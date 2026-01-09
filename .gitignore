@@ -1,0 +1,56 @@
+# Ignore everything by default
+*
+
+# --- Whitelist: Directories ---
+!src/
+!src/**
+!shaders/
+!shaders/**
+!libs/
+!libs/**
+!models/
+!models/**
+!sounds/
+!sounds/**
+
+# --- Whitelist: Root Files ---
+!CMakeLists.txt
+!.gitignore
+!*.cpp
+!*.h
+!*.rc
+!*.ico
+
+# --- Blacklist: Specific exclusions (override whitelist) ---
+# Build & Temp directories (just in case they matched above patterns)
+.vs/
+.vscode/
+build/
+out/
+Debug/
+Release/
+x64/
+tmp/
+dumps/
+tools/
+.gemini/
+
+# File extensions to ignore
+*.txt
+*.log
+*.tlog
+*.obj
+*.pdb
+*.idb
+*.user
+*.suo
+*.aps
+*.opendb
+*.db
+*.sqlite
+*.zip
+*.gz
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.sln
