@@ -128,46 +128,77 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_terrainSystem = std::make_unique<game::systems::WikiTerrainSystem>();
 
   // ゲーム状態初期化
-  game::systems::WikiClient wikiClient;
-  std::string startPage = wikiClient.FetchRandomPageTitle();
-
   // ターゲット記事選択（SDOWデータベース優先）
   std::string targetPage;
   int targetId = -1;
 
-  // まずSDOWデータベースを初期化して人気記事を取得
-  if (!m_shortestPath) {
-    m_shortestPath = std::make_unique<game::systems::WikiShortestPath>();
-    if (!m_shortestPath->Initialize("Assets/data/jawiki_sdow.sqlite")) {
-      LOG_WARN("WikiGolf", "SDOW DB not found for target selection");
-      m_shortestPath.reset();
+  // 事前ロードデータの確認
+  game::components::WikiGlobalData *preloadedData =
+      ctx.world.GetGlobal<game::components::WikiGlobalData>();
+  std::string startPage;
+
+  if (preloadedData && preloadedData->pathSystem) {
+    LOG_INFO("WikiGolf", "Using preloaded data. Start: {}, Target: {}",
+             preloadedData->startPage, preloadedData->targetPage);
+    m_shortestPath = std::move(preloadedData->pathSystem);
+    startPage = preloadedData->startPage;
+    targetPage = preloadedData->targetPage;
+    targetId = preloadedData->targetPageId;
+
+    // グローバルデータから削除（二重使用防止）
+    // ただし ECSの実装上、コンポーネントを削除するのは面倒かもしれないので、
+    // pathSystemがnullかチェックすることで再利用を防ぐ。
+    // すでにmove済みなので pathSystem は null になっているはず。
+
+    if (preloadedData->hasCachedData) {
+      LOG_INFO("WikiGolf",
+               "Found cached page data. Skipping initial network request.");
+      m_hasPreloadedData = true;
+      m_preloadedLinks = preloadedData->cachedLinks;
+      m_preloadedExtract = preloadedData->cachedExtract;
     }
-  }
+  } else {
+    LOG_INFO("WikiGolf", "No preloaded data found or pathSystem invalid. "
+                         "Falling back to sync load.");
 
-  if (m_shortestPath && m_shortestPath->IsAvailable()) {
-    // 入力リンク数100以上の人気記事をターゲットに
-    auto result = m_shortestPath->FetchPopularPageTitle(100);
-    targetPage = result.first;
-    targetId = result.second;
+    game::systems::WikiClient wikiClient;
+    startPage = wikiClient.FetchRandomPageTitle();
 
-    if (targetPage.empty()) {
-      // 閾値を下げて再試行
-      result = m_shortestPath->FetchPopularPageTitle(50);
+    // まずSDOWデータベースを初期化して人気記事を取得
+    if (!m_shortestPath) {
+      m_shortestPath = std::make_unique<game::systems::WikiShortestPath>();
+      if (!m_shortestPath->Initialize("Assets/data/jawiki_sdow.sqlite")) {
+        LOG_WARN("WikiGolf", "SDOW DB not found for target selection");
+        m_shortestPath.reset();
+      }
+    }
+
+    if (m_shortestPath && m_shortestPath->IsAvailable()) {
+      // 入力リンク数100以上の人気記事をターゲットに
+      auto result = m_shortestPath->FetchPopularPageTitle(100);
       targetPage = result.first;
       targetId = result.second;
+
+      if (targetPage.empty()) {
+        // 閾値を下げて再試行
+        result = m_shortestPath->FetchPopularPageTitle(50);
+        targetPage = result.first;
+        targetId = result.second;
+      }
+    }
+
+    // フォールバック: Wikipedia APIから取得
+    if (targetPage.empty()) {
+      targetPage = wikiClient.FetchTargetPageTitle();
+      // API経由の場合IDは不明（-1のまま）
+    }
+
+    if (startPage == targetPage) {
+      targetPage = wikiClient.FetchTargetPageTitle();
+      targetId = -1; // 再取得のためID不明
     }
   }
 
-  // フォールバック: Wikipedia APIから取得
-  if (targetPage.empty()) {
-    targetPage = wikiClient.FetchTargetPageTitle();
-    // API経由の場合IDは不明（-1のまま）
-  }
-
-  if (startPage == targetPage) {
-    targetPage = wikiClient.FetchTargetPageTitle();
-    targetId = -1; // 再取得のためID不明
-  }
   LOG_INFO("WikiGolf", "Start: {}, Target: {} (ID: {})", startPage, targetPage,
            targetId);
 
@@ -866,36 +897,49 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
     LOG_INFO("WikiGolf", "Map view: {}", m_isMapView ? "ON" : "OFF");
   }
 
-  // 右クリックドラッグで視点回転
+  // 右クリックドラッグで視点回転 (通常時) / パン (マップ時)
   int mouseX = ctx.input.GetMousePosition().x;
-  // Idle状態（ショット待機中）のみ操作可能
-  auto *shotStateCheck = ctx.world.GetGlobal<ShotState>();
-  if (shotStateCheck && shotStateCheck->phase == ShotState::Phase::Idle) {
+  int mouseY = ctx.input.GetMousePosition().y;
+
+  if (m_isMapView) {
     if (ctx.input.GetMouseButton(1)) {
-      // 右クリック中
-      if (ctx.input.GetMouseButtonDown(1)) {
-        // 押し始め：現在位置を記録
-        m_prevMouseX = mouseX;
-      } else {
-        // ドラッグ中：差分計算
-        int deltaX = mouseX - m_prevMouseX;
-        m_prevMouseX = mouseX;
+      int deltaX = mouseX - m_prevMouseX;
+      int deltaY = mouseY - m_prevMouseY;
 
-        if (deltaX != 0) {
-          // 回転速度
-          float sensitivity = 0.005f;
-          float angle = deltaX * sensitivity;
+      float sensitivity = 0.05f * m_mapZoom;
+      m_mapCenterOffset.x -= deltaX * sensitivity;
+      m_mapCenterOffset.z += deltaY * sensitivity;
+    }
+  } else {
+    // 通常ビュー: 視点回転
+    auto *shotStateCheck = ctx.world.GetGlobal<ShotState>();
+    if (shotStateCheck && shotStateCheck->phase == ShotState::Phase::Idle) {
+      if (ctx.input.GetMouseButton(1)) {
+        // 右クリック中
+        if (ctx.input.GetMouseButtonDown(1)) {
+          // 押し始め
+        } else {
+          // ドラッグ中：差分計算
+          int deltaX = mouseX - m_prevMouseX;
+          // deltaY は通常ビューでは使わない
 
-          // ショット方向（=カメラの逆方向）を回転
-          XMVECTOR dir = XMLoadFloat3(&m_shotDirection);
-          XMVECTOR q = XMQuaternionRotationRollPitchYaw(0, angle, 0);
-          dir = XMVector3Rotate(dir, q);
-          dir = XMVector3Normalize(dir);
-          XMStoreFloat3(&m_shotDirection, dir);
+          if (deltaX != 0) {
+            float sensitivity = 0.005f;
+            float angle = deltaX * sensitivity;
+            // ...
+            XMVECTOR dir = XMLoadFloat3(&m_shotDirection);
+            XMVECTOR q = XMQuaternionRotationRollPitchYaw(0, angle, 0);
+            dir = XMVector3Rotate(dir, q);
+            dir = XMVector3Normalize(dir);
+            XMStoreFloat3(&m_shotDirection, dir);
+          }
         }
       }
     }
   }
+
+  m_prevMouseX = mouseX;
+  m_prevMouseY = mouseY;
 
   // マップビュー時のズーム（+/-キー）
   if (m_isMapView) {
@@ -1066,17 +1110,22 @@ void WikiGolfScene::UpdateMapCamera(core::GameContext &ctx) {
   // フィールド中央の真上から見下ろす
   float height = std::max(m_fieldWidth, m_fieldDepth) * m_mapZoom;
 
-  // 目標位置: フィールド中央の真上
-  XMVECTOR targetPos = XMVectorSet(0.0f, height, 0.0f, 0.0f);
+  // 目標位置: オフセット適用
+  XMVECTOR targetPos =
+      XMVectorSet(m_mapCenterOffset.x, height, m_mapCenterOffset.z, 0.0f);
+
+  // 少し手前に引く (Zマイナス方向)
+  targetPos = XMVectorAdd(targetPos, XMVectorSet(0, 0, -height * 0.3f, 0));
 
   // 現在位置から滑らかに補間
   XMVECTOR currentPos = XMLoadFloat3(&camT->position);
-  XMVECTOR newPos = XMVectorLerp(currentPos, targetPos, 6.0f * ctx.dt);
+  XMVECTOR newPos =
+      XMVectorLerp(currentPos, targetPos, 10.0f * ctx.dt); // 少し速く
   XMStoreFloat3(&camT->position, newPos);
 
-  // 真下を向く（ピッチ90度）
+  // 斜め下を向く（ピッチ70度）
   XMVECTOR q =
-      XMQuaternionRotationRollPitchYaw(XMConvertToRadians(90.0f), 0.0f, 0.0f);
+      XMQuaternionRotationRollPitchYaw(XMConvertToRadians(70.0f), 0.0f, 0.0f);
   XMStoreFloat4(&camT->rotation, q);
 }
 
@@ -1473,229 +1522,243 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   LOG_DEBUG("WikiGolf", "LoadPage (after delete holes): Cam Alive={}",
             ctx.world.IsAlive(m_cameraEntity) ? "true" : "false");
 
-  // 2. 記事データ取得
-  game::systems::WikiClient wikiClient;
+    // 2. 記事データ取得
+    game::systems::WikiClient wikiClient;
+    std::vector<game::systems::WikiLink> allLinks;
+    std::string articleText;
 
-  // リンク取得（多めに取得してフィルタリング）
-  auto allLinks = wikiClient.FetchPageLinks(pageName, 100);
+    // キャッシュは初回かつページ名が一致する場合のみ使用可能にする（簡易チェック）
+    // ただし初回LoadPage以外でm_hasPreloadedDataがtrueになることはほぼない
+    if (m_hasPreloadedData) {
+      LOG_INFO("WikiGolf", "Using preloaded links and text for {}", pageName);
+      allLinks = std::move(m_preloadedLinks);
+      articleText = std::move(m_preloadedExtract);
+      m_hasPreloadedData = false; // 使い終わったらフラグを下ろす
+    } else {
+      LOG_INFO("WikiGolf", "Fetching live data for {}", pageName);
+      // リンク取得（多めに取得してフィルタリング）
+      allLinks = wikiClient.FetchPageLinks(pageName, 100);
+      // 記事テキスト取得
+      articleText = wikiClient.FetchPageExtract(pageName, 5000);
+    }
 
-  // 記事テキスト取得
-  std::string articleText = wikiClient.FetchPageExtract(pageName, 5000);
+    // 3. リンクのフィルタリング
+    std::vector<std::pair<std::string, std::wstring>> validLinks;
 
-  // 3. リンクのフィルタリング
-  std::vector<std::pair<std::string, std::wstring>> validLinks;
-
-  // フィルタリング（年・月・日・数値のみを除外）
-  auto isIgnored = [](const std::string &t) {
-    if (t.empty())
-      return true;
-    // 末尾チェック (UTF-8)
-    if (t.size() >= 3) {
-      std::string suffix = t.substr(t.size() - 3);
-      if (suffix == "年" || suffix == "月" || suffix == "日")
+    // フィルタリング（年・月・日・数値のみを除外）
+    auto isIgnored = [](const std::string &t) {
+      if (t.empty())
         return true;
-    }
-    // 数値のみ
-    if (std::all_of(t.begin(), t.end(),
-                    [](unsigned char c) { return std::isdigit(c); }))
-      return true;
-    return false;
-  };
+      // 末尾チェック (UTF-8)
+      if (t.size() >= 3) {
+        std::string suffix = t.substr(t.size() - 3);
+        if (suffix == "年" || suffix == "月" || suffix == "日")
+          return true;
+      }
+      // 数値のみ
+      if (std::all_of(t.begin(), t.end(),
+                      [](unsigned char c) { return std::isdigit(c); }))
+        return true;
+      return false;
+    };
 
-  for (const auto &link : allLinks) {
-    if (isIgnored(link.title))
-      continue;
-
-    // 本文に含まれているかチェック
-    if (articleText.find(link.title) != std::string::npos) {
-      validLinks.push_back({link.title, core::ToWString(link.title)});
-    }
-    // ターゲットページは必ず含める
-    else if (link.title == state->targetPage) {
-      validLinks.push_back({link.title, core::ToWString(link.title)});
-    }
-
-    if (validLinks.size() >= 20)
-      break;
-  }
-
-  // リンク不足時の補充
-  if (validLinks.size() < 3) {
     for (const auto &link : allLinks) {
-      bool exists = false;
-      for (const auto &v : validLinks)
-        if (v.first == link.title)
-          exists = true;
-      if (!exists && !isIgnored(link.title)) { // ここでもignoreチェック
+      if (isIgnored(link.title))
+        continue;
+
+      // 本文に含まれているかチェック
+      if (articleText.find(link.title) != std::string::npos) {
         validLinks.push_back({link.title, core::ToWString(link.title)});
-        if (validLinks.size() >= 5)
-          break;
+      }
+      // ターゲットページは必ず含める
+      else if (link.title == state->targetPage) {
+        validLinks.push_back({link.title, core::ToWString(link.title)});
+      }
+
+      if (validLinks.size() >= 20)
+        break;
+    }
+
+    // リンク不足時の補充
+    if (validLinks.size() < 3) {
+      for (const auto &link : allLinks) {
+        bool exists = false;
+        for (const auto &v : validLinks)
+          if (v.first == link.title)
+            exists = true;
+        if (!exists && !isIgnored(link.title)) { // ここでもignoreチェック
+          validLinks.push_back({link.title, core::ToWString(link.title)});
+          if (validLinks.size() >= 5)
+            break;
+        }
       }
     }
-  }
 
-  // ラムダ式内で使うisIgnoredをここでも定義する必要があったので、
-  // 上記の補充ループ内のisIgnoredはコンパイルエラーになる可能性がある。
-  // まじめに実装しなおす。
+    // ラムダ式内で使うisIgnoredをここでも定義する必要があったので、
+    // 上記の補充ループ内のisIgnoredはコンパイルエラーになる可能性がある。
+    // まじめに実装しなおす。
 
-  // 4. フィールドサイズ計算
-  const float minFieldWidth = 20.0f;
-  const float minFieldDepth = 30.0f;
-  float articleLengthFactor =
-      std::max(1.0f, (float)articleText.length() / 1000.0f);
-  float fieldWidth = minFieldWidth * std::sqrt(articleLengthFactor);
-  float fieldDepth = minFieldDepth * std::sqrt(articleLengthFactor);
+    // 4. フィールドサイズ計算
+    const float minFieldWidth = 20.0f;
+    const float minFieldDepth = 30.0f;
+    float articleLengthFactor =
+        std::max(1.0f, (float)articleText.length() / 1000.0f);
+    float fieldWidth = minFieldWidth * std::sqrt(articleLengthFactor);
+    float fieldDepth = minFieldDepth * std::sqrt(articleLengthFactor);
 
-  m_fieldWidth = fieldWidth;
-  m_fieldDepth = fieldDepth;
-  state->fieldWidth = fieldWidth;
-  state->fieldDepth = fieldDepth;
+    m_fieldWidth = fieldWidth;
+    m_fieldDepth = fieldDepth;
+    state->fieldWidth = fieldWidth;
+    state->fieldDepth = fieldDepth;
 
-  // 5. テクスチャ生成
-  uint32_t texWidth = static_cast<uint32_t>(fieldWidth * 100.0f);
-  uint32_t texHeight = static_cast<uint32_t>(fieldDepth * 100.0f);
+    // 5. テクスチャ生成
+    uint32_t texWidth = static_cast<uint32_t>(fieldWidth * 100.0f);
+    uint32_t texHeight = static_cast<uint32_t>(fieldDepth * 100.0f);
 
-  std::vector<std::pair<std::wstring, std::string>> linkPairs;
-  for (const auto &link : validLinks) {
-    linkPairs.push_back({link.second, link.first});
-  }
-
-  auto texResult = m_textureGenerator->GenerateTexture(
-      core::ToWString(pageName), core::ToWString(articleText), linkPairs,
-      state->targetPage, texWidth, texHeight);
-
-  m_wikiTexture =
-      std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
-
-  // 6. 地形（フィールド）再構築
-  LOG_DEBUG("WikiGolf", "Building field size: {}x{}", fieldWidth, fieldDepth);
-  if (m_terrainSystem) {
-    m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture, fieldWidth, fieldDepth);
-    m_floorEntity = m_terrainSystem->GetFloorEntity(); // カメラ追従などに必要
-  }
-
-  // 6.5 ボール位置をフィールドサイズに合わせて再配置
-  auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
-  auto *ballRB = ctx.world.Get<RigidBody>(m_ballEntity);
-  if (ballT) {
-    // フィールド手前（-Z方向）の80%地点、中央X、床より少し上
-    ballT->position = {0.0f, 1.0f, -fieldDepth * 0.4f};
-    LOG_DEBUG("WikiGolf", "Ball repositioned to: ({}, {}, {})",
-              ballT->position.x, ballT->position.y, ballT->position.z);
-    if (ballRB) {
-      ballRB->velocity = {0.0f, 0.0f, 0.0f}; // 速度リセット
+    std::vector<std::pair<std::wstring, std::string>> linkPairs;
+    for (const auto &link : validLinks) {
+      linkPairs.push_back({link.second, link.first});
     }
-  } else {
-    LOG_ERROR("WikiGolf", "Ball transform not found!");
-  }
 
-  // 7. ホール配置
-  const float texWidthF = (float)m_wikiTexture->width;
-  const float texHeightF = (float)m_wikiTexture->height;
+    auto texResult = m_textureGenerator->GenerateTexture(
+        core::ToWString(pageName), core::ToWString(articleText), linkPairs,
+        state->targetPage, texWidth, texHeight);
 
-  for (const auto &linkRegion : m_wikiTexture->links) {
-    float texCenterX = linkRegion.x + linkRegion.width * 0.5f;
-    float texCenterY = linkRegion.y + linkRegion.height * 0.5f;
-    float worldX = (texCenterX / texWidthF - 0.5f) * fieldWidth;
-    float worldZ = (0.5f - texCenterY / texHeightF) * fieldDepth;
+    m_wikiTexture =
+        std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
 
-    CreateHole(ctx, worldX, worldZ, linkRegion.targetPage, linkRegion.isTarget);
-  }
-
-  // 8. 風設定
-  float windSpeed = 0.0f;
-  if (articleText.length() > 2000) {
-    windSpeed = 3.0f + (float)(rand() % 20) / 10.0f;
-  } else if (articleText.length() > 500) {
-    windSpeed = 1.0f + (float)(rand() % 20) / 10.0f;
-  }
-  float windAngle = (float)(rand() % 360) * 3.14159f / 180.0f;
-  DirectX::XMFLOAT2 windDir = {cosf(windAngle), sinf(windAngle)};
-
-  state->windSpeed = windSpeed;
-  state->windDirection = windDir;
-
-  // 風UI更新
-  auto *waUI = ctx.world.Get<UIImage>(state->windArrowEntity);
-  if (waUI) {
-    float angle = std::atan2(windDir.y, windDir.x) * 180.0f / 3.14159f;
-    waUI->rotation = angle;
-  }
-
-  int dir8 = (int)((windAngle + 3.14159f / 8.0f) / (3.14159f / 4.0f)) % 8;
-  const wchar_t *arrows[] = {L"→", L"↗", L"↑", L"↖", L"←", L"↙", L"↓", L"↘"};
-  std::wstring windArrowStr =
-      L"🌬️ " + std::to_wstring((int)(windSpeed * 10) / 10) + L"." +
-      std::to_wstring((int)(windSpeed * 10) % 10) + L"m/s " + arrows[dir8];
-
-  auto *windUI = ctx.world.Get<UIText>(state->windEntity);
-  if (windUI) {
-    windUI->text = windArrowStr;
-  }
-
-  // 9. その他HUD更新
-  auto *headerUI = ctx.world.Get<UIText>(state->headerEntity);
-  if (headerUI) {
-    headerUI->text = L"📍 " + core::ToWString(pageName) + L" → 🎯 " +
-                     core::ToWString(state->targetPage);
-  }
-
-  state->currentPage = pageName;
-  state->pathHistory.push_back(pageName);
-
-  auto *pathUI = ctx.world.Get<UIText>(state->pathEntity);
-  if (pathUI) {
-    std::wstring historyText = L"History: ";
-    // 最新の5件くらいを表示するか、全部表示するか。一旦全部。
-    // 長すぎるとあふれるので注意が必要だが、現状維持。
-    // Historyの構築ロジックが必要。
-    // state->pathHistoryを使って再構築
-    for (size_t i = 0; i < state->pathHistory.size(); ++i) {
-      if (i > 0)
-        historyText += L" > ";
-      historyText += core::ToWString(state->pathHistory[i]);
+    // 6. 地形（フィールド）再構築
+    LOG_DEBUG("WikiGolf", "Building field size: {}x{}", fieldWidth, fieldDepth);
+    if (m_terrainSystem) {
+      m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture, fieldWidth,
+                                  fieldDepth);
+      m_floorEntity = m_terrainSystem->GetFloorEntity(); // カメラ追従などに必要
     }
-    pathUI->text = historyText;
-  }
 
-  // Par計算
-  int calculatedPar = -1;
-  if (m_shortestPath) {
-    game::systems::ShortestPathResult result;
-    if (state->targetPageId != -1) {
-      result =
-          m_shortestPath->FindShortestPath(pageName, state->targetPageId, 20);
+    // 6.5 ボール位置をフィールドサイズに合わせて再配置
+    auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
+    auto *ballRB = ctx.world.Get<RigidBody>(m_ballEntity);
+    if (ballT) {
+      // フィールド手前（-Z方向）の80%地点、中央X、床より少し上
+      ballT->position = {0.0f, 1.0f, -fieldDepth * 0.4f};
+      LOG_DEBUG("WikiGolf", "Ball repositioned to: ({}, {}, {})",
+                ballT->position.x, ballT->position.y, ballT->position.z);
+      if (ballRB) {
+        ballRB->velocity = {0.0f, 0.0f, 0.0f}; // 速度リセット
+      }
     } else {
-      result =
-          m_shortestPath->FindShortestPath(pageName, state->targetPage, 20);
+      LOG_ERROR("WikiGolf", "Ball transform not found!");
     }
-    if (result.success)
-      calculatedPar = result.degrees;
-  }
-  m_calculatedPar = calculatedPar; // メンバ変数に保存（HUD更新用）
 
-  // フォールバックとPar設定
-  int par =
-      (calculatedPar > 0) ? calculatedPar : (int)validLinks.size() / 2 + 2;
-  state->par = par;
+    // 7. ホール配置
+    const float texWidthF = (float)m_wikiTexture->width;
+    const float texHeightF = (float)m_wikiTexture->height;
 
-  // 最短パスとHUD更新
-  // 最短パスとHUD更新
-  std::wstring suffix = L" (推定)";
-  if (calculatedPar > 0) {
-    suffix = L" (残り最短 " + std::to_wstring(calculatedPar) + L" 記事)";
-    LOG_INFO("WikiGolf", "Path found! Degrees: {}", calculatedPar);
-  } else {
-    LOG_INFO("WikiGolf", "Path calc failed or fallback used.");
-  }
+    for (const auto &linkRegion : m_wikiTexture->links) {
+      float texCenterX = linkRegion.x + linkRegion.width * 0.5f;
+      float texCenterY = linkRegion.y + linkRegion.height * 0.5f;
+      float worldX = (texCenterX / texWidthF - 0.5f) * fieldWidth;
+      float worldZ = (0.5f - texCenterY / texHeightF) * fieldDepth;
 
-  // 表示更新
-  auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
-  if (shotUI) {
-    shotUI->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
-                   std::to_wstring(state->par) + suffix;
-    LOG_INFO("WikiGolf", "Updated HUD text: {}", core::ToString(shotUI->text));
+      CreateHole(ctx, worldX, worldZ, linkRegion.targetPage,
+                 linkRegion.isTarget);
+    }
+
+    // 8. 風設定
+    float windSpeed = 0.0f;
+    if (articleText.length() > 2000) {
+      windSpeed = 3.0f + (float)(rand() % 20) / 10.0f;
+    } else if (articleText.length() > 500) {
+      windSpeed = 1.0f + (float)(rand() % 20) / 10.0f;
+    }
+    float windAngle = (float)(rand() % 360) * 3.14159f / 180.0f;
+    DirectX::XMFLOAT2 windDir = {cosf(windAngle), sinf(windAngle)};
+
+    state->windSpeed = windSpeed;
+    state->windDirection = windDir;
+
+    // 風UI更新
+    auto *waUI = ctx.world.Get<UIImage>(state->windArrowEntity);
+    if (waUI) {
+      float angle = std::atan2(windDir.y, windDir.x) * 180.0f / 3.14159f;
+      waUI->rotation = angle;
+    }
+
+    int dir8 = (int)((windAngle + 3.14159f / 8.0f) / (3.14159f / 4.0f)) % 8;
+    const wchar_t *arrows[] = {L"→", L"↗", L"↑", L"↖", L"←", L"↙", L"↓", L"↘"};
+    std::wstring windArrowStr =
+        L"🌬️ " + std::to_wstring((int)(windSpeed * 10) / 10) + L"." +
+        std::to_wstring((int)(windSpeed * 10) % 10) + L"m/s " + arrows[dir8];
+
+    auto *windUI = ctx.world.Get<UIText>(state->windEntity);
+    if (windUI) {
+      windUI->text = windArrowStr;
+    }
+
+    // 9. その他HUD更新
+    auto *headerUI = ctx.world.Get<UIText>(state->headerEntity);
+    if (headerUI) {
+      headerUI->text = L"📍 " + core::ToWString(pageName) + L" → 🎯 " +
+                       core::ToWString(state->targetPage);
+    }
+
+    state->currentPage = pageName;
+    state->pathHistory.push_back(pageName);
+
+    auto *pathUI = ctx.world.Get<UIText>(state->pathEntity);
+    if (pathUI) {
+      std::wstring historyText = L"History: ";
+      // 最新の5件くらいを表示するか、全部表示するか。一旦全部。
+      // 長すぎるとあふれるので注意が必要だが、現状維持。
+      // Historyの構築ロジックが必要。
+      // state->pathHistoryを使って再構築
+      for (size_t i = 0; i < state->pathHistory.size(); ++i) {
+        if (i > 0)
+          historyText += L" > ";
+        historyText += core::ToWString(state->pathHistory[i]);
+      }
+      pathUI->text = historyText;
+    }
+
+    // Par計算
+    int calculatedPar = -1;
+    if (m_shortestPath) {
+      game::systems::ShortestPathResult result;
+      if (state->targetPageId != -1) {
+        result =
+            m_shortestPath->FindShortestPath(pageName, state->targetPageId, 20);
+      } else {
+        result =
+            m_shortestPath->FindShortestPath(pageName, state->targetPage, 20);
+      }
+      if (result.success)
+        calculatedPar = result.degrees;
+    }
+    m_calculatedPar = calculatedPar; // メンバ変数に保存（HUD更新用）
+
+    // フォールバックとPar設定
+    int par =
+        (calculatedPar > 0) ? calculatedPar : (int)validLinks.size() / 2 + 2;
+    state->par = par;
+
+    // 最短パスとHUD更新
+    // 最短パスとHUD更新
+    std::wstring suffix = L" (推定)";
+    if (calculatedPar > 0) {
+      suffix = L" (残り最短 " + std::to_wstring(calculatedPar) + L" 記事)";
+      LOG_INFO("WikiGolf", "Path found! Degrees: {}", calculatedPar);
+    } else {
+      LOG_INFO("WikiGolf", "Path calc failed or fallback used.");
+    }
+
+    // 表示更新
+    auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
+    if (shotUI) {
+      shotUI->text = L"打数: " + std::to_wstring(state->shotCount) +
+                     L" / Par " + std::to_wstring(state->par) + suffix;
+      LOG_INFO("WikiGolf", "Updated HUD text: {}",
+               core::ToString(shotUI->text));
+    }
   }
-}
 
 } // namespace game::scenes

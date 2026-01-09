@@ -4,11 +4,13 @@
  * @brief WikiPinball固有のコンポーネント定義
  */
 
+#include "../systems/TerrainGenerator.h"
+#include "../systems/WikiClient.h"
+#include "../systems/WikiShortestPath.h"
 #include <DirectXMath.h>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include "../systems/TerrainGenerator.h"
 
 namespace game::components {
 
@@ -19,7 +21,7 @@ namespace game::components {
  * ハイトマップデータを保持し、詳細な衝突判定に使用する。
  */
 struct TerrainCollider {
-    std::shared_ptr<game::systems::TerrainData> data;
+  std::shared_ptr<game::systems::TerrainData> data;
 };
 
 /**
@@ -53,6 +55,23 @@ struct WikiGameState {
   int moveCount = 0;         ///< 遷移回数
   int lives = 3;             ///< 残機
   bool gameCleared = false;  ///< クリアフラグ
+};
+
+/**
+ * @brief WikiGolf初期化用グローバルデータ
+ * LoadingSceneで非同期ロードしたデータをWikiGolfSceneへ渡すために使用
+ */
+struct WikiGlobalData {
+  std::unique_ptr<game::systems::WikiShortestPath> pathSystem;
+  std::string startPage;
+  std::string targetPage;
+  int targetPageId = -1;
+  int initialPar = -1;
+
+  // 初回ロード済みデータ (LoadingSceneで取得済みの場合に使用)
+  bool hasCachedData = false;
+  std::vector<game::systems::WikiLink> cachedLinks;
+  std::string cachedExtract;
 };
 
 /**

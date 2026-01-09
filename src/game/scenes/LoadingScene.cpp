@@ -4,7 +4,6 @@
  */
 
 #include "LoadingScene.h"
-#include "LoadingSceneUtils.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
@@ -13,10 +12,14 @@
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
 #include "../components/UIText.h"
+#include "../systems/WikiClient.h"
+#include "../systems/WikiShortestPath.h"
+#include "LoadingSceneUtils.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <random>
+#include <thread>
 
 namespace game::scenes {
 
@@ -37,6 +40,78 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_tipTimer = 0.0f;
   m_tipIndex = 0;
   m_cameraTime = 0.0f;
+  m_logTimer = 0.0f;
+  m_spawnFinishedLogged = false;
+  m_allSettledLogged = false;
+  m_fadeLogged = false;
+  m_movingCount = 0;
+  m_maxSpeed = 0.0f;
+  m_avgSpeed = 0.0f;
+  m_settledCount = 0;
+  m_lastSettledCount = 0;
+  m_stuckTimer = 0.0f;
+  m_lastMovingPos = {0.0f, 0.0f, 0.0f};
+  m_hasMovingSample = false;
+  m_forceFinishTimer = 0.0f;
+  m_isLoading = false;
+  m_loadCompleted = false;
+
+  // 非同期ロード開始
+  m_isLoading = true;
+  m_loadTask = std::async(std::launch::async, []() {
+    auto data = std::make_unique<game::components::WikiGlobalData>();
+
+    // WikiShortestPathの初期化（重い処理）
+    data->pathSystem = std::make_unique<game::systems::WikiShortestPath>();
+    bool dbLoaded =
+        data->pathSystem->Initialize("Assets/data/jawiki_sdow.sqlite");
+    if (!dbLoaded) {
+      // ログは別スレッドからは注意が必要だが、ここでは簡易的に
+    }
+
+    // スタート・ゴール選定
+    game::systems::WikiClient wikiClient;
+    data->startPage = wikiClient.FetchRandomPageTitle();
+
+    // 人気記事からターゲット選定
+    if (dbLoaded && data->pathSystem->IsAvailable()) {
+      auto result = data->pathSystem->FetchPopularPageTitle(100);
+      data->targetPage = result.first;
+      data->targetPageId = result.second;
+      if (data->targetPage.empty()) {
+        result = data->pathSystem->FetchPopularPageTitle(50);
+        data->targetPage = result.first;
+        data->targetPageId = result.second;
+      }
+    }
+
+    // フォールバック
+    if (data->targetPage.empty()) {
+      data->targetPage = wikiClient.FetchTargetPageTitle();
+      data->targetPageId = -1;
+    }
+
+    if (data->startPage == data->targetPage) {
+      data->targetPage = wikiClient.FetchTargetPageTitle();
+      data->targetPageId = -1;
+    }
+
+    // パー計算（ついでにやっておく）
+    if (dbLoaded && data->targetPageId != -1) {
+      // スタート位置のIDがわからないので正確には計算できないが、
+      // ここではロードの重さを吸収するのが目標なのでOK
+      // IdFromTitleなどはDBアクセスが必要
+    }
+
+    // 初回ページのデータを先行ロード（通信ラグ解消）
+    if (!data->startPage.empty()) {
+      data->cachedLinks = wikiClient.FetchPageLinks(data->startPage, 100);
+      data->cachedExtract = wikiClient.FetchPageExtract(data->startPage, 5000);
+      data->hasCachedData = true;
+    }
+
+    return data;
+  });
 
   // マウスカーソルを非表示
   ctx.input.SetMouseCursorVisible(false);
@@ -48,8 +123,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_cameraEntity = ctx.world.CreateEntity();
   auto &camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
   camTr.position = {0.0f, 6.0f, -68.0f};
-  camTr.rotation =
-      {0.0f, 0.0f, 0.0f, 1.0f}; // 軽く俯瞰させるための基準
+  camTr.rotation = {0.0f, 0.0f, 0.0f, 1.0f}; // 軽く俯瞰させるための基準
 
   auto &cam = ctx.world.Add<components::Camera>(m_cameraEntity);
   cam.fov = DirectX::XM_PIDIV4; // 45度
@@ -99,8 +173,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
 
   // 進行状況
   m_progressTextEntity = ctx.world.CreateEntity();
-  auto &progressText =
-      ctx.world.Add<components::UIText>(m_progressTextEntity);
+  auto &progressText = ctx.world.Add<components::UIText>(m_progressTextEntity);
   progressText.text = L"0%";
   progressText.x = 0.0f;
   progressText.y = 170.0f;
@@ -205,8 +278,8 @@ void LoadingScene::SpawnBall(core::GameContext &ctx) {
   // Transform
   auto &tr = ctx.world.Add<components::Transform>(entity);
   tr.position = {distX(rng),
-                 26.0f + static_cast<float>(m_spawnedCount) *
-                             (renderRadius * 0.9f),
+                 26.0f +
+                     static_cast<float>(m_spawnedCount) * (renderRadius * 0.9f),
                  distZ(rng)};
   const float renderScale = BALL_RADIUS * 2.0f * BALL_MODEL_SCALE;
   tr.scale = {renderScale, renderScale, renderScale};
@@ -270,9 +343,8 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
     DirectX::XMVECTOR deltaRot = DirectX::XMQuaternionRotationRollPitchYaw(
         ball.angularVelocity.x * dt, ball.angularVelocity.y * dt,
         ball.angularVelocity.z * dt);
-    auto nextRot =
-        DirectX::XMQuaternionNormalize(DirectX::XMQuaternionMultiply(
-            deltaRot, currentRot));
+    auto nextRot = DirectX::XMQuaternionNormalize(
+        DirectX::XMQuaternionMultiply(deltaRot, currentRot));
     DirectX::XMStoreFloat4(&tr->rotation, nextRot);
     ball.angularVelocity.x *= ANGULAR_DAMPING;
     ball.angularVelocity.y *= ANGULAR_DAMPING;
@@ -341,16 +413,12 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
         float ny = dy / dist;
         float nz = dz / dist;
 
+        // 位置修正（めり込み解消）
         if (other.settled) {
-          // 相手が静止しているなら自分だけが100%押し返される
+          // 相手が静止しているなら自分だけが押し返される
           tr->position.x -= nx * overlap;
           tr->position.y -= ny * overlap;
           tr->position.z -= nz * overlap;
-
-          // 速度の反射（簡易）
-          ball.velocity.x *= -RESTITUTION;
-          ball.velocity.y *= -RESTITUTION;
-          ball.velocity.z *= -RESTITUTION;
         } else if (j > i) {
           // 両方動いているなら半分ずつ（二重処理防止のため j > i の時のみ）
           tr->position.x -= nx * overlap * 0.5f;
@@ -360,27 +428,94 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
           otherTr->position.x += nx * overlap * 0.5f;
           otherTr->position.y += ny * overlap * 0.5f;
           otherTr->position.z += nz * overlap * 0.5f;
+        }
 
-          std::swap(ball.velocity, other.velocity);
+        // 速度の衝突応答（インパルスベース）
+        // 相対速度
+        float rvx = other.velocity.x - ball.velocity.x;
+        float rvy = other.velocity.y - ball.velocity.y;
+        float rvz = other.velocity.z - ball.velocity.z;
+
+        // 法線方向の相対速度
+        float velAlongNormal = rvx * nx + rvy * ny + rvz * nz;
+
+        // 互いに近づいている場合のみ計算（離れようとしているなら無視）
+        if (velAlongNormal < 0) {
+          // 反発係数
+          float jVal = -(1 + RESTITUTION) * velAlongNormal;
+
+          // インパルス
+          float ix = nx * jVal;
+          float iy = ny * jVal;
+          float iz = nz * jVal;
+
+          if (other.settled) {
+            // 相手は動かないので自分が全て受ける（壁扱い）
+            ball.velocity.x -= ix;
+            ball.velocity.y -= iy;
+            ball.velocity.z -= iz;
+          } else if (j > i) {
+            // お互い動くなら半分ずつ（質量等しいと仮定）
+            ball.velocity.x -= ix * 0.5f;
+            ball.velocity.y -= iy * 0.5f;
+            ball.velocity.z -= iz * 0.5f;
+
+            other.velocity.x += ix * 0.5f;
+            other.velocity.y += iy * 0.5f;
+            other.velocity.z += iz * 0.5f;
+          }
         }
       }
     }
 
-    // 静止判定（速度が十分小さくなれば、場所に関わらず静止）
-    const bool nearRestingPlane =
-        tr->position.y <= floorY + renderRadius * 0.6f;
+    // 静止判定（速度が十分小さくなれば静止）
     float speedSq = ball.velocity.x * ball.velocity.x +
                     ball.velocity.y * ball.velocity.y +
                     ball.velocity.z * ball.velocity.z;
-    if (speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD && nearRestingPlane) {
+    if (speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD) {
       ball.settled = true;
       ball.velocity = {0, 0, 0};
       ball.angularVelocity = {0, 0, 0};
     }
   }
+
+  // ログ用メトリクスを更新
+  int settledCount = 0;
+  int moving = 0;
+  float maxSpeed = 0.0f;
+  float speedAccum = 0.0f;
+  int speedCount = 0;
+  m_hasMovingSample = false;
+  for (const auto &ball : m_balls) {
+    if (!ctx.world.IsAlive(ball.entity))
+      continue;
+    if (ball.settled) {
+      settledCount++;
+    }
+    auto *tr = ctx.world.Get<components::Transform>(ball.entity);
+    float speedSq = ball.velocity.x * ball.velocity.x +
+                    ball.velocity.y * ball.velocity.y +
+                    ball.velocity.z * ball.velocity.z;
+    float speed = std::sqrt(speedSq);
+    if (!ball.settled) {
+      moving++;
+      maxSpeed = std::max(maxSpeed, speed);
+      speedAccum += speed;
+      speedCount++;
+      if (!m_hasMovingSample && tr) {
+        m_lastMovingPos = tr->position;
+        m_hasMovingSample = true;
+      }
+    }
+  }
+  m_movingCount = moving;
+  m_maxSpeed = maxSpeed;
+  m_avgSpeed =
+      (speedCount > 0) ? speedAccum / static_cast<float>(speedCount) : 0.0f;
+  m_settledCount = settledCount;
 }
 
-bool LoadingScene::AreAllBallsSettled() const {
+bool LoadingScene::AreAllBallsSettled() {
   if (m_spawnedCount < TOTAL_BALLS) {
     return false;
   }
@@ -390,6 +525,10 @@ bool LoadingScene::AreAllBallsSettled() const {
       return false;
     }
   }
+  if (!m_allSettledLogged) {
+    LOG_INFO("LoadingScene", "All balls settled");
+    m_allSettledLogged = true;
+  }
   return true;
 }
 
@@ -398,6 +537,10 @@ void LoadingScene::UpdateFade(core::GameContext &ctx, float dt) {
     m_fadeDelay -= dt;
     if (m_fadeDelay <= 0.0f) {
       m_fadeStarted = true;
+      if (!m_fadeLogged) {
+        LOG_INFO("LoadingScene", "Fade started");
+        m_fadeLogged = true;
+      }
     }
     return;
   }
@@ -405,8 +548,23 @@ void LoadingScene::UpdateFade(core::GameContext &ctx, float dt) {
   m_fadeAlpha += FADE_SPEED * dt;
   if (m_fadeAlpha >= 1.0f) {
     m_fadeAlpha = 1.0f;
+
+    // ロード結果を取得してグローバルにセット
+    if (m_loadTask.valid()) {
+      try {
+        auto data = m_loadTask.get();
+        LOG_INFO("LoadingScene", "Async load completed. Start: {}, Target: {}",
+                 data->startPage, data->targetPage);
+        // グローバルに移す。WikiGlobalDataはmove-onlyなのでmoveで渡す。
+        ctx.world.SetGlobal(std::move(*data));
+      } catch (const std::exception &e) {
+        LOG_ERROR("LoadingScene", "Load task failed: {}", e.what());
+      }
+    }
+
     // 次のシーンへ遷移
     if (ctx.sceneManager && m_nextSceneFactory) {
+      LOG_INFO("LoadingScene", "Fade completed, switching scene");
       ctx.sceneManager->ChangeScene(m_nextSceneFactory());
     }
   }
@@ -427,8 +585,8 @@ void LoadingScene::UpdateCamera(core::GameContext &ctx, float dt) {
   tr->position.y = 6.0f + bob;
   tr->position.z = -68.0f + dolly;
 
-  auto camRot = DirectX::XMQuaternionRotationRollPitchYaw(
-      -0.12f + bob * 0.01f, sway * 0.003f, 0.0f);
+  auto camRot = DirectX::XMQuaternionRotationRollPitchYaw(-0.12f + bob * 0.01f,
+                                                          sway * 0.003f, 0.0f);
   DirectX::XMStoreFloat4(&tr->rotation, camRot);
 }
 
@@ -437,22 +595,14 @@ void LoadingScene::UpdateUI(core::GameContext &ctx) {
       L"芝目をスキャン中...", L"Wikipediaの芝刈り準備中",
       L"ショットの風向きをプレビュー中", L"リンクをフェアウェイに整地中"};
 
-  size_t settledCount = 0;
-  for (const auto &ball : m_balls) {
-    if (ball.settled) {
-      settledCount++;
-    }
-  }
-
   const float spawnRatio =
       static_cast<float>(m_spawnedCount) / static_cast<float>(TOTAL_BALLS);
   const float settledRatio =
       (m_spawnedCount > 0)
-          ? static_cast<float>(settledCount) / static_cast<float>(TOTAL_BALLS)
+          ? static_cast<float>(m_settledCount) / static_cast<float>(TOTAL_BALLS)
           : 0.0f;
 
-  const float blended =
-      loading_detail::BlendProgress(spawnRatio, settledRatio);
+  const float blended = loading_detail::BlendProgress(spawnRatio, settledRatio);
   const float eased = loading_detail::EaseOutCubic(blended);
   const int percent = static_cast<int>(std::round(eased * 100.0f));
 
@@ -461,6 +611,12 @@ void LoadingScene::UpdateUI(core::GameContext &ctx) {
   const std::wstring dots(static_cast<size_t>(dotCount), L'.');
   const float fade =
       m_fadeStarted ? std::clamp(1.0f - m_fadeAlpha, 0.0f, 1.0f) : 1.0f;
+  const char *phase =
+      m_fadeStarted
+          ? "FADE"
+          : (m_spawnedCount < TOTAL_BALLS
+                 ? "SPAWNING"
+                 : (m_settledCount < TOTAL_BALLS ? "WAIT_SETTLE" : "READY"));
 
   if (auto *title = ctx.world.Get<components::UIText>(m_textEntity)) {
     auto style = m_primaryStyle;
@@ -475,8 +631,7 @@ void LoadingScene::UpdateUI(core::GameContext &ctx) {
     style.color.w *= fade;
     style.shadowColor.w *= fade;
     progress->style = style;
-    progress->text =
-        L"LOADING " + std::to_wstring(percent) + L"%" + dots;
+    progress->text = L"LOADING " + std::to_wstring(percent) + L"%" + dots;
   }
 
   m_tipTimer += ctx.dt;
@@ -492,20 +647,30 @@ void LoadingScene::UpdateUI(core::GameContext &ctx) {
     caption->style = style;
     caption->text = tips[m_tipIndex];
   }
+
+  m_logTimer += ctx.dt;
+  if (m_logTimer > 1.5f) {
+    LOG_INFO("LoadingScene",
+             "phase={} progress={}%, spawned={}/{} settled={} moving={} "
+             "maxSpeed={:.2f} "
+             "avgSpeed={:.2f} fade={}",
+             phase, percent, m_spawnedCount, TOTAL_BALLS, m_settledCount,
+             m_movingCount, m_maxSpeed, m_avgSpeed, m_fadeAlpha);
+    m_logTimer = 0.0f;
+  }
 }
 
 void LoadingScene::ApplyFadeToScene(core::GameContext &ctx) {
   if (!m_fadeStarted)
     return;
 
-  const float shrink =
-      std::max(0.25f, 1.0f - m_fadeAlpha * 0.65f);
+  const float shrink = std::max(0.25f, 1.0f - m_fadeAlpha * 0.65f);
   const float baseScale = BALL_RADIUS * 2.0f * BALL_MODEL_SCALE;
 
   for (auto &ball : m_balls) {
     auto *tr = ctx.world.Get<components::Transform>(ball.entity);
     if (tr) {
-      const float scaled = baseScale * BALL_MODEL_SCALE * shrink;
+      const float scaled = baseScale * shrink;
       tr->scale = {scaled, scaled, scaled};
     }
 
@@ -532,23 +697,82 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
       SpawnBall(ctx);
       m_spawnTimer = 0.0f;
     }
+  } else if (!m_spawnFinishedLogged) {
+    LOG_INFO("LoadingScene", "All balls spawned: {}", TOTAL_BALLS);
+    m_spawnFinishedLogged = true;
   }
 
   // 物理更新
   UpdatePhysics(ctx, dt);
+
+  // 停滞監視（静止数が増えない状態が続いたら詳細ログ）
+  if (m_settledCount != m_lastSettledCount) {
+    m_stuckTimer = 0.0f;
+    m_lastSettledCount = m_settledCount;
+  } else if (m_spawnFinishedLogged && m_settledCount < TOTAL_BALLS) {
+    m_stuckTimer += dt;
+    if (m_stuckTimer > 3.0f) {
+      if (m_hasMovingSample) {
+        LOG_INFO("LoadingScene",
+                 "phase=WAIT_SETTLE stuck settled={}/{} moving={} "
+                 "maxSpeed={:.2f} avgSpeed={:.2f} "
+                 "samplePos=({:.1f},{:.1f},{:.1f}) floorY={:.1f}",
+                 m_settledCount, TOTAL_BALLS, m_movingCount, m_maxSpeed,
+                 m_avgSpeed, m_lastMovingPos.x, m_lastMovingPos.y,
+                 m_lastMovingPos.z, FLOOR_Y + BALL_RADIUS * BALL_MODEL_SCALE);
+      } else {
+        LOG_INFO("LoadingScene",
+                 "phase=WAIT_SETTLE stuck settled={}/{} moving={} "
+                 "maxSpeed={:.2f} avgSpeed={:.2f}",
+                 m_settledCount, TOTAL_BALLS, m_movingCount, m_maxSpeed,
+                 m_avgSpeed);
+      }
+      m_stuckTimer = 0.0f;
+    }
+  }
 
   // カメラ演出とUI更新
   UpdateCamera(ctx, dt);
   UpdateUI(ctx);
 
   // 全ボール静止後のフェード処理
-  if (AreAllBallsSettled()) {
+  // 安全装置: 全てスポーンしてから一定時間経過したら強制的に次へ
+  // 修正: ロードが完了したら、ボールの状態に関わらず即座に次へ進む
+  bool forceFinish = false;
+
+  // ロード完了チェック
+  if (m_isLoading && m_loadTask.valid()) {
+    auto status = m_loadTask.wait_for(std::chrono::milliseconds(0));
+    if (status == std::future_status::ready) {
+      m_loadCompleted = true;
+      m_isLoading = false;
+      LOG_INFO("LoadingScene", "Asset Load Completed!");
+    }
+  }
+
+  if (m_loadCompleted) {
+    forceFinish = true; // ロード完了したら即終了
+  }
+
+  // タイムアウト安全装置
+  if (m_spawnedCount >= TOTAL_BALLS) {
+    m_forceFinishTimer += dt;
+    if (m_forceFinishTimer > 15.0f) { // タイムアウトを少し延長
+      forceFinish = true;
+      if (!m_fadeStarted) {
+        LOG_INFO("LoadingScene", "Force finish triggered due to timeout");
+      }
+    }
+  }
+
+  if (AreAllBallsSettled() || forceFinish) {
     UpdateFade(ctx, dt);
     ApplyFadeToScene(ctx);
   }
 
   // ESCで強制スキップ
   if (ctx.input.GetKeyDown(VK_ESCAPE)) {
+    LOG_INFO("LoadingScene", "Skip requested via ESC");
     if (ctx.sceneManager && m_nextSceneFactory) {
       ctx.sceneManager->ChangeScene(m_nextSceneFactory());
     }

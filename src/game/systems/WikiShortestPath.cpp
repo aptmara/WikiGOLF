@@ -6,12 +6,121 @@
 #include "WikiShortestPath.h"
 #include "../../core/Logger.h"
 #include <algorithm>
+#include <cstdlib>
 #include <ctime>
 #include <queue>
 #include <sqlite3.h>
 #include <sstream>
 
 namespace game::systems {
+
+namespace {
+
+// IN句のチャンクサイズ。ベンチでは 512〜1024 で差がほぼ無かったため安全側の512に固定。
+constexpr size_t kLinkChunkSize = 512;
+
+struct NodeInfo {
+  int parent = -1;
+  int depth = 0;
+};
+
+std::vector<int> ParseLinks(const unsigned char *text) {
+  std::vector<int> links;
+  if (!text)
+    return links;
+
+  const char *ptr = reinterpret_cast<const char *>(text);
+  const char *start = ptr;
+
+  while (*ptr) {
+    if (*ptr == '|') {
+      if (ptr > start) {
+        links.push_back(static_cast<int>(std::strtol(start, nullptr, 10)));
+      }
+      start = ptr + 1;
+    }
+    ++ptr;
+  }
+
+  if (ptr > start) {
+    links.push_back(static_cast<int>(std::strtol(start, nullptr, 10)));
+  }
+
+  return links;
+}
+
+bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
+                const char *fieldName,
+                std::unordered_map<int, std::vector<int>> &outLinks) {
+  if (pageIds.empty())
+    return true;
+
+  size_t index = 0;
+  while (index < pageIds.size()) {
+    size_t count = std::min(kLinkChunkSize, pageIds.size() - index);
+
+    std::string sql = "SELECT id, ";
+    sql += fieldName;
+    sql += " FROM links WHERE id IN (";
+    for (size_t i = 0; i < count; ++i) {
+      if (i > 0)
+        sql += ",";
+      sql += "?";
+    }
+    sql += ")";
+
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+      LOG_ERROR("WikiShortestPath", "Failed to prepare link fetch SQL: {}",
+                sqlite3_errmsg(db));
+      return false;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+      sqlite3_bind_int(stmt, static_cast<int>(i + 1),
+                       pageIds[index + i]); // placeholders are 1-based
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+      int pageId = sqlite3_column_int(stmt, 0);
+      const unsigned char *raw = sqlite3_column_text(stmt, 1);
+      outLinks[pageId] = ParseLinks(raw);
+    }
+
+    sqlite3_finalize(stmt);
+    index += count;
+  }
+
+  return true;
+}
+
+std::vector<int> BuildPath(int meet,
+                           const std::unordered_map<int, NodeInfo> &forwardInfo,
+                           const std::unordered_map<int, NodeInfo> &backwardInfo) {
+  std::vector<int> left;
+  int cur = meet;
+  auto it = forwardInfo.find(cur);
+  while (it != forwardInfo.end()) {
+    left.push_back(cur);
+    cur = it->second.parent;
+    it = forwardInfo.find(cur);
+  }
+  std::reverse(left.begin(), left.end());
+
+  std::vector<int> right;
+  cur = backwardInfo.at(meet).parent;
+  auto itBack = backwardInfo.find(cur);
+  while (itBack != backwardInfo.end()) {
+    right.push_back(cur);
+    cur = itBack->second.parent;
+    itBack = backwardInfo.find(cur);
+  }
+
+  left.insert(left.end(), right.begin(), right.end());
+  return left;
+}
+
+} // namespace
 
 WikiShortestPath::~WikiShortestPath() {
   if (m_db) {
@@ -274,6 +383,10 @@ WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
     result.errorMessage = "ターゲットIDが無効です";
     return result;
   }
+  if (sourceId < 0) {
+    result.errorMessage = "開始記事が見つかりません";
+    return result;
+  }
 
   // 同一ページ
   if (sourceId == targetId) {
@@ -283,125 +396,88 @@ WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
     return result;
   }
 
-  // 双方向BFS
-  std::unordered_map<int, std::vector<int>> unvisitedForward;
-  std::unordered_map<int, std::vector<int>> unvisitedBackward;
-  std::unordered_map<int, std::vector<int>> visitedForward;
-  std::unordered_map<int, std::vector<int>> visitedBackward;
+  // 双方向BFS（長さ優先。タイトル変換は1本のみ）
+  std::vector<int> frontierForward = {sourceId};
+  std::vector<int> frontierBackward = {targetId};
+  std::unordered_map<int, NodeInfo> forwardInfo;
+  std::unordered_map<int, NodeInfo> backwardInfo;
+  forwardInfo[sourceId] = {-1, 0};
+  backwardInfo[targetId] = {-1, 0};
 
-  unvisitedForward[sourceId] = {-1};
-  unvisitedBackward[targetId] = {-1};
+  bool found = false;
+  std::vector<int> pathIds;
 
-  std::vector<std::vector<int>> foundPaths;
-  int depth = 0;
+  for (int iter = 0; iter < maxDepth; ++iter) {
+    if (frontierForward.empty() || frontierBackward.empty())
+      break;
 
-  while (foundPaths.empty() && !unvisitedForward.empty() &&
-         !unvisitedBackward.empty() && depth < maxDepth) {
+    const bool expandForward = frontierForward.size() <= frontierBackward.size();
 
-    depth++;
-
-    // 探索方向選択
-    std::vector<int> forwardKeys, backwardKeys;
-    for (auto &kv : unvisitedForward)
-      forwardKeys.push_back(kv.first);
-    for (auto &kv : unvisitedBackward)
-      backwardKeys.push_back(kv.first);
-
-    int forwardCount = FetchOutgoingLinksCount(forwardKeys);
-    int backwardCount = FetchIncomingLinksCount(backwardKeys);
-
-    if (forwardCount < backwardCount) {
-      // 前方探索
-      for (auto &kv : unvisitedForward) {
-        visitedForward[kv.first] = kv.second;
+    if (expandForward) {
+      std::unordered_map<int, std::vector<int>> linkMap;
+      if (!FetchLinks(m_db, frontierForward, "outgoing_links", linkMap)) {
+        result.errorMessage = "リンク取得に失敗しました";
+        return result;
       }
 
-      std::unordered_map<int, std::vector<int>> newUnvisited;
-
-      for (int pageId : forwardKeys) {
-        std::string linksStr = FetchOutgoingLinks(pageId);
-        std::istringstream iss(linksStr);
-        std::string token;
-
-        while (std::getline(iss, token, '|')) {
-          if (token.empty())
-            continue;
-          int targetPageId = std::stoi(token);
-
-          if (visitedForward.find(targetPageId) == visitedForward.end() &&
-              newUnvisited.find(targetPageId) == newUnvisited.end()) {
-            newUnvisited[targetPageId] = {pageId};
-          } else if (newUnvisited.find(targetPageId) != newUnvisited.end()) {
-            newUnvisited[targetPageId].push_back(pageId);
+      std::vector<int> next;
+      for (int pageId : frontierForward) {
+        int nextDepth = forwardInfo[pageId].depth + 1;
+        for (int nb : linkMap[pageId]) {
+          if (forwardInfo.find(nb) == forwardInfo.end()) {
+            forwardInfo[nb] = {pageId, nextDepth};
+            next.push_back(nb);
+          }
+          if (backwardInfo.find(nb) != backwardInfo.end()) {
+            pathIds = BuildPath(nb, forwardInfo, backwardInfo);
+            found = true;
+            break;
           }
         }
+        if (found)
+          break;
       }
-
-      unvisitedForward = std::move(newUnvisited);
-
+      frontierForward = std::move(next);
     } else {
-      // 後方探索
-      for (auto &kv : unvisitedBackward) {
-        visitedBackward[kv.first] = kv.second;
+      std::unordered_map<int, std::vector<int>> linkMap;
+      if (!FetchLinks(m_db, frontierBackward, "incoming_links", linkMap)) {
+        result.errorMessage = "リンク取得に失敗しました";
+        return result;
       }
 
-      std::unordered_map<int, std::vector<int>> newUnvisited;
-
-      for (int pageId : backwardKeys) {
-        std::string linksStr = FetchIncomingLinks(pageId);
-        std::istringstream iss(linksStr);
-        std::string token;
-
-        while (std::getline(iss, token, '|')) {
-          if (token.empty())
-            continue;
-          int sourcePageId = std::stoi(token);
-
-          if (visitedBackward.find(sourcePageId) == visitedBackward.end() &&
-              newUnvisited.find(sourcePageId) == newUnvisited.end()) {
-            newUnvisited[sourcePageId] = {pageId};
-          } else if (newUnvisited.find(sourcePageId) != newUnvisited.end()) {
-            newUnvisited[sourcePageId].push_back(pageId);
+      std::vector<int> next;
+      for (int pageId : frontierBackward) {
+        int nextDepth = backwardInfo[pageId].depth + 1;
+        for (int nb : linkMap[pageId]) {
+          if (backwardInfo.find(nb) == backwardInfo.end()) {
+            backwardInfo[nb] = {pageId, nextDepth};
+            next.push_back(nb);
+          }
+          if (forwardInfo.find(nb) != forwardInfo.end()) {
+            pathIds = BuildPath(nb, forwardInfo, backwardInfo);
+            found = true;
+            break;
           }
         }
+        if (found)
+          break;
       }
-
-      unvisitedBackward = std::move(newUnvisited);
+      frontierBackward = std::move(next);
     }
 
-    // パス完成チェック
-    for (auto &kv : unvisitedForward) {
-      int pageId = kv.first;
-      if (unvisitedBackward.find(pageId) != unvisitedBackward.end()) {
-        auto pathsFromSource = ReconstructPaths(kv.second, visitedForward);
-        auto pathsFromTarget =
-            ReconstructPaths(unvisitedBackward[pageId], visitedBackward);
-
-        for (auto &ps : pathsFromSource) {
-          for (auto &pt : pathsFromTarget) {
-            std::vector<int> fullPath = ps;
-            fullPath.push_back(pageId);
-            for (auto it = pt.rbegin(); it != pt.rend(); ++it) {
-              fullPath.push_back(*it);
-            }
-            foundPaths.push_back(fullPath);
-          }
-        }
-      }
-    }
+    if (found)
+      break;
   }
 
-  if (foundPaths.empty()) {
+  if (!found) {
     result.errorMessage = "経路が見つかりません";
     return result;
   }
 
-  // 最短パスをタイトルに変換
-  auto &shortestPath = foundPaths[0];
   result.success = true;
-  result.degrees = (int)shortestPath.size() - 1;
+  result.degrees = static_cast<int>(pathIds.size()) - 1;
 
-  for (int pageId : shortestPath) {
+  for (int pageId : pathIds) {
     result.path.push_back(FetchPageTitle(pageId));
   }
 

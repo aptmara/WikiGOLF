@@ -75,7 +75,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
   // タイトル用（大きめ、セリフ体風）
   hr = m_dwriteFactory->CreateTextFormat(
       L"Georgia", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-      DWRITE_FONT_STRETCH_NORMAL, 32.0f, L"ja-JP", &m_titleFormat);
+      DWRITE_FONT_STRETCH_NORMAL, 64.0f, L"ja-JP", &m_titleFormat);
   if (FAILED(hr)) {
     LOG_ERROR("WikiTexGen", "Failed to create title TextFormat");
     return false;
@@ -84,7 +84,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
   // 本文用
   hr = m_dwriteFactory->CreateTextFormat(
       L"Meiryo", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
-      DWRITE_FONT_STRETCH_NORMAL, 16.0f, L"ja-JP", &m_bodyFormat);
+      DWRITE_FONT_STRETCH_NORMAL, 32.0f, L"ja-JP", &m_bodyFormat);
   if (FAILED(hr)) {
     LOG_ERROR("WikiTexGen", "Failed to create body TextFormat");
     return false;

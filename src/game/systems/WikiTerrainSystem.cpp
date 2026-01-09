@@ -13,6 +13,7 @@
 #include "../components/WikiComponents.h" // 追加
 #include "../components/Transform.h"
 #include "TerrainGenerator.h" // 追加
+#include "WikiClient.h" // 追加
 
 namespace game::systems {
 
@@ -57,12 +58,45 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   config.worldDepth = depth;
   config.resolutionX = 128; // 高解像度
   config.resolutionZ = 128;
-  config.heightScale = 3.0f; // 高低差3m
+  config.heightScale = 1.5f; // 高低差を抑えて読みやすく
 
-  // バイオーム決定 (ハッシュベース)
-  std::hash<std::string> hasher;
-  size_t h = hasher(pageTitle);
-  int biome = h % 4;
+  // バイオーム決定 (カテゴリベース)
+  WikiClient client;
+  auto categories = client.FetchPageCategories(pageTitle);
+  
+  int biome = 0; // Default: 0
+  bool found = false;
+
+  for (const auto& cat : categories) {
+      // 歴史・社会 -> 砂漠 (Heavy)
+      if (cat.find("歴史") != std::string::npos || cat.find("戦争") != std::string::npos || 
+          cat.find("事件") != std::string::npos || cat.find("政治") != std::string::npos ||
+          cat.find("古代") != std::string::npos) {
+          biome = 1; 
+          found = true; break;
+      }
+      // 科学・技術 -> 氷原 (Slippery)
+      if (cat.find("科学") != std::string::npos || cat.find("技術") != std::string::npos ||
+          cat.find("数学") != std::string::npos || cat.find("物理") != std::string::npos ||
+          cat.find("コンピュータ") != std::string::npos || cat.find("宇宙") != std::string::npos) {
+          biome = 2; 
+          found = true; break;
+      }
+      // 自然・地理 -> 岩場 (Bouncy)
+      if (cat.find("地理") != std::string::npos || cat.find("地形") != std::string::npos ||
+          cat.find("生物") != std::string::npos || cat.find("植物") != std::string::npos ||
+          cat.find("動物") != std::string::npos || cat.find("山") != std::string::npos) {
+          biome = 3; 
+          found = true; break;
+      }
+  }
+  
+  if (!found) {
+      // フォールバック: ハッシュ
+      std::hash<std::string> hasher;
+      size_t h = hasher(pageTitle);
+      biome = h % 4;
+  }
 
   XMFLOAT4 terrainColor = {1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -75,19 +109,19 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   case 1: // 砂漠 (Heavy)
       config.friction = 2.5f; 
       config.restitution = 0.1f;
-      config.heightScale = 5.0f; // 起伏激しい
+      config.heightScale = 2.5f; // 少し高いくらいに
       terrainColor = {0.9f, 0.8f, 0.5f, 1.0f}; // 砂色
       break;
   case 2: // 氷原 (Slippery)
       config.friction = 0.05f; 
       config.restitution = 0.6f;
-      config.heightScale = 2.0f; // 平坦
+      config.heightScale = 1.0f; // かなり平坦
       terrainColor = {0.8f, 0.9f, 1.0f, 1.0f}; // 白っぽい水色
       break;
   case 3: // 岩場 (Bouncy/Rough)
       config.friction = 0.6f; 
       config.restitution = 0.8f;
-      config.heightScale = 6.0f; // 険しい
+      config.heightScale = 3.0f; // そこそこ険しい
       terrainColor = {0.6f, 0.5f, 0.5f, 1.0f}; // 赤褐色
       break;
   }

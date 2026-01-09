@@ -8,8 +8,10 @@
 #include "../../ecs/Entity.h"
 #include "../../graphics/TextStyle.h"
 #include "../../resources/ResourceManager.h"
+#include "../components/WikiComponents.h"
 #include <DirectXMath.h>
 #include <functional>
+#include <future>
 #include <memory>
 #include <vector>
 
@@ -51,7 +53,7 @@ private:
   void UpdatePhysics(core::GameContext &ctx, float dt);
 
   /// @brief すべてのボールが静止したか判定
-  bool AreAllBallsSettled() const;
+  bool AreAllBallsSettled();
 
   /// @brief フェードアウト処理
   void UpdateFade(core::GameContext &ctx, float dt);
@@ -80,10 +82,10 @@ private:
   // 演出設定（巨大ボール積載仕様）
   static constexpr int TOTAL_BALLS = 24;         ///< 量感を出すための総数
   static constexpr float SPAWN_INTERVAL = 0.15f; ///< 心地よいテンポ
-  static constexpr float BALL_RADIUS = 3.5f; ///< 物理半径（衝突用の基準）
+  static constexpr float BALL_RADIUS = 3.5f;     ///< 物理半径（衝突用の基準）
   static constexpr float BALL_MODEL_SCALE =
       3.0f; ///< 見た目を大きくする係数（当たり判定は変えない）
-  static constexpr float GRAVITY = -120.0f;      ///< しっかり落とす
+  static constexpr float GRAVITY = -120.0f; ///< しっかり落とす
   static constexpr float RESTITUTION =
       0.28f; ///< 軽く弾ませて「動いている感」を出す
   static constexpr float FRICTION = 0.82f; ///< 横滑りを抑える
@@ -99,6 +101,19 @@ private:
   float m_fadeDelay = 0.6f; ///< 全ボール静止後の待機時間
   static constexpr float FADE_SPEED = 1.5f;
   float m_sceneTime = 0.0f;
+  float m_logTimer = 0.0f;
+  bool m_spawnFinishedLogged = false;
+  bool m_allSettledLogged = false;
+  bool m_fadeLogged = false;
+  int m_movingCount = 0;
+  float m_maxSpeed = 0.0f;
+  float m_avgSpeed = 0.0f;
+  int m_settledCount = 0;
+  int m_lastSettledCount = 0;
+  float m_stuckTimer = 0.0f;
+  DirectX::XMFLOAT3 m_lastMovingPos{0.0f, 0.0f, 0.0f};
+  bool m_hasMovingSample = false;
+  float m_forceFinishTimer = 0.0f; // 強制終了用タイマー
 
   // UI
   ecs::Entity m_textEntity;
@@ -124,6 +139,11 @@ private:
   static constexpr float ARENA_HALF_WIDTH = 24.0f;
   static constexpr float ARENA_HALF_DEPTH = 14.0f;
   static constexpr float FLOOR_Y = -8.0f;
+
+  // 非同期ロード
+  std::future<std::unique_ptr<game::components::WikiGlobalData>> m_loadTask;
+  bool m_isLoading = false;
+  bool m_loadCompleted = false;
 };
 
 } // namespace game::scenes

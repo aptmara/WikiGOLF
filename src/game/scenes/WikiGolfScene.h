@@ -9,12 +9,14 @@
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../systems/GameJuiceSystem.h"
 #include "../systems/MapSys.h"
+#include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
 #include <DirectXMath.h>
 #include <memory>
 #include <string>
 #include <vector>
+
 
 namespace core {
 struct GameContext;
@@ -102,6 +104,11 @@ private:
   std::vector<ecs::Entity> m_trajectoryDots;
   void UpdateTrajectory(core::GameContext &ctx, float powerRatio);
 
+  // 初回ロード用キャッシュ（シーン遷移時のラグ解消用）
+  bool m_hasPreloadedData = false;
+  std::vector<game::systems::WikiLink> m_preloadedLinks;
+  std::string m_preloadedExtract;
+
   // テクスチャ関連
   std::unique_ptr<graphics::WikiTextureGenerator> m_textureGenerator;
   std::unique_ptr<graphics::WikiTextureResult> m_wikiTexture;
@@ -111,14 +118,13 @@ private:
   int m_calculatedPar = -1; ///< API計算されたパー（-1=未計算/DB未使用）
 
   // 俯瞰マップビュー
-  bool m_isMapView = false;    ///< 俯瞰ビューモード
-  float m_mapZoom = 1.0f;      ///< マップズーム倍率
-  float m_fieldWidth = 20.0f;  ///< フィールド幅（マップ計算用）
-  float m_fieldDepth = 30.0f;  ///< フィールド奥行き（マップ計算用）
-  ecs::Entity m_mapHintEntity; ///< マップ操作ヒントUI
-
-  // カメラ操作
+  float m_fieldWidth = 20.0f;
+  float m_fieldDepth = 30.0f;
+  float m_mapZoom = 1.0f;
+  DirectX::XMFLOAT3 m_mapCenterOffset = {0.0f, 0.0f, 0.0f};
+  bool m_isMapView = false;
   int m_prevMouseX = 0;
+  int m_prevMouseY = 0; // Yも追加
 
   /// @brief 俯瞰カメラ更新
   void UpdateMapCamera(core::GameContext &ctx);
