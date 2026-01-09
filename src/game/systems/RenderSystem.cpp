@@ -19,6 +19,8 @@ struct VSConstants {
   XMMATRIX view;
   XMMATRIX projection;
   XMFLOAT4 materialColor;
+  XMFLOAT4 lightDir;
+  XMFLOAT4 cameraPos;
 };
 
 struct RenderState {
@@ -60,6 +62,7 @@ void RenderSystem(core::GameContext &ctx) {
   // 2. カメラ情報の取得
   XMMATRIX view = XMMatrixIdentity();
   XMMATRIX proj = XMMatrixIdentity();
+  XMFLOAT4 camPos = {0, 0, 0, 1};
 
   bool cameraFound = false;
   world.Query<components::Transform, components::Camera>().Each(
@@ -67,6 +70,7 @@ void RenderSystem(core::GameContext &ctx) {
         if (!cameraFound) {
           view = c.GetViewMatrix(t);
           proj = c.GetProjectionMatrix();
+          camPos = {t.position.x, t.position.y, t.position.z, 1.0f};
           cameraFound = true;
         }
       });
@@ -106,6 +110,9 @@ void RenderSystem(core::GameContext &ctx) {
             constants->view = view;
             constants->projection = proj;
             constants->materialColor = r.color;
+            // 簡易ライティング用 (左上奥からの光)
+            constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f}; 
+            constants->cameraPos = camPos;
             context->Unmap(state->cBuffer.Get(), 0);
           }
 

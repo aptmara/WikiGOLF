@@ -112,6 +112,9 @@ void TerrainGenerator::CreatePlatforms(TerrainData& data, const std::vector<std:
         // ここでは「周囲より少し低くして平らにする（窪地）」アプローチ
         float targetHeight = GetHeight(data, cx, cz) - 0.5f; 
         
+        // カップ周辺の窪み（すり鉢）の深さ
+        float bowlDepth = 0.4f;
+
         for (int z = cz - radius * 2; z <= cz + radius * 2; ++z) {
             for (int x = cx - radius * 2; x <= cx + radius * 2; ++x) {
                 if (x < 0 || x >= resX || z < 0 || z >= resZ) continue;
@@ -121,10 +124,16 @@ void TerrainGenerator::CreatePlatforms(TerrainData& data, const std::vector<std:
                 float dist = std::sqrt(dx*dx + dz*dz);
                 
                 if (dist < radius) {
-                    // 完全な平地
-                    // 徐々に平らにする (Lerp)
+                    // 中心に向かって窪ませる（Cosカーブですり鉢状に）
+                    float t = dist / radius; // 0.0(center) -> 1.0(edge)
+                    // Cos: 0->1, 1->0. 
+                    // 1.0 - cos(t * pi/2) ? No. cos(t * pi/2) is 1->0.
+                    // shape: 1.0 -> 0.0
+                    float shape = std::cos(t * 3.14159f * 0.5f);
+                    float h = targetHeight - shape * bowlDepth;
+                    
                     float currentH = GetHeight(data, x, z);
-                    SetHeight(data, x, z, Lerp(currentH, targetHeight, 0.8f));
+                    SetHeight(data, x, z, Lerp(currentH, h, 0.9f)); // 強めに適用
                 } else if (dist < radius * 2.0f) {
                     // スムースな接続部
                     float t = SmoothStep(radius, radius * 2.0f, dist);

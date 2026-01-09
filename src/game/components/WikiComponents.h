@@ -181,6 +181,7 @@ struct GolfHole {
   std::string linkTarget; ///< リンク先記事
   float radius = 0.5f;    ///< 判定半径
   bool isTarget = false;  ///< 目的記事へのリンクか
+  float gravity = 5.0f;   ///< 吸引力
 };
 
 } // namespace game::components
