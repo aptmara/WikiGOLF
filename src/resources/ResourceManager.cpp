@@ -252,6 +252,32 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   return handle;
 }
 
+MeshHandle ResourceManager::CreateDynamicMesh(
+    const std::string &name, const std::vector<graphics::Vertex> &vertices,
+    const std::vector<uint32_t> &indices) {
+
+  // 同名のキャッシュがあれば上書き（または再利用）だが、
+  // 動的生成なので内容が変わっている前提で新規作成または更新を行うのが安全。
+  // ここではシンプルに新規作成し、キャッシュマップを更新する。
+
+  graphics::Mesh mesh;
+  if (!mesh.Create(m_device.GetDevice(), vertices, indices)) {
+    LOG_ERROR("Resource", "Failed to create dynamic mesh: {}", name);
+    return {};
+  }
+
+  // もし既存の同名キャッシュがあれば、古いリソースはプールに残るが、
+  // キャッシュマップの指す先は新しいものになる。
+  // 本格的なエンジンの場合は参照カウント等で管理すべきだが、
+  // ここではシーン遷移時の全削除(Clear)に依存する。
+
+  auto handle = m_meshPool.Add(std::move(mesh));
+  m_meshCache[name] = handle;
+  
+  LOG_INFO("Resource", "Created dynamic mesh: {} ({} vertices)", name, vertices.size());
+  return handle;
+}
+
 ShaderHandle ResourceManager::LoadShader(const std::string &name,
                                          const std::wstring &vsPath,
                                          const std::wstring &psPath) {

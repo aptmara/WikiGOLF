@@ -63,6 +63,69 @@ bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
   return true;
 }
 
+// ヘルパー：地形の高さと法線を取得
+bool GetTerrainHeightAndNormal(const systems::TerrainData& terrain, float x, float z, float& outHeight, XMVECTOR& outNormal) {
+    float width = terrain.config.worldWidth;
+    float depth = terrain.config.worldDepth;
+    int resX = terrain.config.resolutionX;
+    int resZ = terrain.config.resolutionZ;
+
+    // UV座標 (0.0~1.0)
+    // Mesh生成時の座標系: px = (u - 0.5) * width, pz = (0.5 - v) * depth
+    // u = (px / width) + 0.5
+    // v = 0.5 - (pz / depth)
+    
+    float u = (x / width) + 0.5f;
+    float v = 0.5f - (z / depth);
+
+    if (u < 0.0f || u >= 1.0f || v < 0.0f || v >= 1.0f) return false;
+
+    float fx = u * (resX - 1);
+    float fz = v * (resZ - 1);
+    
+    int ix = (int)fx;
+    int iz = (int)fz;
+    
+    if (ix >= resX - 1) ix = resX - 2;
+    if (iz >= resZ - 1) iz = resZ - 2;
+    
+    float dx = fx - ix;
+    float dz = fz - iz;
+    
+    auto GetInfo = [&](int gx, int gz, float& h, XMVECTOR& n) {
+        int idx = gz * resX + gx;
+        if (idx >= 0 && idx < terrain.heightMap.size()) {
+            h = terrain.heightMap[idx];
+            n = XMLoadFloat3(&terrain.normals[idx]);
+        } else {
+            h = 0.0f;
+            n = XMVectorSet(0, 1, 0, 0);
+        }
+    };
+    
+    float h00, h10, h01, h11;
+    XMVECTOR n00, n10, n01, n11;
+    
+    GetInfo(ix, iz, h00, n00);
+    GetInfo(ix+1, iz, h10, n10);
+    GetInfo(ix, iz+1, h01, n01);
+    GetInfo(ix+1, iz+1, h11, n11);
+    
+    // 三角形分割 (左上分割)
+    if (dx + dz <= 1.0f) {
+        // Upper Left: (0,0)-(1,0)-(0,1)
+        outHeight = h00 * (1.0f - dx - dz) + h10 * dx + h01 * dz;
+        outNormal = XMVectorScale(n00, 1.0f - dx - dz) + XMVectorScale(n10, dx) + XMVectorScale(n01, dz);
+    } else {
+        // Lower Right: (1,1)-(0,1)-(1,0)
+        outHeight = h11 * (dx + dz - 1.0f) + h01 * (1.0f - dx) + h10 * (1.0f - dz);
+        outNormal = XMVectorScale(n11, dx + dz - 1.0f) + XMVectorScale(n01, 1.0f - dx) + XMVectorScale(n10, 1.0f - dz);
+    }
+    
+    outNormal = XMVector3Normalize(outNormal);
+    return true;
+}
+
 void PhysicsSystem(core::GameContext &ctx, float dt) {
   // 0. フリッパー制御 (省略なし)
   float flipperSpeed = 15.0f * dt;
@@ -116,10 +179,18 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
   }
   events->events.clear();
 
+  // 地形コライダーの取得 (シーンに1つと仮定)
+  systems::TerrainData* terrainData = nullptr;
+  ctx.world.Query<TerrainCollider>().Each([&](ecs::Entity, TerrainCollider& tc) {
+      if (tc.data) {
+          terrainData = tc.data.get();
+      }
+  });
+
   for (int step = 0; step < subSteps; ++step) {
     // 1. 積分ステップ (動的オブジェクトの移動)
-    ctx.world.Query<Transform, RigidBody>().Each(
-        [&](ecs::Entity, Transform &t, RigidBody &rb) {
+    ctx.world.Query<Transform, RigidBody, Collider>().Each(
+        [&](ecs::Entity e, Transform &t, RigidBody &rb, Collider& col) {
           if (rb.isStatic)
             return;
 
@@ -127,46 +198,90 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           XMVECTOR vel = XMLoadFloat3(&rb.velocity);
           XMVECTOR acc = XMLoadFloat3(&rb.acceleration);
 
-          // 接地判定（簡易）: 床の高さに近いか？
-          // 本来は衝突判定結果を使うべきだが、ゴルフなのでy=0付近を"地面"とみなして抵抗をかけるアプローチも可
-          // ここでは速度のY成分が小さく、かつ地面付近にある場合に転がり抵抗を加える
-          float yPos = XMVectorGetY(pos);
-          float yVel = XMVectorGetY(vel);
-
-          // 接地判定 (半径0.25f + マージン) かつ Y速度が小さい(跳ねていない)
-          bool isGrounded = (yPos <= 0.55f && std::abs(yVel) < 1.0f);
-          // ※マップの床の高さは0.0fを想定。球の半径0.1f + マージン
+          // 地形衝突判定 & 接地判定
+          bool isGrounded = false;
+          XMVECTOR groundNormal = XMVectorSet(0, 1, 0, 0);
+          
+          if (terrainData && col.type == ColliderType::Sphere) {
+              float radius = col.radius;
+              float terrainH = 0.0f;
+              XMVECTOR terrainN;
+              
+              if (GetTerrainHeightAndNormal(*terrainData, XMVectorGetX(pos), XMVectorGetZ(pos), terrainH, terrainN)) {
+                  float ballBottom = XMVectorGetY(pos) - radius;
+                  if (ballBottom < terrainH) {
+                      // めり込み修正 (押し出し)
+                      pos = XMVectorSetY(pos, terrainH + radius);
+                      
+                      // 速度の法線成分を確認 (反射)
+                      float vn = XMVectorGetX(XMVector3Dot(vel, terrainN));
+                      if (vn < 0.0f) {
+                          float res = rb.restitution * 0.5f; 
+                          XMVECTOR j = XMVectorScale(terrainN, -(1.0f + res) * vn);
+                          vel = XMVectorAdd(vel, j);
+                      }
+                      
+                      isGrounded = true;
+                      groundNormal = terrainN;
+                  } else if (ballBottom < terrainH + 0.1f) {
+                      // 接地判定のマージン (少し広めに)
+                      isGrounded = true;
+                      groundNormal = terrainN;
+                  }
+              }
+          } else {
+             // Fallback: Plane collision (y=0) if no terrain data
+             float yPos = XMVectorGetY(pos);
+             float yVel = XMVectorGetY(vel);
+             if (yPos <= 0.0f + col.radius) {
+                 if (yPos < 0.0f + col.radius) {
+                      pos = XMVectorSetY(pos, col.radius);
+                      float vn = XMVectorGetY(vel);
+                      if (vn < 0.0f) {
+                          vel = XMVectorSetY(vel, -vn * rb.restitution);
+                      }
+                 }
+                 isGrounded = (std::abs(yVel) < 1.0f);
+             }
+          }
 
           // 重力加算
           acc = XMVectorAdd(acc, gravity);
 
           // 空気抵抗 (Air Drag)
-          vel = XMVectorScale(vel, (1.0f - rb.drag * subDt)); // dt依存にする
+          vel = XMVectorScale(vel, (1.0f - rb.drag * subDt)); 
 
-          // 転がり抵抗 (Rolling Friction)
+          // 転がり抵抗 (Rolling Friction) & 斜面滑走
           if (isGrounded) {
-            // 水平方向の速度成分を取得
-            XMVECTOR xzVel =
-                XMVectorSet(XMVectorGetX(vel), 0.0f, XMVectorGetZ(vel), 0.0f);
-            float speed = XMVectorGetX(XMVector3Length(xzVel));
+             // 斜面での加速成分：重力のうち斜面に沿った成分はすでに acc に含まれている。
+             // しかし、垂直抗力によって打ち消される法線成分を除去する必要がある。
+             // 重力 G = (0, -g, 0)。 法線 N。
+             // 斜面方向の力 F = G - (G.N)N ... だが、ここでは「速度」を操作して擬似的に摩擦と垂直抗力を表現する。
+             
+             // 1. 速度の法線成分（壁に向かう成分）を除去（完全に滑る斜面）
+             float vn = XMVectorGetX(XMVector3Dot(vel, groundNormal));
+             // もし速度が地面に食い込む方向ならキャンセル
+             if (vn < 0.0f) {
+                 vel = XMVectorSubtract(vel, XMVectorScale(groundNormal, vn));
+             }
+             
+             // 2. 摩擦適用
+             XMVECTOR xzVel = vel; // 3次元速度全体に対して摩擦をかけるべきだが、ここでは簡易的に速度ベクトルを縮める
+             float speed = XMVectorGetX(XMVector3Length(xzVel));
 
-            if (speed > 0.001f) {
-              float frictionForce = rb.rollingFriction * subDt;
+             if (speed > 0.001f) {
+               float frictionForce = rb.rollingFriction * subDt;
+               // 斜面では摩擦が少し減るかも？ (N.Y 成分に応じて)
+               // float slopeFactor = std::max(0.2f, XMVectorGetY(groundNormal));
+               // frictionForce *= slopeFactor;
 
-              // 速度を減衰させる（逆方向への力というよりは減衰）
-              // 速度が小さい場合はゼロにする
-              if (speed < frictionForce) {
-                // 停止
-                vel = XMVectorSet(0, XMVectorGetY(vel), 0, 0);
-              } else {
-                float newSpeed = speed - frictionForce;
-                float scale = newSpeed / speed;
-                // Y成分は変えずにXZ成分のみスケーリング
-                XMVECTOR newXZ = XMVectorScale(xzVel, scale);
-                vel = XMVectorSet(XMVectorGetX(newXZ), XMVectorGetY(vel),
-                                  XMVectorGetZ(newXZ), 0);
-              }
-            }
+               if (speed < frictionForce) {
+                 vel = XMVectorSet(0, 0, 0, 0);
+               } else {
+                 float newSpeed = speed - frictionForce;
+                 vel = XMVectorScale(vel, newSpeed / speed);
+               }
+             }
           }
 
           // 速度更新 (v += a * dt)
@@ -175,18 +290,16 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           // 位置更新 (p += v * dt)
           pos = XMVectorAdd(pos, XMVectorScale(vel, subDt));
 
-          // 停止閾値 (Sleep Threshold) - 強化
+          // 停止閾値 (Sleep Threshold)
           float vSq;
           XMStoreFloat(&vSq, XMVector3LengthSq(vel));
-          // 速度が非常に小さく、かつ地面付近なら完全停止
           if (vSq < 0.1f * 0.1f && isGrounded) {
             vel = XMVectorSet(0, 0, 0, 0);
           }
 
-          // 床へのめり込み防止（簡易床コリジョン）
-          // Wikiマップなどは個別のColliderがあるので、これは安全策
+          // 落下判定
           if (XMVectorGetY(pos) < -50.0f) {
-            // 落下死（リスポーンはシーン側で管理）
+            // Scene handles respawn
           }
 
           // 加速度リセット
@@ -195,6 +308,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           XMStoreFloat3(&t.position, pos);
           XMStoreFloat3(&rb.velocity, vel);
         });
+
 
     // 2. 衝突検出と応答 (既存コードの維持)
     struct BodyInfo {
