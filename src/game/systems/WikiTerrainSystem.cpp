@@ -42,7 +42,7 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
 
   CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle);
   CreateWalls(ctx, fieldWidth, fieldDepth);
-  CreateImageObstacles(ctx, result, fieldWidth, fieldDepth);
+  // CreateImageObstacles(ctx, result, fieldWidth, fieldDepth);
 }
 
 void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
@@ -150,9 +150,8 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
       TerrainGenerator::GenerateTerrain(seedText, holePositions, config));
 
   // 単一メッシュを生成
-  auto meshHandle =
-      ctx.resource.CreateDynamicMesh("TerrainFull", m_terrainData->vertices,
-                                     m_terrainData->indices);
+  auto meshHandle = ctx.resource.CreateDynamicMesh(
+      "TerrainFull", m_terrainData->vertices, m_terrainData->indices);
 
   // エンティティ作成
   auto e = ctx.world.CreateEntity();

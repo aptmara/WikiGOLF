@@ -12,9 +12,10 @@
 !models/**
 !sounds/
 !sounds/**
+!Assets/
+!Assets/**
 
 # --- Whitelist: Root Files ---
-!CMakeLists.txt
 !.gitignore
 !*.cpp
 !*.h
@@ -54,3 +55,6 @@ tools/
 *.vcxproj
 *.vcxproj.filters
 *.sln
+
+# --- Explicitly Include ---
+!CMakeLists.txt

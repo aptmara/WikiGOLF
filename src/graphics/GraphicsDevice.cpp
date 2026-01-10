@@ -85,6 +85,19 @@ bool GraphicsDevice::Resize(uint32_t width, uint32_t height) {
 }
 
 bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
+  auto driverTypeToStr = [](D3D_DRIVER_TYPE type) {
+    switch (type) {
+    case D3D_DRIVER_TYPE_HARDWARE:
+      return "HARDWARE";
+    case D3D_DRIVER_TYPE_WARP:
+      return "WARP";
+    case D3D_DRIVER_TYPE_REFERENCE:
+      return "REFERENCE";
+    default:
+      return "UNKNOWN";
+    }
+  };
+
   DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
   swapChainDesc.BufferCount = 2;
   swapChainDesc.BufferDesc.Width = m_width;
@@ -98,8 +111,7 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
   swapChainDesc.SampleDesc.Count = 1;
   swapChainDesc.SampleDesc.Quality = 0;
   swapChainDesc.Windowed = TRUE;
-  swapChainDesc.SwapEffect =
-      DXGI_SWAP_EFFECT_DISCARD; // D2D互換（FLIP_DISCARDはD2D1レガシーAPIと非互換）
+  swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL; // D2D互換を優先
 
   UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT; // D2D互換に必須
 #ifdef _DEBUG
@@ -112,12 +124,45 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
   };
 
   D3D_FEATURE_LEVEL featureLevel;
-  HRESULT hr = D3D11CreateDeviceAndSwapChain(
-      nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createDeviceFlags,
-      featureLevels, _countof(featureLevels), D3D11_SDK_VERSION, &swapChainDesc,
-      &m_swapChain, &m_device, &featureLevel, &m_context);
+  auto tryCreate = [&](D3D_DRIVER_TYPE type) {
+    return D3D11CreateDeviceAndSwapChain(
+        nullptr, type, nullptr, createDeviceFlags, featureLevels,
+        _countof(featureLevels), D3D11_SDK_VERSION, &swapChainDesc,
+        &m_swapChain, &m_device, &featureLevel, &m_context);
+  };
 
-  return SUCCEEDED(hr);
+  // WARPを先に試し、ハードウェアが安定しない環境でも起動を優先
+  HRESULT hr = tryCreate(D3D_DRIVER_TYPE_WARP);
+  m_driverType = D3D_DRIVER_TYPE_WARP;
+  if (FAILED(hr)) {
+    LOG_WARN("GraphicsDevice",
+             "WARP device creation failed (hr={:08X}), trying hardware",
+             static_cast<uint32_t>(hr));
+    hr = tryCreate(D3D_DRIVER_TYPE_HARDWARE);
+    m_driverType = D3D_DRIVER_TYPE_HARDWARE;
+  }
+
+  if (FAILED(hr)) {
+    LOG_ERROR("GraphicsDevice", "Device creation failed (hr={:08X})",
+              static_cast<uint32_t>(hr));
+    return false;
+  }
+
+  m_featureLevel = featureLevel;
+  LOG_INFO("GraphicsDevice", "Device created. Driver={}, FeatureLevel=0x{:04X}",
+           driverTypeToStr(m_driverType),
+           static_cast<uint32_t>(m_featureLevel));
+
+  if (m_device) {
+    HRESULT reason = m_device->GetDeviceRemovedReason();
+    if (reason != S_OK) {
+      LOG_ERROR("GraphicsDevice", "Device already removed (reason={:08X})",
+                static_cast<uint32_t>(reason));
+      return false;
+    }
+  }
+
+  return true;
 }
 
 bool GraphicsDevice::CreateRenderTargetView() {
@@ -128,6 +173,12 @@ bool GraphicsDevice::CreateRenderTargetView() {
 
   hr = m_device->CreateRenderTargetView(backBuffer.Get(), nullptr,
                                         &m_renderTargetView);
+  if (FAILED(hr)) {
+    LOG_ERROR("GraphicsDevice",
+              "CreateRenderTargetView failed (hr={:08X}, removed={:08X})",
+              static_cast<uint32_t>(hr),
+              static_cast<uint32_t>(GetDeviceRemovedReason()));
+  }
   return SUCCEEDED(hr);
 }
 

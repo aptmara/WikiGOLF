@@ -130,6 +130,12 @@ HRESULT TextRenderer::CreateTargetBitmap(IDXGISwapChain *swapChain) {
     LOG_ERROR("TextRenderer",
               "CreateBitmapFromDxgiSurface failed (HRESULT: {:08X})",
               static_cast<uint32_t>(hr));
+    ComPtr<ID3D11Device> d3dDevice;
+    if (SUCCEEDED(swapChain->GetDevice(IID_PPV_ARGS(&d3dDevice)))) {
+      HRESULT reason = d3dDevice->GetDeviceRemovedReason();
+      LOG_ERROR("TextRenderer", "D3D device removed reason: {:08X}",
+                static_cast<uint32_t>(reason));
+    }
     return hr;
   }
 

@@ -489,7 +489,11 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
         // 摩擦による減速
         float speed = SafeLength(vel);
-        if (speed > 0.0001f) {
+        float tangentialAcc = SafeLength(acc); // 接地面に沿った加速度
+        if (CanStaticFrictionHold(speed, friction, tangentialAcc, subDt)) {
+          vel = XMVectorZero();
+          acc = XMVectorZero();
+        } else if (speed > 0.0001f) {
           float newSpeed = ApplyRollingFriction(speed, friction, subDt);
           if (newSpeed <= 0.0f) {
             vel = XMVectorZero();

@@ -50,6 +50,23 @@ int main() {
     CHECK_CLOSE(drop, expectedDrop, 1e-6f, "Drop helper multiplies coefficient by gravity and dt");
   }
 
+  // 5) 静止摩擦が坂の微小な押し出しを打ち消す
+  {
+    float smallSpeed = 0.05f;
+    float gentleSlopeAcc = 1.0f; // 摩擦 0.35 * 9.8 = 3.43 > 1.0
+    bool holds = game::systems::CanStaticFrictionHold(
+        smallSpeed, frictionCoeff, gentleSlopeAcc, dt);
+    CHECK(holds, "Static friction holds when tangential acceleration is weaker than friction");
+
+    bool slides = game::systems::CanStaticFrictionHold(
+        smallSpeed, frictionCoeff, 15.0f, dt);
+    CHECK(!slides, "Static friction yields when slope acceleration exceeds friction capability");
+
+    bool movingFast = game::systems::CanStaticFrictionHold(
+        0.6f, frictionCoeff, gentleSlopeAcc, dt);
+    CHECK(!movingFast, "Static friction is skipped once speed exceeds threshold");
+  }
+
   std::cout << "All physics friction tests passed!\n";
   return 0;
 }

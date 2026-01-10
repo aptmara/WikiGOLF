@@ -13,6 +13,7 @@
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
+#include "../utils/MapViewState.h"
 #include <DirectXMath.h>
 #include <memory>
 #include <string>
@@ -155,10 +156,16 @@ private:
   float m_mapZoom = 1.0f;
   DirectX::XMFLOAT3 m_mapCenterOffset = {0.0f, 0.0f, 0.0f};
   bool m_isMapView = false;
+  game::utils::MapViewSkyboxState
+      m_mapViewSkyboxState; ///< マップビュー時のスカイボックス制御
   int m_prevMouseX = 0;
   int m_prevMouseY = 0; // Yも追加
 
   float m_judgeDisplayTimer = 0.0f; // 判定表示タイマー
+
+  // カメラ追従用
+  DirectX::XMFLOAT3 m_shotStartCamPos = {0, 0, 0}; // ショット瞬間のカメラ位置
+  bool m_isCameraChasing = false;                  // 現在追尾モードに入ったか
 
   /// @brief 俯瞰カメラ更新
   void UpdateMapCamera(core::GameContext &ctx);

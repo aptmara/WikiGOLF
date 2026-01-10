@@ -28,7 +28,6 @@ private:
   ecs::Entity m_cameraEntity = 0; ///< カメラ
   ecs::Entity m_skyboxEntity = 0; ///< スカイボックス
   ecs::Entity m_floorEntity = 0;  ///< 地面
-  ecs::Entity m_ballEntity = 0;   ///< 演出用ボール
 
   // --- 豪華演出用 ---
   std::vector<ecs::Entity> m_clubs;       ///< 周回するクラブ
@@ -55,8 +54,27 @@ private:
     DirectX::XMFLOAT3 basePos;
     float phase;
     float speed;
+    int type; // 0:Normal, 1:Galaxy
   };
   std::vector<Particle> m_particles;
+
+  // --- デジタルオーロラ ---
+  struct AuroraSegment {
+    ecs::Entity entity;
+    float phaseOffset;
+    float heightBase;
+  };
+  std::vector<AuroraSegment> m_auroraSegments;
+
+  // --- ジオメトリック・ストーム ---
+  struct StormObject {
+    ecs::Entity entity;
+    float lifeTime;
+    float maxLife;
+    DirectX::XMFLOAT3 rotAxis;
+  };
+  std::vector<StormObject> m_stormObjects;
+  float m_stormTimer = 0.0f;
 
   // --- 演出制御 ---
   float m_time = 0.0f;
