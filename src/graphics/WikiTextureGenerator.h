@@ -50,13 +50,13 @@ struct HeadingRegion {
  * @brief Wikipedia風テクスチャ生成結果
  */
 struct WikiTextureResult {
-  ComPtr<ID3D11Texture2D> texture;      ///< 生成されたテクスチャ
-  ComPtr<ID3D11ShaderResourceView> srv; ///< シェーダーリソースビュー
-  std::vector<LinkRegion> links;        ///< リンク領域一覧
-  std::vector<ImageRegion> images;      ///< 画像領域一覧
-  std::vector<HeadingRegion> headings;  ///< 見出し領域一覧
-  uint32_t width;                       ///< テクスチャ幅
-  uint32_t height;                      ///< テクスチャ高さ
+  ComPtr<ID3D11Texture2D> texture;
+  ComPtr<ID3D11ShaderResourceView> srv;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  std::vector<LinkRegion> links;
+  std::vector<ImageRegion> images;
+  std::vector<HeadingRegion> headings;
 };
 
 /**

@@ -14,7 +14,6 @@
 #include <type_traits>
 #include <vector>
 
-
 namespace resources {
 
 /// @brief リソース管理プール
@@ -60,14 +59,14 @@ public:
   T *Get(Handle handle) {
     // インデックス範囲チェック
     if (handle.index >= m_slots.size()) {
-      return HandleError("インデックス範囲外");
+      return HandleError("Index out of range");
     }
 
     Slot &slot = m_slots[handle.index];
 
     // 生存チェック & 世代チェック
     if (!slot.isAlive || slot.generation != handle.generation) {
-      return HandleError("無効な世代または破棄されたリソース");
+      return HandleError("Invalid generation or destroyed resource");
     }
 
     return &slot.resource;

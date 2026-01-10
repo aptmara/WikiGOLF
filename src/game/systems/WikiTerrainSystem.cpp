@@ -11,10 +11,9 @@
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
-#include "../components/WikiComponents.h" // 追加
-#include "TerrainGenerator.h"             // 追加
-#include "WikiClient.h"                   // 追加
-
+#include "../components/WikiComponents.h"
+#include "TerrainGenerator.h"
+#include "WikiClient.h"
 
 namespace game::systems {
 
@@ -43,11 +42,7 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
 
   CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle);
   CreateWalls(ctx, fieldWidth, fieldDepth);
-  // 画像や見出しの障害物は、地形の起伏に埋もれる可能性があるため、
-  // 地形の高さを考慮して配置する必要があるが、一旦Y座標調整のみで対応
   CreateImageObstacles(ctx, result, fieldWidth, fieldDepth);
-  // CreateHeadingSteps は地形そのもので表現されるべきなので廃止検討
-  // だが、今回は残しておく（地形の上に浮くかもしれないが）
 }
 
 void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
@@ -70,7 +65,6 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   bool found = false;
 
   for (const auto &cat : categories) {
-    // 歴史・社会 -> 砂漠 (Heavy)
     if (cat.find("歴史") != std::string::npos ||
         cat.find("戦争") != std::string::npos ||
         cat.find("事件") != std::string::npos ||
@@ -80,7 +74,6 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
       found = true;
       break;
     }
-    // 科学・技術 -> 氷原 (Slippery)
     if (cat.find("科学") != std::string::npos ||
         cat.find("技術") != std::string::npos ||
         cat.find("数学") != std::string::npos ||
@@ -91,7 +84,6 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
       found = true;
       break;
     }
-    // 自然・地理 -> 岩場 (Bouncy)
     if (cat.find("地理") != std::string::npos ||
         cat.find("地形") != std::string::npos ||
         cat.find("生物") != std::string::npos ||
@@ -105,7 +97,6 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   }
 
   if (!found) {
-    // フォールバック: ハッシュ
     std::hash<std::string> hasher;
     size_t h = hasher(pageTitle);
     biome = h % 4;
@@ -114,45 +105,39 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   XMFLOAT4 terrainColor = {1.0f, 1.0f, 1.0f, 1.0f};
 
   switch (biome) {
-  case 0: // 草原 (Normal)
+  case 0: // 草原
     config.friction = 0.5f;
     config.restitution = 0.3f;
-    terrainColor = {0.4f, 0.8f, 0.4f, 1.0f}; // 緑
+    terrainColor = {0.4f, 0.8f, 0.4f, 1.0f};
     break;
-  case 1: // 砂漠 (Heavy)
+  case 1: // 砂漠
     config.friction = 2.5f;
     config.restitution = 0.1f;
-    config.heightScale = 2.5f;               // 少し高いくらいに
-    terrainColor = {0.9f, 0.8f, 0.5f, 1.0f}; // 砂色
+    config.heightScale = 2.5f;
+    terrainColor = {0.9f, 0.8f, 0.5f, 1.0f};
     break;
-  case 2: // 氷原 (Slippery)
+  case 2: // 氷原
     config.friction = 0.05f;
     config.restitution = 0.6f;
-    config.heightScale = 1.0f;               // かなり平坦
-    terrainColor = {0.8f, 0.9f, 1.0f, 1.0f}; // 白っぽい水色
+    config.heightScale = 1.0f;
+    terrainColor = {0.8f, 0.9f, 1.0f, 1.0f};
     break;
-  case 3: // 岩場 (Bouncy/Rough)
+  case 3: // 岩場
     config.friction = 0.6f;
     config.restitution = 0.8f;
-    config.heightScale = 3.0f;               // そこそこ険しい
-    terrainColor = {0.6f, 0.5f, 0.5f, 1.0f}; // 赤褐色
+    config.heightScale = 3.0f;
+    terrainColor = {0.6f, 0.5f, 0.5f, 1.0f};
     break;
   }
 
-  // 記事テキストとリンク情報（WikiTextureResultにはリンク位置はあるがテキストがない）
-  // テクスチャ生成時に使ったテキストが必要だが、ここには渡されていない。
-  // 簡易的に WikiTextureResult の text (wstring) を string に変換して使うか、
-  // あるいはランダムシードとして pageTitle を使う。
-  // ここでは pageTitle をシードにする。
   std::string seedText = pageTitle;
 
-  // リンクのワールド座標を計算してTerrainGeneratorに渡す
+  // リンクのワールド座標を計算
   std::vector<DirectX::XMFLOAT2> holePositions;
   float texW = (float)result.width;
   float texH = (float)result.height;
 
   for (const auto &link : result.links) {
-    // WikiGolfSceneと同じ座標計算式を使用
     float texCenterX = link.x + link.width * 0.5f;
     float texCenterY = link.y + link.height * 0.5f;
     float worldX = (texCenterX / texW - 0.5f) * width;
@@ -161,30 +146,26 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   }
 
   // 地形データ生成
-  // TerrainDataは大きくコピーコストが高いので、shared_ptrで管理してコンポーネントと共有する
   m_terrainData = std::make_shared<TerrainData>(
       TerrainGenerator::GenerateTerrain(seedText, holePositions, config));
-  auto terrainData = m_terrainData;
 
-  // メッシュリソース作成
-  std::string meshName = "GeneratedTerrain_" + seedText;
-  auto meshHandle = ctx.resource.CreateDynamicMesh(
-      meshName, terrainData->vertices, terrainData->indices);
+  // 単一メッシュを生成
+  auto meshHandle =
+      ctx.resource.CreateDynamicMesh("TerrainFull", m_terrainData->vertices,
+                                     m_terrainData->indices);
 
   // エンティティ作成
   auto e = ctx.world.CreateEntity();
   auto &t = ctx.world.Add<Transform>(e);
-  t.position = {0.0f, 0.0f, 0.0f}; // メッシュ自体がオフセットを持っているので0
+  t.position = {0.0f, 0.0f, 0.0f};
   t.scale = {1.0f, 1.0f, 1.0f};
 
   auto &mr = ctx.world.Add<MeshRenderer>(e);
   mr.mesh = meshHandle;
-  // 地形専用シェーダーを使用（グリッド、フォグ、ライティング）
   mr.shader =
       ctx.resource.LoadShader("Terrain", L"Assets/shaders/TerrainVS.hlsl",
                               L"Assets/shaders/TerrainPS.hlsl");
   mr.color = terrainColor;
-
   if (result.srv) {
     mr.textureSRV = result.srv;
     mr.hasTexture = true;
@@ -195,36 +176,33 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   rb.restitution = 0.2f;
   rb.rollingFriction = 0.5f;
 
-  // 地形コライダーを追加（物理システムで使用）
   auto &tc = ctx.world.Add<TerrainCollider>(e);
-  tc.data = terrainData;
-
+  tc.data = m_terrainData;
   m_floorEntity = e;
+
   m_entities.push_back(e);
 
   LOG_INFO("WikiTerrain", "Generated terrain mesh with {} vertices",
-           terrainData->vertices.size());
+           m_terrainData->vertices.size());
 }
 
 void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
                                     float depth) {
-  float wallHeight = 4.0f;    // 高くする
-  float wallThickness = 2.0f; // 厚くする
+  float wallHeight = 8.0f;
+  float wallThickness = 6.0f;
   float halfW = width * 0.5f;
   float halfD = depth * 0.5f;
 
-  // 4方向の壁
   struct WallDef {
     float x, z, w, d;
   };
   WallDef walls[] = {
       {0.0f, halfD + wallThickness * 0.5f, width + wallThickness * 2,
-       wallThickness}, // 奥
+       wallThickness},
       {0.0f, -halfD - wallThickness * 0.5f, width + wallThickness * 2,
-       wallThickness},                                             // 手前
-      {-halfW - wallThickness * 0.5f, 0.0f, wallThickness, depth}, // 左
-      {halfW + wallThickness * 0.5f, 0.0f, wallThickness, depth}   // 右
-  };
+       wallThickness},
+      {-halfW - wallThickness * 0.5f, 0.0f, wallThickness, depth},
+      {halfW + wallThickness * 0.5f, 0.0f, wallThickness, depth}};
 
   for (const auto &w : walls) {
     auto e = ctx.world.CreateEntity();
@@ -234,8 +212,8 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");
-    mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                        L"shaders/BasicPS.hlsl");
+    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                        L"Assets/shaders/BasicPS.hlsl");
     mr.color = {0.8f, 0.8f, 0.8f, 1.0f};
 
     auto &rb = ctx.world.Add<RigidBody>(e);
@@ -256,8 +234,10 @@ void WikiTerrainSystem::CreateImageObstacles(
   float texW = (float)result.width;
   float texH = (float)result.height;
 
+  if (texW <= 0.0f || texH <= 0.0f)
+    return;
+
   for (const auto &img : result.images) {
-    // 画像のワールド座標への変換
     float centerX = img.x + img.width * 0.5f;
     float centerY = img.y + img.height * 0.5f;
 
@@ -266,19 +246,17 @@ void WikiTerrainSystem::CreateImageObstacles(
     float worldW = (img.width / texW) * fieldWidth;
     float worldD = (img.height / texH) * fieldDepth;
 
-    float height = 2.0f; // 高くする
+    float height = 2.0f;
 
-    // 本体
     auto e = ctx.world.CreateEntity();
     auto &t = ctx.world.Add<Transform>(e);
-    // Y座標はとりあえず浮かないように高めに設定して埋める
     t.position = {worldX, height * 0.5f, worldZ};
     t.scale = {worldW, height, worldD};
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");
-    mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                        L"shaders/BasicPS.hlsl");
+    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                        L"Assets/shaders/BasicPS.hlsl");
     mr.color = {0.9f, 0.9f, 0.9f, 1.0f};
 
     auto &rb = ctx.world.Add<RigidBody>(e);
@@ -295,17 +273,11 @@ void WikiTerrainSystem::CreateImageObstacles(
 
 void WikiTerrainSystem::CreateHeadingSteps(
     core::GameContext &ctx, const graphics::WikiTextureResult &result,
-    float fieldWidth, float fieldDepth) {
-  // 廃止（地形に統合されるため）
-}
+    float fieldWidth, float fieldDepth) {}
 
 float WikiTerrainSystem::GetHeight(float x, float z) const {
   if (!m_terrainData)
     return 0.0f;
-
-  // ワールド座標 -> ハイトマップ座標
-  // px = (u - 0.5) * W  => u = px/W + 0.5
-  // pz = (0.5 - v) * D  => v = 0.5 - pz/D
 
   float worldW = m_terrainData->config.worldWidth;
   float worldD = m_terrainData->config.worldDepth;
@@ -321,7 +293,6 @@ float WikiTerrainSystem::GetHeight(float x, float z) const {
   int ix = (int)(u * (resX - 1));
   int iz = (int)(v * (resZ - 1));
 
-  // 範囲チェック
   if (ix < 0)
     ix = 0;
   if (ix >= resX)
