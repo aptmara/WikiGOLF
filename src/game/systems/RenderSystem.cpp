@@ -19,6 +19,7 @@ struct VSConstants {
   XMMATRIX view;
   XMMATRIX projection;
   XMFLOAT4 materialColor;
+  XMFLOAT4 materialFlags; // x: hasTexture, y: hasNormalMap
   XMFLOAT4 lightDir;
   XMFLOAT4 cameraPos;
 };
@@ -88,6 +89,7 @@ void RenderSystem(core::GameContext &ctx) {
 
   // 3. レンダリングループ
   context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
+  context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
 
   world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t,
@@ -110,6 +112,10 @@ void RenderSystem(core::GameContext &ctx) {
             constants->view = view;
             constants->projection = proj;
             constants->materialColor = r.color;
+            const bool hasDiffuse = r.hasTexture && r.textureSRV;
+            const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
+            constants->materialFlags = {hasDiffuse ? 1.0f : 0.0f,
+                                        hasNormal ? 1.0f : 0.0f, 0.0f, 0.0f};
             // 簡易ライティング用 (左上奥からの光)
             constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f}; 
             constants->cameraPos = camPos;
@@ -117,13 +123,21 @@ void RenderSystem(core::GameContext &ctx) {
           }
 
           // テクスチャバインド（あれば）
+          ID3D11ShaderResourceView *nullSRV = nullptr;
           if (r.hasTexture && r.textureSRV) {
             context->PSSetShaderResources(0, 1, r.textureSRV.GetAddressOf());
-            context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
           } else {
-            ID3D11ShaderResourceView *nullSRV = nullptr;
             context->PSSetShaderResources(0, 1, &nullSRV);
           }
+
+          if (r.hasNormalMap && r.normalMapSRV) {
+            context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
+          } else {
+            context->PSSetShaderResources(1, 1, &nullSRV);
+          }
+
+          context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
+          context->PSSetSamplers(1, 1, state->sampler.GetAddressOf());
 
           mesh->Bind(context);
           mesh->Draw(context);

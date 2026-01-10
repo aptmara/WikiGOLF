@@ -22,6 +22,9 @@ struct RigidBody {
   float drag = 0.01f;           ///< 空気抵抗係数 (0.0 - 1.0)
   float rollingFriction = 0.5f; ///< 転がり抵抗係数 (接地時の減速)
   float restitution = 0.5f;     ///< 反発係数 (0.0: 非弾性 - 1.0: 完全弾性)
+  DirectX::XMFLOAT3 angularVelocity = {0.0f, 0.0f,
+                                       0.0f}; ///< 角速度ベクトル (rad/s)
+  float spinDecay = 0.5f; ///< スピン減衰係数 (空気抵抗による減速)
   bool isStatic =
       false; ///< 静的オブジェクトフラグ (trueの場合、物理演算で移動しない)
 };
@@ -30,8 +33,9 @@ struct RigidBody {
  * @brief コライダーの種類
  */
 enum class ColliderType {
-  Sphere, ///< 球体コライダー
-  Box     ///< 矩形（AABB）コライダー
+  Sphere,  ///< 球体コライダー
+  Box,     ///< 矩形（AABB）コライダー
+  Cylinder ///< 円柱コライダー
 };
 
 /**

@@ -10,6 +10,7 @@
 #include "ResourcePool.h"
 #include <string>
 #include <unordered_map>
+#include <wrl/client.h>
 
 
 namespace graphics {
@@ -52,6 +53,10 @@ public:
   /// @brief 音声を取得
   audio::AudioClip *GetAudio(AudioHandle handle);
 
+  /// @brief テクスチャをSRVとしてロード（キャッシュ付き）
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
+  LoadTextureSRV(const std::string &path);
+
   /// @brief 全リソースを解放（シーン遷移用）
   void Clear();
 
@@ -69,6 +74,10 @@ private:
 
   ResourcePool<audio::AudioClip> m_audioPool;
   std::unordered_map<std::string, AudioHandle> m_audioCache;
+
+  std::unordered_map<std::string,
+                     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>>
+      m_textureCache;
 };
 
 } // namespace resources

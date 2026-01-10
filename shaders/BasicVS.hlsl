@@ -8,6 +8,7 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View;
     matrix Projection;
     float4 MaterialColor;
+    float4 MaterialFlags; // x: hasDiffuse, y: hasNormalMap
 };
 
 struct VS_INPUT {
@@ -15,6 +16,8 @@ struct VS_INPUT {
     float3 normal : NORMAL;
     float2 texCoord : TEXCOORD;
     float4 color : COLOR;
+    float3 tangent : TANGENT;
+    float3 bitangent : BINORMAL;
 };
 
 struct VS_OUTPUT {
@@ -22,6 +25,8 @@ struct VS_OUTPUT {
     float3 normal : NORMAL;
     float2 texCoord : TEXCOORD;
     float4 color : COLOR;
+    float3 tangent : TANGENT;
+    float3 bitangent : BINORMAL;
 };
 
 VS_OUTPUT main(VS_INPUT input) {
@@ -31,8 +36,10 @@ VS_OUTPUT main(VS_INPUT input) {
     float4 viewPos = mul(worldPos, View);
     output.position = mul(viewPos, Projection);
     
-    output.normal = mul(input.normal, (float3x3)World);
-    output.texCoord = input.texCoord;
+    float3x3 world3x3 = (float3x3)World;
+    output.normal = mul(input.normal, world3x3);
+    output.tangent = mul(input.tangent, world3x3);
+    output.bitangent = mul(input.bitangent, world3x3);
     output.texCoord = input.texCoord;
     output.color = input.color * MaterialColor;
     

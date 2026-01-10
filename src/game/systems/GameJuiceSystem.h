@@ -66,12 +66,17 @@ public:
 
   // === インパクトエフェクト ===
 
+  /// @brief 判定タイプ（パーティクルの色・挙動に影響）
+  enum class JudgeType { None, Great, Nice, Miss };
+
   /// @brief インパクトエフェクト発火
   /// @param ctx ゲームコンテキスト
   /// @param position エフェクト発生位置
   /// @param power エフェクトの強さ（パーティクル速度に影響）
+  /// @param judge 判定タイプ（デフォルト: None）
   void TriggerImpactEffect(core::GameContext &ctx,
-                           const DirectX::XMFLOAT3 &position, float power);
+                           const DirectX::XMFLOAT3 &position, float power,
+                           JudgeType judge = JudgeType::None);
 
   // === トレイル ===
 
@@ -95,7 +100,7 @@ private:
   std::vector<DirectX::XMFLOAT3> m_trailPositions;
   int m_trailWriteIndex = 0;
   float m_trailUpdateTimer = 0.0f;
-  static constexpr int kTrailCount = 15;
+  static constexpr int kTrailCount = 40;               // 派手に増量
   static constexpr float kTrailUpdateInterval = 0.02f; // 50Hz
 
   // --- インパクトエフェクト ---
@@ -105,7 +110,7 @@ private:
     float lifetime = 0.0f;
   };
   std::vector<ImpactParticle> m_impactParticles;
-  static constexpr int kImpactParticleCount = 12;
+  static constexpr int kImpactParticleCount = 80; // 大幅増量で派手に
 
   // --- 内部処理 ---
   void UpdateCameraShake(core::GameContext &ctx, ecs::Entity cameraEntity);

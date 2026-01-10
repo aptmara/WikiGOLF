@@ -4,7 +4,9 @@
 #include "../graphics/GraphicsDevice.h"
 #include "../graphics/MeshPrimitives.h"
 #include "../graphics/ObjLoader.h"
+#include <wincodec.h>
 #include <algorithm>
+#include <vector>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -163,6 +165,117 @@ audio::AudioClip *ResourceManager::GetAudio(AudioHandle handle) {
   return m_audioPool.Get(handle);
 }
 
+Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
+ResourceManager::LoadTextureSRV(const std::string &path) {
+  if (auto it = m_textureCache.find(path); it != m_textureCache.end()) {
+    return it->second;
+  }
+
+  // WIC Factory (lazy init)
+  static Microsoft::WRL::ComPtr<IWICImagingFactory> s_factory;
+  if (!s_factory) {
+    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr,
+                                  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&s_factory));
+    if (FAILED(hr)) {
+      LOG_ERROR("Resource", "Failed to create WICImagingFactory (hr=0x{:08X})",
+                static_cast<uint32_t>(hr));
+      return {};
+    }
+  }
+
+  int size_needed =
+      MultiByteToWideChar(CP_UTF8, 0, &path[0], (int)path.size(), NULL, 0);
+  std::wstring wpath(size_needed, 0);
+  MultiByteToWideChar(CP_UTF8, 0, &path[0], (int)path.size(), &wpath[0],
+                      size_needed);
+
+  Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+  HRESULT hr = s_factory->CreateDecoderFromFilename(
+      wpath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad,
+      &decoder);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "Failed to decode texture: {} (hr=0x{:08X})", path,
+              static_cast<uint32_t>(hr));
+    return {};
+  }
+
+  Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+  decoder->GetFrame(0, &frame);
+
+  Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+  hr = s_factory->CreateFormatConverter(&converter);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CreateFormatConverter failed for {}", path);
+    return {};
+  }
+
+  hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
+                             WICBitmapDitherTypeNone, nullptr, 0.0,
+                             WICBitmapPaletteTypeMedianCut);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "Format conversion failed for {}", path);
+    return {};
+  }
+
+  UINT width = 0;
+  UINT height = 0;
+  converter->GetSize(&width, &height);
+  if (width == 0 || height == 0) {
+    LOG_ERROR("Resource", "Texture has invalid size: {}", path);
+    return {};
+  }
+
+  const UINT stride = width * 4;
+  const UINT bufferSize = stride * height;
+  std::vector<BYTE> pixels(bufferSize);
+  hr = converter->CopyPixels(nullptr, stride, bufferSize, pixels.data());
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CopyPixels failed for {}", path);
+    return {};
+  }
+
+  D3D11_TEXTURE2D_DESC desc = {};
+  desc.Width = width;
+  desc.Height = height;
+  desc.MipLevels = 1;
+  desc.ArraySize = 1;
+  desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  desc.SampleDesc.Count = 1;
+  desc.Usage = D3D11_USAGE_DEFAULT;
+  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+  D3D11_SUBRESOURCE_DATA initData = {};
+  initData.pSysMem = pixels.data();
+  initData.SysMemPitch = stride;
+
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+  hr = m_device.GetDevice()->CreateTexture2D(&desc, &initData, &texture);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CreateTexture2D failed for {} (hr=0x{:08X})", path,
+              static_cast<uint32_t>(hr));
+    return {};
+  }
+
+  D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+  srvDesc.Format = desc.Format;
+  srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+  srvDesc.Texture2D.MostDetailedMip = 0;
+  srvDesc.Texture2D.MipLevels = 1;
+
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
+  hr = m_device.GetDevice()->CreateShaderResourceView(texture.Get(), &srvDesc,
+                                                      &srv);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CreateShaderResourceView failed for {} (hr=0x{:08X})",
+              path, static_cast<uint32_t>(hr));
+    return {};
+  }
+
+  m_textureCache[path] = srv;
+  LOG_INFO("Resource", "Loaded Texture: {} ({}x{})", path, width, height);
+  return srv;
+}
+
 MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   // キャッシュヒット確認
   if (auto it = m_meshCache.find(path); it != m_meshCache.end()) {
@@ -310,6 +423,7 @@ void ResourceManager::Clear() {
   m_shaderCache.clear();
   m_audioPool.Clear();
   m_audioCache.clear();
+  m_textureCache.clear();
 }
 
 void ResourceManager::DumpStatistics() const {

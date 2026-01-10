@@ -70,7 +70,7 @@ struct WikiGlobalData {
 
   // 初回ロード済みデータ (LoadingSceneで取得済みの場合に使用)
   bool hasCachedData = false;
-  std::vector<game::systems::WikiLink> cachedLinks;
+  std::vector<game::WikiLink> cachedLinks;
   std::string cachedExtract;
 };
 
@@ -141,6 +141,10 @@ struct GolfGameState {
   uint32_t resultBgEntity = 0;    ///< 結果画面背景
   uint32_t resultTextEntity = 0;  ///< 結果テキスト
   uint32_t retryButtonEntity = 0; ///< おあいこボタン
+  uint32_t guideBgEntity = 0;     ///< ガイド背景（半透明帯）
+  uint32_t guideEntity = 0;       ///< ガイドUIエンティティ
+
+  std::vector<uint32_t> holes; ///< ホールエンティティリスト
 };
 
 /**

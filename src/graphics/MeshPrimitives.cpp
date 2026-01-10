@@ -1,4 +1,5 @@
 #include "MeshPrimitives.h"
+#include "TangentGenerator.h"
 #include <cmath>
 #include <vector>
 
@@ -21,6 +22,8 @@ Mesh MeshPrimitives::CreateTriangle(ID3D11Device *device) {
        {0.0f, 0.0f, 1.0f, 1.0f}},
   };
   std::vector<uint32_t> indices = {0, 1, 2};
+
+  ComputeTangents(vertices, indices);
 
   Mesh mesh;
   mesh.Create(device, vertices, indices);
@@ -73,6 +76,8 @@ Mesh MeshPrimitives::CreateCube(ID3D11Device *device) {
     indices.push_back(base + 3);
   }
 
+  ComputeTangents(vertices, indices);
+
   Mesh mesh;
   mesh.Create(device, vertices, indices);
   return mesh;
@@ -120,6 +125,8 @@ Mesh MeshPrimitives::CreateSphere(ID3D11Device *device, int segments) {
     }
   }
 
+  ComputeTangents(vertices, indices);
+
   Mesh mesh;
   mesh.Create(device, vertices, indices);
   return mesh;
@@ -138,6 +145,8 @@ Mesh MeshPrimitives::CreatePlane(ID3D11Device *device, float width,
   };
 
   std::vector<uint32_t> indices = {0, 1, 2, 0, 2, 3};
+
+  ComputeTangents(vertices, indices);
 
   Mesh mesh;
   mesh.Create(device, vertices, indices);

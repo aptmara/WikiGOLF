@@ -3,6 +3,7 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View;
     matrix Projection;
     float4 Color;
+    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap (unused here)
     float4 LightDir; // w is unused
     float4 CameraPos; // w is unused
 };
@@ -12,6 +13,8 @@ struct VS_INPUT {
     float3 Normal : NORMAL;
     float2 Tex : TEXCOORD0;
     float4 Color : COLOR0;
+    float3 Tangent : TANGENT;
+    float3 Bitangent : BINORMAL;
 };
 
 struct PS_INPUT {

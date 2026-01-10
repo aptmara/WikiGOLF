@@ -7,6 +7,7 @@
 #include "src/game/scenes/TitleScene.h"
 #include "src/game/scenes/WikiGolfScene.h"
 #include "src/game/systems/RenderSystem.h"
+#include "src/game/systems/SkyboxRenderSystem.h"
 #include "src/game/systems/UIButtonRenderSystem.h"
 #include "src/game/systems/UIButtonSystem.h"
 #include "src/game/systems/UIImageRenderSystem.h"
@@ -59,10 +60,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   wc.lpszClassName = L"DX_GAME_WINDOW";
   RegisterClassEx(&wc);
 
+  // ウィンドウサイズを計算（クライアント領域を1280x720確保するため）
+  RECT rc = {0, 0, 1280, 720};
+  AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+
   // ウィンドウ作成
-  HWND hWnd = CreateWindowEx(0, L"DX_GAME_WINDOW", L"WikiGolf",
-                             WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                             1280, 720, nullptr, nullptr, hInstance, nullptr);
+  HWND hWnd =
+      CreateWindowEx(0, L"DX_GAME_WINDOW", L"WikiGolf", WS_OVERLAPPEDWINDOW,
+                     CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left,
+                     rc.bottom - rc.top, nullptr, nullptr, hInstance, nullptr);
 
   if (!hWnd) {
     return -1;
@@ -158,6 +164,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
       // 描画開始
       graphics.BeginFrame();
+
+      // スカイボックス描画 (背景)
+      game::systems::SkyboxRenderSystem(ctx);
 
       // 3Dシーン描画
       game::systems::RenderSystem(ctx);

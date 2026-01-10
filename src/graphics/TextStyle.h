@@ -30,6 +30,9 @@ struct TextStyle {
   float shadowOffsetX = 2.0f;
   float shadowOffsetY = 2.0f;
 
+  // 背景色 (0が透明)
+  DirectX::XMFLOAT4 bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
+
   // アウトライン効果
   bool hasOutline = false;
   DirectX::XMFLOAT4 outlineColor = {1.0f, 1.0f, 1.0f,
@@ -58,6 +61,76 @@ struct TextStyle {
     s.shadowColor = {0.0f, 0.0f, 0.0f, 0.8f};
     s.shadowOffsetX = 1.5f;
     s.shadowOffsetY = 1.5f;
+    return s;
+  }
+
+  /// @brief タイトルシーン用：豪華なタイトル
+  static TextStyle LuxuryTitle() {
+    TextStyle s;
+    s.fontFamily = "Times New Roman";
+    s.fontSize = 110.0f;
+    s.color = {1.0f, 0.95f, 0.7f, 1.0f}; // プラチナゴールド
+    s.align = TextAlign::Center;
+
+    s.hasOutline = true;
+    s.outlineColor = {0.4f, 0.3f, 0.1f, 0.9f}; // ブロンズ
+    s.outlineWidth = 3.0f;
+
+    s.hasShadow = true;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.6f};
+    s.shadowOffsetX = 6.0f;
+    s.shadowOffsetY = 6.0f;
+    return s;
+  }
+
+  /// @brief タイトルシーン用：スタートボタン
+  static TextStyle LuxuryButton() {
+    TextStyle s;
+    s.fontSize = 42.0f;
+    s.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    s.align = TextAlign::Center;
+
+    s.hasOutline = true;
+    s.outlineColor = {0.0f, 0.2f, 0.3f, 0.8f};
+    s.outlineWidth = 1.0f;
+
+    s.hasShadow = true;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.5f};
+    return s;
+  }
+
+  /// @brief ガイド表示用（白文字 + 太黒縁 + 影） - どんな背景でも読める最強設定
+  static TextStyle Guide() {
+    TextStyle s;
+    s.fontSize = 24.0f; // 読みやすく小さめに
+    s.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    s.align = TextAlign::Center;
+
+    // 強力なアウトライン
+    s.hasOutline = true;
+    s.outlineColor = {0.0f, 0.0f, 0.0f, 1.0f};
+    s.outlineWidth = 2.0f;
+
+    // ドロップシャドウ
+    s.hasShadow = true;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.8f};
+    s.shadowOffsetX = 2.0f;
+    s.shadowOffsetY = 2.0f;
+
+    return s;
+  }
+
+  /// @brief ステータス表示用（特大白文字 + 影）
+  static TextStyle Status() {
+    TextStyle s;
+    s.fontSize = 28.0f; // 適度なサイズ
+    s.color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    s.hasShadow = true;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.8f};
+    s.shadowOffsetX = 3.0f;
+    s.shadowOffsetY = 3.0f;
+
     return s;
   }
 

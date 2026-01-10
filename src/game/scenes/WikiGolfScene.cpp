@@ -11,17 +11,20 @@
 #include "../components/Camera.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
+#include "../components/Skybox.h"
 #include "../components/Transform.h"
 #include "../components/UIButton.h"
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../systems/PhysicsSystem.h"
+#include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
 #include "TitleScene.h"
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <map>
 
@@ -44,24 +47,35 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     ctx.audio->PlayBGM(ctx, "bgm_game.mp3", 0.3f);
   }
 
-  // シーン遷移時にマウスカーソルを表示・ロック解除
+  // シーン遷移時にマウスカーソルを表示・ロック解除（UIモード）
   ctx.input.SetMouseCursorVisible(true);
   ctx.input.SetMouseCursorLocked(false);
+
+  // === 残存エンティティの強制クリーンアップ ===
+  // LoadingSceneなどのエンティティが残っている場合があるため、全て削除する
+  // カメラ生成などの前に実行する必要がある
+  std::vector<ecs::Entity> strayEntities;
+  ctx.world.Query<components::Transform>().Each(
+      [&](ecs::Entity e, components::Transform &) {
+        strayEntities.push_back(e);
+      });
+  for (auto e : strayEntities) {
+    if (ctx.world.IsAlive(e)) {
+      ctx.world.DestroyEntity(e);
+    }
+  }
+  LOG_INFO("WikiGolf", "Cleaned up {} stray entities", strayEntities.size());
 
   m_textureGenerator = std::make_unique<graphics::WikiTextureGenerator>();
   m_textureGenerator->Initialize(ctx.graphics.GetDevice());
 
   // カメラ（ボール追従）
-  m_cameraEntity = ctx.world.CreateEntity();
+  m_cameraEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_cameraEntity);
-  t.position = {0.0f, 15.0f, -15.0f}; // 後ろ上から
+  t.position = {0.0f, 15.0f,
+                -15.0f}; // 後ろ上から（UpdateCameraで即座に更新される）
   LOG_DEBUG("WikiGolf", "Camera initial pos: ({}, {}, {})", t.position.x,
             t.position.y, t.position.z);
-
-  // 前方下を向く（約40度）
-  XMVECTOR q =
-      XMQuaternionRotationRollPitchYaw(XMConvertToRadians(40.0f), 0.0f, 0.0f);
-  XMStoreFloat4(&t.rotation, q);
 
   LOG_DEBUG("WikiGolf", "Camera created. ID={}, Alive={}", m_cameraEntity,
             ctx.world.IsAlive(m_cameraEntity) ? "true" : "false");
@@ -72,16 +86,16 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   camComp.nearZ = 0.1f;
   camComp.farZ = 150.0f;
 
-  // カメラ初期距離
-  m_cameraDistance = 15.0f;
-  m_targetCameraDistance = 15.0f;
-  m_shotDirection = {0.0f, 0.0f, 1.0f};
+  // カメラ初期状態（TPSオービットカメラ）
+  m_cameraYaw = 0.0f;                   // 初期方向: 北（Z+方向）
+  m_cameraPitch = 0.5f;                 // 初期角度: 少し見下ろし（約28.6度）
+  m_cameraDistance = 15.0f;             // 初期距離
+  m_shotDirection = {0.0f, 0.0f, 1.0f}; // 初期ショット方向
 
   // ミニマップ初期化
   if (!m_minimapRenderer) {
     m_minimapRenderer = std::make_unique<game::systems::MapSys>();
     if (!m_minimapRenderer->Initialize(ctx.graphics.GetDevice(), 720, 720)) {
-      LOG_WARN("WikiGolf", "Minimap initialization failed");
       m_minimapRenderer.reset();
     } else {
       LOG_INFO("WikiGolf", "Minimap initialized");
@@ -89,14 +103,26 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   }
 
   // 矢印（ショット予測線）
-  m_arrowEntity = ctx.world.CreateEntity();
+  m_arrowEntity = CreateEntity(ctx.world);
   auto &at = ctx.world.Add<Transform>(m_arrowEntity);
   at.scale = {0.0f, 0.0f, 0.0f}; // 最初は非表示
+
+  // 方向ガイド矢印（常時表示、Idle時のみ可視）
+  m_guideArrowEntity = CreateEntity(ctx.world);
+  auto &gat = ctx.world.Add<Transform>(m_guideArrowEntity);
+  gat.scale = {0.15f, 0.1f, 2.0f}; // 細長い矢印
+
+  auto &gamr = ctx.world.Add<MeshRenderer>(m_guideArrowEntity);
+  gamr.mesh = ctx.resource.LoadMesh("builtin/cube");
+  gamr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                        L"Assets/shaders/BasicPS.hlsl");
+  gamr.color = {0.3f, 0.8f, 1.0f, 0.6f}; // シアン半透明
+  gamr.isVisible = false;                // 初期は非表示、OnUpdateで制御
 
   // 軌道予測用（ドットのプール作成）
   m_trajectoryDots.clear();
   for (int i = 0; i < 30; ++i) {
-    auto e = ctx.world.CreateEntity();
+    auto e = CreateEntity(ctx.world);
     auto &t = ctx.world.Add<Transform>(e);
     t.scale = {0.1f, 0.1f, 0.1f};
 
@@ -120,12 +146,34 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   // クラブ初期化
   InitializeClubs(ctx);
 
+  // クラブ3Dモデル初期化
+  InitializeClubModel(ctx);
+
   // === Game Juice システム初期化 ===
   m_gameJuice = std::make_unique<game::systems::GameJuiceSystem>();
   m_gameJuice->Initialize(ctx);
 
   // === Wiki Terrain システム初期化 ===
   m_terrainSystem = std::make_unique<game::systems::WikiTerrainSystem>();
+
+  // === Skybox システム初期化 ===
+  m_skyboxGenerator = std::make_unique<graphics::SkyboxTextureGenerator>();
+
+  // スカイボックスエンティティ作成
+  m_skyboxEntity = CreateEntity(ctx.world);
+  auto &skyboxComp = ctx.world.Add<components::Skybox>(m_skyboxEntity);
+  skyboxComp.isVisible = true;
+  skyboxComp.brightness = 0.7f; // 床の文字を見やすくするため控えめ
+  skyboxComp.saturation = 0.8f; // 彩度も抑えめ
+
+  // デフォルト（静的）スカイボックスを生成して割り当て
+  // ページごとの動的生成は廃止
+  // デバイスロスト回避のため完全に無効化
+  // m_skyboxGenerator->GenerateCubemapFromTheme(ctx.graphics.GetDevice(),
+  //                                             graphics::SkyboxTheme::Default,
+  //                                             skyboxComp.cubemapSRV);
+
+  LOG_INFO("WikiGolf", "Skybox system disabled (Device Lost Prevention)");
 
   // ゲーム状態初期化
   // ターゲット記事選択（SDOWデータベース優先）
@@ -199,6 +247,60 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     }
   }
 
+  // 最短距離が1記事以内のターゲットはスキップして再抽選
+  if (m_shortestPath && m_shortestPath->IsAvailable() && !startPage.empty() &&
+      !targetPage.empty()) {
+    const int maxRetry = 5;
+    for (int attempt = 0; attempt < maxRetry; ++attempt) {
+      game::systems::ShortestPathResult pathResult;
+      if (targetId != -1) {
+        pathResult = m_shortestPath->FindShortestPath(startPage, targetId, 6);
+      } else {
+        pathResult = m_shortestPath->FindShortestPath(startPage, targetPage, 6);
+      }
+
+      if (!pathResult.success) {
+        LOG_WARN("WikiGolf",
+                 "Shortest path check failed (attempt {}): {} (start={}, "
+                 "target={})",
+                 attempt + 1, pathResult.errorMessage, startPage, targetPage);
+        break;
+      }
+
+      LOG_INFO("WikiGolf", "Shortest path to '{}' is {} hops from '{}'",
+               targetPage, pathResult.degrees, startPage);
+
+      if (pathResult.degrees > 1) {
+        break; // 十分な距離
+      }
+
+      LOG_INFO("WikiGolf",
+               "Target too close ({} hops). Re-selecting target... (attempt "
+               "{}/{})",
+               pathResult.degrees, attempt + 1, maxRetry);
+
+      auto newTarget = m_shortestPath->FetchPopularPageTitle(100);
+      if (newTarget.first.empty()) {
+        newTarget = m_shortestPath->FetchPopularPageTitle(50);
+      }
+
+      if (newTarget.first.empty()) {
+        game::systems::WikiClient fallbackClient;
+        targetPage = fallbackClient.FetchTargetPageTitle();
+        targetId = -1;
+        LOG_INFO("WikiGolf",
+                 "Fallback target selected via API after close-distance skip: "
+                 "{}",
+                 targetPage);
+      } else {
+        targetPage = newTarget.first;
+        targetId = newTarget.second;
+        LOG_INFO("WikiGolf", "New target candidate: {} (ID: {})", targetPage,
+                 targetId);
+      }
+    }
+  }
+
   LOG_INFO("WikiGolf", "Start: {}, Target: {} (ID: {})", startPage, targetPage,
            targetId);
 
@@ -244,7 +346,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
 void WikiGolfScene::CreateField(core::GameContext &ctx) {
   // 床（Wikipedia風の白背景）
-  m_floorEntity = ctx.world.CreateEntity();
+  m_floorEntity = CreateEntity(ctx.world);
   auto &ft = ctx.world.Add<Transform>(m_floorEntity);
   ft.position = {0.0f, 0.0f, 0.0f};
   ft.scale = {20.0f, 0.5f, 30.0f};
@@ -271,7 +373,7 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
     ctx.world.DestroyEntity(m_ballEntity);
   }
 
-  m_ballEntity = ctx.world.CreateEntity();
+  m_ballEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_ballEntity);
   t.position = {0.0f, 1.0f, -8.0f}; // 初期位置を少し高くして床抜け防止
   t.scale = {0.08f, 0.08f, 0.08f};
@@ -287,9 +389,9 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
   auto &rb = ctx.world.Add<RigidBody>(m_ballEntity);
   rb.isStatic = false;
   rb.mass = 1.0f;
-  rb.restitution = 0.5f;     // 反発係数
-  rb.drag = 0.1f;            // 空気抵抗
-  rb.rollingFriction = 2.0f; // 転がり抵抗
+  rb.restitution = 0.5f;      // 反発係数
+  rb.drag = 0.25f;            // 空気抵抗（やや強め）
+  rb.rollingFriction = 25.0f; // 転がり抵抗を大幅に強化
   rb.velocity = {0, 0, 0};
 
   auto &c = ctx.world.Add<Collider>(m_ballEntity);
@@ -300,86 +402,6 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
   auto *state = ctx.world.GetGlobal<GolfGameState>();
   if (state)
     state->ballEntity = m_ballEntity;
-}
-
-void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
-  if (!ctx.world.IsAlive(m_ballEntity) || !ctx.world.IsAlive(m_cameraEntity)) {
-    static bool loggedOnce1 = false;
-    if (!loggedOnce1) {
-      LOG_ERROR("WikiGolf",
-                "UpdateCamera early return: ball alive={}, cam alive={}",
-                ctx.world.IsAlive(m_ballEntity) ? "true" : "false",
-                ctx.world.IsAlive(m_cameraEntity) ? "true" : "false");
-      loggedOnce1 = true;
-    }
-    return;
-  }
-
-  auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
-  auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
-  auto *state = ctx.world.GetGlobal<GolfGameState>();
-  if (!ballT || !camT || !state) {
-    static bool loggedOnce2 = false;
-    if (!loggedOnce2) {
-      LOG_ERROR("WikiGolf",
-                "UpdateCamera early return: ballT={}, camT={}, state={}",
-                (void *)ballT, (void *)camT, (void *)state);
-      loggedOnce2 = true;
-    }
-    return;
-  }
-
-  XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
-
-  // 目標カメラ距離（ショット可能時は近づく）
-  if (state->canShoot) {
-    m_targetCameraDistance = 8.0f; // 近い
-  } else {
-    m_targetCameraDistance = 15.0f; // 遠い
-  }
-
-  // カメラ距離を滑らかに補間
-  m_cameraDistance +=
-      (m_targetCameraDistance - m_cameraDistance) * (3.0f * ctx.dt);
-
-  // ショット方向に基づいてカメラ位置を計算
-  XMVECTOR shotDir = XMLoadFloat3(&m_shotDirection);
-  shotDir = XMVector3Normalize(shotDir);
-
-  // カメラはショット方向の逆側（後ろ）に配置
-  XMVECTOR camOffset = XMVectorScale(shotDir, -m_cameraDistance * 0.7f);
-  camOffset = XMVectorAdd(
-      camOffset, XMVectorSet(0, m_cameraDistance * 0.6f, 0, 0)); // 上方向
-
-  XMVECTOR targetCamPos = XMVectorAdd(ballPos, camOffset);
-
-  // 現在のカメラ位置を滑らかに補間
-  XMVECTOR currentCamPos = XMLoadFloat3(&camT->position);
-  XMVECTOR newCamPos = XMVectorLerp(currentCamPos, targetCamPos, 5.0f * ctx.dt);
-  XMStoreFloat3(&camT->position, newCamPos);
-
-  // カメラをボールの方向に向ける
-  XMVECTOR lookDir = XMVectorSubtract(ballPos, newCamPos);
-  lookDir = XMVector3Normalize(lookDir);
-
-  // 方向からピッチとヨーを計算
-  XMFLOAT3 lookDirF;
-  XMStoreFloat3(&lookDirF, lookDir);
-
-  float yaw = atan2f(lookDirF.x, lookDirF.z);
-  float pitch = -asinf(lookDirF.y);
-
-  XMVECTOR q = XMQuaternionRotationRollPitchYaw(pitch, yaw, 0.0f);
-  XMStoreFloat4(&camT->rotation, q);
-
-  // 初回のみログ
-  static bool loggedOnce = false;
-  if (!loggedOnce) {
-    LOG_DEBUG("WikiGolf", "UpdateCamera: cam=({}, {}, {}), ball=({}, {}, {})",
-              camT->position.x, camT->position.y, camT->position.z,
-              ballT->position.x, ballT->position.y, ballT->position.z);
-    loggedOnce = true;
-  }
 }
 
 void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
@@ -430,6 +452,13 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
   if (!state->canShoot)
     return;
 
+  // クラブ切り替え入力 (Q/Eキーのみ、ホイールはマップビューのズームに使用)
+  if (ctx.input.GetKeyUp('E')) {
+    SwitchClub(ctx, 1);
+  } else if (ctx.input.GetKeyUp('Q')) {
+    SwitchClub(ctx, -1);
+  }
+
   auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
   auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
 
@@ -442,9 +471,12 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
     if (judgeUI)
       judgeUI->visible = false;
 
-    // 左クリックでパワーゲージ開始 (UIクリックでなければ)
+    // === UI誤爆防止: カーソル表示中（Altモード）はショット開始しない ===
+    bool isUIMode = ctx.input.GetKey(VK_MENU);
+
+    // 左クリックでパワーゲージ開始 (UIクリックでなく、かつUIモードでなければ)
     bool uiClicked = false;
-    if (ctx.input.GetMouseButtonDown(0)) {
+    if (ctx.input.GetMouseButtonDown(0) && !isUIMode) {
       float mx = (float)ctx.input.GetMousePosition().x;
       float my = (float)ctx.input.GetMousePosition().y;
 
@@ -482,10 +514,8 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       if (ctx.audio)
         ctx.audio->PlaySE(ctx, "se_charge.mp3");
 
-      auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-      if (infoUI) {
-        infoUI->text = L"[パワー] 左クリックで決定 / 右クリックでキャンセル";
-      }
+      if (ctx.audio)
+        ctx.audio->PlaySE(ctx, "se_charge.mp3");
 
       // マーカー表示開始
       auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
@@ -697,6 +727,36 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
   XMFLOAT3 shotDir;
   XMStoreFloat3(&shotDir, dir);
 
+  // スピン設定（角速度 rad/s）
+  // shotDir基準のローカル座標系
+  XMVECTOR shotV = XMLoadFloat3(&shotDir);
+  XMVECTOR up = XMVectorSet(0, 1, 0, 0);
+  XMVECTOR rightV = XMVector3Normalize(XMVector3Cross(up, shotV));
+
+  float backspinRate = 0.0f;
+  float sidespinRate = -curveAmount * 100.0f; // カーブ量に応じてサイドスピン
+
+  if (m_currentClub.name == "Wedge") {
+    backspinRate = 60.0f; // 強力なバックスピン
+  } else if (m_currentClub.name == "Iron") {
+    backspinRate = 35.0f;
+  } else if (m_currentClub.name == "Driver") {
+    backspinRate = 12.0f; // 低スピン
+  } else {
+    backspinRate = 5.0f; // Putterなど
+  }
+
+  if (shot->judgement == ShotJudgement::Miss) {
+    backspinRate *= 0.5f;
+    float randomSpin = ((float)(rand() % 100) / 50.0f - 1.0f) * 20.0f;
+    sidespinRate += randomSpin;
+  }
+
+  // 後でRigidBodyに設定するために計算しておく
+  XMVECTOR initialAngularV = XMVectorScale(rightV, backspinRate);
+  initialAngularV =
+      XMVectorAdd(initialAngularV, XMVectorScale(up, sidespinRate));
+
   // ボールに速度を与える（打ち上げ角適用）
   auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
   if (rb) {
@@ -713,22 +773,74 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
     rb->velocity.x += state->windDirection.x * windInfluence;
     rb->velocity.z += state->windDirection.y * windInfluence;
 
+    // スピン適用
+    XMStoreFloat3(&rb->angularVelocity, initialAngularV);
+
     LOG_INFO("WikiGolf", "Shot: power={:.1f}, club={}, angle={:.1f}", power,
              m_currentClub.name, m_currentClub.launchAngle);
 
-    // === Game Juice: インパクト演出 ===
+    // === Game Juice: 超派手なインパクト演出 ===
     if (m_gameJuice) {
-      // ボール位置でインパクトエフェクト発火
       auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
       if (ballT) {
         float normalizedPower = shot->confirmedPower; // 0.0〜1.0
-        m_gameJuice->TriggerImpactEffect(ctx, ballT->position, normalizedPower);
+
+        // 判定から色タイプを決定
+        game::systems::GameJuiceSystem::JudgeType judgeType =
+            game::systems::GameJuiceSystem::JudgeType::None;
+        switch (shot->judgement) {
+        case ShotJudgement::Great:
+          judgeType = game::systems::GameJuiceSystem::JudgeType::Great;
+          break;
+        case ShotJudgement::Nice:
+          judgeType = game::systems::GameJuiceSystem::JudgeType::Nice;
+          break;
+        case ShotJudgement::Miss:
+          judgeType = game::systems::GameJuiceSystem::JudgeType::Miss;
+          break;
+        default:
+          break;
+        }
+
+        // メインの大爆発（判定タイプ付き）
+        m_gameJuice->TriggerImpactEffect(ctx, ballT->position, normalizedPower,
+                                         judgeType);
+
+        // パワーが高い場合は追加爆発
+        if (normalizedPower > 0.5f) {
+          XMFLOAT3 extraPos = ballT->position;
+          extraPos.y += 0.5f;
+          m_gameJuice->TriggerImpactEffect(ctx, extraPos,
+                                           normalizedPower * 0.7f, judgeType);
+        }
+
+        // フルパワー時は三連爆発
+        if (normalizedPower > 0.9f) {
+          XMFLOAT3 extraPos2 = ballT->position;
+          extraPos2.y += 1.0f;
+          m_gameJuice->TriggerImpactEffect(ctx, extraPos2,
+                                           normalizedPower * 0.5f, judgeType);
+        }
+
+        // Great判定時は特大演出
+        if (shot->judgement == ShotJudgement::Great) {
+          XMFLOAT3 greatPos = ballT->position;
+          greatPos.y += 0.3f;
+          m_gameJuice->TriggerImpactEffect(
+              ctx, greatPos, 1.0f,
+              game::systems::GameJuiceSystem::JudgeType::Great);
+          m_gameJuice->TriggerCameraShake(0.6f, 0.3f); // 追加シェイク
+        }
       }
 
-      // カメラシェイク（パワーに応じて強度調整）
-      float shakeIntensity = 0.1f + shot->confirmedPower * 0.4f;
-      float shakeDuration = 0.15f + shot->confirmedPower * 0.15f;
+      // カメラシェイク
+      float shakeIntensity = 0.2f + shot->confirmedPower * 0.8f; // 強化
+      float shakeDuration = 0.2f + shot->confirmedPower * 0.3f;  // 長め
       m_gameJuice->TriggerCameraShake(shakeIntensity, shakeDuration);
+
+      // FOV: パワーに応じてズームアウト（スピード感）
+      float targetFov = 65.0f + shot->confirmedPower * 15.0f;
+      m_gameJuice->SetTargetFov(targetFov);
 
       // サウンド再生
       if (ctx.audio) {
@@ -776,50 +888,103 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
   }
 
   auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-  if (infoUI) {
-    std::string judgeTexPath;
-    switch (shot->judgement) {
-    case ShotJudgement::Great:
-      judgeTexPath = "ui_judge_great.png";
-      break;
-    case ShotJudgement::Nice:
-      judgeTexPath = "ui_judge_nice.png";
-      break;
-    case ShotJudgement::Miss:
-      judgeTexPath = "ui_judge_miss.png";
-      break;
-    default:
-      break;
-    }
 
-    if (judgeUI && !judgeTexPath.empty()) {
-      judgeUI->texturePath = judgeTexPath;
-      judgeUI->visible = true;
-    }
+  // 判定表示
+  std::string judgeTexPath;
+  switch (shot->judgement) {
+  case ShotJudgement::Great:
+    judgeTexPath = "ui_judge_great.png";
+    if (infoUI)
+      infoUI->text = L"★ GREAT ★";
+    break;
+  case ShotJudgement::Nice:
+    judgeTexPath = "ui_judge_nice.png";
+    if (infoUI)
+      infoUI->text = L"◎ NICE ◎";
+    break;
+  case ShotJudgement::Miss:
+    judgeTexPath = "ui_judge_miss.png";
+    if (infoUI)
+      infoUI->text = L"△ MISS △";
+    break;
+  default:
+    break;
+  }
+
+  if (judgeUI && !judgeTexPath.empty()) {
+    judgeUI->texturePath = judgeTexPath;
+    judgeUI->visible = true;
+    LOG_INFO("WikiGolf", "Showing judge UI: {}", judgeTexPath);
   }
 }
 
-void WikiGolfScene::CreateHole(core::GameContext &ctx, float x, float z,
-                               const std::string &targetPage, bool isTarget) {
-  auto e = ctx.world.CreateEntity();
-  auto &t = ctx.world.Add<Transform>(e);
-  t.position = {x, -0.4f, z};
-  t.scale = {0.15f, 0.01f, 0.15f};
-
-  auto &mr = ctx.world.Add<MeshRenderer>(e);
-  mr.mesh = ctx.resource.LoadMesh("builtin/cylinder");
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
-  if (isTarget) {
-    mr.color = {1.0f, 0.0f, 0.0f, 0.8f};
-  } else {
-    mr.color = {0.0f, 0.0f, 1.0f, 0.5f};
+void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
+  if (!ctx.world.IsAlive(m_ballEntity) || !ctx.world.IsAlive(m_cameraEntity)) {
+    return;
   }
 
-  auto &hole = ctx.world.Add<GolfHole>(e);
-  hole.radius = 0.3f;
-  hole.linkTarget = targetPage; // 修正点：targetPage -> linkTarget
-  hole.isTarget = isTarget;
+  auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
+  auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
+  if (!ballT || !camT) {
+    return;
+  }
+
+  // === TPSオービットカメラ ===
+  // ボール位置を中心に、Yaw/Pitch/Distanceで球面座標上にカメラを配置
+
+  XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
+
+  // カメラの回転クォータニオン（Yaw, Pitch）
+  XMVECTOR camRotQ =
+      XMQuaternionRotationRollPitchYaw(m_cameraPitch, m_cameraYaw, 0.0f);
+
+  // 基準オフセット（後方 = -Z方向）からカメラまでの距離ベクトル
+  XMVECTOR offset = XMVectorSet(0, 0, -m_cameraDistance, 0);
+  offset = XMVector3Rotate(offset, camRotQ);
+
+  // カメラ位置 = ボール位置 + オフセット
+  XMVECTOR camPos = XMVectorAdd(ballPos, offset);
+  XMStoreFloat3(&camT->position, camPos);
+
+  // カメラの回転（ボールを見る向きではなく、Yaw/Pitchそのもの）
+  XMStoreFloat4(&camT->rotation, camRotQ);
+
+  // === ショット方向の同期 ===
+  // カメラの前方ベクトル（水平成分のみ）をショット方向とする
+  XMVECTOR forward = XMVectorSet(0, 0, 1, 0);
+  forward = XMVector3Rotate(forward, camRotQ);
+
+  // 水平成分のみ抽出（Y成分をゼロにして正規化）
+  XMFLOAT3 fwd;
+  XMStoreFloat3(&fwd, forward);
+  fwd.y = 0.0f; // 水平方向のみ
+  XMVECTOR flatForward = XMLoadFloat3(&fwd);
+  flatForward = XMVector3Normalize(flatForward);
+  XMStoreFloat3(&m_shotDirection, flatForward);
+}
+
+void WikiGolfScene::CreateLinksFromTexture(core::GameContext &ctx) {
+  if (!m_wikiTexture)
+    return;
+
+  float width = m_fieldWidth;
+  float depth = m_fieldDepth;
+  float texW = (float)m_wikiTexture->width;
+  float texH = (float)m_wikiTexture->height;
+
+  auto *state = ctx.world.GetGlobal<GolfGameState>();
+
+  for (const auto &link : m_wikiTexture->links) {
+    float cx = link.x + link.width * 0.5f;
+    float cy = link.y + link.height * 0.5f;
+
+    // UV -> World
+    float worldX = (cx / texW - 0.5f) * width;
+    float worldZ = (0.5f - cy / texH) * depth;
+
+    bool isTarget = (link.targetPage == state->targetPage);
+    CreateHole(ctx, worldX, worldZ, link.targetPage, isTarget);
+  }
 }
 
 void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
@@ -834,12 +999,11 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   state->shotCount = 0;
   state->canShoot = true;
 
-  auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
-  if (camT) {
-    m_cameraDistance = 15.0f;
-    m_targetCameraDistance = 15.0f;
-    m_shotDirection = {0, 0, 1};
-  }
+  // カメラリセット（TPSオービットカメラ）
+  m_cameraYaw = 0.0f;
+  m_cameraPitch = 0.5f;
+  m_cameraDistance = 15.0f;
+  m_shotDirection = {0, 0, 1};
 
   auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
   if (ballT) {
@@ -854,12 +1018,19 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   }
 
   LoadPage(ctx, pageName);
+  
+  // カメラ位置を即座に更新（描画前に正しい位置へ）
+  UpdateCamera(ctx);
+  
   if (ctx.audio)
     ctx.audio->PlaySE(ctx, "se_warp.mp3");
 }
 
 void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   auto *state = ctx.world.GetGlobal<GolfGameState>();
+
+  // ガイドUI更新
+  UpdateGuideUI(ctx);
 
   // リザルト画面処理
   if (state && state->gameCleared) {
@@ -897,11 +1068,18 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
     LOG_INFO("WikiGolf", "Map view: {}", m_isMapView ? "ON" : "OFF");
   }
 
-  // 右クリックドラッグで視点回転 (通常時) / パン (マップ時)
+  // === カーソル制御とマウス入力 ===
+  // Alt押下でUIモード（カーソル表示）、それ以外はエイムモード（カーソルロック）
+  bool isUIMode = ctx.input.GetKey(VK_MENU); // Alt キー
+
   int mouseX = ctx.input.GetMousePosition().x;
   int mouseY = ctx.input.GetMousePosition().y;
 
   if (m_isMapView) {
+    // マップビュー: カーソル表示、ドラッグでパン
+    ctx.input.SetMouseCursorVisible(true);
+    ctx.input.SetMouseCursorLocked(false);
+
     if (ctx.input.GetMouseButton(1)) {
       int deltaX = mouseX - m_prevMouseX;
       int deltaY = mouseY - m_prevMouseY;
@@ -910,47 +1088,72 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       m_mapCenterOffset.x -= deltaX * sensitivity;
       m_mapCenterOffset.z += deltaY * sensitivity;
     }
-  } else {
-    // 通常ビュー: 視点回転
-    auto *shotStateCheck = ctx.world.GetGlobal<ShotState>();
-    if (shotStateCheck && shotStateCheck->phase == ShotState::Phase::Idle) {
-      if (ctx.input.GetMouseButton(1)) {
-        // 右クリック中
-        if (ctx.input.GetMouseButtonDown(1)) {
-          // 押し始め
-        } else {
-          // ドラッグ中：差分計算
-          int deltaX = mouseX - m_prevMouseX;
-          // deltaY は通常ビューでは使わない
 
-          if (deltaX != 0) {
-            float sensitivity = 0.005f;
-            float angle = deltaX * sensitivity;
-            // ...
-            XMVECTOR dir = XMLoadFloat3(&m_shotDirection);
-            XMVECTOR q = XMQuaternionRotationRollPitchYaw(0, angle, 0);
-            dir = XMVector3Rotate(dir, q);
-            dir = XMVector3Normalize(dir);
-            XMStoreFloat3(&m_shotDirection, dir);
-          }
+    // マップビューのズーム（ホイール + キー）
+    float wheel = ctx.input.GetMouseScrollDelta();
+    if (wheel != 0.0f) {
+      m_mapZoom = std::clamp(m_mapZoom - wheel * 0.1f, 0.1f,
+                             2.0f); // 最小値を0.3から0.1に緩和
+    }
+    if (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD)) {
+      m_mapZoom = std::clamp(m_mapZoom - 0.1f, 0.1f, 2.0f);
+    }
+    if (ctx.input.GetKeyDown(VK_OEM_MINUS) ||
+        ctx.input.GetKeyDown(VK_SUBTRACT)) {
+      m_mapZoom = std::clamp(m_mapZoom + 0.1f, 0.1f, 2.0f);
+    }
+  } else {
+    // 通常ビュー: UIモード時はカーソル表示、エイムモード時はロック
+    auto *shotStateCheck = ctx.world.GetGlobal<ShotState>();
+    bool canAim =
+        shotStateCheck && shotStateCheck->phase == ShotState::Phase::Idle;
+
+    if (isUIMode || !canAim) {
+      // UIモード または ショット不可時: カーソル表示
+      ctx.input.SetMouseCursorVisible(true);
+      ctx.input.SetMouseCursorLocked(false);
+    } else {
+      // エイムモード: カーソルロック、マウス移動でカメラ回転（TPSオービット）
+      ctx.input.SetMouseCursorVisible(false);
+      ctx.input.SetMouseCursorLocked(true);
+
+      // ロック時は画面中央からの差分を取得
+      // （カーソルは毎フレーム中央に戻されるため）
+      int screenCenterX = 640; // TODO: 画面サイズから取得が望ましい
+      int screenCenterY = 360;
+      int deltaX = mouseX - screenCenterX;
+      int deltaY = mouseY - screenCenterY;
+
+      // === TPSオービットカメラ: マウス移動 → Yaw/Pitch更新 ===
+      if (deltaX != 0 || deltaY != 0) {
+        // 精密エイム: Shift押下で感度を1/3に
+        float sensitivity = 0.005f;
+        if (ctx.input.GetKey(VK_SHIFT)) {
+          sensitivity *= 0.33f; // 精密モード
         }
+
+        // 水平回転（Yaw）
+        m_cameraYaw += deltaX * sensitivity;
+
+        // 垂直回転（Pitch）
+        m_cameraPitch += deltaY * sensitivity;
+
+        // Pitch制限（上: -0.1rad, 下: 1.4rad ≒ 80度）
+        m_cameraPitch = std::clamp(m_cameraPitch, -0.1f, 1.4f);
+      }
+
+      // マウスホイールでズーム
+      float wheel = ctx.input.GetMouseScrollDelta();
+      if (wheel != 0.0f) {
+        m_cameraDistance -= wheel * 2.0f; // ホイール感度
+        m_cameraDistance =
+            std::clamp(m_cameraDistance, 3.0f, 30.0f); // 距離制限
       }
     }
   }
 
   m_prevMouseX = mouseX;
   m_prevMouseY = mouseY;
-
-  // マップビュー時のズーム（+/-キー）
-  if (m_isMapView) {
-    if (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD)) {
-      m_mapZoom = std::clamp(m_mapZoom - 0.1f, 0.3f, 2.0f);
-    }
-    if (ctx.input.GetKeyDown(VK_OEM_MINUS) ||
-        ctx.input.GetKeyDown(VK_SUBTRACT)) {
-      m_mapZoom = std::clamp(m_mapZoom + 0.1f, 0.3f, 2.0f);
-    }
-  }
 
   // クリア済みの場合、リトライボタンのみチェック
   if (state->gameCleared) {
@@ -981,10 +1184,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       state->canShoot = true;
       state->shotCount++; // ペナルティ
 
-      auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-      if (infoUI) {
-        infoUI->text = L"⚠️ OB! リスポーン";
-      }
+      state->shotCount++; // ペナルティ
+
       LOG_INFO("WikiGolf", "Ball respawned (fell off)");
     }
 
@@ -996,10 +1197,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
         state->canShoot = true;
         rb->velocity = {0, 0, 0};
 
-        auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-        if (infoUI) {
-          infoUI->text = L"ドラッグでショット";
-        }
+        rb->velocity = {0, 0, 0};
       }
     }
   }
@@ -1029,75 +1227,45 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
     m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
+
   // ボール位置取得（スクロールとホールイン判定で使用）
   auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
 
-  // ホールイン判定
-  if (ballT) {
-    ctx.world.Query<Transform, GolfHole>().Each([&](ecs::Entity, Transform &ht,
-                                                    GolfHole &hole) {
-      float dx = ballT->position.x - ht.position.x;
-      float dz = ballT->position.z - ht.position.z;
-      float dist = std::sqrt(dx * dx + dz * dz);
-      if (dist < hole.radius) {
-        // ホールイン！
-        LOG_INFO("WikiGolf", "Hole in! -> {}", hole.linkTarget);
+  // クラブアニメーション更新
+  UpdateClubAnimation(ctx, ctx.dt);
 
-        if (ctx.audio) {
-          ctx.audio->PlaySE(ctx, "se_cupin.mp3");
-        }
+  // === 方向ガイド矢印の更新 ===
+  {
+    auto *shotCheck = ctx.world.GetGlobal<ShotState>();
+    auto *guideT = ctx.world.Get<Transform>(m_guideArrowEntity);
+    auto *guideMR = ctx.world.Get<MeshRenderer>(m_guideArrowEntity);
 
-        if (hole.isTarget) {
-          // BGM
-          if (ctx.audio)
-            ctx.audio->PlayBGM(ctx, "bgm_result.mp3");
+    if (guideT && guideMR && ballT && shotCheck) {
+      // Idle時のみ表示
+      if (shotCheck->phase == ShotState::Phase::Idle && state->canShoot) {
+        guideMR->isVisible = true;
 
-          // クリア！
-          state->gameCleared = true;
-          auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-          if (infoUI) {
-            infoUI->text = L"🎉 クリア！ 打数: " +
-                           std::to_wstring(state->shotCount) + L" / 遷移: " +
-                           std::to_wstring(state->moveCount);
-          }
+        // ボールの前方に配置
+        float yaw = std::atan2(m_shotDirection.x, m_shotDirection.z);
+        XMVECTOR q = XMQuaternionRotationRollPitchYaw(0, yaw, 0);
+        XMStoreFloat4(&guideT->rotation, q);
 
-          // 結果画面UI表示
-          auto *resultText = ctx.world.Get<UIText>(state->resultTextEntity);
-          if (resultText) {
-            std::wstring result = L"🎉 クリア！\n\n";
-            result += L"🏌️ 打数: " + std::to_wstring(state->shotCount);
-            result += L" (Par " + std::to_wstring(state->par) + L")\n";
-            result +=
-                L"📍 遷移: " + std::to_wstring(state->moveCount) + L"回\n";
-            int diff = state->shotCount - state->par;
-            if (diff < 0) {
-              result += L"🌟 " + std::to_wstring(-diff) + L"アンダー！";
-            } else if (diff == 0) {
-              result += L"✅ パー！";
-            } else {
-              result += L"+" + std::to_wstring(diff);
-            }
-            resultText->text = result;
-            resultText->visible = true;
-          }
-
-          auto *retryBtn = ctx.world.Get<UIButton>(state->retryButtonEntity);
-          if (retryBtn) {
-            retryBtn->visible = true;
-          }
-
-          // ハイスコア保存
-          SaveHighScore(state->targetPage, state->shotCount);
-        } else {
-          // 遷移
-          TransitionToPage(ctx, hole.linkTarget);
-        }
+        XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
+        XMVECTOR offset =
+            XMVectorScale(XMLoadFloat3(&m_shotDirection), 1.0f); // 1m前方
+        XMVECTOR arrowPos = XMVectorAdd(ballPos, offset);
+        arrowPos = XMVectorSetY(arrowPos,
+                                XMVectorGetY(ballPos) + 0.2f); // 少し浮かせる
+        XMStoreFloat3(&guideT->position, arrowPos);
+      } else {
+        guideMR->isVisible = false;
       }
-    });
+    }
   }
-}
 
-void WikiGolfScene::OnExit(core::GameContext &ctx) {}
+  // カップイン判定
+  CheckCupIn(ctx);
+}
 
 void WikiGolfScene::UpdateMapCamera(core::GameContext &ctx) {
   if (!ctx.world.IsAlive(m_cameraEntity))
@@ -1128,7 +1296,6 @@ void WikiGolfScene::UpdateMapCamera(core::GameContext &ctx) {
       XMQuaternionRotationRollPitchYaw(XMConvertToRadians(70.0f), 0.0f, 0.0f);
   XMStoreFloat4(&camT->rotation, q);
 }
-
 void WikiGolfScene::UpdateMinimap(core::GameContext &ctx) {
   if (m_minimapRenderer) {
     m_minimapRenderer->RenderMinimap(ctx);
@@ -1234,9 +1401,34 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
   // RigidBody設定（ボールと同じ値を使う）
   auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
   float drag = rb ? rb->drag : 0.01f;
+  float rollingFriction = rb ? rb->rollingFriction : 0.5f;
+  XMVECTOR initialAngularVelocity =
+      rb ? XMLoadFloat3(&rb->angularVelocity) : XMVectorZero();
+
+  // 風情報取得
+  auto *golfState = ctx.world.GetGlobal<GolfGameState>();
+
+  // 地形データ取得
+  auto terrainData =
+      m_terrainSystem ? m_terrainSystem->GetTerrainData() : nullptr;
+
+  // マテリアル取得ヘルパー
+  auto GetMaterial = [&](float x, float z) -> uint8_t {
+    if (!terrainData || terrainData->materialMap.empty())
+      return 0; // Default Fairway
+    float u = x / terrainData->config.worldWidth + 0.5f;
+    float v = 0.5f - z / terrainData->config.worldDepth;
+    int ix = (int)(u * (terrainData->config.resolutionX - 1));
+    int iz = (int)(v * (terrainData->config.resolutionZ - 1));
+    if (ix < 0 || ix >= terrainData->config.resolutionX || iz < 0 ||
+        iz >= terrainData->config.resolutionZ)
+      return 0;
+    return terrainData->materialMap[iz * terrainData->config.resolutionX + ix];
+  };
 
   // 初期位置（ボール位置）
   XMVECTOR prevPos = pos;
+  XMVECTOR angularVelocity = initialAngularVelocity;
 
   for (size_t i = 0; i < m_trajectoryDots.size(); ++i) {
     auto e = m_trajectoryDots[i];
@@ -1246,13 +1438,110 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
     if (!mr || !t)
       continue;
 
+    XMVECTOR currentPos = prevPos;
+
     // --- 物理ステップ (簡易オイラー積分) ---
-    // 空気抵抗 (v *= 1 - drag * dt)
-    vel = XMVectorScale(vel, (1.0f - drag * dt));
-    // 重力 (v += g * dt)
-    vel = XMVectorAdd(vel, XMVectorScale(gravity, dt));
-    // 位置 (p += v * dt)
-    XMVECTOR currentPos = XMVectorAdd(prevPos, XMVectorScale(vel, dt));
+    // 1. マグヌス効果 (Magnus Effect)
+    float magnusCoeff = 0.0004f;
+
+    // スピン減衰
+    float decay = 1.0f - (rb ? rb->spinDecay : 0.5f) * dt;
+    angularVelocity = XMVectorScale(angularVelocity, decay);
+
+    XMVECTOR magnusForce = XMVector3Cross(angularVelocity, vel);
+    magnusForce = XMVectorScale(magnusForce, magnusCoeff);
+
+    // 2. 重力 + マグヌス
+    XMVECTOR acc = XMVectorAdd(gravity, magnusForce);
+
+    // 3. Air Drag (Wind and Quadratic)
+    XMVECTOR windVel = XMVectorZero();
+    if (golfState) {
+      float yVal = XMVectorGetY(currentPos);
+      float h = (yVal > 0.0f) ? yVal : 0.0f;
+      float windFactor =
+          std::log(h * 0.5f + 1.0f) * 1.5f; // limit height factor
+      windVel = XMVectorSet(golfState->windDirection.x, 0,
+                            golfState->windDirection.y, 0);
+      windVel = XMVectorScale(windVel, golfState->windSpeed * windFactor);
+    }
+
+    XMVECTOR relVel = XMVectorSubtract(vel, windVel);
+    float vLen = XMVectorGetX(XMVector3Length(relVel));
+
+    if (vLen > 0.001f) {
+      float dragFactor = drag * 0.02f;
+      XMVECTOR dragDir = XMVectorScale(relVel, -1.0f);
+      XMVECTOR dragForce = XMVectorScale(dragDir, dragFactor * vLen);
+      acc = XMVectorAdd(acc, dragForce);
+    }
+
+    // 速度更新
+    vel = XMVectorAdd(vel, XMVectorScale(acc, dt));
+
+    // 位置更新
+    currentPos = XMVectorAdd(prevPos, XMVectorScale(vel, dt));
+
+    // 地面との接触を簡易判定（地形があれば取得）
+    float groundY = 0.0f;
+    if (m_terrainSystem) {
+      groundY = m_terrainSystem->GetHeight(XMVectorGetX(currentPos),
+                                           XMVectorGetZ(currentPos));
+    }
+    if (XMVectorGetY(currentPos) <= groundY) {
+      // 着地扱い：Yを地面に合わせ、縦速度をゼロ、転がり抵抗を水平成分に適用
+      currentPos = XMVectorSetY(currentPos, groundY);
+      vel = XMVectorSetY(vel, 0.0f);
+
+      // 地形摩擦を取得
+      float terrainFriction = 1.0f;
+      if (terrainData) {
+        terrainFriction = terrainData->config.friction;
+        uint8_t mat =
+            GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
+        switch (mat) {
+        case 1:
+          terrainFriction *= 2.5f;
+          break; // Rough
+        case 2:
+          terrainFriction *= 4.0f;
+          break; // Bunker
+        case 3:
+          terrainFriction *= 0.5f;
+          break; // Green
+        }
+      }
+
+      // 斜面傾斜を簡易的に推定（隣接点で法線を近似）
+      float gradX = 0.0f, gradZ = 0.0f;
+      if (m_terrainSystem) {
+        float cx = XMVectorGetX(currentPos);
+        float cz = XMVectorGetZ(currentPos);
+        float hCenter = m_terrainSystem->GetHeight(cx, cz);
+        float hX = m_terrainSystem->GetHeight(cx + 0.1f, cz);
+        float hZ = m_terrainSystem->GetHeight(cx, cz + 0.1f);
+        gradX = (hX - hCenter) / 0.1f;
+        gradZ = (hZ - hCenter) / 0.1f;
+      }
+      // 傾斜係数（急斜面で摩擦を減少）
+      float slopeGrad = std::sqrt(gradX * gradX + gradZ * gradZ);
+      float slopeFactor = 1.0f / (1.0f + slopeGrad * 2.0f);
+      if (slopeFactor < 0.3f)
+        slopeFactor = 0.3f;
+
+      // 実効摩擦＝ローリング摩擦 × 地形摩擦 × 斜面係数
+      float effectiveFriction = rollingFriction * terrainFriction * slopeFactor;
+      float frictionFactor = 1.0f - effectiveFriction * dt;
+      if (frictionFactor < 0.0f)
+        frictionFactor = 0.0f;
+
+      // XZだけ減速
+      XMFLOAT3 v3;
+      XMStoreFloat3(&v3, vel);
+      v3.x *= frictionFactor;
+      v3.z *= frictionFactor;
+      vel = XMVectorSet(v3.x, v3.y, v3.z, 0.0f);
+    }
 
     // セグメント計算
     XMVECTOR segmentVec = XMVectorSubtract(currentPos, prevPos);
@@ -1310,14 +1599,13 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
 void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
   m_availableClubs.clear();
-  m_availableClubs.push_back(
-      {"Driver", 30.0f, 30.0f, "Assets/icon_driver.png"});
-  m_availableClubs.push_back({"Iron", 20.0f, 45.0f, "Assets/icon_iron.png"});
-  m_availableClubs.push_back({"Putter", 10.0f, 5.0f, "Assets/icon_putter.png"});
+  m_availableClubs.push_back({"Driver", 15.0f, 30.0f, "icon_driver.png"});
+  m_availableClubs.push_back({"Iron", 10.0f, 45.0f, "icon_iron.png"});
+  m_availableClubs.push_back({"Putter", 5.0f, 5.0f, "icon_putter.png"});
 
   // UI作成
   for (size_t i = 0; i < m_availableClubs.size(); ++i) {
-    auto e = ctx.world.CreateEntity();
+    auto e = CreateEntity(ctx.world);
 
     // アイコン画像
     auto &img = ctx.world.Add<UIImage>(e);
@@ -1353,54 +1641,43 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
 
   // ミニマップUI作成 (右上)
   if (m_minimapRenderer) {
-    m_minimapEntity = ctx.world.CreateEntity();
+    m_minimapEntity = CreateEntity(ctx.world);
     auto &ui = ctx.world.Add<UIImage>(m_minimapEntity);
     ui.textureSRV = m_minimapRenderer->GetSRV();
-    ui.width = 200.0f;
-    ui.height = 200.0f;
-    ui.x = 1280.0f - 220.0f; // 画面右端から20px余裕
+    ui.width = 180.0f; // 少し小さく
+    ui.height = 180.0f;
+    ui.x = 1080.0f; // 左に移動
     ui.y = 20.0f;
     ui.visible = true;
     ui.layer = 100; // 手前に表示
   }
 
   // Header
-  auto headerE = ctx.world.CreateEntity();
+  auto headerE = CreateEntity(ctx.world);
   auto &ht = ctx.world.Add<UIText>(headerE);
   ht.text = L"Loading..."; // 初期値
-  ht.x = 10;
-  ht.y = 10;
-  ht.style = graphics::TextStyle::ModernBlack();
+  ht.x = 20;
+  ht.y = 20;
+  ht.style = graphics::TextStyle::Status(); // ステータススタイル（40pt）
   ht.visible = true;
   ht.layer = 10;
   state.headerEntity = headerE;
 
   // Shot HUD
-  auto shotE = ctx.world.CreateEntity();
+  auto shotE = CreateEntity(ctx.world);
   auto &st = ctx.world.Add<UIText>(shotE);
   st.text = L""; // 初期化はUpdateHUDで行う
-  st.x = 10;
-  st.y = 40;
-  st.style = graphics::TextStyle::ModernBlack();
+  st.x = 20;
+  st.y = 70;
+  st.style = graphics::TextStyle::Status(); // ステータススタイル（40pt）
   st.visible = true;
   st.layer = 10;
   state.shotCountEntity = shotE;
 
-  // Info
-  auto infoE = ctx.world.CreateEntity();
-  auto &it = ctx.world.Add<UIText>(infoE);
-  it.text = L"クリックでショット";
-  it.x = 10;
-  it.y = 680;
-  it.style = graphics::TextStyle::ModernBlack();
-  it.visible = true;
-  it.layer = 10;
-  state.infoEntity = infoE;
-
   // Wind UI
-  auto windE = ctx.world.CreateEntity();
+  auto windE = CreateEntity(ctx.world);
   auto &wt = ctx.world.Add<UIText>(windE);
-  wt.x = 1100;
+  wt.x = 950; // 左に移動
   wt.y = 10;
   wt.visible = true;
   wt.layer = 10;
@@ -1408,9 +1685,9 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
 
   // Wind Arrow
   LOG_INFO("WikiGolf", "Creating wind arrow UI...");
-  auto windArrowE = ctx.world.CreateEntity();
+  auto windArrowE = CreateEntity(ctx.world);
   auto &wa = ctx.world.Add<UIImage>(windArrowE);
-  wa = UIImage::Create("ui_wind_arrow.png", 1120.0f, 40.0f);
+  wa = UIImage::Create("ui_wind_arrow.png", 970.0f, 40.0f);
   wa.width = 64.0f;
   wa.height = 64.0f;
   wa.visible = true;
@@ -1419,16 +1696,17 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
 
   // Gauge (Bg, Fill, Marker)
   LOG_INFO("WikiGolf", "Creating gauge UI...");
-  auto gaugeBarE = ctx.world.CreateEntity();
-  auto &gb = ctx.world.Add<UIImage>(gaugeBarE);
-  gb = UIImage::Create("ui_gauge_bg.png", 440.0f, 650.0f);
-  gb.width = 400.0f;
-  gb.height = 30.0f;
-  gb.visible = true;
-  gb.layer = 10;
-  state.gaugeBarEntity = gaugeBarE;
+  // ゲージ背景は削除
+  // auto gaugeBarE = CreateEntity(ctx.world);
+  // auto &gb = ctx.world.Add<UIImage>(gaugeBarE);
+  // gb = UIImage::Create("ui_gauge_bg.png", 440.0f, 650.0f);
+  // gb.width = 400.0f;
+  // gb.height = 30.0f;
+  // gb.visible = true;
+  // gb.layer = 10;
+  // state.gaugeBarEntity = gaugeBarE;
 
-  auto gaugeFillE = ctx.world.CreateEntity();
+  auto gaugeFillE = CreateEntity(ctx.world);
   auto &gf = ctx.world.Add<UIImage>(gaugeFillE);
   gf = UIImage::Create("ui_gauge_fill.png", 450.0f, 655.0f);
   gf.width = 0.0f; // 最初は0
@@ -1437,7 +1715,7 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   gf.layer = 11;
   state.gaugeFillEntity = gaugeFillE;
 
-  auto markerE = ctx.world.CreateEntity();
+  auto markerE = CreateEntity(ctx.world);
   auto &gm = ctx.world.Add<UIImage>(markerE);
   gm = UIImage::Create("ui_gauge_marker.png", 450.0f, 645.0f);
   gm.width = 16.0f;
@@ -1447,41 +1725,43 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   state.gaugeMarkerEntity = markerE;
 
   // Path History
-  auto pathE = ctx.world.CreateEntity();
+  auto pathE = CreateEntity(ctx.world);
   auto &pathT = ctx.world.Add<UIText>(pathE);
   pathT.text = L"History: ";
-  pathT.x = 10;
-  pathT.y = 100;
+  pathT.x = 20;
+  pathT.y = 130;
   pathT.visible = true;
   pathT.layer = 10;
   pathT.style = graphics::TextStyle::ModernBlack();
-  pathT.style.fontSize = 16.0f;
+  pathT.style.fontSize = 24.0f; // 24ptに拡大
+  pathT.style.hasShadow = true;
   state.pathEntity = pathE;
 
   // Judge Result
   LOG_INFO("WikiGolf", "Creating judge UI...");
-  auto judgeE = ctx.world.CreateEntity();
+  auto judgeE = CreateEntity(ctx.world);
   auto &ji = ctx.world.Add<UIImage>(judgeE);
-  ji = UIImage::Create("ui_judge_great.png", 490.0f, 300.0f);
-  ji.width = 300.0f;
-  ji.height = 100.0f;
+  ji = UIImage::Create("ui_judge_great.png", 540.0f, 280.0f); // 画面中央に配置
+  ji.width = 200.0f;                                          // 小さく
+  ji.height = 80.0f;                                          // 小さく
   ji.visible = false;
   ji.layer = 20;
   state.judgeEntity = judgeE;
 
   // Result Screen UI
   LOG_INFO("WikiGolf", "Creating result UI...");
-  auto resultBgE = ctx.world.CreateEntity();
-  auto &rbg = ctx.world.Add<UIImage>(resultBgE);
-  rbg = UIImage::Create("ui_gauge_bg.png", 0, 0);
-  rbg.width = 1280.0f;
-  rbg.height = 720.0f;
-  rbg.alpha = 0.8f;
-  rbg.visible = false;
-  rbg.layer = 50;
-  state.resultBgEntity = resultBgE;
+  // リザルト背景は削除
+  // auto resultBgE = CreateEntity(ctx.world);
+  // auto &rbg = ctx.world.Add<UIImage>(resultBgE);
+  // rbg = UIImage::Create("ui_gauge_bg.png", 0, 0);
+  // rbg.width = 1280.0f;
+  // rbg.height = 720.0f;
+  // rbg.alpha = 0.8f;
+  // rbg.visible = false;
+  // rbg.layer = 50;
+  // state.resultBgEntity = resultBgE;
 
-  auto resultTextE = ctx.world.CreateEntity();
+  auto resultTextE = CreateEntity(ctx.world);
   auto &rt = ctx.world.Add<UIText>(resultTextE);
   rt.x = 400.0f;
   rt.y = 250.0f;
@@ -1492,11 +1772,103 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   rt.style.color = {1.0f, 0.84f, 0.0f, 1.0f}; // 金色
   state.resultTextEntity = resultTextE;
 
-  auto retryBtnE = ctx.world.CreateEntity();
+  auto retryBtnE = CreateEntity(ctx.world);
   auto &btn = ctx.world.Add<UIButton>(retryBtnE);
   btn = UIButton::Create(L"もう一度", "retry", 540.0f, 400.0f, 200.0f, 50.0f);
   btn.visible = false;
   state.retryButtonEntity = retryBtnE;
+
+  // Context-Sensitive Guide UI
+  LOG_INFO("WikiGolf", "Creating guide UI...");
+
+  // 背景（Message Bar）は削除
+  // auto guideBgE = CreateEntity(ctx.world);
+  // auto &gbg = ctx.world.Add<UIImage>(guideBgE);
+  // // ui_gauge_bg.png（半透明黒）を画面幅いっぱいに引き伸ばして使用
+  // gbg = UIImage::Create("ui_gauge_bg.png", 0.0f, 660.0f);
+  // gbg.width = 1280.0f;
+  // gbg.height = 60.0f;
+  // gbg.alpha = 0.9f; // 濃いめ
+  // gbg.visible = true;
+  // gbg.layer = 90; // テキストより奥
+  // state.guideBgEntity = guideBgE;
+
+  // テキスト
+  auto guideE = CreateEntity(ctx.world);
+  auto &gt = ctx.world.Add<UIText>(guideE);
+  gt.text = L"";
+  gt.x = 600.0f;                           // 左寄りに配置
+  gt.y = 640.0f;                           // 少し上に調整
+  gt.width = 800.0f;                       // 幅を調整
+  gt.style = graphics::TextStyle::Guide(); // 新しいガイドスタイル（24pt）
+  gt.visible = true;
+  gt.layer = 100; // 最前面
+  state.guideEntity = guideE;
+}
+
+void WikiGolfScene::UpdateGuideUI(core::GameContext &ctx) {
+  auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
+  auto *shot = ctx.world.GetGlobal<game::components::ShotState>();
+  if (!state || !shot)
+    return;
+
+  auto *guideUI = ctx.world.Get<UIText>(state->guideEntity);
+  auto *guideBg = ctx.world.Get<UIImage>(state->guideBgEntity);
+
+  if (!guideUI)
+    return;
+
+  std::wstring text = L"";
+
+  if (state->gameCleared) {
+    text = L"[クリック] 次へ";
+  } else if (m_isMapView) {
+    text = L"[右ドラッグ] 移動  [ホイール] ズーム  [M] 戻る";
+  } else {
+    // カーソルモード判定
+    bool isUIMode = ctx.input.GetKey(VK_MENU);
+    bool isPrecision = ctx.input.GetKey(VK_SHIFT);
+
+    switch (shot->phase) {
+    case game::components::ShotState::Phase::Idle:
+      if (isUIMode) {
+        text = L"[UIモード] クラブ選択可  [Alt] 解除";
+      } else if (isPrecision) {
+        text = L"[精密エイム] マウスでゆっくり狙う";
+      } else {
+        text = L"[マウス] 狙う  [Shift] 精密  [Q/E] クラブ  [M] マップ";
+      }
+      break;
+    case game::components::ShotState::Phase::PowerCharging:
+      text = L"[クリック] パワー決定  [右] キャンセル";
+      break;
+    case game::components::ShotState::Phase::ImpactTiming:
+      text = L"[クリック] インパクト！";
+      break;
+    case game::components::ShotState::Phase::Executing:
+      text = L"ショット中...";
+      break;
+    case game::components::ShotState::Phase::ShowResult:
+      text = L"判定中...";
+      break;
+    }
+  }
+
+  guideUI->text = text;
+
+  // 背景も同期して表示
+  if (guideBg) {
+    guideBg->visible = guideUI->visible;
+    // テキストが空なら背景も消す？（ただしtext=""でもvisible=trueなら枠が出るかも）
+    // 現状textは常に何かしらセットされるのでOK
+  }
+
+  // 色の動的変更（エラー時は赤くするなど）
+  if (text.find(L"OB") != std::wstring::npos) {
+    guideUI->style.color = {1.0f, 0.2f, 0.2f, 1.0f}; // 赤
+  } else {
+    guideUI->style.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白
+  }
 }
 
 void WikiGolfScene::LoadPage(core::GameContext &ctx,
@@ -1522,243 +1894,610 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   LOG_DEBUG("WikiGolf", "LoadPage (after delete holes): Cam Alive={}",
             ctx.world.IsAlive(m_cameraEntity) ? "true" : "false");
 
-    // 2. 記事データ取得
-    game::systems::WikiClient wikiClient;
-    std::vector<game::systems::WikiLink> allLinks;
-    std::string articleText;
+  // 2. 記事データ取得
+  game::systems::WikiClient wikiClient;
+  std::vector<game::WikiLink> allLinks;
+  std::string articleText;
 
-    // キャッシュは初回かつページ名が一致する場合のみ使用可能にする（簡易チェック）
-    // ただし初回LoadPage以外でm_hasPreloadedDataがtrueになることはほぼない
-    if (m_hasPreloadedData) {
-      LOG_INFO("WikiGolf", "Using preloaded links and text for {}", pageName);
-      allLinks = std::move(m_preloadedLinks);
-      articleText = std::move(m_preloadedExtract);
-      m_hasPreloadedData = false; // 使い終わったらフラグを下ろす
-    } else {
-      LOG_INFO("WikiGolf", "Fetching live data for {}", pageName);
-      // リンク取得（多めに取得してフィルタリング）
-      allLinks = wikiClient.FetchPageLinks(pageName, 100);
-      // 記事テキスト取得
-      articleText = wikiClient.FetchPageExtract(pageName, 5000);
+  // キャッシュは初回かつページ名が一致する場合のみ使用可能にする（簡易チェック）
+  // ただし初回LoadPage以外でm_hasPreloadedDataがtrueになることはほぼない
+  if (m_hasPreloadedData) {
+    LOG_INFO("WikiGolf", "Using preloaded links and text for {}", pageName);
+    allLinks = std::move(m_preloadedLinks);
+    articleText = std::move(m_preloadedExtract);
+    m_hasPreloadedData = false; // 使い終わったらフラグを下ろす
+  } else {
+    LOG_INFO("WikiGolf", "Fetching live data for {}", pageName);
+    // リンク取得（多めに取得してフィルタリング）
+    allLinks = wikiClient.FetchPageLinks(pageName, 100);
+    // 記事テキスト取得
+    articleText = wikiClient.FetchPageExtract(pageName, 5000);
+  }
+
+  // 3. リンクのフィルタリング
+  std::vector<std::pair<std::string, std::wstring>> validLinks;
+
+  // フィルタリング（年・月・日・数値のみを除外）
+  auto isIgnored = [](const std::string &t) {
+    if (t.empty())
+      return true;
+    // 末尾チェック (UTF-8)
+    if (t.size() >= 3) {
+      std::string suffix = t.substr(t.size() - 3);
+      if (suffix == "年" || suffix == "月" || suffix == "日")
+        return true;
+    }
+    // 数値のみ
+    if (std::all_of(t.begin(), t.end(),
+                    [](unsigned char c) { return std::isdigit(c); }))
+      return true;
+    return false;
+  };
+
+  for (const auto &link : allLinks) {
+    if (isIgnored(link.title))
+      continue;
+
+    // 本文に含まれているかチェック
+    if (articleText.find(link.title) != std::string::npos) {
+      validLinks.push_back({link.title, core::ToWString(link.title)});
+    }
+    // ターゲットページは必ず含める
+    else if (link.title == state->targetPage) {
+      validLinks.push_back({link.title, core::ToWString(link.title)});
     }
 
-    // 3. リンクのフィルタリング
-    std::vector<std::pair<std::string, std::wstring>> validLinks;
+    if (validLinks.size() >= 20)
+      break;
+  }
 
-    // フィルタリング（年・月・日・数値のみを除外）
-    auto isIgnored = [](const std::string &t) {
-      if (t.empty())
-        return true;
-      // 末尾チェック (UTF-8)
-      if (t.size() >= 3) {
-        std::string suffix = t.substr(t.size() - 3);
-        if (suffix == "年" || suffix == "月" || suffix == "日")
-          return true;
-      }
-      // 数値のみ
-      if (std::all_of(t.begin(), t.end(),
-                      [](unsigned char c) { return std::isdigit(c); }))
-        return true;
-      return false;
-    };
-
+  // リンク不足時の補充
+  if (validLinks.size() < 3) {
     for (const auto &link : allLinks) {
-      if (isIgnored(link.title))
-        continue;
-
-      // 本文に含まれているかチェック
-      if (articleText.find(link.title) != std::string::npos) {
+      bool exists = false;
+      for (const auto &v : validLinks)
+        if (v.first == link.title)
+          exists = true;
+      if (!exists && !isIgnored(link.title)) { // ここでもignoreチェック
         validLinks.push_back({link.title, core::ToWString(link.title)});
+        if (validLinks.size() >= 5)
+          break;
       }
-      // ターゲットページは必ず含める
-      else if (link.title == state->targetPage) {
-        validLinks.push_back({link.title, core::ToWString(link.title)});
-      }
-
-      if (validLinks.size() >= 20)
-        break;
-    }
-
-    // リンク不足時の補充
-    if (validLinks.size() < 3) {
-      for (const auto &link : allLinks) {
-        bool exists = false;
-        for (const auto &v : validLinks)
-          if (v.first == link.title)
-            exists = true;
-        if (!exists && !isIgnored(link.title)) { // ここでもignoreチェック
-          validLinks.push_back({link.title, core::ToWString(link.title)});
-          if (validLinks.size() >= 5)
-            break;
-        }
-      }
-    }
-
-    // ラムダ式内で使うisIgnoredをここでも定義する必要があったので、
-    // 上記の補充ループ内のisIgnoredはコンパイルエラーになる可能性がある。
-    // まじめに実装しなおす。
-
-    // 4. フィールドサイズ計算
-    const float minFieldWidth = 20.0f;
-    const float minFieldDepth = 30.0f;
-    float articleLengthFactor =
-        std::max(1.0f, (float)articleText.length() / 1000.0f);
-    float fieldWidth = minFieldWidth * std::sqrt(articleLengthFactor);
-    float fieldDepth = minFieldDepth * std::sqrt(articleLengthFactor);
-
-    m_fieldWidth = fieldWidth;
-    m_fieldDepth = fieldDepth;
-    state->fieldWidth = fieldWidth;
-    state->fieldDepth = fieldDepth;
-
-    // 5. テクスチャ生成
-    uint32_t texWidth = static_cast<uint32_t>(fieldWidth * 100.0f);
-    uint32_t texHeight = static_cast<uint32_t>(fieldDepth * 100.0f);
-
-    std::vector<std::pair<std::wstring, std::string>> linkPairs;
-    for (const auto &link : validLinks) {
-      linkPairs.push_back({link.second, link.first});
-    }
-
-    auto texResult = m_textureGenerator->GenerateTexture(
-        core::ToWString(pageName), core::ToWString(articleText), linkPairs,
-        state->targetPage, texWidth, texHeight);
-
-    m_wikiTexture =
-        std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
-
-    // 6. 地形（フィールド）再構築
-    LOG_DEBUG("WikiGolf", "Building field size: {}x{}", fieldWidth, fieldDepth);
-    if (m_terrainSystem) {
-      m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture, fieldWidth,
-                                  fieldDepth);
-      m_floorEntity = m_terrainSystem->GetFloorEntity(); // カメラ追従などに必要
-    }
-
-    // 6.5 ボール位置をフィールドサイズに合わせて再配置
-    auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
-    auto *ballRB = ctx.world.Get<RigidBody>(m_ballEntity);
-    if (ballT) {
-      // フィールド手前（-Z方向）の80%地点、中央X、床より少し上
-      ballT->position = {0.0f, 1.0f, -fieldDepth * 0.4f};
-      LOG_DEBUG("WikiGolf", "Ball repositioned to: ({}, {}, {})",
-                ballT->position.x, ballT->position.y, ballT->position.z);
-      if (ballRB) {
-        ballRB->velocity = {0.0f, 0.0f, 0.0f}; // 速度リセット
-      }
-    } else {
-      LOG_ERROR("WikiGolf", "Ball transform not found!");
-    }
-
-    // 7. ホール配置
-    const float texWidthF = (float)m_wikiTexture->width;
-    const float texHeightF = (float)m_wikiTexture->height;
-
-    for (const auto &linkRegion : m_wikiTexture->links) {
-      float texCenterX = linkRegion.x + linkRegion.width * 0.5f;
-      float texCenterY = linkRegion.y + linkRegion.height * 0.5f;
-      float worldX = (texCenterX / texWidthF - 0.5f) * fieldWidth;
-      float worldZ = (0.5f - texCenterY / texHeightF) * fieldDepth;
-
-      CreateHole(ctx, worldX, worldZ, linkRegion.targetPage,
-                 linkRegion.isTarget);
-    }
-
-    // 8. 風設定
-    float windSpeed = 0.0f;
-    if (articleText.length() > 2000) {
-      windSpeed = 3.0f + (float)(rand() % 20) / 10.0f;
-    } else if (articleText.length() > 500) {
-      windSpeed = 1.0f + (float)(rand() % 20) / 10.0f;
-    }
-    float windAngle = (float)(rand() % 360) * 3.14159f / 180.0f;
-    DirectX::XMFLOAT2 windDir = {cosf(windAngle), sinf(windAngle)};
-
-    state->windSpeed = windSpeed;
-    state->windDirection = windDir;
-
-    // 風UI更新
-    auto *waUI = ctx.world.Get<UIImage>(state->windArrowEntity);
-    if (waUI) {
-      float angle = std::atan2(windDir.y, windDir.x) * 180.0f / 3.14159f;
-      waUI->rotation = angle;
-    }
-
-    int dir8 = (int)((windAngle + 3.14159f / 8.0f) / (3.14159f / 4.0f)) % 8;
-    const wchar_t *arrows[] = {L"→", L"↗", L"↑", L"↖", L"←", L"↙", L"↓", L"↘"};
-    std::wstring windArrowStr =
-        L"🌬️ " + std::to_wstring((int)(windSpeed * 10) / 10) + L"." +
-        std::to_wstring((int)(windSpeed * 10) % 10) + L"m/s " + arrows[dir8];
-
-    auto *windUI = ctx.world.Get<UIText>(state->windEntity);
-    if (windUI) {
-      windUI->text = windArrowStr;
-    }
-
-    // 9. その他HUD更新
-    auto *headerUI = ctx.world.Get<UIText>(state->headerEntity);
-    if (headerUI) {
-      headerUI->text = L"📍 " + core::ToWString(pageName) + L" → 🎯 " +
-                       core::ToWString(state->targetPage);
-    }
-
-    state->currentPage = pageName;
-    state->pathHistory.push_back(pageName);
-
-    auto *pathUI = ctx.world.Get<UIText>(state->pathEntity);
-    if (pathUI) {
-      std::wstring historyText = L"History: ";
-      // 最新の5件くらいを表示するか、全部表示するか。一旦全部。
-      // 長すぎるとあふれるので注意が必要だが、現状維持。
-      // Historyの構築ロジックが必要。
-      // state->pathHistoryを使って再構築
-      for (size_t i = 0; i < state->pathHistory.size(); ++i) {
-        if (i > 0)
-          historyText += L" > ";
-        historyText += core::ToWString(state->pathHistory[i]);
-      }
-      pathUI->text = historyText;
-    }
-
-    // Par計算
-    int calculatedPar = -1;
-    if (m_shortestPath) {
-      game::systems::ShortestPathResult result;
-      if (state->targetPageId != -1) {
-        result =
-            m_shortestPath->FindShortestPath(pageName, state->targetPageId, 20);
-      } else {
-        result =
-            m_shortestPath->FindShortestPath(pageName, state->targetPage, 20);
-      }
-      if (result.success)
-        calculatedPar = result.degrees;
-    }
-    m_calculatedPar = calculatedPar; // メンバ変数に保存（HUD更新用）
-
-    // フォールバックとPar設定
-    int par =
-        (calculatedPar > 0) ? calculatedPar : (int)validLinks.size() / 2 + 2;
-    state->par = par;
-
-    // 最短パスとHUD更新
-    // 最短パスとHUD更新
-    std::wstring suffix = L" (推定)";
-    if (calculatedPar > 0) {
-      suffix = L" (残り最短 " + std::to_wstring(calculatedPar) + L" 記事)";
-      LOG_INFO("WikiGolf", "Path found! Degrees: {}", calculatedPar);
-    } else {
-      LOG_INFO("WikiGolf", "Path calc failed or fallback used.");
-    }
-
-    // 表示更新
-    auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
-    if (shotUI) {
-      shotUI->text = L"打数: " + std::to_wstring(state->shotCount) +
-                     L" / Par " + std::to_wstring(state->par) + suffix;
-      LOG_INFO("WikiGolf", "Updated HUD text: {}",
-               core::ToString(shotUI->text));
     }
   }
+
+  // ラムダ式内で使うisIgnoredをここでも定義する必要があったので、
+  // 上記の補充ループ内のisIgnoredはコンパイルエラーになる可能性がある。
+  // まじめに実装しなおす。
+
+  // 4. フィールドサイズ計算
+  const float minFieldWidth = 20.0f;
+  const float minFieldDepth = 30.0f;
+  float articleLengthFactor =
+      std::max(1.0f, (float)articleText.length() / 1000.0f);
+  float fieldWidth = minFieldWidth * std::sqrt(articleLengthFactor);
+  float fieldDepth = minFieldDepth * std::sqrt(articleLengthFactor);
+  
+  // 安全策: 最小サイズ保証
+  fieldWidth = std::max(fieldWidth, minFieldWidth);
+  fieldDepth = std::max(fieldDepth, minFieldDepth);
+
+  m_fieldWidth = fieldWidth;
+  m_fieldDepth = fieldDepth;
+  state->fieldWidth = fieldWidth;
+  state->fieldDepth = fieldDepth;
+
+  // 5. テクスチャ生成
+  uint32_t texWidth = static_cast<uint32_t>(fieldWidth * 100.0f);
+  uint32_t texHeight = static_cast<uint32_t>(fieldDepth * 100.0f);
+
+  std::vector<std::pair<std::wstring, std::string>> linkPairs;
+  for (const auto &link : validLinks) {
+    linkPairs.push_back({link.second, link.first});
+  }
+
+  // === Skybox テクスチャ生成（プロシージャル） (無効化) ===
+  // if (m_skyboxGenerator) {
+  //   auto *skyboxComp = ctx.world.Get<components::Skybox>(m_skyboxEntity);
+  //   if (skyboxComp) {
+  //     // ... (Generation logic removed)
+  //   }
+  // }
+
+  auto texResult = m_textureGenerator->GenerateTexture(
+      core::ToWString(pageName), core::ToWString(articleText), linkPairs,
+      state->targetPage, texWidth, texHeight);
+
+  m_wikiTexture =
+      std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
+
+  // 6. 地形（フィールド）再構築
+  LOG_DEBUG("WikiGolf", "Building field size: {}x{}", fieldWidth, fieldDepth);
+  if (m_terrainSystem) {
+    m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture, fieldWidth,
+                                fieldDepth);
+    m_floorEntity = m_terrainSystem->GetFloorEntity(); // カメラ追従などに必要
+  }
+
+  // 6.5 ボール位置をフィールドサイズに合わせて再配置
+  auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
+  auto *ballRB = ctx.world.Get<RigidBody>(m_ballEntity);
+  if (ballT) {
+    // フィールド手前（-Z方向）の80%地点、中央X、床より少し上
+    ballT->position = {0.0f, 1.0f, -fieldDepth * 0.4f};
+    LOG_DEBUG("WikiGolf", "Ball repositioned to: ({}, {}, {})",
+              ballT->position.x, ballT->position.y, ballT->position.z);
+    if (ballRB) {
+      ballRB->velocity = {0.0f, 0.0f, 0.0f}; // 速度リセット
+    }
+  } else {
+    LOG_ERROR("WikiGolf", "Ball transform not found!");
+  }
+
+  // 7. ホール配置
+  // 同じ座標に複数のホールを作らないよう追跡（座標ベース）
+  std::vector<std::pair<float, float>> createdHolePositions;
+  const float texWidthF = (float)m_wikiTexture->width;
+  const float texHeightF = (float)m_wikiTexture->height;
+  const float minHoleDistance = 0.2f; // ホール間の最小距離
+
+  for (const auto &linkRegion : m_wikiTexture->links) {
+    float texCenterX = linkRegion.x + linkRegion.width * 0.5f;
+    float texCenterY = linkRegion.y + linkRegion.height * 0.5f;
+    float worldX = (texCenterX / texWidthF - 0.5f) * fieldWidth;
+    float worldZ = (0.5f - texCenterY / texHeightF) * fieldDepth;
+
+    // 既に近い位置にホールがあるかチェック
+    bool tooClose = false;
+    for (const auto &pos : createdHolePositions) {
+      float dx = worldX - pos.first;
+      float dz = worldZ - pos.second;
+      if (dx * dx + dz * dz < minHoleDistance * minHoleDistance) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (tooClose) {
+      continue;
+    }
+    createdHolePositions.push_back({worldX, worldZ});
+
+    CreateHole(ctx, worldX, worldZ, linkRegion.targetPage, linkRegion.isTarget);
+  }
+
+  // 8. 風設定
+  float windSpeed = 0.0f;
+  if (articleText.length() > 2000) {
+    windSpeed = 3.0f + (float)(rand() % 20) / 10.0f;
+  } else if (articleText.length() > 500) {
+    windSpeed = 1.0f + (float)(rand() % 20) / 10.0f;
+  }
+  float windAngle = (float)(rand() % 360) * 3.14159f / 180.0f;
+  DirectX::XMFLOAT2 windDir = {cosf(windAngle), sinf(windAngle)};
+
+  state->windSpeed = windSpeed;
+  state->windDirection = windDir;
+
+  // 風UI更新
+  auto *waUI = ctx.world.Get<UIImage>(state->windArrowEntity);
+  if (waUI) {
+    float angle = std::atan2(windDir.y, windDir.x) * 180.0f / 3.14159f;
+    waUI->rotation = angle;
+  }
+
+  int dir8 = (int)((windAngle + 3.14159f / 8.0f) / (3.14159f / 4.0f)) % 8;
+  const wchar_t *arrows[] = {L"→", L"↗", L"↑", L"↖", L"←", L"↙", L"↓", L"↘"};
+  std::wstring windArrowStr =
+      L"🌬️ " + std::to_wstring((int)(windSpeed * 10) / 10) + L"." +
+      std::to_wstring((int)(windSpeed * 10) % 10) + L"m/s " + arrows[dir8];
+
+  auto *windUI = ctx.world.Get<UIText>(state->windEntity);
+  if (windUI) {
+    windUI->text = windArrowStr;
+  }
+
+  // 9. その他HUD更新
+  auto *headerUI = ctx.world.Get<UIText>(state->headerEntity);
+  if (headerUI) {
+    headerUI->text = L"📍 " + core::ToWString(pageName) + L" → 🎯 " +
+                     core::ToWString(state->targetPage);
+  }
+
+  state->currentPage = pageName;
+  state->pathHistory.push_back(pageName);
+
+  auto *pathUI = ctx.world.Get<UIText>(state->pathEntity);
+  if (pathUI) {
+    std::wstring historyText = L"History: ";
+    // 最新の5件くらいを表示するか、全部表示するか。一旦全部。
+    // 長すぎるとあふれるので注意が必要だが、現状維持。
+    // Historyの構築ロジックが必要。
+    // state->pathHistoryを使って再構築
+    for (size_t i = 0; i < state->pathHistory.size(); ++i) {
+      if (i > 0)
+        historyText += L" > ";
+      historyText += core::ToWString(state->pathHistory[i]);
+    }
+    pathUI->text = historyText;
+  }
+
+  // Par計算
+  int calculatedPar = -1;
+  if (m_shortestPath) {
+    game::systems::ShortestPathResult result;
+    if (state->targetPageId != -1) {
+      result =
+          m_shortestPath->FindShortestPath(pageName, state->targetPageId, 20);
+    } else {
+      result =
+          m_shortestPath->FindShortestPath(pageName, state->targetPage, 20);
+    }
+    if (result.success)
+      calculatedPar = result.degrees;
+  }
+  m_calculatedPar = calculatedPar; // メンバ変数に保存（HUD更新用）
+
+  // フォールバックとPar設定
+  int par =
+      (calculatedPar > 0) ? calculatedPar : (int)validLinks.size() / 2 + 2;
+  state->par = par;
+
+  // 最短パスとHUD更新
+  // 最短パスとHUD更新
+  std::wstring suffix = L" (推定)";
+  if (calculatedPar > 0) {
+    suffix = L" (残り最短 " + std::to_wstring(calculatedPar) + L" 記事)";
+    LOG_INFO("WikiGolf", "Path found! Degrees: {}", calculatedPar);
+  } else {
+    LOG_INFO("WikiGolf", "Path calc failed or fallback used.");
+  }
+
+  // 表示更新
+  auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
+  if (shotUI) {
+    shotUI->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
+                   std::to_wstring(state->par) + suffix;
+    LOG_INFO("WikiGolf", "Updated HUD text: {}", core::ToString(shotUI->text));
+  }
+}
+
+void WikiGolfScene::CreateHole(core::GameContext &ctx, float x, float z,
+                               const std::string &linkTarget,
+                               bool isTargetHole) {
+  auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
+  if (!state)
+    return;
+
+  // 地形の高さを取得
+  float terrainHeight = 0.0f;
+  if (m_terrainSystem) {
+    terrainHeight = m_terrainSystem->GetHeight(x, z);
+  }
+
+  auto e = CreateEntity(ctx.world);
+  auto &t = ctx.world.Add<Transform>(e);
+  // カップの底：地形とほぼ面一。中心は地面よりごく僅かに下げる。
+  t.position = {x, terrainHeight - 0.02f, z};
+  t.scale = {0.22f, 0.07f, 0.22f}; // 見た目半径~0.22, 高さ0.07
+
+  auto &mr = ctx.world.Add<MeshRenderer>(e);
+  mr.mesh = ctx.resource.LoadMesh("builtin/cylinder");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
+  // ターゲットは目立つ色、他は黒（穴）
+  if (isTargetHole) {
+    mr.color = {0.8f, 0.0f, 0.0f, 1.0f}; // 赤
+  } else {
+    mr.color = {0.0f, 0.0f, 0.0f, 1.0f}; // 黒
+  }
+
+  auto &h = ctx.world.Add<GolfHole>(e);
+  h.radius = 0.55f;                         // 吸い込み有効半径を拡大
+  h.gravity = isTargetHole ? 24.0f : 14.0f; // 吸引力弱め
+  h.linkTarget = linkTarget;
+  h.isTarget = isTargetHole;
+
+  // ホールを物理演算用にも登録（ただしPhysicsSystemで反発は無視される）
+  auto &col = ctx.world.Add<Collider>(e);
+  col.type = ColliderType::Cylinder;
+  col.radius = 0.2f; // 見た目に合わせて拡大
+  col.size = {0.2f, 0.1f, 0.2f};
+
+  // ホールエンティティをリストに追加
+  state->holes.push_back(e);
+
+  LOG_DEBUG("WikiGolf",
+            "Created hole at ({}, {}, {}) for target '{}', isTarget={}", x,
+            t.position.y, z, linkTarget, isTargetHole);
+}
+
+void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
+  auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
+  auto *t = ctx.world.Get<Transform>(m_ballEntity);
+  if (!rb || !t)
+    return;
+
+  // 速度チェック（ほぼ止まっているか）
+  float speedSq = rb->velocity.x * rb->velocity.x +
+                  rb->velocity.y * rb->velocity.y +
+                  rb->velocity.z * rb->velocity.z;
+
+  // カップ判定
+  auto *state = ctx.world.GetGlobal<GolfGameState>();
+  if (!state)
+    return;
+
+  for (auto holeEntity : state->holes) {
+    auto *holeT = ctx.world.Get<Transform>(holeEntity);
+    auto *hole = ctx.world.Get<GolfHole>(holeEntity);
+    if (!holeT || !hole)
+      continue;
+
+    // 距離チェック (XZ平面)
+    float dx = t->position.x - holeT->position.x;
+    float dz = t->position.z - holeT->position.z;
+    float distSq = dx * dx + dz * dz;
+    float radius = hole->radius * 0.9f; // 判定はややタイト
+
+    bool inHole = (distSq < radius * radius);
+
+    // 高さチェック (カップの底に落ちているか)
+    float dy = t->position.y - holeT->position.y;
+    bool atBottom = (dy < 0.2f && dy > -0.2f); // 許容範囲
+
+    if (inHole && atBottom && speedSq < 0.01f) {
+      // カップイン！
+      LOG_INFO("WikiGolf", "Cup In! Target: {}", hole->linkTarget);
+
+      // === 超派手なホールイン演出 ===
+      if (m_gameJuice) {
+        // 巨大カメラシェイク
+        m_gameJuice->TriggerCameraShake(0.8f, 0.5f);
+
+        // 複数回のパーティクル爆発（タイミングをずらして）
+        XMFLOAT3 effectPos = holeT->position;
+        effectPos.y += 0.5f; // ホールの上から発火
+
+        // 1回目：中央大爆発
+        m_gameJuice->TriggerImpactEffect(ctx, effectPos, 1.0f);
+
+        // 2回目以降は高さを変えて（連続爆発風）
+        effectPos.y += 1.0f;
+        m_gameJuice->TriggerImpactEffect(ctx, effectPos, 0.8f);
+
+        effectPos.y += 1.0f;
+        m_gameJuice->TriggerImpactEffect(ctx, effectPos, 0.6f);
+
+        // FOV変化（ズームイン→アウト）
+        m_gameJuice->SetTargetFov(40.0f); // 一瞬ズームイン
+      }
+
+      // 音楽と効果音
+      if (ctx.audio) {
+        ctx.audio->PlaySE(ctx, "se_cupin.mp3");
+        // ターゲット到達ならさらに派手な音
+        if (hole->isTarget) {
+          ctx.audio->PlaySE(ctx, "se_shot_hard.mp3"); // ボーナス音
+        }
+      }
+
+      // ターゲット到達時は超派手に追加演出
+      if (hole->isTarget && m_gameJuice) {
+        // 追加のカメラシェイク
+        m_gameJuice->TriggerCameraShake(1.0f, 1.0f);
+
+        // 四方向にパーティクル発射
+        XMFLOAT3 pos = holeT->position;
+        pos.y += 0.5f;
+        for (int i = 0; i < 4; ++i) {
+          XMFLOAT3 offset = {std::cos((float)i * XM_PIDIV2) * 2.0f, 0.0f,
+                             std::sin((float)i * XM_PIDIV2) * 2.0f};
+          XMFLOAT3 effectPosExtra = {pos.x + offset.x, pos.y + 1.5f,
+                                     pos.z + offset.z};
+          m_gameJuice->TriggerImpactEffect(ctx, effectPosExtra, 1.0f);
+        }
+      }
+
+      TransitionToPage(ctx, hole->linkTarget);
+      return; // 1フレームに1回だけ遷移
+    }
+  }
+}
+
+void WikiGolfScene::SwitchClub(core::GameContext &ctx, int direction) {
+  m_currentClubIndex += direction;
+  if (m_currentClubIndex < 0)
+    m_currentClubIndex = m_availableClubs.size() - 1;
+  if (m_currentClubIndex >= m_availableClubs.size())
+    m_currentClubIndex = 0;
+
+  m_currentClub = m_availableClubs[m_currentClubIndex];
+
+  // カメラ設定更新
+  if (m_currentClub.name == "Putter") {
+    m_targetCameraDistance = 4.0f;
+    m_targetCameraHeight = 8.0f; // 真上から見下ろす
+  } else if (m_currentClub.name == "Wedge") {
+    m_targetCameraDistance = 10.0f;
+    m_targetCameraHeight = 6.0f;
+  } else {
+    m_targetCameraDistance = 15.0f;
+    m_targetCameraHeight = 5.0f;
+  }
+
+  LOG_INFO("WikiGolf", "Switched Club: {}", m_currentClub.name);
+
+  // UI更新
+  for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
+    auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i]);
+    if (ui) {
+      ui->alpha = (i == m_currentClubIndex) ? 1.0f : 0.5f;
+    }
+  }
+
+  // 軌道予測更新
+  auto *shot = ctx.world.GetGlobal<ShotState>();
+  if (shot) {
+    UpdateTrajectory(ctx, shot->confirmedPower > 0 ? shot->confirmedPower
+                                                   : shot->powerGaugePos);
+  }
+}
+
+void WikiGolfScene::InitializeClubModel(core::GameContext &ctx) {
+  // ゴルフクラブ3Dモデルエンティティ作成
+  m_clubModelEntity = CreateEntity(ctx.world);
+
+  auto &tr = ctx.world.Add<Transform>(m_clubModelEntity);
+  tr.position = {0.0f, 0.5f, 0.0f};
+  tr.scale = {0.5f, 0.5f, 0.5f}; // モデルサイズ調整
+
+  auto &mr = ctx.world.Add<MeshRenderer>(m_clubModelEntity);
+  mr.mesh = ctx.resource.LoadMesh("Assets/models/golf_club.fbx");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
+  mr.color = {0.9f, 0.9f, 0.9f, 1.0f}; // 銀色っぽい
+  mr.isVisible = false;                // 最初は非表示
+
+  // アニメーション状態初期化
+  m_clubAnimPhase = ClubAnimPhase::Idle;
+  m_clubSwingAngle = 0.0f;
+  m_clubSwingSpeed = 0.0f;
+  m_clubAnimTimer = 0.0f;
+
+  LOG_INFO("WikiGolf", "Golf club model initialized");
+}
+
+void WikiGolfScene::UpdateClubAnimation(core::GameContext &ctx, float dt) {
+  if (!ctx.world.IsAlive(m_clubModelEntity) ||
+      !ctx.world.IsAlive(m_ballEntity)) {
+    return;
+  }
+
+  auto *clubTr = ctx.world.Get<Transform>(m_clubModelEntity);
+  auto *clubMr = ctx.world.Get<MeshRenderer>(m_clubModelEntity);
+  auto *ballTr = ctx.world.Get<Transform>(m_ballEntity);
+  auto *shot = ctx.world.GetGlobal<ShotState>();
+
+  if (!clubTr || !clubMr || !ballTr || !shot) {
+    return;
+  }
+
+  // クラブの基準位置: ボールの横
+  const float clubOffsetX = -0.8f; // ボールの左側
+  const float clubOffsetY = 0.3f;  // 少し上
+  const float clubOffsetZ = -0.3f; // 少し後ろ
+
+  // ショット方向に基づいてクラブ位置を回転
+  XMVECTOR shotDir = XMLoadFloat3(&m_shotDirection);
+  shotDir = XMVector3Normalize(shotDir);
+
+  float yaw = std::atan2(m_shotDirection.x, m_shotDirection.z);
+
+  // ローカルオフセットを回転して適用
+  XMVECTOR localOffset = XMVectorSet(clubOffsetX, clubOffsetY, clubOffsetZ, 0);
+  XMMATRIX rotMatrix = XMMatrixRotationY(yaw);
+  XMVECTOR worldOffset = XMVector3Transform(localOffset, rotMatrix);
+
+  XMVECTOR clubBasePos =
+      XMVectorAdd(XMLoadFloat3(&ballTr->position), worldOffset);
+
+  // フェーズに基づいてアニメーション制御
+  switch (shot->phase) {
+  case ShotState::Phase::Idle:
+    // 待機状態：クラブ非表示
+    clubMr->isVisible = false;
+    m_clubAnimPhase = ClubAnimPhase::Idle;
+    m_clubSwingAngle = 0.0f;
+    break;
+
+  case ShotState::Phase::PowerCharging: {
+    // パワーチャージ中：バックスイング（振りかぶり）
+    clubMr->isVisible = true;
+    m_clubAnimPhase = ClubAnimPhase::Backswing;
+
+    // パワーゲージに応じてバックスイング角度を増加
+    // 0% → 0度, 100% → -90度（後方に振りかぶる）
+    float targetAngle = -shot->powerGaugePos * 90.0f;
+    m_clubSwingAngle += (targetAngle - m_clubSwingAngle) * 8.0f * dt;
+    break;
+  }
+
+  case ShotState::Phase::ImpactTiming: {
+    // インパクトタイミング中：バックスイング維持
+    clubMr->isVisible = true;
+    float targetAngle = -shot->confirmedPower * 90.0f;
+    m_clubSwingAngle += (targetAngle - m_clubSwingAngle) * 8.0f * dt;
+    break;
+  }
+
+  case ShotState::Phase::Executing: {
+    // ショット実行：ダウンスイング→フォロースルー
+    clubMr->isVisible = true;
+
+    if (m_clubAnimPhase != ClubAnimPhase::Downswing &&
+        m_clubAnimPhase != ClubAnimPhase::FollowThrough) {
+      m_clubAnimPhase = ClubAnimPhase::Downswing;
+      m_clubSwingSpeed = 800.0f; // 高速スイング開始
+      m_clubAnimTimer = 0.0f;
+    }
+
+    if (m_clubAnimPhase == ClubAnimPhase::Downswing) {
+      // ダウンスイング: 急速に前方へ
+      m_clubSwingAngle += m_clubSwingSpeed * dt;
+      m_clubSwingSpeed *= 0.92f; // 減速
+
+      if (m_clubSwingAngle >= 60.0f) {
+        m_clubAnimPhase = ClubAnimPhase::FollowThrough;
+        m_clubSwingAngle = 60.0f;
+      }
+    } else if (m_clubAnimPhase == ClubAnimPhase::FollowThrough) {
+      // フォロースルー: 徐々に戻る
+      m_clubAnimTimer += dt;
+      if (m_clubAnimTimer > 0.4f) {
+        m_clubSwingAngle += (0.0f - m_clubSwingAngle) * 3.0f * dt;
+      }
+
+      // 1秒後に非表示
+      if (m_clubAnimTimer > 1.0f) {
+        clubMr->isVisible = false;
+        m_clubAnimPhase = ClubAnimPhase::Idle;
+      }
+    }
+    break;
+  }
+
+  case ShotState::Phase::ShowResult:
+    // 結果表示中：フォロースルー継続
+    if (m_clubAnimPhase == ClubAnimPhase::FollowThrough) {
+      m_clubAnimTimer += dt;
+      m_clubSwingAngle += (0.0f - m_clubSwingAngle) * 3.0f * dt;
+      if (m_clubAnimTimer > 1.0f) {
+        clubMr->isVisible = false;
+        m_clubAnimPhase = ClubAnimPhase::Idle;
+      }
+    } else {
+      clubMr->isVisible = false;
+    }
+    break;
+
+  default:
+    clubMr->isVisible = false;
+    break;
+  }
+
+  // クラブの変形（位置・回転）を適用
+  XMStoreFloat3(&clubTr->position, clubBasePos);
+
+  // スイング角度をX軸回転として適用（ピッチ）
+  // Y軸はショット方向に合わせる
+  float pitchRad = XMConvertToRadians(m_clubSwingAngle);
+  XMVECTOR q = XMQuaternionRotationRollPitchYaw(pitchRad, yaw, 0);
+  XMStoreFloat4(&clubTr->rotation, q);
+}
+
+void WikiGolfScene::OnExit(core::GameContext &ctx) {
+  LOG_INFO("WikiGolf", "Exiting WikiGolfScene");
+  Scene::OnExit(ctx);
+}
 
 } // namespace game::scenes

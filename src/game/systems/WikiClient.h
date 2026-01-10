@@ -10,8 +10,7 @@
 #include <windows.h>
 #include <winhttp.h>
 
-namespace game::systems {
-
+namespace game {
 /**
  * @brief 内部リンク情報
  */
@@ -19,6 +18,9 @@ struct WikiLink {
   std::string title;   ///< リンク先記事タイトル
   std::string display; ///< 表示テキスト
 };
+} // namespace game
+
+namespace game::systems {
 
 class WikiClient {
 public:
@@ -35,7 +37,8 @@ public:
   /// @param title 記事タイトル
   /// @param limit 最大取得数
   /// @return リンク情報のリスト
-  std::vector<WikiLink> FetchPageLinks(const std::string &title, int limit = 50);
+  std::vector<game::WikiLink> FetchPageLinks(const std::string &title,
+                                             int limit = 50);
 
   /// @brief 記事のカテゴリ一覧を取得
   /// @param title 記事タイトル
@@ -47,12 +50,12 @@ public:
   std::string FetchTargetPageTitle();
 
   /**
-   * @brief 記事の冒頭（リード文）を取得します
+   * @brief 記事の全文（プレーンテキスト）を取得します
    * @param title 記事タイトル
-   * @param lengthLimit 文字数制限（概算）
-   * @return 記事のリード文
+   * @param lengthLimit (現在は使用されません。互換性のために残されています)
+   * @return 記事の全文
    */
-  std::string FetchPageExtract(const std::string &title, int lengthLimit = 200);
+  std::string FetchPageExtract(const std::string &title, int lengthLimit = 0);
 
   /**
    * @brief URLエンコードを行います

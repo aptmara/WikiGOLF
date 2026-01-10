@@ -5,9 +5,9 @@
  */
 
 #include "../../graphics/WikiTextureGenerator.h"
+#include "../systems/TerrainGenerator.h" // TerrainDataのために追加
 #include <memory>
 #include <vector>
-
 
 namespace core {
 struct GameContext;
@@ -36,7 +36,7 @@ public:
   /// @param textureResult テクスチャ生成結果（画像・見出し座標入り）
   /// @param fieldWidth フィールドのワールド幅
   /// @param fieldDepth フィールドのワールド奥行き
-  void BuildField(core::GameContext &ctx, const std::string& pageTitle,
+  void BuildField(core::GameContext &ctx, const std::string &pageTitle,
                   const graphics::WikiTextureResult &textureResult,
                   float fieldWidth, float fieldDepth);
 
@@ -49,14 +49,21 @@ public:
   /// @brief 床のエンティティID取得（カメラターゲット用など）
   ecs::Entity GetFloorEntity() const { return m_floorEntity; }
 
+  /// @brief 地形データを取得（物理パラメータ参照用）
+  std::shared_ptr<TerrainData> GetTerrainData() const { return m_terrainData; }
+
+  /// @brief 指定座標の地形高さを取得
+  float GetHeight(float x, float z) const;
+
 private:
   std::vector<ecs::Entity> m_entities;
-  ecs::Entity m_floorEntity = 0xFFFFFFFF; // 無効値
+  ecs::Entity m_floorEntity = 0xFFFFFFFF;     // 無効値
+  std::shared_ptr<TerrainData> m_terrainData; // 地形データ保持用
 
   /// @brief 床作成
   void CreateFloor(core::GameContext &ctx,
                    const graphics::WikiTextureResult &result, float width,
-                   float depth, const std::string& pageTitle);
+                   float depth, const std::string &pageTitle);
 
   /// @brief 壁作成
   void CreateWalls(core::GameContext &ctx, float width, float depth);
