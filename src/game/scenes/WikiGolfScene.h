@@ -110,9 +110,9 @@ private:
   // カメラ制御（TPSオービットカメラ）
   float m_cameraYaw = 0.0f;   // 水平回転角度（ラジアン）
   float m_cameraPitch = 0.5f; // 垂直回転角度（ラジアン、初期値: 少し見下ろし）
-  float m_cameraDistance = 15.0f; // カメラ距離
-  float m_targetCameraDistance = 15.0f; // クラブ別の推奨カメラ距離
-  float m_targetCameraHeight = 5.0f;    // クラブ別の推奨カメラ高さ
+  float m_cameraDistance = 60.0f;       // カメラ距離
+  float m_targetCameraDistance = 60.0f; // クラブ別の推奨カメラ距離
+  float m_targetCameraHeight = 20.0f;   // クラブ別の推奨カメラ高さ
   DirectX::XMFLOAT3 m_shotDirection = {
       0, 0, 1}; // ショット方向（カメラ前方ベクトルから自動計算）
 
@@ -150,19 +150,22 @@ private:
   int m_calculatedPar = -1; ///< API計算されたパー（-1=未計算/DB未使用）
 
   // 俯瞰マップビュー
-  float m_fieldWidth = 20.0f;
-  float m_fieldDepth = 30.0f;
+  float m_fieldWidth = 80.0f;
+  float m_fieldDepth = 120.0f;
   float m_mapZoom = 1.0f;
   DirectX::XMFLOAT3 m_mapCenterOffset = {0.0f, 0.0f, 0.0f};
   bool m_isMapView = false;
   int m_prevMouseX = 0;
   int m_prevMouseY = 0; // Yも追加
 
+  float m_judgeDisplayTimer = 0.0f; // 判定表示タイマー
+
   /// @brief 俯瞰カメラ更新
   void UpdateMapCamera(core::GameContext &ctx);
 
   // ミニマップ（右上常時表示）
   std::unique_ptr<game::systems::MapSys> m_minimapRenderer;
+
   ecs::Entity m_minimapEntity; ///< ミニマップ表示用UIエンティティ
 
   /// @brief ミニマップ更新・描画

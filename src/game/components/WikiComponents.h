@@ -124,8 +124,8 @@ struct GolfGameState {
   // 経路履歴
   std::vector<std::string> pathHistory; ///< 訪問した記事の履歴
 
-  float fieldWidth = 20.0f; ///< フィールド幅（最小20）
-  float fieldDepth = 30.0f; ///< フィールド奥行（最小30）
+  float fieldWidth = 80.0f; ///< フィールド幅（最小80）
+  float fieldDepth = 120.0f; ///< フィールド奥行（最小120）
 
   // 風システム
   DirectX::XMFLOAT2 windDirection = {1.0f, 0.0f}; ///< 風向き（正規化）
@@ -151,10 +151,11 @@ struct GolfGameState {
  * @brief ショット判定結果
  */
 enum class ShotJudgement {
-  None,  ///< 未判定
-  Great, ///< 完璧（中央±5%）
-  Nice,  ///< 良好（中央±15%）
-  Miss   ///< ミス（それ以外）
+  None,    ///< 未判定
+  Special, ///< 完璧 (誤差 < 2%)
+  Great,   ///< 優秀 (誤差 < 5%)
+  Nice,    ///< 良好 (誤差 < 15%)
+  Miss     ///< ミス (それ以外)
 };
 
 /**
@@ -205,6 +206,36 @@ struct GolfHole {
   float radius = 0.5f;    ///< 判定半径
   bool isTarget = false;  ///< 目的記事へのリンクか
   float gravity = 5.0f;   ///< 吸引力
+};
+
+/**
+ * @brief D2D描画用バーゲージコンポーネント
+ */
+struct UIBarGauge {
+  float value = 0.0f;    ///< 現在値 (0.0 - 1.0)
+  float maxValue = 1.0f; ///< 最大値
+
+  DirectX::XMFLOAT4 color = {0.0f, 1.0f, 0.0f, 1.0f};       ///< バー色
+  DirectX::XMFLOAT4 bgColor = {0.0f, 0.0f, 0.0f, 0.5f};     ///< 背景色
+  DirectX::XMFLOAT4 borderColor = {1.0f, 1.0f, 1.0f, 1.0f}; ///< 枠線色
+  float borderWidth = 2.0f;
+
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 200.0f;
+  float height = 20.0f;
+  bool isVisible = true;
+
+  // マーカー（現在値とは別に表示するカーソル等）
+  bool showMarker = false;
+  float markerValue = 0.0f;
+  DirectX::XMFLOAT4 markerColor = {1.0f, 1.0f, 1.0f, 1.0f};
+
+  // インパクトゾーン（ゴルフゲーム特化）
+  bool showImpactZones = false;
+  float impactCenter = 0.5f;     ///< インパクト中心 (0.0-1.0)
+  float impactWidthGreat = 0.1f; ///< Greatゾーン幅 (全体に対する割合)
+  float impactWidthNice = 0.3f;  ///< Niceゾーン幅
 };
 
 } // namespace game::components

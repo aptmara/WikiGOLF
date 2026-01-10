@@ -8,6 +8,7 @@
 #include "src/game/scenes/WikiGolfScene.h"
 #include "src/game/systems/RenderSystem.h"
 #include "src/game/systems/SkyboxRenderSystem.h"
+#include "src/game/systems/UIBarGaugeRenderSystem.h" // 追加
 #include "src/game/systems/UIButtonRenderSystem.h"
 #include "src/game/systems/UIButtonSystem.h"
 #include "src/game/systems/UIImageRenderSystem.h"
@@ -115,6 +116,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // ゲームコンテキスト
   core::GameContext ctx(resource, world, graphics, input);
   ctx.audio = &audioSystem;
+  ctx.textRenderer = &textRenderer;
 
   // フォントロード（必要なら）
   // textRenderer.LoadFont("Default", "C:\\Windows\\Fonts\\msgothic.ttc");
@@ -131,6 +133,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   game::systems::UIRenderSystem uiRenderSystem(textRenderer);
   game::systems::UIButtonRenderSystem uiButtonRenderSystem(textRenderer);
   game::systems::UIImageRenderSystem uiImageRenderSystem(textRenderer);
+  game::systems::UIBarGaugeRenderSystem uiBarGaugeRenderSystem; // 追加
 
   // シーンマネージャ初期化
   core::SceneManager sceneManager;
@@ -173,6 +176,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
       // UI描画
       uiImageRenderSystem(ctx);
+      uiBarGaugeRenderSystem(ctx); // 追加
       uiButtonRenderSystem(ctx);
       uiRenderSystem(ctx);
 

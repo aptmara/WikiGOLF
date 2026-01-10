@@ -18,16 +18,17 @@ public:
     if (!ctx.textRenderer)
       return;
 
-    auto &world = ctx.world;
-    world.Query<game::components::UIBarGauge>().Each(
+    // 3. 描画
+    ctx.textRenderer->BeginDraw();
+
+    ctx.world.Query<game::components::UIBarGauge>().Each(
         [&](ecs::Entity entity, game::components::UIBarGauge &gauge) {
           if (!gauge.isVisible)
             return;
 
           // 1. 背景
-          D2D1_RECT_F bgRect =
-              D2D1::RectF(gauge.x, gauge.y, gauge.x + gauge.width,
-                          gauge.y + gauge.height);
+          D2D1_RECT_F bgRect = D2D1::RectF(
+              gauge.x, gauge.y, gauge.x + gauge.width, gauge.y + gauge.height);
           ctx.textRenderer->FillRect(bgRect, gauge.bgColor);
 
           // 2. インパクトゾーン (ゴルフ特化)
@@ -65,9 +66,9 @@ public:
             fillRatio = 1.0f;
 
           if (fillRatio > 0.0f) {
-            D2D1_RECT_F fillRect = D2D1::RectF(
-                gauge.x, gauge.y, gauge.x + gauge.width * fillRatio,
-                gauge.y + gauge.height);
+            D2D1_RECT_F fillRect =
+                D2D1::RectF(gauge.x, gauge.y, gauge.x + gauge.width * fillRatio,
+                            gauge.y + gauge.height);
             ctx.textRenderer->FillRect(fillRect, gauge.color);
           }
 
@@ -76,9 +77,9 @@ public:
             float markerX =
                 gauge.x + gauge.width * (gauge.markerValue / gauge.maxValue);
             float w = 4.0f;
-            D2D1_RECT_F markerRect = D2D1::RectF(
-                markerX - w * 0.5f, gauge.y - 5.0f, markerX + w * 0.5f,
-                gauge.y + gauge.height + 5.0f);
+            D2D1_RECT_F markerRect =
+                D2D1::RectF(markerX - w * 0.5f, gauge.y - 5.0f,
+                            markerX + w * 0.5f, gauge.y + gauge.height + 5.0f);
 
             // 白枠黒中身など目立つように
             ctx.textRenderer->FillRect(markerRect,
@@ -92,33 +93,32 @@ public:
             ctx.textRenderer->FillRect(markerRect, gauge.markerColor);
           }
 
-          // 5. 枠線 (簡易:
-          // アウトライン用のFillRect実装がないため、四角形を4回描くか、諦めるか)
-          // TextRenderer::FillRectしかないので、四辺を描く
+          // 5. 枠線
           if (gauge.borderWidth > 0.0f) {
             float b = gauge.borderWidth;
             // 上
-            ctx.textRenderer->FillRect(
-                D2D1::RectF(bgRect.left, bgRect.top, bgRect.right,
-                            bgRect.top + b),
-                gauge.borderColor);
+            ctx.textRenderer->FillRect(D2D1::RectF(bgRect.left, bgRect.top,
+                                                   bgRect.right,
+                                                   bgRect.top + b),
+                                       gauge.borderColor);
             // 下
-            ctx.textRenderer->FillRect(
-                D2D1::RectF(bgRect.left, bgRect.bottom - b, bgRect.right,
-                            bgRect.bottom),
-                gauge.borderColor);
+            ctx.textRenderer->FillRect(D2D1::RectF(bgRect.left,
+                                                   bgRect.bottom - b,
+                                                   bgRect.right, bgRect.bottom),
+                                       gauge.borderColor);
             // 左
-            ctx.textRenderer->FillRect(
-                D2D1::RectF(bgRect.left, bgRect.top, bgRect.left + b,
-                            bgRect.bottom),
-                gauge.borderColor);
+            ctx.textRenderer->FillRect(D2D1::RectF(bgRect.left, bgRect.top,
+                                                   bgRect.left + b,
+                                                   bgRect.bottom),
+                                       gauge.borderColor);
             // 右
-            ctx.textRenderer->FillRect(
-                D2D1::RectF(bgRect.right - b, bgRect.top, bgRect.right,
-                            bgRect.bottom),
-                gauge.borderColor);
+            ctx.textRenderer->FillRect(D2D1::RectF(bgRect.right - b, bgRect.top,
+                                                   bgRect.right, bgRect.bottom),
+                                       gauge.borderColor);
           }
         });
+
+    ctx.textRenderer->EndDraw();
   }
 };
 

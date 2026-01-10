@@ -7,7 +7,9 @@
 #include "../../graphics/Shader.h"
 #include "../../resources/ResourceManager.h"
 #include "../components/MeshRenderer.h"
+#include "../components/WikiComponents.h"
 #include "../components/Transform.h"
+#include <algorithm>
 
 using namespace DirectX;
 
@@ -105,8 +107,16 @@ void MapSys::RenderMinimap(core::GameContext &ctx) {
   BeginRender(context);
 
   float fw = 50.0f, fd = 50.0f;
-  XMMATRIX v = XMMatrixTranspose(GetViewMatrix(0, 0, fd * 2));
-  XMMATRIX p = XMMatrixTranspose(GetProjMatrix(fw, fd));
+  auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
+  if (state) {
+    fw = std::max(fw, state->fieldWidth);
+    fd = std::max(fd, state->fieldDepth);
+  }
+  float extent = std::max(fw, fd);
+
+  XMMATRIX v =
+      XMMatrixTranspose(GetViewMatrix(0, 0, extent * 2.5f + 5.0f)); // 俯瞰高さ
+  XMMATRIX p = XMMatrixTranspose(GetProjMatrix(extent, extent));
 
   context->VSSetConstantBuffers(0, 1, m_cb.GetAddressOf());
 
