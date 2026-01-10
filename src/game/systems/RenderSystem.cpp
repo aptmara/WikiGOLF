@@ -19,7 +19,8 @@ struct VSConstants {
   XMMATRIX view;
   XMMATRIX projection;
   XMFLOAT4 materialColor;
-  XMFLOAT4 materialFlags; // x: hasTexture, y: hasNormalMap
+  XMFLOAT4
+      materialFlags; // x: hasTexture, y: hasNormalMap, z: padding, w: padding
   XMFLOAT4 lightDir;
   XMFLOAT4 cameraPos;
 };
@@ -27,6 +28,7 @@ struct VSConstants {
 struct RenderState {
   ComPtr<ID3D11Buffer> cBuffer;
   ComPtr<ID3D11SamplerState> sampler;
+  ComPtr<ID3D11BlendState> blendState;
 };
 
 void RenderSystem(core::GameContext &ctx) {
@@ -34,7 +36,7 @@ void RenderSystem(core::GameContext &ctx) {
   auto *context = ctx.graphics.GetContext();
   auto &world = ctx.world;
 
-  // 1. 定数バッファの取得または作成（Global Dataを使用）
+  // 1. 定数バッファ等の取得または作成（Global Dataを使用）
   auto *state = world.GetGlobal<RenderState>();
   if (!state) {
     RenderState newState;
@@ -48,13 +50,28 @@ void RenderSystem(core::GameContext &ctx) {
     // サンプラーステート作成
     D3D11_SAMPLER_DESC sampDesc = {};
     sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
     sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
     device->CreateSamplerState(&sampDesc, &newState.sampler);
+
+    // ブレンドステート作成（半透明対応）
+    D3D11_BLEND_DESC blendDesc = {};
+    blendDesc.AlphaToCoverageEnable = FALSE;
+    blendDesc.IndependentBlendEnable = FALSE;
+    blendDesc.RenderTarget[0].BlendEnable = TRUE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+    blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+    blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask =
+        D3D11_COLOR_WRITE_ENABLE_ALL;
+    device->CreateBlendState(&blendDesc, &newState.blendState);
 
     world.SetGlobal(std::move(newState));
     state = world.GetGlobal<RenderState>();
@@ -90,6 +107,7 @@ void RenderSystem(core::GameContext &ctx) {
   // 3. レンダリングループ
   context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
   context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
+  context->OMSetBlendState(state->blendState.Get(), nullptr, 0xFFFFFFFF);
 
   world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t,
@@ -115,9 +133,10 @@ void RenderSystem(core::GameContext &ctx) {
             const bool hasDiffuse = r.hasTexture && r.textureSRV;
             const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
             constants->materialFlags = {hasDiffuse ? 1.0f : 0.0f,
-                                        hasNormal ? 1.0f : 0.0f, 0.0f, 0.0f};
+                                        hasNormal ? 1.0f : 0.0f,
+                                        r.customFlags.x, r.customFlags.y};
             // 簡易ライティング用 (左上奥からの光)
-            constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f}; 
+            constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f};
             constants->cameraPos = camPos;
             context->Unmap(state->cBuffer.Get(), 0);
           }

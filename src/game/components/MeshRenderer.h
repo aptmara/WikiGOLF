@@ -21,6 +21,10 @@ struct MeshRenderer {
   bool hasTexture = false;
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> normalMapSRV;
   bool hasNormalMap = false;
+
+  // 追加フラグ（シェーダー用）
+  DirectX::XMFLOAT4 customFlags = {0, 0, 0, 0};
+  bool isTransparent = false;
 };
 
 } // namespace game::components

@@ -166,6 +166,7 @@ private:
   // カメラ追従用
   DirectX::XMFLOAT3 m_shotStartCamPos = {0, 0, 0}; // ショット瞬間のカメラ位置
   bool m_isCameraChasing = false;                  // 現在追尾モードに入ったか
+  float m_cameraChaseThreshold = 60.0f;            // 追従開始距離閾値（初速から計算）
 
   /// @brief 俯瞰カメラ更新
   void UpdateMapCamera(core::GameContext &ctx);
@@ -177,6 +178,14 @@ private:
 
   /// @brief ミニマップ更新・描画
   void UpdateMinimap(core::GameContext &ctx);
+
+  /// @brief カメラの衝突判定（地形・壁）を行い、位置を補正する
+  /// @param ctx ゲームコンテキスト
+  /// @param targetPos カメラの目標位置
+  /// @param lookAtPos 注視点（ボール位置）
+  /// @param outPos 補正後のカメラ位置
+  /// @return 補正が行われたか
+  bool CheckCameraCollision(core::GameContext &ctx, const DirectX::XMVECTOR &targetPos, const DirectX::XMVECTOR &lookAtPos, DirectX::XMVECTOR &outPos);
 
   // === Game Juice システム（演出効果） ===
   std::unique_ptr<game::systems::GameJuiceSystem> m_gameJuice;

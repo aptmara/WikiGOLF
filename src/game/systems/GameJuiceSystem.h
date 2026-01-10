@@ -108,18 +108,38 @@ private:
     ecs::Entity entity = UINT32_MAX;
     DirectX::XMFLOAT3 velocity = {0, 0, 0};
     float lifetime = 0.0f;
+    float maxLifetime = 1.0f;
+    DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
   };
   std::vector<ImpactParticle> m_impactParticles;
   static constexpr int kImpactParticleCount = 80; // 大幅増量で派手に
+
+  // --- 環境エフェクト（転がり・スライド） ---
+  struct EnvironmentParticle {
+    ecs::Entity entity = UINT32_MAX;
+    DirectX::XMFLOAT3 velocity = {0, 0, 0};
+    DirectX::XMFLOAT3 angularVelocity = {0, 0, 0};
+    float lifetime = 0.0f;
+    float maxLifetime = 1.0f;
+    float baseScale = 0.1f;
+    bool isDust = false; // 砂煙(Sphere)か芝片(Cube/Sheet)か
+  };
+  std::vector<EnvironmentParticle> m_envParticles;
+  int m_envWriteIndex = 0;
+  float m_envEmitTimer = 0.0f;
+  static constexpr int kEnvParticleCount = 120; // 豊かな環境表現のため多めに
 
   // --- 内部処理 ---
   void UpdateCameraShake(core::GameContext &ctx, ecs::Entity cameraEntity);
   void UpdateFov(core::GameContext &ctx, ecs::Entity cameraEntity);
   void UpdateTrail(core::GameContext &ctx, ecs::Entity targetEntity);
   void UpdateImpactParticles(core::GameContext &ctx);
+  void UpdateEnvironmentParticles(core::GameContext &ctx, ecs::Entity targetEntity);
+  void EmitEnvironmentParticles(core::GameContext &ctx, ecs::Entity targetEntity);
 
   void CreateTrailEntities(core::GameContext &ctx);
   void CreateImpactParticleEntities(core::GameContext &ctx);
+  void CreateEnvironmentParticleEntities(core::GameContext &ctx);
 };
 
 } // namespace game::systems

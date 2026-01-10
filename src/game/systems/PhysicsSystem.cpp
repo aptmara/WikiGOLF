@@ -7,7 +7,6 @@
  */
 
 #include "PhysicsSystem.h"
-#include "PhysicsFriction.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../ecs/World.h"
@@ -15,6 +14,7 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
+#include "PhysicsFriction.h"
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -87,7 +87,8 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
                            float &outDepth) {
   XMVECTOR sPos = XMLoadFloat3(&spherePos);
   XMVECTOR bPos = XMLoadFloat3(&boxPos);
-  XMVECTOR bSize = XMLoadFloat3(&boxSize);
+  // boxSize is full size, convert to half extents
+  XMVECTOR bHalf = XMVectorScale(XMLoadFloat3(&boxSize), 0.5f);
   XMVECTOR bRot = XMLoadFloat4(&boxRot);
 
   // 球をボックスのローカル座標系に変換
@@ -96,29 +97,94 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
   XMVECTOR localPos = XMVector3Rotate(relPos, invRot);
 
   // ローカル座標系でのAABB判定（クランプ）
-  XMVECTOR closestLocal = XMVectorClamp(localPos, XMVectorNegate(bSize), bSize);
+  XMVECTOR closestLocal = XMVectorClamp(localPos, XMVectorNegate(bHalf), bHalf);
 
   // 距離チェック
   XMVECTOR distVecLocal = XMVectorSubtract(localPos, closestLocal);
   float d2 = XMVectorGetX(XMVector3LengthSq(distVecLocal));
 
-  if (d2 > radius * radius)
-    return false;
+  // 中心が外側にある場合
+  if (d2 > 0.00001f) {
+    if (d2 > radius * radius) {
+      return false; // 衝突なし
+    }
 
-  float d = std::sqrt(d2);
-
-  // 中心が内部にある場合
-  if (d < 0.0001f) {
-    XMVECTOR localNormal = XMVectorSet(0, 1, 0, 0);
+    float d = std::sqrt(d2);
+    XMVECTOR localNormal = XMVectorScale(distVecLocal, 1.0f / d);
     outNormal = XMVector3Rotate(localNormal, bRot);
-    outDepth = radius;
+    outDepth = radius - d;
     return true;
   }
 
-  // 法線をワールド座標系へ変換
-  XMVECTOR localNormal = XMVectorScale(distVecLocal, 1.0f / d);
+  // 中心が内部にある場合：最も近い面を探す
+  float x = XMVectorGetX(localPos);
+  float y = XMVectorGetY(localPos);
+  float z = XMVectorGetZ(localPos);
+  float hx = XMVectorGetX(bHalf);
+  float hy = XMVectorGetY(bHalf);
+  float hz = XMVectorGetZ(bHalf);
+
+  // 各面への距離（正: 内側への距離）
+  float dx_p = hx - x; // +X face
+  float dx_n = x + hx; // -X face
+  float dy_p = hy - y; // +Y face
+  float dy_n = y + hy; // -Y face
+  float dz_p = hz - z; // +Z face
+  float dz_n = z + hz; // -Z face
+
+  // 最小の絶対値を持つ軸を探す（そこが最も浅い脱出ルート）
+  float minD = dx_p;
+  int axis = 0; // 0:+x, 1:-x, 2:+y, 3:-y, 4:+z, 5:-z
+
+  if (dx_n < minD) {
+    minD = dx_n;
+    axis = 1;
+  }
+  if (dy_p < minD) {
+    minD = dy_p;
+    axis = 2;
+  }
+  if (dy_n < minD) {
+    minD = dy_n;
+    axis = 3;
+  }
+  if (dz_p < minD) {
+    minD = dz_p;
+    axis = 4;
+  }
+  if (dz_n < minD) {
+    minD = dz_n;
+    axis = 5;
+  }
+
+  XMVECTOR localNormal;
+  // 脱出方向は面法線
+  switch (axis) {
+  case 0:
+    localNormal = XMVectorSet(1, 0, 0, 0);
+    break;
+  case 1:
+    localNormal = XMVectorSet(-1, 0, 0, 0);
+    break;
+  case 2:
+    localNormal = XMVectorSet(0, 1, 0, 0);
+    break;
+  case 3:
+    localNormal = XMVectorSet(0, -1, 0, 0);
+    break;
+  case 4:
+    localNormal = XMVectorSet(0, 0, 1, 0);
+    break;
+  case 5:
+    localNormal = XMVectorSet(0, 0, -1, 0);
+    break;
+  }
+
   outNormal = XMVector3Rotate(localNormal, bRot);
-  outDepth = radius - d;
+  // 貫通深度 = (表面までの距離) + 半径
+  // minDは「表面までの距離」
+  outDepth = minD + radius;
+
   return true;
 }
 
@@ -314,6 +380,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       RigidBody &rb = *body.rb;
       Collider &col = *body.c;
 
+      // ボールの接地状態をリセット（衝突判定で接地していればtrueになる）
+      if (golfState && body.entity == ballEntity) {
+        golfState->isBallGrounded = false;
+        golfState->currentBallSpeed = SafeLength(XMLoadFloat3(&rb.velocity));
+      }
+
       XMVECTOR pos = XMLoadFloat3(&t.position);
       XMVECTOR vel = XMLoadFloat3(&rb.velocity);
 
@@ -451,11 +523,31 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
 
         // 摩擦係数計算（マテリアルと斜面考慮）
-        float friction = rb.rollingFriction;
+        // 摩擦係数計算（マテリアルと斜面考慮）
+        // ★芝生シミュレーション:
+        // 1. 基本摩擦: 芝の種類によるベース抵抗
+        // 2. 沈み込み: 低速になるほどボールが芝に沈み、抵抗が増す (粘り)
+        // 3. 垂直抗力依存: 斜面では N = mg * cosθ に比例した摩擦力
+
+        float currentSpeed = SafeLength(vel);
+
+        // 芝への沈み込み抵抗 (強力に!)
+        // 速度低下に伴い、急激に抵抗を増やす（芝に埋まる感覚）
+        float sinkFactor = 1.0f;
+        if (currentSpeed < 3.0f) {
+          sinkFactor =
+              1.0f + (3.0f - currentSpeed) * 1.0f; // Max 4.0x (at speed 0)
+        }
+
+        // 基本摩擦係数を上げる (0.35 -> 0.5)
+        float baseFriction = 0.5f;
+
+        float friction = baseFriction * sinkFactor;
+        uint8_t mat = 0;
+
         if (terrainData) {
           friction *= terrainData->config.friction;
-          uint8_t mat = 0;
-          if (terrainData && !terrainData->materialMap.empty()) {
+          if (!terrainData->materialMap.empty()) {
             float u = XMVectorGetX(pos) / terrainData->config.worldWidth + 0.5f;
             float v = 0.5f - XMVectorGetZ(pos) / terrainData->config.worldDepth;
             int ix = (int)(u * (terrainData->config.resolutionX - 1));
@@ -469,77 +561,87 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           }
           switch (mat) {
           case 1:
-            friction *= 2.0f;
-            break; // Rough (0.35 * 2 = 0.7)
+            friction *= 3.0f; // Rough: かなり重い
+            break;
           case 2:
-            friction *= 3.0f;
-            break; // Bunker (0.35 * 3 = 1.05) - 砂の抵抗
+            friction *= 10.0f; // Bunker: 脱出困難
+            break;
           case 3:
-            friction *= 0.28f;
-            break; // Green (0.35 * 0.28 = 0.098) - スティンプ10ft相当
+            friction *= 0.2f; // Green: それなりに転がるが止まる
+            break;
           default:
             break;
           }
         }
 
-        // 斜面が急なほど摩擦を減らして滑りやすくする
-        float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
-        float slopeFrictionScale = 0.6f + 0.4f * ny; // ny=1 ->1.0, ny=0 ->0.6
-        friction *= slopeFrictionScale;
+        // 環境状態の保存（ボールのみ対象）
+        if (golfState && body.entity == ballEntity) {
+          golfState->isBallGrounded = true;
+          golfState->currentMaterial = static_cast<TerrainMaterial>(mat);
+          golfState->currentBallSpeed = currentSpeed;
+        }
 
-        // 摩擦による減速
-        float speed = SafeLength(vel);
-        float tangentialAcc = SafeLength(acc); // 接地面に沿った加速度
-        if (CanStaticFrictionHold(speed, friction, tangentialAcc, subDt)) {
+        // 垂直抗力 N = mg * cos(theta) = mg * ny
+        // 摩擦力 F = mu * N
+        // 加速度 a = F / m = mu * g * ny
+        // 以前の slopeFrictionScale (摩擦係数を下げる処理) は廃止し、
+        // 物理的に正しい 垂直抗力比例 (= ny倍) を適用する。
+        // これにより斜面でも不自然に加速せず、適切な減速がかかる。
+
+        float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
+        float frictionAccel = friction * 9.8f * ny;
+
+        // ★草の抵抗定数項 (速度によらず一定のブレーキ)
+        // これがないと低摩擦時にいつまでも止まらない
+        frictionAccel += 1.0f; // 1.0 m/s^2 の定数減速を追加
+
+        // 接線方向の重力成分に対する静止摩擦チェック (簡易)
+        float tangentialAcc = SafeLength(acc);
+        // 静止摩擦力 (最大) > 重力引張力 なら停止維持
+        // F_static_max = mu_static * N * g
+        // ここでは動摩擦係数をベースに少し色をつけて判定
+        float staticLimit = frictionAccel * 1.5f; // 静止摩擦マージン拡大
+
+        if (currentSpeed < 0.15f && tangentialAcc < staticLimit) {
+          // ほぼ停止 & 重力に勝てる摩擦がある -> 完全停止
           vel = XMVectorZero();
           acc = XMVectorZero();
-        } else if (speed > 0.0001f) {
-          float newSpeed = ApplyRollingFriction(speed, friction, subDt);
-          if (newSpeed <= 0.0f) {
+        } else if (currentSpeed > 0.0001f) {
+          // 動摩擦減衰: v_new = v - a * dt
+          // 本来は v > 0 で反対方向に働く
+          float drop = frictionAccel * subDt;
+          if (currentSpeed <= drop) {
             vel = XMVectorZero();
           } else {
-            vel = XMVectorScale(vel, newSpeed / speed);
+            vel = XMVectorScale(vel, (currentSpeed - drop) / currentSpeed);
           }
         }
 
-        // 低速減衰（平坦のみ）。斜面では止めない。
+        // 極低速時の微細振動カット (Green上などでのピク付き防止)
         float speedAfter = SafeLength(vel);
         float slopeFlatness = XMVectorGetY(groundNormal);
-        if (speedAfter < 0.2f && slopeFlatness > 0.95f) {
+        if (speedAfter < 0.02f && slopeFlatness > 0.90f) {
           vel = XMVectorZero();
-        } else if (speedAfter < 0.5f && slopeFlatness > 0.98f) {
-          vel = XMVectorScale(vel, 0.98f);
-        }
-      } else {
-        // 空気抵抗 (二乗則: F = 0.5 * rho * v^2 * Cd * A)
-        // rho(空気密度) = 1.225 kg/m^3
-        // r(半径) = 0.02135m (直径42.67mm)
-        // A(断面積) = pi * r^2 = 0.00143 m^2
-        // Cd(抗力係数) = rb.drag (通常0.25 - 0.3)
-        // m(質量) = rb.mass (0.0459kg)
-
-        // 係数 K = 0.5 * 1.225 * 0.00143 = 0.000876
-        // 加速度 a = (K * Cd * v^2) / m
-
-        float speed = SafeLength(vel);
-        if (speed > 0.001f) {
-          float K = 0.000876f;
-          float dragForce = K * rb.drag * speed * speed;
-          float dragAccMagnitude = dragForce / rb.mass;
-
-          // 速度の逆方向
-          XMVECTOR dragDir = XMVectorScale(vel, -1.0f / speed);
-          XMVECTOR dragAcc = XMVectorScale(dragDir, dragAccMagnitude);
-
-          // 風の影響（相対速度で計算すべきだが簡易的に現在のaccに加算）
-          acc = XMVectorAdd(acc, dragAcc);
         }
       }
 
-      // オイラー積分
+      // 空気抵抗 (常時適用): F = 0.5 * rho * v^2 * Cd * A
+      // 地上で転がっているときも多少の空気抵抗+転がり抵抗の速度比例項として機能させる
+      speed = SafeLength(vel);
+      if (speed > 0.001f) {
+        float K = 0.000876f;
+        float dragForce = K * rb.drag * speed * speed;
+        float dragAccMagnitude = dragForce / rb.mass;
+
+        XMVECTOR dragDir = XMVectorScale(vel, -1.0f / speed);
+        XMVECTOR dragAcc = XMVectorScale(dragDir, dragAccMagnitude);
+
+        acc = XMVectorAdd(acc, dragAcc);
+      }
+
+      // オイラー積分 (復活)
       vel = XMVectorAdd(vel, XMVectorScale(acc, subDt));
       pos = XMVectorAdd(pos, XMVectorScale(vel, subDt));
-
       // 最終NaNチェック
       if (IsVectorNaN(pos) || IsVectorNaN(vel)) {
         LOG_DEBUG("Physics", "Post-integration NaN detected, resetting");
@@ -547,10 +649,11 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         vel = XMVectorZero();
       }
 
-      // 停止判定（平坦時のみ）。斜面では静止させない。
+      // 停止判定（平坦時のみ）。
+      // 完全に止める閾値を 0.05 -> 0.01 に変更して粘りを出す
       float speedFinal = SafeLength(vel);
       float slopeFlatnessFinal = XMVectorGetY(groundNormal);
-      if (speedFinal < 0.05f && isGrounded && slopeFlatnessFinal > 0.98f) {
+      if (speedFinal < 0.01f && isGrounded && slopeFlatnessFinal > 0.98f) {
         vel = XMVectorZero();
       }
 
