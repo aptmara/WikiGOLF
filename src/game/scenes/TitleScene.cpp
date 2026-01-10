@@ -229,22 +229,6 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
     m_auroraSegments.push_back(as);
   }
 
-  // --- 7. ディバイン・ライト (神の光) ---
-  {
-    auto e = CreateEntity(ctx.world);
-    auto &t = ctx.world.Add<components::Transform>(e);
-    t.position = {0.0f, 10.0f, 0.0f};
-    t.scale = {2.0f, 20.0f, 2.0f}; // 細長い光柱
-
-    auto &mr = ctx.world.Add<components::MeshRenderer>(e);
-    mr.mesh = ctx.resource.LoadMesh("builtin/cylinder"); // 円柱で代用
-    mr.shader = basicShader;
-    mr.color = {1.0f, 1.0f, 0.8f, 0.15f}; // 非常に薄い光
-    mr.isVisible = true;
-    // 回転アニメはUpdateで
-    m_reflections.push_back(e); // 簡易的にリストに入れておく（管理用）
-  }
-
   // --- 6. カメラ ---
   m_cameraEntity = CreateEntity(ctx.world);
   auto &camTr = ctx.world.Add<components::Transform>(m_cameraEntity);

@@ -81,14 +81,14 @@ private:
   float m_spawnTimer = 0.0f;
 
   // 演出設定（大量投入＆小型ボール仕様）
-  static constexpr int TOTAL_BALLS = 500;         ///< 総数増量
+  static constexpr int TOTAL_BALLS = 350;         ///< 総数増量
   static constexpr float SPAWN_INTERVAL = 0.005f; ///< 爆速スポーン
   static constexpr float BALL_RADIUS = 1.1f;      ///< 物理半径
   static constexpr float BALL_MODEL_SCALE = 3.0f; ///< 見た目スケールも
   static constexpr float MODEL_ASSET_SCALE_FACTOR =
       20.0f;                                  ///< FBXモデルの単位ズレ補正
   static constexpr float GRAVITY = -180.0f;   ///< 重力強化
-  static constexpr float RESTITUTION = 0.6f;  ///< よく弾む
+  static constexpr float RESTITUTION = 0.3f;  ///< よく弾む
   static constexpr float FRICTION = 0.82f;    ///< 横滑りを抑える
   static constexpr float AIR_DRAG =
       0.98f; ///< 減衰弱め
