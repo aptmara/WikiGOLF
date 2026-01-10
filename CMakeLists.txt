@@ -64,7 +64,7 @@ add_custom_command(TARGET DX_GAME POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_driver.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_driver.png
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_iron.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_iron.png
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_putter.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_putter.png
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_putter.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_wedge.png
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_wedge.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_wedge.png
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll $<TARGET_FILE_DIR:DX_GAME>/assimp-vc143-mt.dll
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/jawiki_sdow.sqlite $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow.sqlite
     COMMENT "Deploying assets to output directory..."
