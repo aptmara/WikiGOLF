@@ -7,6 +7,7 @@
 #include "../../core/StringUtils.h"
 #include "../../ecs/World.h"
 #include "../../graphics/GraphicsDevice.h"
+#include "../../graphics/TextRenderer.h"
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../components/Camera.h"
 #include "../components/MeshRenderer.h"
@@ -388,15 +389,15 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
 
   auto &rb = ctx.world.Add<RigidBody>(m_ballEntity);
   rb.isStatic = false;
-  rb.mass = 1.0f;
-  rb.restitution = 0.5f;      // 反発係数
-  rb.drag = 0.25f;            // 空気抵抗（やや強め）
-  rb.rollingFriction = 25.0f; // 転がり抵抗を大幅に強化
+  rb.mass = 0.0459f;          // 規定質量 45.9g
+  rb.restitution = 0.35f;     // 反発係数 (現実の芝との衝突)
+  rb.drag = 0.30f;            // 空気抵抗係数 (Cd値)
+  rb.rollingFriction = 0.35f; // 転がり抵抗 (フェアウェイ基準)
   rb.velocity = {0, 0, 0};
 
   auto &c = ctx.world.Add<Collider>(m_ballEntity);
   c.type = ColliderType::Sphere;
-  c.radius = 0.04f;
+  c.radius = 0.02135f; // 規定半径 21.35mm
 
   // グローバル状態のボール参照も更新
   auto *state = ctx.world.GetGlobal<GolfGameState>();
@@ -577,22 +578,44 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       arrowPos = XMVectorAdd(arrowPos, offset);
       XMStoreFloat3(&arrowT->position, arrowPos);
 
-      // 軌道予測更新
-      UpdateTrajectory(ctx, shot->powerGaugePos);
+      // ゲージ更新
+      auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
+      if (gauge) {
+        gauge->isVisible = true;
+        gauge->value = shot->powerGaugePos;
+        gauge->showMarker = false;
+        gauge->showImpactZones = false;
+        // 色: パワーが上がるほど赤く
+        float r = shot->powerGaugePos;
+        float g = 1.0f - shot->powerGaugePos * 0.5f;
+        float b = 0.2f;
+        gauge->color = {r, g, b, 1.0f};
+      }
+
+      UpdateTrajectory(ctx, shot->powerGaugePos); // 予測線更新
     }
 
-    // クリックでパワー確定→インパクトへ
+    // クリックでパワー決定
     if (ctx.input.GetMouseButtonDown(0)) {
       shot->confirmedPower = shot->powerGaugePos;
       shot->phase = ShotState::Phase::ImpactTiming;
       shot->impactGaugePos = 0.0f;
       shot->impactGaugeDir = 1.0f;
-      LOG_INFO("WikiGolf", "Power confirmed: {:.1f}%",
-               shot->confirmedPower * 100.0f);
 
-      if (infoUI) {
-        infoUI->text = L"[インパクト] 赤いゾーンで止めろ！";
+      // ゲージモード切り替え
+      auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
+      if (gauge) {
+        gauge->showImpactZones = true;
+        gauge->showMarker = true;
+        gauge->markerValue = 0.0f;
+        gauge->value = shot->confirmedPower;
+        gauge->color = {0.8f, 0.8f, 0.8f, 0.8f};
       }
+
+      if (ctx.audio)
+        ctx.audio->PlaySE(ctx, "se_shot_charge.mp3");
+      LOG_INFO("WikiGolf", "Power confirmed: {:.2f}, Enter ImpactTiming",
+               shot->confirmedPower);
     }
 
     // 右クリックでキャンセル（復元）
@@ -633,19 +656,23 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
     if (infoUI) {
       float offset = shot->impactGaugePos - 0.5f;
       std::wstring indicator;
-      if (std::abs(offset) < 0.05f)
+      if (std::abs(offset) <= 0.02f)
+        indicator = L"★ SPECIAL ★";
+      else if (std::abs(offset) <= 0.05f)
         indicator = L"★ GREAT ★";
-      else if (std::abs(offset) < 0.15f)
+      else if (std::abs(offset) <= 0.15f)
         indicator = L"◎ NICE ◎";
       else
         indicator = L"○";
       infoUI->text = L"[インパクト] " + indicator;
     }
 
-    // マーカー移動
-    auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
-    if (markerUI) {
-      markerUI->x = 440.0f + shot->impactGaugePos * 400.0f;
+    // ゲージ・マーカー更新
+    auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
+    if (gauge) {
+      gauge->showImpactZones = true;
+      gauge->showMarker = true;
+      gauge->markerValue = shot->impactGaugePos; // マーカー移動
 
       UpdateTrajectory(ctx, shot->confirmedPower);
     }
@@ -656,9 +683,11 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
 
       // 判定計算
       float impactError = std::abs(shot->confirmedImpact - 0.5f);
-      if (impactError < 0.05f) {
+      if (impactError <= 0.02f) {
+        shot->judgement = ShotJudgement::Special;
+      } else if (impactError <= 0.05f) {
         shot->judgement = ShotJudgement::Great;
-      } else if (impactError < 0.15f) {
+      } else if (impactError <= 0.15f) {
         shot->judgement = ShotJudgement::Nice;
       } else {
         shot->judgement = ShotJudgement::Miss;
@@ -700,16 +729,20 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
   float curveAmount = 0.0f;
 
   switch (shot->judgement) {
-  case ShotJudgement::Great:
-    powerMultiplier = 1.1f; // ボーナス
+  case ShotJudgement::Special:
+    powerMultiplier = 1.0f; // 完璧 (予測線通り)
     curveAmount = 0.0f;
     break;
+  case ShotJudgement::Great:
+    powerMultiplier = 1.0f;           // 距離は完璧
+    curveAmount = impactError * 0.1f; // わずかにブレる
+    break;
   case ShotJudgement::Nice:
-    powerMultiplier = 1.0f;
+    powerMultiplier = 0.95f;          // 少しパワーダウン
     curveAmount = impactError * 0.3f; // 少し曲がる
     break;
   case ShotJudgement::Miss:
-    powerMultiplier = 0.8f;           // 減少
+    powerMultiplier = 0.7f;           // 大きくパワーダウン
     curveAmount = impactError * 0.6f; // 大きく曲がる
     break;
   default:
@@ -1018,10 +1051,10 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   }
 
   LoadPage(ctx, pageName);
-  
+
   // カメラ位置を即座に更新（描画前に正しい位置へ）
   UpdateCamera(ctx);
-  
+
   if (ctx.audio)
     ctx.audio->PlaySE(ctx, "se_warp.mp3");
 }
@@ -1440,107 +1473,136 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
     XMVECTOR currentPos = prevPos;
 
-    // --- 物理ステップ (簡易オイラー積分) ---
-    // 1. マグヌス効果 (Magnus Effect)
-    float magnusCoeff = 0.0004f;
+    // --- 物理ステップ (PhysicsSystemのロジックを模倣) ---
+    float speed = XMVectorGetX(XMVector3Length(vel));
 
-    // スピン減衰
-    float decay = 1.0f - (rb ? rb->spinDecay : 0.5f) * dt;
-    angularVelocity = XMVectorScale(angularVelocity, decay);
+    XMVECTOR acc;
 
-    XMVECTOR magnusForce = XMVector3Cross(angularVelocity, vel);
-    magnusForce = XMVectorScale(magnusForce, magnusCoeff);
+    // 1. 空気抵抗 (二乗則)
+    // F = 0.5 * rho * v^2 * Cd * A => mで割って加速度a
+    // 係数 K = 0.000876 (PhysicsSystemと同じ)
+    if (speed > 0.001f) {
+      float K = 0.000876f;
+      float dragVal = rb ? rb->drag : 0.30f;
+      float dragForce = K * dragVal * speed * speed;
+      float dragAccMag = dragForce / (rb ? rb->mass : 0.0459f);
 
-    // 2. 重力 + マグヌス
-    XMVECTOR acc = XMVectorAdd(gravity, magnusForce);
+      XMVECTOR dragDir = XMVectorScale(vel, -1.0f / speed);
+      XMVECTOR dragAcc = XMVectorScale(dragDir, dragAccMag);
 
-    // 3. Air Drag (Wind and Quadratic)
-    XMVECTOR windVel = XMVectorZero();
-    if (golfState) {
-      float yVal = XMVectorGetY(currentPos);
-      float h = (yVal > 0.0f) ? yVal : 0.0f;
-      float windFactor =
-          std::log(h * 0.5f + 1.0f) * 1.5f; // limit height factor
-      windVel = XMVectorSet(golfState->windDirection.x, 0,
-                            golfState->windDirection.y, 0);
-      windVel = XMVectorScale(windVel, golfState->windSpeed * windFactor);
+      // マグヌス効果 (簡易計算 - 揚力として追加)
+      // 本来は角速度ベクトルとの外積だが、簡易的にY軸方向への揚力とXZ方向への曲がりを考慮
+      // ここでは重力とドラッグのみをメインとして計算し、マグヌスは以前の簡易実装を維持しつつ係数調整
+      XMVECTOR magnusAcc = XMVectorZero();
+      /*
+       * マグヌスは複雑なため、予測線では「曲がり」はショットパラメータで計算済みの
+       * 初期velocityに含まれるサイドスピン成分に任せ、
+       * ここでは追加の揚力（バックスピンによる滞空時間延長）のみ考慮する
+       */
+
+      acc = XMVectorAdd(gravity, dragAcc);
+    } else {
+      acc = gravity;
     }
 
-    XMVECTOR relVel = XMVectorSubtract(vel, windVel);
-    float vLen = XMVectorGetX(XMVector3Length(relVel));
-
-    if (vLen > 0.001f) {
-      float dragFactor = drag * 0.02f;
-      XMVECTOR dragDir = XMVectorScale(relVel, -1.0f);
-      XMVECTOR dragForce = XMVectorScale(dragDir, dragFactor * vLen);
-      acc = XMVectorAdd(acc, dragForce);
+    // 風の影響 (簡易: 加速度として加算 - 本来は相対速度だが予測線では近似)
+    if (golfState && golfState->windSpeed > 0.0f) {
+      float windForce = golfState->windSpeed * 0.1f; // 係数調整
+      XMVECTOR windVec = XMVectorSet(golfState->windDirection.x, 0,
+                                     golfState->windDirection.y, 0);
+      acc = XMVectorAdd(acc, XMVectorScale(windVec, windForce));
     }
 
-    // 速度更新
+    // 速度更新 (オイラー積分)
     vel = XMVectorAdd(vel, XMVectorScale(acc, dt));
 
     // 位置更新
     currentPos = XMVectorAdd(prevPos, XMVectorScale(vel, dt));
 
-    // 地面との接触を簡易判定（地形があれば取得）
+    // 地面との接触判定
     float groundY = 0.0f;
-    if (m_terrainSystem) {
-      groundY = m_terrainSystem->GetHeight(XMVectorGetX(currentPos),
-                                           XMVectorGetZ(currentPos));
-    }
-    if (XMVectorGetY(currentPos) <= groundY) {
-      // 着地扱い：Yを地面に合わせ、縦速度をゼロ、転がり抵抗を水平成分に適用
-      currentPos = XMVectorSetY(currentPos, groundY);
-      vel = XMVectorSetY(vel, 0.0f);
+    bool isGrounded = false;
+    XMVECTOR groundNormal = XMVectorSet(0, 1, 0, 0);
 
-      // 地形摩擦を取得
-      float terrainFriction = 1.0f;
-      if (terrainData) {
-        terrainFriction = terrainData->config.friction;
-        uint8_t mat =
-            GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
-        switch (mat) {
-        case 1:
-          terrainFriction *= 2.5f;
-          break; // Rough
-        case 2:
-          terrainFriction *= 4.0f;
-          break; // Bunker
-        case 3:
-          terrainFriction *= 0.5f;
-          break; // Green
+    if (m_terrainSystem) {
+      XMVECTOR n;
+      float h; // dummy
+      float px = XMVectorGetX(currentPos);
+      float pz = XMVectorGetZ(currentPos);
+      // GetHeightは補間あり、GetNormalも必要だがここでは簡易的にY高さだけチェック
+      groundY = m_terrainSystem->GetHeight(px, pz);
+
+      // 法線取得（傾斜抵抗のため）
+      // 簡易差分法 (PhysicsSystemと同じロジックの一部)
+      float hX = m_terrainSystem->GetHeight(px + 0.1f, pz);
+      float hZ = m_terrainSystem->GetHeight(px, pz + 0.1f);
+      float gradX = (hX - groundY) / 0.1f;
+      float gradZ = (hZ - groundY) / 0.1f;
+      XMVECTOR slopeVec = XMVectorSet(-gradX, 1.0f, -gradZ, 0.0f);
+      groundNormal = XMVector3Normalize(slopeVec);
+    }
+
+    if (XMVectorGetY(currentPos) <= groundY) {
+      // 着地
+      currentPos = XMVectorSetY(currentPos, groundY);
+      isGrounded = true;
+
+      // 速度のY成分を反転・減衰 (バウンド)
+      float vy = XMVectorGetY(vel);
+      if (vy < 0.0f) {
+        float restitution = rb ? rb->restitution : 0.35f;
+
+        // 浅い角度なら転がりへ移行
+        if (std::abs(vy) < 2.0f) {
+          vy = 0.0f;
+          // 傾斜に沿ったベクトルへ修正
+          // ここは厳密にやると複雑なので、Yを0にするだけにする（PhysicsSystemの着地処理近似）
+        } else {
+          vy = -vy * restitution;
+        }
+        vel = XMVectorSetY(vel, vy);
+      }
+
+      // 転がり抵抗 (PhysicsSystemと同じ減算方式)
+      if (std::abs(XMVectorGetY(vel)) < 0.1f) { // ほぼ転がっている
+        float baseFriction = rb ? rb->rollingFriction : 0.35f;
+        float terrainFriction = 1.0f;
+
+        if (terrainData) {
+          uint8_t mat =
+              GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
+          switch (mat) {
+          case 1:
+            terrainFriction = 2.0f;
+            break; // Rough
+          case 2:
+            terrainFriction = 3.0f;
+            break; // Bunker
+          case 3:
+            terrainFriction = 0.28f;
+            break; // Green
+          }
+        }
+
+        float mu = baseFriction * terrainFriction;
+
+        // 傾斜による加速/減速 (簡易: 重力の接線成分)
+        XMVECTOR slopeAcc = XMVectorZero();
+        // 重力 g * sin(theta) ... 簡易的に勾配から算出
+        // 摩擦による減速: a = -mu * g
+        float frictionDecel = mu * 9.8f;
+
+        float currentSpeed = XMVectorGetX(XMVector3Length(vel));
+        if (currentSpeed > 0.0f) {
+          float dropSpeed = frictionDecel * dt;
+          if (currentSpeed <= dropSpeed) {
+            vel = XMVectorZero();
+            currentSpeed = 0.0f;
+          } else {
+            vel = XMVectorScale(vel, (currentSpeed - dropSpeed) / currentSpeed);
+          }
         }
       }
-
-      // 斜面傾斜を簡易的に推定（隣接点で法線を近似）
-      float gradX = 0.0f, gradZ = 0.0f;
-      if (m_terrainSystem) {
-        float cx = XMVectorGetX(currentPos);
-        float cz = XMVectorGetZ(currentPos);
-        float hCenter = m_terrainSystem->GetHeight(cx, cz);
-        float hX = m_terrainSystem->GetHeight(cx + 0.1f, cz);
-        float hZ = m_terrainSystem->GetHeight(cx, cz + 0.1f);
-        gradX = (hX - hCenter) / 0.1f;
-        gradZ = (hZ - hCenter) / 0.1f;
-      }
-      // 傾斜係数（急斜面で摩擦を減少）
-      float slopeGrad = std::sqrt(gradX * gradX + gradZ * gradZ);
-      float slopeFactor = 1.0f / (1.0f + slopeGrad * 2.0f);
-      if (slopeFactor < 0.3f)
-        slopeFactor = 0.3f;
-
-      // 実効摩擦＝ローリング摩擦 × 地形摩擦 × 斜面係数
-      float effectiveFriction = rollingFriction * terrainFriction * slopeFactor;
-      float frictionFactor = 1.0f - effectiveFriction * dt;
-      if (frictionFactor < 0.0f)
-        frictionFactor = 0.0f;
-
-      // XZだけ減速
-      XMFLOAT3 v3;
-      XMStoreFloat3(&v3, vel);
-      v3.x *= frictionFactor;
-      v3.z *= frictionFactor;
-      vel = XMVectorSet(v3.x, v3.y, v3.z, 0.0f);
     }
 
     // セグメント計算
@@ -1558,9 +1620,9 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
     XMStoreFloat3(&t->position, midPoint);
 
     // 視認性調整
-    float baseThickness = 0.15f; // ベースの太さを3倍に (0.05 -> 0.15)
+    float baseThickness = 0.15f;
     if (m_isMapView) {
-      baseThickness *= 3.0f; // マップビュー時はさらに3倍して強調
+      baseThickness *= 2.0f; // マップビュー時は太く
     }
 
     // スケール (Z軸方向に引き伸ばす)
@@ -1599,9 +1661,10 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
 void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
   m_availableClubs.clear();
-  m_availableClubs.push_back({"Driver", 15.0f, 30.0f, "icon_driver.png"});
-  m_availableClubs.push_back({"Iron", 10.0f, 45.0f, "icon_iron.png"});
-  m_availableClubs.push_back({"Putter", 5.0f, 5.0f, "icon_putter.png"});
+  m_availableClubs.push_back({"Driver", 65.0f, 12.0f, "icon_driver.png"});
+  m_availableClubs.push_back({"Iron", 48.0f, 18.0f, "icon_iron.png"});
+  m_availableClubs.push_back({"Wedge", 35.0f, 26.0f, "icon_wedge.png"});
+  m_availableClubs.push_back({"Putter", 10.0f, 0.0f, "icon_putter.png"});
 
   // UI作成
   for (size_t i = 0; i < m_availableClubs.size(); ++i) {
@@ -1706,23 +1769,30 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   // gb.layer = 10;
   // state.gaugeBarEntity = gaugeBarE;
 
-  auto gaugeFillE = CreateEntity(ctx.world);
-  auto &gf = ctx.world.Add<UIImage>(gaugeFillE);
-  gf = UIImage::Create("ui_gauge_fill.png", 450.0f, 655.0f);
-  gf.width = 0.0f; // 最初は0
-  gf.height = 20.0f;
-  gf.visible = true;
-  gf.layer = 11;
-  state.gaugeFillEntity = gaugeFillE;
+  // --- パワーゲージ (D2D UIBarGauge) ---
+  state.gaugeBarEntity = CreateEntity(ctx.world);
+  auto &gauge = ctx.world.Add<UIBarGauge>(state.gaugeBarEntity);
+  gauge.x = 440.0f;
+  gauge.y = 650.0f;
+  gauge.width = 400.0f;
+  gauge.height = 30.0f;
 
-  auto markerE = CreateEntity(ctx.world);
-  auto &gm = ctx.world.Add<UIImage>(markerE);
-  gm = UIImage::Create("ui_gauge_marker.png", 450.0f, 645.0f);
-  gm.width = 16.0f;
-  gm.height = 32.0f;
-  gm.visible = false;
-  gm.layer = 12;
-  state.gaugeMarkerEntity = markerE;
+  gauge.value = 0.0f;
+  gauge.maxValue = 1.0f;
+  gauge.color = {0.2f, 0.8f, 1.0f, 1.0f}; // 青
+  gauge.bgColor = {0.0f, 0.0f, 0.0f, 0.8f};
+  gauge.borderColor = {1.0f, 1.0f, 1.0f, 1.0f};
+  gauge.borderWidth = 2.0f;
+  gauge.isVisible = false;
+
+  gauge.showImpactZones = false;
+  gauge.impactCenter = 0.5f;
+  gauge.impactWidthGreat = 0.1f;
+  gauge.impactWidthNice = 0.3f;
+  gauge.showMarker = false;
+
+  state.gaugeFillEntity = 0;
+  state.gaugeMarkerEntity = 0;
 
   // Path History
   auto pathE = CreateEntity(ctx.world);
@@ -1977,7 +2047,7 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
       std::max(1.0f, (float)articleText.length() / 1000.0f);
   float fieldWidth = minFieldWidth * std::sqrt(articleLengthFactor);
   float fieldDepth = minFieldDepth * std::sqrt(articleLengthFactor);
-  
+
   // 安全策: 最小サイズ保証
   fieldWidth = std::max(fieldWidth, minFieldWidth);
   fieldDepth = std::max(fieldDepth, minFieldDepth);
