@@ -31,6 +31,11 @@ public:
   /// @param path ファイルパス または "builtin/cube" などの特殊コマンド
   MeshHandle LoadMesh(const std::string &path);
 
+  /// @brief 動的にメッシュを作成して登録
+  MeshHandle CreateDynamicMesh(const std::string &name,
+                               const std::vector<graphics::Vertex> &vertices,
+                               const std::vector<uint32_t> &indices);
+
   /// @brief メッシュを取得（レンダリングループ用）
   graphics::Mesh *GetMesh(MeshHandle handle);
 
