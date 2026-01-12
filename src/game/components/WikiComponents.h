@@ -6,8 +6,21 @@
 
 #include <DirectXMath.h>
 #include <string>
+#include <vector>
+#include <memory>
+#include "../systems/TerrainGenerator.h"
 
 namespace game::components {
+
+// ... (existing structs)
+
+/**
+ * @brief 地形コライダー
+ * ハイトマップデータを保持し、詳細な衝突判定に使用する。
+ */
+struct TerrainCollider {
+    std::shared_ptr<game::systems::TerrainData> data;
+};
 
 /**
  * @brief Wikiの見出し（障害物）コンポーネント

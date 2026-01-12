@@ -32,10 +32,11 @@ public:
 
   /// @brief フィールドを再構築する
   /// @param ctx ゲームコンテキスト
+  /// @param pageTitle 記事タイトル（シードとして使用）
   /// @param textureResult テクスチャ生成結果（画像・見出し座標入り）
   /// @param fieldWidth フィールドのワールド幅
   /// @param fieldDepth フィールドのワールド奥行き
-  void BuildField(core::GameContext &ctx,
+  void BuildField(core::GameContext &ctx, const std::string& pageTitle,
                   const graphics::WikiTextureResult &textureResult,
                   float fieldWidth, float fieldDepth);
 
@@ -55,7 +56,7 @@ private:
   /// @brief 床作成
   void CreateFloor(core::GameContext &ctx,
                    const graphics::WikiTextureResult &result, float width,
-                   float depth);
+                   float depth, const std::string& pageTitle);
 
   /// @brief 壁作成
   void CreateWalls(core::GameContext &ctx, float width, float depth);

@@ -1570,7 +1570,7 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   // 6. 地形（フィールド）再構築
   LOG_DEBUG("WikiGolf", "Building field size: {}x{}", fieldWidth, fieldDepth);
   if (m_terrainSystem) {
-    m_terrainSystem->BuildField(ctx, *m_wikiTexture, fieldWidth, fieldDepth);
+    m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture, fieldWidth, fieldDepth);
     m_floorEntity = m_terrainSystem->GetFloorEntity(); // カメラ追従などに必要
   }
 
