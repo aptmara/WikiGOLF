@@ -59,6 +59,39 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   config.resolutionZ = 128;
   config.heightScale = 3.0f; // 高低差3m
 
+  // バイオーム決定 (ハッシュベース)
+  std::hash<std::string> hasher;
+  size_t h = hasher(pageTitle);
+  int biome = h % 4;
+
+  XMFLOAT4 terrainColor = {1.0f, 1.0f, 1.0f, 1.0f};
+
+  switch(biome) {
+  case 0: // 草原 (Normal)
+      config.friction = 0.5f; 
+      config.restitution = 0.3f;
+      terrainColor = {0.4f, 0.8f, 0.4f, 1.0f}; // 緑
+      break;
+  case 1: // 砂漠 (Heavy)
+      config.friction = 2.5f; 
+      config.restitution = 0.1f;
+      config.heightScale = 5.0f; // 起伏激しい
+      terrainColor = {0.9f, 0.8f, 0.5f, 1.0f}; // 砂色
+      break;
+  case 2: // 氷原 (Slippery)
+      config.friction = 0.05f; 
+      config.restitution = 0.6f;
+      config.heightScale = 2.0f; // 平坦
+      terrainColor = {0.8f, 0.9f, 1.0f, 1.0f}; // 白っぽい水色
+      break;
+  case 3: // 岩場 (Bouncy/Rough)
+      config.friction = 0.6f; 
+      config.restitution = 0.8f;
+      config.heightScale = 6.0f; // 険しい
+      terrainColor = {0.6f, 0.5f, 0.5f, 1.0f}; // 赤褐色
+      break;
+  }
+
   // 記事テキストとリンク情報（WikiTextureResultにはリンク位置はあるがテキストがない）
   // テクスチャ生成時に使ったテキストが必要だが、ここには渡されていない。
   // 簡易的に WikiTextureResult の text (wstring) を string に変換して使うか、
@@ -92,9 +125,10 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
   auto &mr = ctx.world.Add<MeshRenderer>(e);
   mr.mesh = meshHandle;
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
-  mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  // 地形専用シェーダーを使用（グリッド、フォグ、ライティング）
+  mr.shader = ctx.resource.LoadShader("Terrain", L"Assets/shaders/TerrainVS.hlsl",
+                                      L"Assets/shaders/TerrainPS.hlsl");
+  mr.color = terrainColor;
 
   if (result.srv) {
     mr.textureSRV = result.srv;
