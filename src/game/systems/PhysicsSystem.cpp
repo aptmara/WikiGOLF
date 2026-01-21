@@ -187,6 +187,17 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       }
   });
 
+  // ホール情報の収集（吸引用）
+  struct HoleInfo {
+      XMVECTOR position;
+      float radius;
+      float gravity;
+  };
+  std::vector<HoleInfo> holes;
+  ctx.world.Query<Transform, GolfHole>().Each([&](ecs::Entity, Transform& t, GolfHole& h) {
+      holes.push_back({XMLoadFloat3(&t.position), h.radius, h.gravity});
+  });
+
   for (int step = 0; step < subSteps; ++step) {
     // 1. 積分ステップ (動的オブジェクトの移動)
     ctx.world.Query<Transform, RigidBody, Collider>().Each(
@@ -245,6 +256,29 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
              }
           }
 
+          // ホール吸引力
+          if (col.type == ColliderType::Sphere) { // ボールのみ吸い込む
+              for(const auto& h : holes) {
+                  XMVECTOR toHole = XMVectorSubtract(h.position, pos);
+                  toHole = XMVectorSetY(toHole, 0.0f); // 水平方向のみ
+                  
+                  float distSq = XMVectorGetX(XMVector3LengthSq(toHole));
+                  float range = h.radius * 4.0f; // 吸い込み範囲
+                  
+                  if (distSq < range * range && distSq > 0.0001f) {
+                      float dist = std::sqrt(distSq);
+                      XMVECTOR dir = XMVectorScale(toHole, 1.0f / dist);
+                      
+                      // 距離に応じた強さ (線形減衰)
+                      float factor = std::max(0.0f, 1.0f - (dist / range));
+                      // 中心に近いほど強く
+                      float force = h.gravity * factor * 10.0f; 
+                      
+                      acc = XMVectorAdd(acc, XMVectorScale(dir, force));
+                  }
+              }
+          }
+
           // 重力加算
           acc = XMVectorAdd(acc, gravity);
 
@@ -270,7 +304,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
              float speed = XMVectorGetX(XMVector3Length(xzVel));
 
              if (speed > 0.001f) {
-               float frictionForce = rb.rollingFriction * subDt;
+               float frictionCoeff = rb.rollingFriction;
+               if (terrainData) {
+                   frictionCoeff *= terrainData->config.friction;
+               }
+               
+               float frictionForce = frictionCoeff * subDt;
                // 斜面では摩擦が少し減るかも？ (N.Y 成分に応じて)
                // float slopeFactor = std::max(0.2f, XMVectorGetY(groundNormal));
                // frictionForce *= slopeFactor;

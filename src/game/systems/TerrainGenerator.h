@@ -14,6 +14,8 @@ struct TerrainConfig {
     float worldDepth = 30.0f;
     float baseHeight = 0.0f;
     float heightScale = 5.0f; // 高低差の最大値
+    float friction = 0.5f;    // 地形の基本摩擦
+    float restitution = 0.2f; // 地形の基本反発
 };
 
 struct TerrainData {
