@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <memory>
 #include <any>
+#include <type_traits>
 
 namespace ecs {
 
@@ -126,16 +127,28 @@ public:
 
     template<typename T>
     void SetGlobal(T&& value) {
-        ComponentTypeId id = GetComponentTypeId<T>();
-        m_globals[id] = std::make_any<T>(std::forward<T>(value));
+        using Decayed = std::decay_t<T>;
+        ComponentTypeId id = GetComponentTypeId<Decayed>();
+        if constexpr (std::is_copy_constructible_v<Decayed>) {
+            m_globals[id] = std::make_any<Decayed>(std::forward<T>(value));
+        } else {
+            m_globals[id] = std::make_any<std::shared_ptr<Decayed>>(
+                std::make_shared<Decayed>(std::forward<T>(value)));
+        }
     }
 
     template<typename T>
     T* GetGlobal() {
-        ComponentTypeId id = GetComponentTypeId<T>();
+        using Decayed = std::decay_t<T>;
+        ComponentTypeId id = GetComponentTypeId<Decayed>();
         auto it = m_globals.find(id);
         if (it == m_globals.end()) return nullptr;
-        return std::any_cast<T>(&it->second);
+        if constexpr (std::is_copy_constructible_v<Decayed>) {
+            return std::any_cast<Decayed>(&it->second);
+        } else {
+            auto shared = std::any_cast<std::shared_ptr<Decayed>>(&it->second);
+            return (shared && *shared) ? shared->get() : nullptr;
+        }
     }
 
     //==========================================================================

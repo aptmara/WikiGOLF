@@ -31,19 +31,19 @@ public:
    */
   std::string FetchRandomPageTitle();
 
-  /**
-   * @brief 指定した記事の内部リンク一覧を取得します
-   * @param title 記事タイトル
-   * @param limit 取得上限（デフォルト50）
-   * @return 内部リンクのリスト
-   */
-  std::vector<WikiLink> FetchPageLinks(const std::string &title,
-                                       int limit = 50);
+  /// @brief 記事のリンク一覧を取得
+  /// @param title 記事タイトル
+  /// @param limit 最大取得数
+  /// @return リンク情報のリスト
+  std::vector<WikiLink> FetchPageLinks(const std::string &title, int limit = 50);
 
-  /**
-   * @brief 目的記事用のランダムな「人気記事」を取得します
-   * @return 記事タイトル
-   */
+  /// @brief 記事のカテゴリ一覧を取得
+  /// @param title 記事タイトル
+  /// @return カテゴリ名（"Category:xxx"）のリスト
+  std::vector<std::string> FetchPageCategories(const std::string &title);
+
+  /// @brief 目標ページ（ゴール）をランダムに決定
+  /// @return ページタイトル
   std::string FetchTargetPageTitle();
 
   /**
