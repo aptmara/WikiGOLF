@@ -5,6 +5,7 @@
 
 #include "FbxLoader.h"
 #include "../core/Logger.h"
+#include "TangentGenerator.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -114,6 +115,8 @@ bool FbxLoader::Load(const std::string &path, std::vector<Vertex> &outVertices,
 
   // ルートノードから再帰的に処理
   ProcessNode(scene->mRootNode, scene, outVertices, outIndices);
+
+  ComputeTangents(outVertices, outIndices);
 
   LOG_INFO("FbxLoader", "ロード成功: {} (頂点: {}, インデックス: {})", path,
            outVertices.size(), outIndices.size());

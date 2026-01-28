@@ -10,6 +10,7 @@
 #include "../../resources/ResourceManager.h"
 #include "../components/WikiComponents.h"
 #include <DirectXMath.h>
+#include <atomic>
 #include <functional>
 #include <future>
 #include <memory>
@@ -79,28 +80,30 @@ private:
   int m_spawnedCount = 0;
   float m_spawnTimer = 0.0f;
 
-  // 演出設定（巨大ボール積載仕様）
-  static constexpr int TOTAL_BALLS = 24;         ///< 量感を出すための総数
-  static constexpr float SPAWN_INTERVAL = 0.15f; ///< 心地よいテンポ
-  static constexpr float BALL_RADIUS = 3.5f;     ///< 物理半径（衝突用の基準）
-  static constexpr float BALL_MODEL_SCALE =
-      3.0f; ///< 見た目を大きくする係数（当たり判定は変えない）
-  static constexpr float GRAVITY = -120.0f; ///< しっかり落とす
-  static constexpr float RESTITUTION =
-      0.28f; ///< 軽く弾ませて「動いている感」を出す
-  static constexpr float FRICTION = 0.82f; ///< 横滑りを抑える
+  // 演出設定（大量投入＆小型ボール仕様）
+  static constexpr int TOTAL_BALLS = 300;         ///< 総数増量
+  static constexpr float SPAWN_INTERVAL = 0.005f; ///< 爆速スポーン
+  static constexpr float BALL_RADIUS = 1.1f;      ///< 物理半径
+  static constexpr float BALL_MODEL_SCALE = 3.0f; ///< 見た目スケールも
+  static constexpr float MODEL_ASSET_SCALE_FACTOR =
+      20.0f;                                  ///< FBXモデルの単位ズレ補正
+  static constexpr float GRAVITY = -180.0f;   ///< 重力強化
+  static constexpr float RESTITUTION = 0.6f;  ///< よく弾む
+  static constexpr float FRICTION = 0.82f;    ///< 横滑りを抑える
   static constexpr float AIR_DRAG =
-      0.94f; ///< 毎フレームの減衰（dtを掛けた指数減衰）
-  static constexpr float ANGULAR_DAMPING = 0.9f; ///< 回転の減衰
+      0.98f; ///< 減衰弱め
+  static constexpr float ANGULAR_DAMPING = 0.95f; ///< 回転維持
   static constexpr float SETTLE_THRESHOLD =
-      1.8f; ///< 早めに静止させて安定させる
+      1.2f; ///< 小型化に合わせて閾値も縮小
 
   // フェードアウト
   float m_fadeAlpha = 0.0f;
   bool m_fadeStarted = false;
   float m_fadeDelay = 0.6f; ///< 全ボール静止後の待機時間
-  static constexpr float FADE_SPEED = 1.5f;
+  static constexpr float FADE_SPEED = 2.0f;
   float m_sceneTime = 0.0f;
+  float m_explosionTimer = 0.0f; // 爆発演出用タイマー
+  bool m_exploded = false;       // 爆発済みフラグ
   float m_logTimer = 0.0f;
   bool m_spawnFinishedLogged = false;
   bool m_allSettledLogged = false;
@@ -136,14 +139,16 @@ private:
   ecs::Entity m_backdropEntity;
 
   // ステージ寸法
-  static constexpr float ARENA_HALF_WIDTH = 24.0f;
-  static constexpr float ARENA_HALF_DEPTH = 14.0f;
+  static constexpr float ARENA_HALF_WIDTH = 40.0f;
+  static constexpr float ARENA_HALF_DEPTH = 20.0f;
   static constexpr float FLOOR_Y = -8.0f;
 
   // 非同期ロード
   std::future<std::unique_ptr<game::components::WikiGlobalData>> m_loadTask;
   bool m_isLoading = false;
   bool m_loadCompleted = false;
+  std::shared_ptr<std::atomic<float>> m_loadProgress;
+  float m_uiProgress = 0.0f;
 };
 
 } // namespace game::scenes

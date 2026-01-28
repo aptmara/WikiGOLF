@@ -27,6 +27,14 @@ int main() {
   CHECK_CLOSE(BlendProgress(2.0f, 2.0f), 1.0f, 0.0001f,
               "BlendProgress clamps to 1");
 
+  // 非同期ロードと演出の統合は大きい方を採用し、0-1にクランプされる
+  CHECK_CLOSE(CombineLoadingProgress(0.6f, 0.4f), 0.6f, 0.0001f,
+              "CombineLoadingProgress picks async when larger");
+  CHECK_CLOSE(CombineLoadingProgress(0.3f, 0.5f), 0.5f, 0.0001f,
+              "CombineLoadingProgress picks visual when larger");
+  CHECK_CLOSE(CombineLoadingProgress(1.2f, 0.52f), 1.0f, 0.0001f,
+              "CombineLoadingProgress clamps to 1 when async exceeds 1");
+
   std::cout << "All loading progress tests passed!\n";
   return 0;
 }

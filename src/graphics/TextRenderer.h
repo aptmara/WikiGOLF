@@ -89,6 +89,8 @@ private:
   /// @brief バックバッファを D2D ターゲットとして設定
   HRESULT CreateTargetBitmap(IDXGISwapChain *swapChain);
 
+  ComPtr<IDXGISwapChain> m_swapChain;
+
   // D2D 1.1 オブジェクト
   ComPtr<ID2D1Factory1> m_d2dFactory;
   ComPtr<ID2D1DeviceContext> m_d2dContext;

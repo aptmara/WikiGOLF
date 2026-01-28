@@ -1,5 +1,6 @@
 #include "ObjLoader.h"
 #include "../core/Logger.h"
+#include "TangentGenerator.h"
 #include <algorithm>
 #include <charconv>
 #include <filesystem>
@@ -320,6 +321,8 @@ bool ObjLoader::Load(const std::string &path, std::vector<Vertex> &outVertices,
   if (!parser.Parse(outVertices, outIndices)) {
     return false;
   }
+
+  ComputeTangents(outVertices, outIndices);
 
   LOG_INFO("ObjLoader", "ロード完了: {} (Vertices: {}, Indices: {})",
            path.c_str(), outVertices.size(), outIndices.size());
