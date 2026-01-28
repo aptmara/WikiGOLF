@@ -11,6 +11,7 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View;
     matrix Projection;
     float4 MaterialColor;
+    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap (unused here)
     float4 LightDir;
     float4 CameraPos;
 };

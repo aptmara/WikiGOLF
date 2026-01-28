@@ -20,6 +20,8 @@ struct Vertex {
   DirectX::XMFLOAT3 normal;
   DirectX::XMFLOAT2 texCoord;
   DirectX::XMFLOAT4 color;
+  DirectX::XMFLOAT3 tangent{1.0f, 0.0f, 0.0f};
+  DirectX::XMFLOAT3 bitangent{0.0f, 1.0f, 0.0f};
 };
 
 /// @brief メッシュクラス

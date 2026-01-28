@@ -1,9 +1,9 @@
 #include "TerrainGenerator.h"
 #include "../../core/Logger.h"
+#include "../../graphics/TangentGenerator.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
-
 
 namespace game::systems {
 
@@ -20,7 +20,7 @@ static float SmoothStep(float edge0, float edge1, float x) {
 
 TerrainData TerrainGenerator::GenerateTerrain(
     const std::string &articleText,
-    const std::vector<std::pair<std::string, std::wstring>> &links,
+    const std::vector<DirectX::XMFLOAT2> &holePositions,
     const TerrainConfig &config) {
   TerrainData data;
   data.config = config;
@@ -28,19 +28,20 @@ TerrainData TerrainGenerator::GenerateTerrain(
   // ハイトマップ初期化
   int totalVerts = config.resolutionX * config.resolutionZ;
   data.heightMap.resize(totalVerts, 0.0f);
+  data.materialMap.resize(totalVerts, 0); // 0: Fairway
 
   // 1. 基本形状生成 (ノイズ + プラットフォーム)
   GenerateBaseHeightMap(data, articleText);
 
   // 2. リンク位置に基づくプラットフォーム生成
-  CreatePlatforms(data, links);
+  CreatePlatforms(data, holePositions);
 
   // 3. スムージング処理
   ApplySmoothing(data, 3); // 3回スムージング
 
   // 4. メッシュ生成
   CalculateNormals(data);
-  GenerateMesh(data);
+  GenerateMesh(data, holePositions); // ホール位置を渡す
 
   return data;
 }
@@ -82,69 +83,120 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
 
       // ベース高さ調整
       SetHeight(data, x, z, h + data.config.baseHeight);
+
+      // マテリアル設定: 外周(壁)はラフ、またはノイズが高い場所
+      int idx = z * resX + x;
+      if (wallFactor > 0.5f) {
+        data.materialMap[idx] = 1; // Rough
+      } else if (h2 > 0.03f) {     // 起伏が激しい場所もラフ
+        data.materialMap[idx] = 1;
+      }
     }
   }
 }
 
 void TerrainGenerator::CreatePlatforms(
-    TerrainData &data,
-    const std::vector<std::pair<std::string, std::wstring>> &links) {
+    TerrainData &data, const std::vector<DirectX::XMFLOAT2> &holePositions) {
   int resX = data.config.resolutionX;
   int resZ = data.config.resolutionZ;
+  float worldW = data.config.worldWidth;
+  float worldD = data.config.worldDepth;
 
-  // リンク数に応じてプラットフォームを作る
-  // ここでは簡易的に、リンクのハッシュ値から位置を決定
+  // 頂点カラー初期化（全体を白に）
+  // 頂点生成前だが、ここでフラグなどを持てないので、一旦GenerateMesh内でやるか、
+  // あるいはここでハイトマップ以外の情報も操作するか。
+  // 今回はGenerateMeshで色を決めるために、TerrainDataに「地形属性マップ」を追加するのが正しいが、
+  // 簡易的に「GenerateMeshで色を塗る際のロジック」を修正する方針にする。
+  // しかしGenerateMeshは座標を知らない。
+  // なので、GenerateMeshを修正し、holePositionsを参照できるようにするか、
+  // データに色情報を埋め込むか。
+  // verticesはこの後生成されるので、Vertex.colorをいじるなら生成時。
+  // ひとまずここは形状のみに注力し、色は別途考える（あるいはGenerateMeshにholePositionsを渡す？）。
+  // いや、頂点ごとに属性を持つ配列を追加しよう。
+  // TerrainDataにはまだないので、GenerateMesh内で色を決定するロジックをハードコードする。
 
-  for (const auto &link : links) {
-    // ハッシュから位置を決定
-    std::hash<std::string> hasher;
-    size_t h = hasher(link.first);
+  // リンク位置に基づいてプラットフォームを作る
+  for (const auto &pos : holePositions) {
+    // ワールド座標 -> グリッドUV -> インデックス
+    // px = (u - 0.5) * W  => u = px/W + 0.5
+    // pz = (0.5 - v) * D  => v = 0.5 - pz/D
 
-    // 0.2 ~ 0.8 の範囲に配置 (端っこすぎないように)
-    float px = 0.2f + (float)(h % 100) / 100.0f * 0.6f;
-    float pz = 0.2f + (float)((h / 100) % 100) / 100.0f * 0.6f;
+    float u = pos.x / worldW + 0.5f;
+    float v = 0.5f - pos.y / worldD; // pos.y is Z in world coords here (vector2
+                                     // x, z passed as x, y)
 
-    int cx = (int)(px * resX);
-    int cz = (int)(pz * resZ);
+    int cx = (int)(u * (resX - 1));
+    int cz = (int)(v * (resZ - 1));
 
-    // プラットフォーム半径 (少し広げる)
-    int radius = resX / 8;
+    // プラットフォーム半径 (グリーン)
+    int radius = resX / 10; // ほどよい大きさでテキストを邪魔しない
 
     // プラットフォームの高さ
-    // テキストを読みやすくするため、元の起伏を抑えてベース高さに近づける
     float currentCenterH = GetHeight(data, cx, cz);
-    float targetHeight =
-        currentCenterH * 0.3f; // 起伏を7割カットして0に近づける
+    float targetHeight = currentCenterH + 0.05f; // わずかに持ち上げて埋没を防ぐ
 
-    // カップ周辺の窪み（すり鉢）の深さ
-    float bowlDepth = 0.4f;
+    // Cup bowl depth
+    float bowlDepth = 0.15f;
 
-    for (int z = cz - radius * 2; z <= cz + radius * 2; ++z) {
-      for (int x = cx - radius * 2; x <= cx + radius * 2; ++x) {
+    // Bunker generation
+    std::mt19937 tempRng(cx + cz * resX);
+    std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+    float bunkerAngle = dist01(tempRng) * 6.28f;
+    float bunkerDist = radius * 1.8f;
+
+    for (int z = cz - radius * 3; z <= cz + radius * 3; ++z) {
+      for (int x = cx - radius * 3; x <= cx + radius * 3; ++x) {
         if (x < 0 || x >= resX || z < 0 || z >= resZ)
           continue;
 
         float dx = (float)(x - cx);
         float dz = (float)(z - cz);
         float dist = std::sqrt(dx * dx + dz * dz);
+        int idx = z * resX + x;
 
+        // Green area
         if (dist < radius) {
-          // 中心に向かって窪ませる（Cosカーブですり鉢状に）
-          float t = dist / radius; // 0.0(center) -> 1.0(edge)
-          // Cos: 0->1, 1->0.
-          // 1.0 - cos(t * pi/2) ? No. cos(t * pi/2) is 1->0.
-          // shape: 1.0 -> 0.0
-          float shape = std::cos(t * 3.14159f * 0.5f);
-          float h = targetHeight - shape * bowlDepth;
+          data.materialMap[idx] = 3; // Green
 
+          float cupRadius = 1.5f;
+          if (dist < cupRadius) {
+            float t = dist / cupRadius;
+            float shape = std::cos(t * 3.14159f * 0.5f);
+            float h = targetHeight - shape * bowlDepth;
+            SetHeight(data, x, z, h);
+          } else {
+            SetHeight(data, x, z, targetHeight);
+          }
+        } else if (dist < radius * 1.5f) {
+          // Apron
+          data.materialMap[idx] = 0;
+
+          // Connect to rough
+          float t = SmoothStep(radius, radius * 1.5f, dist);
           float currentH = GetHeight(data, x, z);
-          SetHeight(data, x, z, Lerp(currentH, h, 0.9f)); // 強めに適用
-        } else if (dist < radius * 2.0f) {
-          // スムースな接続部
-          float t = SmoothStep(radius, radius * 2.0f, dist);
-          float currentH = GetHeight(data, x, z);
-          // 外側ほど元の高さ、内側ほどターゲット高さ
           SetHeight(data, x, z, Lerp(targetHeight, currentH, t));
+        } else {
+          // Generate bunkers
+          float angle = std::atan2(dz, dx);
+          float angleDiff = angle - bunkerAngle;
+          while (angleDiff > 3.14159f)
+            angleDiff -= 6.28318f;
+          while (angleDiff < -3.14159f)
+            angleDiff += 6.28318f;
+
+          if (std::abs(angleDiff) < 0.6f) {
+            float distFromBunkerCenter =
+                std::sqrt(std::pow(dist - bunkerDist, 2.0f));
+            float bunkerRadius = radius * 0.5f;
+            if (distFromBunkerCenter < bunkerRadius) {
+              data.materialMap[idx] = 2; // Bunker
+              // 窪ませる
+              float currentH = GetHeight(data, x, z);
+              SetHeight(data, x, z,
+                        currentH - 0.25f * std::cos(distFromBunkerCenter /
+                                                    bunkerRadius * 1.57f));
+            }
+          }
         }
       }
     }
@@ -206,10 +258,8 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
       XMVECTOR tangentX = XMVectorSet(2.0f * cellW, hR - hL, 0.0f, 0.0f);
       XMVECTOR tangentZ = XMVectorSet(0.0f, hU - hD, -2.0f * cellD, 0.0f);
 
-      // 法線 = Cross(Z, X)  (左手座標系 Y-up)
-      // DirectXMathは左手系が基本だが、Crossの順序に注意
-      // T_z cross T_x -> Normal
-      XMVECTOR normal = XMVector3Cross(tangentZ, tangentX);
+      // 法線 = Cross(X, Z)  (左手座標系 Y-up)。順序を誤ると下向きになる。
+      XMVECTOR normal = XMVector3Cross(tangentX, tangentZ);
       normal = XMVector3Normalize(normal);
 
       XMStoreFloat3(&data.normals[z * resX + x], normal);
@@ -217,7 +267,8 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
   }
 }
 
-void TerrainGenerator::GenerateMesh(TerrainData &data) {
+void TerrainGenerator::GenerateMesh(
+    TerrainData &data, const std::vector<DirectX::XMFLOAT2> &holePositions) {
   int resX = data.config.resolutionX;
   int resZ = data.config.resolutionZ;
   float width = data.config.worldWidth;
@@ -244,7 +295,42 @@ void TerrainGenerator::GenerateMesh(TerrainData &data) {
       vert.position = {px, py, pz};
       vert.normal = data.normals[z * resX + x];
       vert.texCoord = {u, v};
-      vert.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白
+
+      // デフォルト色 (マテリアルマップに基づく)
+      int idx = z * resX + x;
+      uint8_t mat = data.materialMap[idx];
+
+      switch (mat) {
+      case 0: // Fairway
+        vert.color = {0.2f, 0.6f, 0.2f, 1.0f};
+        break;
+      case 1: // Rough
+        vert.color = {0.1f, 0.35f, 0.1f, 1.0f};
+        break;
+      case 2: // Bunker
+        vert.color = {0.85f, 0.75f, 0.55f, 1.0f};
+        break;
+      case 3: // Green
+        vert.color = {0.3f, 0.8f, 0.3f, 1.0f};
+        break;
+      default:
+        vert.color = {1.0f, 1.0f, 1.0f, 1.0f};
+        break;
+      }
+
+      // ホール可視化（黒く塗る）
+      // 座標系: px, pz (World)
+      for (const auto &hole : holePositions) {
+        float dx = px - hole.x;
+        float dz = pz - hole.y; // hole.y is Z
+        float distSq = dx * dx + dz * dz;
+
+        // 塗りつぶしは極小範囲に限定し、色も明るめにして黒ずみを避ける
+        if (distSq < 0.25f * 0.25f) {
+          vert.color = {0.9f, 0.95f, 0.9f, 1.0f};
+          break;
+        }
+      }
 
       vertices.push_back(vert);
     }
@@ -280,6 +366,8 @@ void TerrainGenerator::GenerateMesh(TerrainData &data) {
       indices.push_back(i3);
     }
   }
+
+  graphics::ComputeTangents(vertices, indices);
 
   // データ格納
   data.vertices = std::move(vertices);

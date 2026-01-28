@@ -6,6 +6,7 @@
 
 #include "../../core/Scene.h"
 #include "../../ecs/Entity.h"
+#include "../../graphics/SkyboxTextureGenerator.h"
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../systems/GameJuiceSystem.h"
 #include "../systems/MapSys.h"
@@ -16,7 +17,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
 
 namespace core {
 struct GameContext;
@@ -63,6 +63,13 @@ private:
   /// @brief ページ遷移（値渡し：ホール削除後も安全に使用するため）
   void TransitionToPage(core::GameContext &ctx, std::string pageName);
 
+  /// @brief カップイン判定（ボールがホール内で静止したか）
+  void CheckCupIn(core::GameContext &ctx);
+
+  /// @brief クラブ切り替え
+  /// @param direction 1: 次へ, -1: 前へ
+  void SwitchClub(core::GameContext &ctx, int direction);
+
   /// @brief テクスチャからリンク領域を作成
   void CreateLinksFromTexture(core::GameContext &ctx);
 
@@ -78,12 +85,36 @@ private:
   ecs::Entity m_ballEntity = UINT32_MAX; // 無効値で初期化（ID競合防止）
   ecs::Entity m_floorEntity = UINT32_MAX;
   ecs::Entity m_cameraEntity = UINT32_MAX;
-  ecs::Entity m_arrowEntity = UINT32_MAX; // 矢印表示用
+  ecs::Entity m_arrowEntity = UINT32_MAX; // 矢印表示用（パワーチャージ時）
+  ecs::Entity m_guideArrowEntity =
+      UINT32_MAX; // 方向ガイド（アイドル時常時表示）
+  ecs::Entity m_clubModelEntity = UINT32_MAX; // ゴルフクラブ3Dモデル
 
-  // カメラ制御
-  float m_cameraDistance = 15.0f;                // 現在のカメラ距離
-  float m_targetCameraDistance = 15.0f;          // 目標カメラ距離
-  DirectX::XMFLOAT3 m_shotDirection = {0, 0, 1}; // ショット方向
+  // === クラブアニメーション制御 ===
+  enum class ClubAnimPhase {
+    Idle,         ///< 待機（クラブ非表示または構え）
+    Backswing,    ///< バックスイング（振りかぶり）
+    Downswing,    ///< ダウンスイング（振り下ろし）
+    FollowThrough ///< フォロースルー
+  };
+  ClubAnimPhase m_clubAnimPhase = ClubAnimPhase::Idle;
+  float m_clubSwingAngle = 0.0f; ///< 現在のスイング角度（度）
+  float m_clubSwingSpeed = 0.0f; ///< スイング速度
+  float m_clubAnimTimer = 0.0f;  ///< アニメーションタイマー
+
+  /// @brief クラブモデルの初期化
+  void InitializeClubModel(core::GameContext &ctx);
+  /// @brief クラブアニメーション更新
+  void UpdateClubAnimation(core::GameContext &ctx, float dt);
+
+  // カメラ制御（TPSオービットカメラ）
+  float m_cameraYaw = 0.0f;   // 水平回転角度（ラジアン）
+  float m_cameraPitch = 0.5f; // 垂直回転角度（ラジアン、初期値: 少し見下ろし）
+  float m_cameraDistance = 15.0f; // カメラ距離
+  float m_targetCameraDistance = 15.0f; // クラブ別の推奨カメラ距離
+  float m_targetCameraHeight = 5.0f;    // クラブ別の推奨カメラ高さ
+  DirectX::XMFLOAT3 m_shotDirection = {
+      0, 0, 1}; // ショット方向（カメラ前方ベクトルから自動計算）
 
   // クラブ定義
   struct Club {
@@ -95,6 +126,7 @@ private:
 
   Club m_currentClub = {"Driver", 30.0f, 30.0f,
                         "icon_driver.png"}; // デフォルト
+  int m_currentClubIndex = 0;               // 現在のクラブインデックス
   std::vector<Club> m_availableClubs;
   std::vector<ecs::Entity> m_clubUIEntities;
 
@@ -106,7 +138,7 @@ private:
 
   // 初回ロード用キャッシュ（シーン遷移時のラグ解消用）
   bool m_hasPreloadedData = false;
-  std::vector<game::systems::WikiLink> m_preloadedLinks;
+  std::vector<game::WikiLink> m_preloadedLinks;
   std::string m_preloadedExtract;
 
   // テクスチャ関連
@@ -142,9 +174,16 @@ private:
   // === Wiki Terrain システム（地形生成） ===
   std::unique_ptr<game::systems::WikiTerrainSystem> m_terrainSystem;
 
+  // === Skybox システム（背景スカイボックス） ===
+  std::unique_ptr<graphics::SkyboxTextureGenerator> m_skyboxGenerator;
+  ecs::Entity m_skyboxEntity = UINT32_MAX; ///< スカイボックスエンティティ
+
   /// @brief UI要素の初期化（エンティティ作成）
   void InitializeUI(core::GameContext &ctx,
                     game::components::GolfGameState &state);
+
+  /// @brief ガイドUI更新
+  void UpdateGuideUI(core::GameContext &ctx);
 
   /// @brief ページ読み込み・テクスチャ生成・フィールド更新
   void LoadPage(core::GameContext &ctx, const std::string &pageName);

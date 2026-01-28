@@ -12,6 +12,7 @@ void Input::Initialize() {
   m_mouseButtonsDown.fill(false);
   m_mouseButtonsUp.fill(false);
   m_mousePosition = {0, 0};
+  m_scrollDelta = 0.0f;
   m_cursorVisible = true;
   m_cursorLocked = false;
 }
@@ -28,6 +29,7 @@ void Input::Update() {
   m_keysUp.fill(false);
   m_mouseButtonsDown.fill(false);
   m_mouseButtonsUp.fill(false);
+  m_scrollDelta = 0.0f;
 }
 
 void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
@@ -55,21 +57,6 @@ void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   case WM_MOUSEMOVE:
     m_mousePosition.x = GET_X_LPARAM(lParam);
     m_mousePosition.y = GET_Y_LPARAM(lParam);
-
-    if (m_cursorLocked) {
-      // 射影ロジックやキャプチャ用にウィンドウ中央に戻す
-      // ここではカーソルが動かないようにクリップする
-      RECT clipRect;
-      if (GetClipCursor(&clipRect)) {
-        // すでにクリップされていれば何もしない
-      } else {
-        // 画面全体を 0 で初期化してからウィンドウ領域をクリップするのは
-        // 呼び出し側のウィンドウハンドルが必要なので、簡易的に
-        // カーソルは非表示にして中央にセットする
-        // 注意: 正確なウィンドウ領域でのロックは呼び出し側が行うことを想定
-        SetCursorPos(0, 0);
-      }
-    }
     break;
 
   // --- マウスボタン ---
@@ -96,6 +83,16 @@ void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   case WM_MBUTTONUP:
     m_mouseButtons[2] = false;
     m_mouseButtonsUp[2] = true;
+    m_mouseButtonsUp[2] = true;
+    break;
+
+  case WM_MOUSEWHEEL:
+    // ホイールの回転量 (WHEEL_DELTA = 120 単位)
+    // 正: 奥（上）, 負: 手前（下）
+    {
+      float delta = (float)GET_WHEEL_DELTA_WPARAM(wParam) / (float)WHEEL_DELTA;
+      m_scrollDelta += delta;
+    }
     break;
   }
 }
@@ -136,22 +133,73 @@ bool Input::GetMouseButtonUp(int button) const {
   return m_mouseButtonsUp[button];
 }
 
+float Input::GetMouseScrollDelta() const { return m_scrollDelta; }
+
 void Input::SetMouseCursorVisible(bool visible) {
   m_cursorVisible = visible;
   ShowCursor(visible);
 }
 
 void Input::SetMouseCursorLocked(bool locked) {
+  // 状態が変わらなければ何もしない（毎フレーム呼ばれる対策）
+  if (m_cursorLocked == locked) {
+    // ただしロック中は毎フレームカーソルを中央に戻す
+    if (locked) {
+      HWND hwnd = GetActiveWindow();
+      if (hwnd) {
+        RECT clientRect;
+        GetClientRect(hwnd, &clientRect);
+        POINT topLeft = {clientRect.left, clientRect.top};
+        POINT bottomRight = {clientRect.right, clientRect.bottom};
+        ClientToScreen(hwnd, &topLeft);
+        ClientToScreen(hwnd, &bottomRight);
+
+        int centerX = (topLeft.x + bottomRight.x) / 2;
+        int centerY = (topLeft.y + bottomRight.y) / 2;
+        SetCursorPos(centerX, centerY);
+
+        // マウス位置も中央に更新（デルタ計算のため）
+        m_mousePosition.x = (clientRect.right - clientRect.left) / 2;
+        m_mousePosition.y = (clientRect.bottom - clientRect.top) / 2;
+      }
+    }
+    return;
+  }
+
   m_cursorLocked = locked;
+
   if (locked) {
-    // クリップは画面全体ではなく、呼び出し元がウィンドウ領域を指定する想定
-    // ここでは簡易的にカーソルを中心に固定
-    POINT p = {0, 0};
-    SetCursorPos(p.x, p.y);
-    // Hide cursor when locked
+    // ウィンドウハンドルを取得（アクティブウィンドウ）
+    HWND hwnd = GetActiveWindow();
+    if (hwnd) {
+      // ウィンドウのクライアント領域を取得
+      RECT clientRect;
+      GetClientRect(hwnd, &clientRect);
+
+      // クライアント座標をスクリーン座標に変換
+      POINT topLeft = {clientRect.left, clientRect.top};
+      POINT bottomRight = {clientRect.right, clientRect.bottom};
+      ClientToScreen(hwnd, &topLeft);
+      ClientToScreen(hwnd, &bottomRight);
+
+      // クリップ領域をウィンドウ内に制限
+      RECT clipRect = {topLeft.x, topLeft.y, bottomRight.x, bottomRight.y};
+      ClipCursor(&clipRect);
+
+      // カーソルをウィンドウ中心に移動
+      int centerX = (topLeft.x + bottomRight.x) / 2;
+      int centerY = (topLeft.y + bottomRight.y) / 2;
+      SetCursorPos(centerX, centerY);
+
+      // マウス位置も中央に初期化
+      m_mousePosition.x = (clientRect.right - clientRect.left) / 2;
+      m_mousePosition.y = (clientRect.bottom - clientRect.top) / 2;
+    }
+
+    // カーソルを非表示
     ShowCursor(FALSE);
   } else {
-    // Release clipping
+    // クリップ解除
     ClipCursor(nullptr);
     ShowCursor(TRUE);
   }

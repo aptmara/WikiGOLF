@@ -19,6 +19,8 @@ struct MeshRenderer {
   // テクスチャ（オプション）
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> textureSRV;
   bool hasTexture = false;
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> normalMapSRV;
+  bool hasNormalMap = false;
 };
 
 } // namespace game::components

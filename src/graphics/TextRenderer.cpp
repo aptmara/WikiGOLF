@@ -17,6 +17,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
     LOG_ERROR("TextRenderer", "SwapChain is null");
     return false;
   }
+  m_swapChain = swapChain;
 
   HRESULT hr;
 
@@ -125,8 +126,12 @@ HRESULT TextRenderer::CreateTargetBitmap(IDXGISwapChain *swapChain) {
   ComPtr<ID2D1Bitmap1> targetBitmap;
   hr = m_d2dContext->CreateBitmapFromDxgiSurface(dxgiBackBuffer.Get(),
                                                  &bitmapProps, &targetBitmap);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG_ERROR("TextRenderer",
+              "CreateBitmapFromDxgiSurface failed (HRESULT: {:08X})",
+              static_cast<uint32_t>(hr));
     return hr;
+  }
 
   // ターゲットとして設定
   m_d2dContext->SetTarget(targetBitmap.Get());
@@ -154,7 +159,44 @@ void TextRenderer::EndDraw() {
   if (m_d2dContext) {
     HRESULT hr = m_d2dContext->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET) {
-      LOG_ERROR("TextRenderer", "D2D RenderTarget lost, needs recreation");
+      LOG_WARN("TextRenderer", "D2D RenderTarget lost, recreating...");
+      m_d2dContext->SetTarget(nullptr);
+      if (m_swapChain) {
+        // まずターゲット再作成を試みる
+        HRESULT hrRecreate = CreateTargetBitmap(m_swapChain.Get());
+        if (SUCCEEDED(hrRecreate)) {
+          LOG_INFO("TextRenderer", "D2D RenderTarget recreated successfully");
+        } else {
+          LOG_ERROR("TextRenderer",
+                    "Failed to recreate target bitmap (HRESULT: {:08X}). "
+                    "Attempting full reset...",
+                    static_cast<uint32_t>(hrRecreate));
+
+          // ターゲット再作成失敗ならフルリセット
+          // Shutdownでキャッシュなども消えるが、描画不可よりはマシ
+          // SwapChainポインタは一旦退避が必要（Shutdownで消えるなら）
+          // しかしShutdownはメンバ変数をResetするだけ。InitializeでSwapChainを再利用する。
+          // m_swapChainはComPtrなのでShutdownでResetされないように注意が必要だが
+          // Shutdownの実装を見ると m_d2dContext.Reset() 等であり、m_swapChain
+          // は触っていない（はず）
+          // ...確認すると Shutdown() 内には m_swapChain のリセット処理がない。
+          // TextRenderer.h を見ると m_swapChain はメンバ変数として追加したが
+          // Shutdown には入れていないはず。 なのでそのまま Shutdown ->
+          // Initialize できる。
+
+          ComPtr<IDXGISwapChain> swapChain = m_swapChain; // 退避（念のため）
+          Shutdown();
+          if (Initialize(swapChain.Get())) {
+            LOG_INFO("TextRenderer",
+                     "Full initialization successful after loss");
+          } else {
+            LOG_ERROR("TextRenderer", "Full initialization failed.");
+          }
+        }
+      }
+    } else if (FAILED(hr)) {
+      LOG_WARN("TextRenderer", "EndDraw failed with HRESULT: {:08X}",
+               static_cast<uint32_t>(hr));
     }
   }
 }
@@ -335,6 +377,58 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
       m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
   if (!format)
     return;
+
+  // 背景描画 (bgColor.w > 0 の場合)
+  if (style.bgColor.w > 0.0f) {
+    ComPtr<IDWriteTextLayout> layout;
+    float maxWidth = rect.right - rect.left;
+    float maxHeight = rect.bottom - rect.top;
+
+    // レイアウト作成
+    HRESULT hr = m_dwriteFactory->CreateTextLayout(
+        text.c_str(), static_cast<UINT32>(text.length()), format, maxWidth,
+        maxHeight, &layout);
+
+    if (SUCCEEDED(hr)) {
+      DWRITE_TEXT_METRICS metrics;
+      layout->GetMetrics(&metrics);
+
+      // 背景矩形計算
+      D2D1_RECT_F bgRect = rect;
+
+      // アラインメントに応じたXオフセット調整 (DrawTextWの挙動に合わせる)
+      // ※DrawTextWはrect内で整列するが、背景はテキスト領域だけにしたい場合は計算が必要
+      // ここでは簡易的にrect全体ではなく、テキストの外接矩形に近いものを計算する
+
+      // 幅・高さを実測値に
+      float textW = metrics.width; // + style.fontSize * 0.5f; // 余白
+      float textH = metrics.height;
+
+      // アラインメント調整
+      float offsetX = 0.0f;
+      if (style.align == TextAlign::Center) {
+        offsetX = (maxWidth - textW) * 0.5f;
+      } else if (style.align == TextAlign::Right) {
+        offsetX = (maxWidth - textW);
+      }
+
+      bgRect.left += offsetX;
+      bgRect.right = bgRect.left + textW;
+
+      // 少し余白を追加
+      float padding = 4.0f;
+      bgRect.left -= padding;
+      bgRect.top -= padding * 0.5f;
+      bgRect.right += padding;
+      bgRect.bottom = bgRect.top + textH + padding;
+
+      // 背景描画
+      ID2D1SolidColorBrush *bgBrush = m_brushCache.GetBrush(style.bgColor);
+      if (bgBrush) {
+        m_d2dContext->FillRectangle(bgRect, bgBrush);
+      }
+    }
+  }
 
   // 影の描画
   if (style.hasShadow) {

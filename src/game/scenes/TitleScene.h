@@ -7,6 +7,7 @@
 #include "../../core/Scene.h"
 #include "../../ecs/Entity.h"
 #include "../../graphics/TextStyle.h"
+#include <DirectXMath.h>
 #include <vector>
 
 namespace game::scenes {
@@ -23,28 +24,47 @@ public:
   void OnExit(core::GameContext &ctx) override;
 
 private:
-  ecs::Entity m_bgEntity = 0;        ///< 背景エンティティ
-  ecs::Entity m_titleTextEntity = 0; ///< タイトルテキスト
-  ecs::Entity m_subTextEntity = 0;   ///< サブタイトル
-  ecs::Entity m_startEntity = 0;     ///< スタートボタン
-  ecs::Entity m_hintEntity = 0;      ///< ヒントテキスト
-  ecs::Entity m_footerEntity = 0;    ///< フッターメッセージ
-  ecs::Entity m_cameraEntity = 0;    ///< タイトル用カメラ
-  ecs::Entity m_ballEntity = 0;      ///< デコボール
-  ecs::Entity m_clubEntity = 0;      ///< デコクラブ
-  ecs::Entity m_floorEntity = 0;     ///< 床
-  std::vector<ecs::Entity> m_decorEntities; ///< 装飾用エンティティ
-  std::vector<ecs::Entity> m_lightBeams;    ///< 背景ライト
-  std::vector<ecs::Entity> m_badgeEntities; ///< 特徴表示プレート
+  // --- エンティティ ---
+  ecs::Entity m_cameraEntity = 0; ///< カメラ
+  ecs::Entity m_skyboxEntity = 0; ///< スカイボックス
+  ecs::Entity m_floorEntity = 0;  ///< 地面
+  ecs::Entity m_ballEntity = 0;   ///< 演出用ボール
 
-  graphics::TextStyle m_titleStyle{};
-  graphics::TextStyle m_subStyle{};
-  graphics::TextStyle m_startStyle{};
-  graphics::TextStyle m_hintStyle{};
-  graphics::TextStyle m_badgeStyle{};
+  // --- 豪華演出用 ---
+  std::vector<ecs::Entity> m_clubs;       ///< 周回するクラブ
+  std::vector<ecs::Entity> m_ringObjects; ///< 背景の巨大リング
+  std::vector<ecs::Entity> m_reflections; ///< 鏡面反射用ダミー
+  ecs::Entity m_globeEntity = 0;          ///< Wikipedia地球儀
 
+  // --- UI管理 ---
+  struct UIElement {
+    ecs::Entity entity;
+    float baseX, baseY;          ///< 初期位置
+    float currentScale;          ///< 現在のスケール
+    float targetScale;           ///< 目標スケール
+    bool isHovered;              ///< ホバー状態
+    bool isClicked;              ///< クリック状態（一瞬）
+    std::wstring text;           ///< 表示テキスト
+    DirectX::XMFLOAT4 baseColor; ///< ベース色
+  };
+  std::vector<UIElement> m_uiElements;
+
+  // --- パーティクル演出 ---
+  struct Particle {
+    ecs::Entity entity;
+    DirectX::XMFLOAT3 basePos;
+    float phase;
+    float speed;
+  };
+  std::vector<Particle> m_particles;
+
+  // --- 演出制御 ---
   float m_time = 0.0f;
-  float m_lightPhase = 0.0f;
+
+  // カメラ演出用
+  float m_cameraPitch = 0.0f;
+  float m_cameraDist = 0.0f;
+  float m_cameraHeight = 0.0f;
 };
 
 } // namespace game::scenes

@@ -55,16 +55,30 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_forceFinishTimer = 0.0f;
   m_isLoading = false;
   m_loadCompleted = false;
+  m_uiProgress = 0.0f;
+  m_explosionTimer = 0.0f;
+  m_exploded = false;
+  m_loadProgress = std::make_shared<std::atomic<float>>(0.0f);
 
   // 非同期ロード開始
   m_isLoading = true;
-  m_loadTask = std::async(std::launch::async, []() {
+  auto progressPtr = m_loadProgress;
+  m_loadTask = std::async(std::launch::async, [progressPtr]() {
+    const auto setProgress = [progressPtr](float value) {
+      if (progressPtr) {
+        progressPtr->store(std::clamp(value, 0.0f, 1.0f),
+                           std::memory_order_relaxed);
+      }
+    };
+
+    setProgress(0.02f);
     auto data = std::make_unique<game::components::WikiGlobalData>();
 
     // WikiShortestPathの初期化（重い処理）
     data->pathSystem = std::make_unique<game::systems::WikiShortestPath>();
     bool dbLoaded =
         data->pathSystem->Initialize("Assets/data/jawiki_sdow.sqlite");
+    setProgress(0.3f);
     if (!dbLoaded) {
       // ログは別スレッドからは注意が必要だが、ここでは簡易的に
     }
@@ -72,12 +86,14 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     // スタート・ゴール選定
     game::systems::WikiClient wikiClient;
     data->startPage = wikiClient.FetchRandomPageTitle();
+    setProgress(0.45f);
 
     // 人気記事からターゲット選定
     if (dbLoaded && data->pathSystem->IsAvailable()) {
       auto result = data->pathSystem->FetchPopularPageTitle(100);
       data->targetPage = result.first;
       data->targetPageId = result.second;
+      setProgress(0.7f);
       if (data->targetPage.empty()) {
         result = data->pathSystem->FetchPopularPageTitle(50);
         data->targetPage = result.first;
@@ -89,11 +105,45 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     if (data->targetPage.empty()) {
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
+      setProgress(0.8f);
     }
 
     if (data->startPage == data->targetPage) {
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
+      setProgress(0.82f);
+    }
+
+    // 最短1記事（または同一）のターゲットは再抽選
+    if (dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
+        !data->startPage.empty() && !data->targetPage.empty()) {
+      const int maxRetry = 5;
+      for (int attempt = 0; attempt < maxRetry; ++attempt) {
+        game::systems::ShortestPathResult pathResult;
+        if (data->targetPageId != -1) {
+          pathResult = data->pathSystem->FindShortestPath(
+              data->startPage, data->targetPageId, 6);
+        } else {
+          pathResult = data->pathSystem->FindShortestPath(data->startPage,
+                                                          data->targetPage, 6);
+        }
+
+        if (!pathResult.success || pathResult.degrees > 1) {
+          break; // 計算失敗時もここで抜ける
+        }
+
+        auto newTarget = data->pathSystem->FetchPopularPageTitle(100);
+        if (newTarget.first.empty()) {
+          newTarget = data->pathSystem->FetchPopularPageTitle(50);
+        }
+
+        if (newTarget.first.empty()) {
+          break; // 取得できなければ諦める
+        }
+
+        data->targetPage = newTarget.first;
+        data->targetPageId = newTarget.second;
+      }
     }
 
     // パー計算（ついでにやっておく）
@@ -108,8 +158,10 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       data->cachedLinks = wikiClient.FetchPageLinks(data->startPage, 100);
       data->cachedExtract = wikiClient.FetchPageExtract(data->startPage, 5000);
       data->hasCachedData = true;
+      setProgress(0.97f);
     }
 
+    setProgress(1.0f);
     return data;
   });
 
@@ -117,10 +169,10 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   ctx.input.SetMouseCursorVisible(false);
 
   // ゴルフボールメッシュをロード
-  m_ballMeshHandle = ctx.resource.LoadMesh("models/golfball.fbx");
+  m_ballMeshHandle = ctx.resource.LoadMesh("Assets/models/golfball.fbx");
 
   // カメラを作成
-  m_cameraEntity = ctx.world.CreateEntity();
+  m_cameraEntity = CreateEntity(ctx.world);
   auto &camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
   camTr.position = {0.0f, 6.0f, -68.0f};
   camTr.rotation = {0.0f, 0.0f, 0.0f, 1.0f}; // 軽く俯瞰させるための基準
@@ -161,7 +213,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_captionStyle.shadowColor = {0.0f, 0.0f, 0.0f, 0.4f};
 
   // メインタイトル
-  m_textEntity = ctx.world.CreateEntity();
+  m_textEntity = CreateEntity(ctx.world);
   auto &titleText = ctx.world.Add<components::UIText>(m_textEntity);
   titleText.text = L"WIKI GOLF LOADING";
   titleText.x = 0.0f;
@@ -172,7 +224,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   titleText.layer = 12;
 
   // 進行状況
-  m_progressTextEntity = ctx.world.CreateEntity();
+  m_progressTextEntity = CreateEntity(ctx.world);
   auto &progressText = ctx.world.Add<components::UIText>(m_progressTextEntity);
   progressText.text = L"0%";
   progressText.x = 0.0f;
@@ -183,7 +235,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   progressText.layer = 12;
 
   // キャプション（ tips 巡回用 ）
-  m_captionTextEntity = ctx.world.CreateEntity();
+  m_captionTextEntity = CreateEntity(ctx.world);
   auto &caption = ctx.world.Add<components::UIText>(m_captionTextEntity);
   caption.text = L"芝目をスキャン中...";
   caption.x = 0.0f;
@@ -205,7 +257,7 @@ void LoadingScene::CreateBoundaries(core::GameContext &ctx) {
       "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
 
   // 床（水槽の底）
-  m_floorEntity = ctx.world.CreateEntity();
+  m_floorEntity = CreateEntity(ctx.world);
   auto &floorTr = ctx.world.Add<components::Transform>(m_floorEntity);
   floorTr.position = {0.0f, FLOOR_Y, 0.0f};
   floorTr.scale = {ARENA_HALF_WIDTH * 2.0f, 0.6f, ARENA_HALF_DEPTH * 2.4f};
@@ -219,7 +271,7 @@ void LoadingScene::CreateBoundaries(core::GameContext &ctx) {
   // 壁（水槽の左右と奥） - 2D的に見せるため薄い
   auto createWall = [&](DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 scale,
                         DirectX::XMFLOAT4 color, bool visible) {
-    auto wallEntity = ctx.world.CreateEntity();
+    auto wallEntity = CreateEntity(ctx.world);
     auto &tr = ctx.world.Add<components::Transform>(wallEntity);
     tr.position = pos;
     tr.scale = scale;
@@ -248,7 +300,7 @@ void LoadingScene::CreateBoundaries(core::GameContext &ctx) {
              {0.15f, 0.24f, 0.35f, 0.22f}, true);
 
   // 背景パネル
-  m_backdropEntity = ctx.world.CreateEntity();
+  m_backdropEntity = CreateEntity(ctx.world);
   auto &panelTr = ctx.world.Add<components::Transform>(m_backdropEntity);
   panelTr.position = {0.0f, 12.0f, ARENA_HALF_DEPTH + 10.0f};
   panelTr.scale = {ARENA_HALF_WIDTH * 2.6f, wallHeight * 0.8f, 2.0f};
@@ -263,25 +315,24 @@ void LoadingScene::SpawnBall(core::GameContext &ctx) {
   // ランダム生成器
   static std::mt19937 rng(std::random_device{}());
   const float renderRadius = BALL_RADIUS * BALL_MODEL_SCALE;
-  const float spawnHalfX = ARENA_HALF_WIDTH - renderRadius - 1.0f;
-  const float spawnHalfZ = ARENA_HALF_DEPTH - renderRadius - 0.3f;
+  const float spawnHalfX = ARENA_HALF_WIDTH - renderRadius - 0.5f;
+  const float spawnHalfZ = ARENA_HALF_DEPTH - renderRadius - 0.2f;
   std::uniform_real_distribution<float> distX(-spawnHalfX, spawnHalfX);
   std::uniform_real_distribution<float> distZ(-spawnHalfZ, spawnHalfZ);
-  std::uniform_real_distribution<float> distVelX(-12.0f, 12.0f);
-  std::uniform_real_distribution<float> distVelZ(-6.0f, 6.0f);
-  std::uniform_real_distribution<float> spinDist(-2.5f, 2.5f);
+  std::uniform_real_distribution<float> distHeight(24.0f, 40.0f);
+  std::uniform_real_distribution<float> distVelX(-22.0f, 22.0f);
+  std::uniform_real_distribution<float> distVelZ(-14.0f, 14.0f);
+  std::uniform_real_distribution<float> spinDist(-4.0f, 4.0f);
   std::uniform_real_distribution<float> angleDist(-DirectX::XM_PI,
                                                   DirectX::XM_PI);
 
-  auto entity = ctx.world.CreateEntity();
+  auto entity = CreateEntity(ctx.world);
 
   // Transform
   auto &tr = ctx.world.Add<components::Transform>(entity);
-  tr.position = {distX(rng),
-                 26.0f +
-                     static_cast<float>(m_spawnedCount) * (renderRadius * 0.9f),
-                 distZ(rng)};
-  const float renderScale = BALL_RADIUS * 2.0f * BALL_MODEL_SCALE;
+  tr.position = {distX(rng), distHeight(rng), distZ(rng)};
+  const float renderScale =
+      BALL_RADIUS * 2.0f * BALL_MODEL_SCALE * MODEL_ASSET_SCALE_FACTOR;
   tr.scale = {renderScale, renderScale, renderScale};
   // 軽いランダム回転を入れておく
   auto randomRotation = DirectX::XMQuaternionRotationRollPitchYaw(
@@ -293,16 +344,36 @@ void LoadingScene::SpawnBall(core::GameContext &ctx) {
   mr.mesh = m_ballMeshHandle;
   mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                       L"Assets/shaders/BasicPS.hlsl");
-  // ゴルフボールらしい白色
-  mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    // 色の決定（5%の確率で上品なネオンカラー）
+    std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);
+    if (colorDist(rng) < 0.05f) {
+        // ネオンパレット (RGB) - 控えめな発光
+        const float intensity = 1.8f; 
+        const std::array<DirectX::XMFLOAT3, 5> neonColors = {{
+            {0.1f * intensity, 0.6f * intensity, 1.0f * intensity}, // Sky Blue
+            {0.9f * intensity, 0.2f * intensity, 0.6f * intensity}, // Rose
+            {1.0f * intensity, 0.8f * intensity, 0.1f * intensity}, // Amber
+            {0.2f * intensity, 0.9f * intensity, 0.4f * intensity}, // Soft Emerald
+            {0.6f * intensity, 0.3f * intensity, 1.0f * intensity}  // Violet
+        }};
+        std::uniform_int_distribution<size_t> paletteDist(0, neonColors.size() - 1);
+        DirectX::XMFLOAT3 c = neonColors[paletteDist(rng)];
+        mr.color = {c.x, c.y, c.z, 1.0f};
+    } else {
+        // ゴルフボールらしい白色
+        mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    }
   mr.isVisible = true;
+  mr.normalMapSRV = ctx.resource.LoadTextureSRV("Assets/models/golfball_n.png");
+  mr.hasNormalMap = static_cast<bool>(mr.normalMapSRV);
 
   // ボール状態を記録
   BallState ball{};
   ball.entity = entity;
-  ball.velocity = {distVelX(rng), -10.0f, distVelZ(rng)};
-  ball.angularVelocity = {spinDist(rng) * 0.6f, spinDist(rng),
-                          spinDist(rng) * 0.4f};
+  ball.velocity = {distVelX(rng), -16.0f, distVelZ(rng)};
+  ball.angularVelocity = {spinDist(rng) * 0.8f, spinDist(rng),
+                          spinDist(rng) * 0.6f};
   ball.settled = false;
   m_balls.push_back(ball);
 
@@ -314,86 +385,94 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
   const float floorY = FLOOR_Y + 0.3f + renderRadius;
   const float wallX = ARENA_HALF_WIDTH - renderRadius;
   const float wallZ = ARENA_HALF_DEPTH - renderRadius;
-  const float linearDrag = std::pow(AIR_DRAG, dt * 60.0f);
 
+  // サブステップ数（貫通防止のため分割実行）
+  const int subSteps = 8;
+  const float subDt = dt / subSteps;
+
+  for (int step = 0; step < subSteps; ++step) {
+    for (auto &ball : m_balls) {
+      if (!ctx.world.IsAlive(ball.entity) || ball.settled) {
+        continue;
+      }
+
+      auto *tr = ctx.world.Get<components::Transform>(ball.entity);
+      if (!tr)
+        continue;
+
+      // 重力を適用
+      ball.velocity.y += GRAVITY * subDt;
+
+      // 空気抵抗
+      float subDrag = std::pow(AIR_DRAG, subDt * 60.0f);
+      ball.velocity.x *= subDrag;
+      ball.velocity.z *= subDrag;
+
+      // 位置を更新
+      tr->position.x += ball.velocity.x * subDt;
+      tr->position.y += ball.velocity.y * subDt;
+      tr->position.z += ball.velocity.z * subDt;
+
+      // 回転を更新
+      DirectX::XMVECTOR currentRot = DirectX::XMLoadFloat4(&tr->rotation);
+      DirectX::XMVECTOR deltaRot = DirectX::XMQuaternionRotationRollPitchYaw(
+          ball.angularVelocity.x * subDt, ball.angularVelocity.y * subDt,
+          ball.angularVelocity.z * subDt);
+      auto nextRot = DirectX::XMQuaternionNormalize(
+          DirectX::XMQuaternionMultiply(deltaRot, currentRot));
+      DirectX::XMStoreFloat4(&tr->rotation, nextRot);
+      float subAngDrag = std::pow(ANGULAR_DAMPING, subDt * 60.0f);
+      ball.angularVelocity.x *= subAngDrag;
+      ball.angularVelocity.y *= subAngDrag;
+      ball.angularVelocity.z *= subAngDrag;
+
+      // 床との衝突
+      if (tr->position.y < floorY) {
+        tr->position.y = floorY;
+        if (ball.velocity.y < -0.5f) {
+          ball.velocity.y = -ball.velocity.y * RESTITUTION;
+        } else {
+          ball.velocity.y = 0.0f;
+        }
+        const float subFriction = std::pow(FRICTION, subDt * 60.0f);
+        ball.velocity.x *= subFriction;
+        ball.velocity.z *= subFriction;
+      }
+
+      // 壁との衝突
+      const float wallMinX = -wallX, wallMaxX = wallX;
+      const float wallMinZ = -wallZ, wallMaxZ = wallZ;
+      if (tr->position.x < wallMinX) {
+        tr->position.x = wallMinX;
+        ball.velocity.x = -ball.velocity.x * RESTITUTION;
+      } else if (tr->position.x > wallMaxX) {
+        tr->position.x = wallMaxX;
+        ball.velocity.x = -ball.velocity.x * RESTITUTION;
+      }
+      if (tr->position.z < wallMinZ) {
+        tr->position.z = wallMinZ;
+        ball.velocity.z = -ball.velocity.z * RESTITUTION;
+      } else if (tr->position.z > wallMaxZ) {
+        tr->position.z = wallMaxZ;
+        ball.velocity.z = -ball.velocity.z * RESTITUTION;
+      }
+    }
+  }
+
+  // ボール同士の衝突 (N^2だがサブステップ化で安定)
   for (size_t i = 0; i < m_balls.size(); i++) {
     auto &ball = m_balls[i];
-    if (!ctx.world.IsAlive(ball.entity) || ball.settled) {
+    if (!ctx.world.IsAlive(ball.entity))
       continue;
-    }
-
     auto *tr = ctx.world.Get<components::Transform>(ball.entity);
     if (!tr)
       continue;
 
-    // 重力を適用
-    ball.velocity.y += GRAVITY * dt;
-
-    // 空気抵抗で横移動を滑らかに減衰
-    ball.velocity.x *= linearDrag;
-    ball.velocity.z *= linearDrag;
-
-    // 位置を更新
-    tr->position.x += ball.velocity.x * dt;
-    tr->position.y += ball.velocity.y * dt;
-    tr->position.z += ball.velocity.z * dt;
-
-    // 回転を更新
-    DirectX::XMVECTOR currentRot = DirectX::XMLoadFloat4(&tr->rotation);
-    DirectX::XMVECTOR deltaRot = DirectX::XMQuaternionRotationRollPitchYaw(
-        ball.angularVelocity.x * dt, ball.angularVelocity.y * dt,
-        ball.angularVelocity.z * dt);
-    auto nextRot = DirectX::XMQuaternionNormalize(
-        DirectX::XMQuaternionMultiply(deltaRot, currentRot));
-    DirectX::XMStoreFloat4(&tr->rotation, nextRot);
-    ball.angularVelocity.x *= ANGULAR_DAMPING;
-    ball.angularVelocity.y *= ANGULAR_DAMPING;
-    ball.angularVelocity.z *= ANGULAR_DAMPING;
-
-    // 床との衝突
-    if (tr->position.y < floorY) {
-      tr->position.y = floorY;
-
-      // 反発
-      if (ball.velocity.y < -0.5f) {
-        ball.velocity.y = -ball.velocity.y * RESTITUTION;
-      } else {
-        ball.velocity.y = 0.0f;
-      }
-
-      // 摩擦
-      ball.velocity.x *= FRICTION;
-      ball.velocity.z *= FRICTION;
-    }
-
-    // 壁との衝突（水槽の範囲）
-    const float wallMinX = -wallX;
-    const float wallMaxX = wallX;
-    const float wallMinZ = -wallZ;
-    const float wallMaxZ = wallZ;
-
-    if (tr->position.x < wallMinX) {
-      tr->position.x = wallMinX;
-      ball.velocity.x = -ball.velocity.x * RESTITUTION;
-    } else if (tr->position.x > wallMaxX) {
-      tr->position.x = wallMaxX;
-      ball.velocity.x = -ball.velocity.x * RESTITUTION;
-    }
-
-    if (tr->position.z < wallMinZ) {
-      tr->position.z = wallMinZ;
-      ball.velocity.z = -ball.velocity.z * RESTITUTION;
-    } else if (tr->position.z > wallMaxZ) {
-      tr->position.z = wallMaxZ;
-      ball.velocity.z = -ball.velocity.z * RESTITUTION;
-    }
-
-    // ボール同士の衝突（簡易）
-    for (size_t j = 0; j < m_balls.size(); j++) {
-      if (i == j)
-        continue; // 自分自身はスキップ
-
+    for (size_t j = i + 1; j < m_balls.size(); j++) {
       auto &other = m_balls[j];
+      if (!ctx.world.IsAlive(other.entity) || (ball.settled && other.settled))
+        continue;
+
       auto *otherTr = ctx.world.Get<components::Transform>(other.entity);
       if (!otherTr)
         continue;
@@ -404,144 +483,87 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
       float distSq = dx * dx + dy * dy + dz * dz;
       float minDist = renderRadius * 2.0f;
 
-      if (distSq < minDist * minDist && distSq > 0.001f) {
+      if (distSq < minDist * minDist && distSq > 0.0001f) {
         float dist = std::sqrt(distSq);
-        float overlap = minDist - dist;
+        float overlap = (minDist - dist);
+        float nx = dx / dist, ny = dy / dist, nz = dz / dist;
 
-        // 分離ベクトル
-        float nx = dx / dist;
-        float ny = dy / dist;
-        float nz = dz / dist;
+        float p1 = ball.settled ? 0.0f : (other.settled ? 1.0f : 0.5f);
+        float p2 = 1.0f - p1;
 
-        // 位置修正（めり込み解消）
-        if (other.settled) {
-          // 相手が静止しているなら自分だけが押し返される
-          tr->position.x -= nx * overlap;
-          tr->position.y -= ny * overlap;
-          tr->position.z -= nz * overlap;
-        } else if (j > i) {
-          // 両方動いているなら半分ずつ（二重処理防止のため j > i の時のみ）
-          tr->position.x -= nx * overlap * 0.5f;
-          tr->position.y -= ny * overlap * 0.5f;
-          tr->position.z -= nz * overlap * 0.5f;
+        tr->position.x -= nx * overlap * p1;
+        tr->position.y -= ny * overlap * p1;
+        tr->position.z -= nz * overlap * p1;
+        otherTr->position.x += nx * overlap * p2;
+        otherTr->position.y += ny * overlap * p2;
+        otherTr->position.z += nz * overlap * p2;
 
-          otherTr->position.x += nx * overlap * 0.5f;
-          otherTr->position.y += ny * overlap * 0.5f;
-          otherTr->position.z += nz * overlap * 0.5f;
-        }
-
-        // 速度の衝突応答（インパルスベース）
-        // 相対速度
         float rvx = other.velocity.x - ball.velocity.x;
         float rvy = other.velocity.y - ball.velocity.y;
         float rvz = other.velocity.z - ball.velocity.z;
-
-        // 法線方向の相対速度
         float velAlongNormal = rvx * nx + rvy * ny + rvz * nz;
 
-        // 互いに近づいている場合のみ計算（離れようとしているなら無視）
         if (velAlongNormal < 0) {
-          // 反発係数
-          float jVal = -(1 + RESTITUTION) * velAlongNormal;
-
-          // インパルス
-          float ix = nx * jVal;
-          float iy = ny * jVal;
-          float iz = nz * jVal;
-
-          if (other.settled) {
-            // 相手は動かないので自分が全て受ける（壁扱い）
-            ball.velocity.x -= ix;
-            ball.velocity.y -= iy;
-            ball.velocity.z -= iz;
-          } else if (j > i) {
-            // お互い動くなら半分ずつ（質量等しいと仮定）
-            ball.velocity.x -= ix * 0.5f;
-            ball.velocity.y -= iy * 0.5f;
-            ball.velocity.z -= iz * 0.5f;
-
-            other.velocity.x += ix * 0.5f;
-            other.velocity.y += iy * 0.5f;
-            other.velocity.z += iz * 0.5f;
+          float jVal = -(1 + RESTITUTION) * velAlongNormal * 0.5f;
+          float ix = nx * jVal, iy = ny * jVal, iz = nz * jVal;
+          if (!ball.settled) {
+            ball.velocity.x -= ix; ball.velocity.y -= iy; ball.velocity.z -= iz;
           }
+          if (!other.settled) {
+            other.velocity.x += ix; other.velocity.y += iy; other.velocity.z += iz;
+          }
+          if (jVal > 0.5f) { ball.settled = other.settled = false; }
         }
       }
     }
 
-    // 静止判定（速度が十分小さくなれば静止）
-    float speedSq = ball.velocity.x * ball.velocity.x +
-                    ball.velocity.y * ball.velocity.y +
-                    ball.velocity.z * ball.velocity.z;
-    if (speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD) {
+    float speedSq = ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y + ball.velocity.z * ball.velocity.z;
+    if (speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD * 0.5f && tr->position.y <= floorY + 0.1f) {
       ball.settled = true;
-      ball.velocity = {0, 0, 0};
-      ball.angularVelocity = {0, 0, 0};
+      ball.velocity = {0,0,0}; ball.angularVelocity = {0,0,0};
+    } else {
+      ball.settled = false;
     }
   }
 
-  // ログ用メトリクスを更新
+  // ログ用メトリクス
   int settledCount = 0;
   int moving = 0;
-  float maxSpeed = 0.0f;
-  float speedAccum = 0.0f;
+  float maxSpeed = 0.0f, speedAccum = 0.0f;
   int speedCount = 0;
   m_hasMovingSample = false;
   for (const auto &ball : m_balls) {
-    if (!ctx.world.IsAlive(ball.entity))
-      continue;
-    if (ball.settled) {
-      settledCount++;
-    }
-    auto *tr = ctx.world.Get<components::Transform>(ball.entity);
-    float speedSq = ball.velocity.x * ball.velocity.x +
-                    ball.velocity.y * ball.velocity.y +
-                    ball.velocity.z * ball.velocity.z;
-    float speed = std::sqrt(speedSq);
-    if (!ball.settled) {
+    if (!ctx.world.IsAlive(ball.entity)) continue;
+    if (ball.settled) settledCount++;
+    else {
       moving++;
+      float speed = std::sqrt(ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y + ball.velocity.z * ball.velocity.z);
       maxSpeed = std::max(maxSpeed, speed);
       speedAccum += speed;
       speedCount++;
-      if (!m_hasMovingSample && tr) {
-        m_lastMovingPos = tr->position;
-        m_hasMovingSample = true;
+      if (!m_hasMovingSample) {
+        if (auto *tr = ctx.world.Get<components::Transform>(ball.entity)) {
+            m_lastMovingPos = tr->position;
+            m_hasMovingSample = true;
+        }
       }
     }
   }
-  m_movingCount = moving;
-  m_maxSpeed = maxSpeed;
-  m_avgSpeed =
-      (speedCount > 0) ? speedAccum / static_cast<float>(speedCount) : 0.0f;
-  m_settledCount = settledCount;
+  m_movingCount = moving; m_maxSpeed = maxSpeed; m_settledCount = settledCount;
+  m_avgSpeed = (speedCount > 0) ? speedAccum / speedCount : 0.0f;
 }
 
 bool LoadingScene::AreAllBallsSettled() {
-  if (m_spawnedCount < TOTAL_BALLS) {
-    return false;
-  }
-
-  for (const auto &ball : m_balls) {
-    if (!ball.settled) {
-      return false;
-    }
-  }
-  if (!m_allSettledLogged) {
-    LOG_INFO("LoadingScene", "All balls settled");
-    m_allSettledLogged = true;
-  }
+  if (m_spawnedCount < TOTAL_BALLS) return false;
+  for (const auto &ball : m_balls) { if (!ball.settled) return false; }
+  if (!m_allSettledLogged) { LOG_INFO("LoadingScene", "All balls settled"); m_allSettledLogged = true; }
   return true;
 }
 
 void LoadingScene::UpdateFade(core::GameContext &ctx, float dt) {
   if (!m_fadeStarted) {
-    m_fadeDelay -= dt;
-    if (m_fadeDelay <= 0.0f) {
-      m_fadeStarted = true;
-      if (!m_fadeLogged) {
-        LOG_INFO("LoadingScene", "Fade started");
-        m_fadeLogged = true;
-      }
-    }
+    m_fadeStarted = true;
+    LOG_INFO("LoadingScene", "Fade started");
     return;
   }
 
@@ -555,7 +577,6 @@ void LoadingScene::UpdateFade(core::GameContext &ctx, float dt) {
         auto data = m_loadTask.get();
         LOG_INFO("LoadingScene", "Async load completed. Start: {}, Target: {}",
                  data->startPage, data->targetPage);
-        // グローバルに移す。WikiGlobalDataはmove-onlyなのでmoveで渡す。
         ctx.world.SetGlobal(std::move(*data));
       } catch (const std::exception &e) {
         LOG_ERROR("LoadingScene", "Load task failed: {}", e.what());
@@ -564,7 +585,7 @@ void LoadingScene::UpdateFade(core::GameContext &ctx, float dt) {
 
     // 次のシーンへ遷移
     if (ctx.sceneManager && m_nextSceneFactory) {
-      LOG_INFO("LoadingScene", "Fade completed, switching scene");
+      LOG_INFO("LoadingScene", "Explosion finished, switching scene");
       ctx.sceneManager->ChangeScene(m_nextSceneFactory());
     }
   }
@@ -603,8 +624,15 @@ void LoadingScene::UpdateUI(core::GameContext &ctx) {
           : 0.0f;
 
   const float blended = loading_detail::BlendProgress(spawnRatio, settledRatio);
-  const float eased = loading_detail::EaseOutCubic(blended);
-  const int percent = static_cast<int>(std::round(eased * 100.0f));
+  const float visualProgress = loading_detail::EaseOutCubic(blended);
+  const float asyncProgress =
+      m_loadProgress ? m_loadProgress->load(std::memory_order_relaxed) : 0.0f;
+  const float combined =
+      loading_detail::CombineLoadingProgress(asyncProgress, visualProgress);
+
+  // UI表示は単調増加させ、ロード完了なら必ず100%
+  m_uiProgress = std::clamp(std::max(m_uiProgress, combined), 0.0f, 1.0f);
+  const int percent = static_cast<int>(std::round(m_uiProgress * 100.0f));
 
   const int dotCount =
       static_cast<int>(std::fmod(m_sceneTime * 1.6f, 3.0f)) + 1;
@@ -664,26 +692,7 @@ void LoadingScene::ApplyFadeToScene(core::GameContext &ctx) {
   if (!m_fadeStarted)
     return;
 
-  const float shrink = std::max(0.25f, 1.0f - m_fadeAlpha * 0.65f);
-  const float baseScale = BALL_RADIUS * 2.0f * BALL_MODEL_SCALE;
-
-  for (auto &ball : m_balls) {
-    auto *tr = ctx.world.Get<components::Transform>(ball.entity);
-    if (tr) {
-      const float scaled = baseScale * shrink;
-      tr->scale = {scaled, scaled, scaled};
-    }
-
-    auto *mr = ctx.world.Get<components::MeshRenderer>(ball.entity);
-    if (mr) {
-      mr->color.w = std::clamp(1.0f - m_fadeAlpha * 0.8f, 0.0f, 1.0f);
-    }
-  }
-
-  if (auto *panelMr =
-          ctx.world.Get<components::MeshRenderer>(m_backdropEntity)) {
-    panelMr->color.w = std::clamp(1.0f - m_fadeAlpha * 0.5f, 0.0f, 1.0f);
-  }
+  // フェード中のアルファ変更は行わず、純粋に時間経過で遷移する
 }
 
 void LoadingScene::OnUpdate(core::GameContext &ctx) {
@@ -738,7 +747,7 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
   // 全ボール静止後のフェード処理
   // 安全装置: 全てスポーンしてから一定時間経過したら強制的に次へ
   // 修正: ロードが完了したら、ボールの状態に関わらず即座に次へ進む
-  bool forceFinish = false;
+  bool triggerFade = false;
 
   // ロード完了チェック
   if (m_isLoading && m_loadTask.valid()) {
@@ -746,28 +755,30 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
     if (status == std::future_status::ready) {
       m_loadCompleted = true;
       m_isLoading = false;
+      if (m_loadProgress) {
+        m_loadProgress->store(1.0f, std::memory_order_relaxed);
+      }
       LOG_INFO("LoadingScene", "Asset Load Completed!");
     }
   }
 
   if (m_loadCompleted) {
-    forceFinish = true; // ロード完了したら即終了
+    triggerFade = true; // ロード完了したら即終了
   }
 
   // タイムアウト安全装置
   if (m_spawnedCount >= TOTAL_BALLS) {
     m_forceFinishTimer += dt;
-    if (m_forceFinishTimer > 15.0f) { // タイムアウトを少し延長
-      forceFinish = true;
+    if (m_forceFinishTimer > 4.0f) { // タイムアウトを少し延長
+      triggerFade = true;
       if (!m_fadeStarted) {
         LOG_INFO("LoadingScene", "Force finish triggered due to timeout");
       }
     }
   }
 
-  if (AreAllBallsSettled() || forceFinish) {
+  if (triggerFade) {
     UpdateFade(ctx, dt);
-    ApplyFadeToScene(ctx);
   }
 
   // ESCで強制スキップ
@@ -782,44 +793,11 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
 void LoadingScene::OnExit(core::GameContext &ctx) {
   LOG_INFO("LoadingScene", "OnExit");
 
-  // ボールを破棄
-  for (auto &ball : m_balls) {
-    if (ctx.world.IsAlive(ball.entity)) {
-      ctx.world.DestroyEntity(ball.entity);
-    }
-  }
   m_balls.clear();
-
-  // UI破棄
-  if (ctx.world.IsAlive(m_textEntity)) {
-    ctx.world.DestroyEntity(m_textEntity);
-  }
-  if (ctx.world.IsAlive(m_progressTextEntity)) {
-    ctx.world.DestroyEntity(m_progressTextEntity);
-  }
-  if (ctx.world.IsAlive(m_captionTextEntity)) {
-    ctx.world.DestroyEntity(m_captionTextEntity);
-  }
-
-  // カメラ破棄
-  if (ctx.world.IsAlive(m_cameraEntity)) {
-    ctx.world.DestroyEntity(m_cameraEntity);
-  }
-
-  // 床・壁破棄
-  if (ctx.world.IsAlive(m_floorEntity)) {
-    ctx.world.DestroyEntity(m_floorEntity);
-  }
-  for (auto &wall : m_wallEntities) {
-    if (ctx.world.IsAlive(wall)) {
-      ctx.world.DestroyEntity(wall);
-    }
-  }
   m_wallEntities.clear();
 
-  if (ctx.world.IsAlive(m_backdropEntity)) {
-    ctx.world.DestroyEntity(m_backdropEntity);
-  }
+  // 基底クラスのクリーンアップ（全エンティティ破棄）
+  Scene::OnExit(ctx);
 }
 
 } // namespace game::scenes

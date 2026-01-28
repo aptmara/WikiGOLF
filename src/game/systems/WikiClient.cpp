@@ -207,9 +207,9 @@ std::string WikiClient::UrlEncode(const std::string &str) {
   return encoded.str();
 }
 
-std::vector<WikiLink> WikiClient::FetchPageLinks(const std::string &title,
-                                                 int limit) {
-  std::vector<WikiLink> links;
+std::vector<game::WikiLink> WikiClient::FetchPageLinks(const std::string &title,
+                                                       int limit) {
+  std::vector<game::WikiLink> links;
 
   std::string encodedTitle = UrlEncode(title);
 
@@ -254,44 +254,50 @@ std::vector<WikiLink> WikiClient::FetchPageLinks(const std::string &title,
   return links;
 }
 
-std::vector<std::string> WikiClient::FetchPageCategories(const std::string &title) {
+std::vector<std::string>
+WikiClient::FetchPageCategories(const std::string &title) {
   std::vector<std::string> categories;
   std::string encodedTitle = UrlEncode(title);
   std::wstring wtitle = core::ToWString(encodedTitle);
 
   // prop=categories
-  std::wstring path = L"/w/api.php?action=query&titles=" + wtitle +
-                      L"&prop=categories&cllimit=50&format=json&formatversion=2";
+  std::wstring path =
+      L"/w/api.php?action=query&titles=" + wtitle +
+      L"&prop=categories&cllimit=50&format=json&formatversion=2";
 
   std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
-  
+
   // "categories": [...] を探す
   size_t catStart = response.find("\"categories\":");
   if (catStart == std::string::npos) {
-      // カテゴリがない、またはエラー
-      return categories;
+    // カテゴリがない、またはエラー
+    return categories;
   }
 
   // カテゴリ配列の終わりの括弧を探す（簡易パースの限界として、次のキーまでを範囲とする）
   size_t catEnd = response.find("]", catStart);
-  if (catEnd == std::string::npos) catEnd = response.length();
+  if (catEnd == std::string::npos)
+    catEnd = response.length();
 
   size_t pos = catStart;
   while ((pos = response.find("\"title\":\"", pos)) != std::string::npos) {
-    if (pos > catEnd) break; // 範囲外
+    if (pos > catEnd)
+      break; // 範囲外
 
     size_t start = pos + 9;
     size_t end = response.find("\"", start);
-    if (end == std::string::npos) break;
+    if (end == std::string::npos)
+      break;
 
     std::string catTitle = response.substr(start, end - start);
     catTitle = DecodeUnicodeEscape(catTitle);
-    
+
     categories.push_back(catTitle);
     pos = end;
   }
-  
-  LOG_INFO("WikiClient", "Fetched {} categories for {}", categories.size(), title);
+
+  LOG_INFO("WikiClient", "Fetched {} categories for {}", categories.size(),
+           title);
   return categories;
 }
 
@@ -359,9 +365,6 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
       extract = ReplaceAll(extract, "\\\"", "\"");
       extract = ReplaceAll(extract, "\\/", "/");
 
-      if (extract.length() > (size_t)lengthLimit) {
-        extract = extract.substr(0, lengthLimit) + "...\n(詳細省略)";
-      }
       LOG_INFO("WikiClient", "Extract fetched: {} chars", extract.length());
       return extract;
     }

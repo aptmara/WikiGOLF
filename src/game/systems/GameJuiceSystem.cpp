@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <cmath>
 
-
 // Windowsマクロ対策
 #include <windows.h> // 必要なら
 #undef min
@@ -147,18 +146,55 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
     auto e = ctx.world.CreateEntity();
 
     auto &t = ctx.world.Add<Transform>(e);
-    t.position = {0, -100, 0}; // 画面外
-    t.scale = {0.05f, 0.05f, 0.05f};
+    t.position = {0, -100, 0};    // 画面外
+    t.scale = {0.1f, 0.1f, 0.1f}; // 大きめ
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
     mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
                                         L"shaders/BasicPS.hlsl");
 
-    // グラデーション（先端が明るい）
+    // 虹色グラデーション（派手に）
     float ratio = (float)i / (float)(kTrailCount - 1);
-    float alpha = 0.8f * (1.0f - ratio);
-    mr.color = {1.0f, 0.9f - ratio * 0.5f, 0.3f, alpha}; // オレンジ→赤グラデ
+    float hue = ratio * 360.0f; // 0-360度
+    float h = hue / 60.0f;
+    int hi = (int)h % 6;
+    float f = h - (int)h;
+    float r, g, b;
+    switch (hi) {
+    case 0:
+      r = 1.0f;
+      g = f;
+      b = 0.0f;
+      break;
+    case 1:
+      r = 1.0f - f;
+      g = 1.0f;
+      b = 0.0f;
+      break;
+    case 2:
+      r = 0.0f;
+      g = 1.0f;
+      b = f;
+      break;
+    case 3:
+      r = 0.0f;
+      g = 1.0f - f;
+      b = 1.0f;
+      break;
+    case 4:
+      r = f;
+      g = 0.0f;
+      b = 1.0f;
+      break;
+    default:
+      r = 1.0f;
+      g = 0.0f;
+      b = 1.0f - f;
+      break;
+    }
+    float alpha = 0.95f * (1.0f - ratio * 0.6f);
+    mr.color = {r * 1.5f, g * 1.5f, b * 1.5f, alpha}; // 発光感
     mr.isVisible = false;
 
     m_trailEntities.push_back(e);
@@ -270,44 +306,200 @@ void GameJuiceSystem::CreateImpactParticleEntities(core::GameContext &ctx) {
 
 void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
                                           const DirectX::XMFLOAT3 &position,
-                                          float power) {
-  LOG_DEBUG("GameJuice", "Impact effect triggered at ({:.2f}, {:.2f}, {:.2f})",
-            position.x, position.y, position.z);
+                                          float power, JudgeType judge) {
+  LOG_DEBUG("GameJuice",
+            "Impact effect triggered at ({:.2f}, {:.2f}, {:.2f}) power={:.2f} "
+            "judge={}",
+            position.x, position.y, position.z, power, (int)judge);
 
-  float baseSpeed = 5.0f + power * 8.0f;
+  // 判定によって派手さを調整
+  float speedMultiplier = 1.0f;
+  float sizeMultiplier = 1.0f;
+  float lifetimeMultiplier = 1.0f;
+
+  switch (judge) {
+  case JudgeType::Great:
+    speedMultiplier = 1.5f;    // より高速に飛び散る
+    sizeMultiplier = 1.5f;     // 大きめ
+    lifetimeMultiplier = 1.3f; // 長寿命
+    break;
+  case JudgeType::Nice:
+    speedMultiplier = 1.2f;
+    sizeMultiplier = 1.2f;
+    lifetimeMultiplier = 1.1f;
+    break;
+  case JudgeType::Miss:
+    speedMultiplier = 0.7f; // 弱め
+    sizeMultiplier = 0.8f;
+    lifetimeMultiplier = 0.8f;
+    break;
+  default:
+    break;
+  }
+
+  float baseSpeed = (8.0f + power * 15.0f) * speedMultiplier;
+  float spreadFactor = 1.0f + power * 0.5f;
 
   for (int i = 0; i < kImpactParticleCount; ++i) {
     auto &p = m_impactParticles[i];
 
-    // 放射状に速度を設定
-    float angle = (float)i / (float)kImpactParticleCount * XM_2PI;
-    float upAngle = XM_PIDIV4 + ((float)(rand() % 100) / 100.0f) * XM_PIDIV4;
+    // === 多層構造の爆発エフェクト ===
+    int layer = i % 4; // 4層構造
+    float layerOffset = layer * 0.25f;
+    float layerSpeed = baseSpeed * (1.0f - layerOffset * 0.3f);
 
-    p.velocity.x = std::cos(angle) * std::cos(upAngle) * baseSpeed;
-    p.velocity.y = std::sin(upAngle) * baseSpeed * 0.8f;
-    p.velocity.z = std::sin(angle) * std::cos(upAngle) * baseSpeed;
+    // 放射状に速度を設定（スパイラル風）
+    float baseAngle = (float)i / (float)kImpactParticleCount * XM_2PI;
+    float spiralOffset = (float)layer * 0.3f;
+    float angle = baseAngle + spiralOffset;
+
+    // 上向きのばらつき（花火風に上に多く）
+    float upAngle =
+        XM_PIDIV4 * (1.0f + ((float)(rand() % 100) / 100.0f) * 1.5f);
+    if (layer == 0)
+      upAngle *= 1.3f;
+
+    p.velocity.x =
+        std::cos(angle) * std::cos(upAngle) * layerSpeed * spreadFactor;
+    p.velocity.y = std::sin(upAngle) * layerSpeed * 1.2f;
+    p.velocity.z =
+        std::sin(angle) * std::cos(upAngle) * layerSpeed * spreadFactor;
 
     // ランダムなばらつき
-    p.velocity.x += ((float)(rand() % 100) / 100.0f - 0.5f) * 2.0f;
-    p.velocity.z += ((float)(rand() % 100) / 100.0f - 0.5f) * 2.0f;
+    p.velocity.x += ((float)(rand() % 100) / 100.0f - 0.5f) * 5.0f;
+    p.velocity.y += ((float)(rand() % 100) / 100.0f) * 3.0f;
+    p.velocity.z += ((float)(rand() % 100) / 100.0f - 0.5f) * 5.0f;
 
-    p.lifetime = 0.4f + ((float)(rand() % 100) / 100.0f) * 0.2f;
+    // 寿命
+    p.lifetime =
+        (0.6f + ((float)(rand() % 100) / 100.0f) * 0.5f + layer * 0.15f) *
+        lifetimeMultiplier;
 
     // 初期位置設定
     auto *t = ctx.world.Get<Transform>(p.entity);
     if (t) {
       t->position = position;
-      t->position.y += 0.1f; // ボールの上から発生
-      t->scale = {0.12f, 0.12f, 0.12f};
+      t->position.x += ((float)(rand() % 100) / 100.0f - 0.5f) * 0.3f;
+      t->position.y += 0.1f + ((float)(rand() % 100) / 100.0f) * 0.2f;
+      t->position.z += ((float)(rand() % 100) / 100.0f - 0.5f) * 0.3f;
+
+      float baseScale = (0.15f + power * 0.1f) * sizeMultiplier;
+      float scaleVar = 0.8f + ((float)(rand() % 100) / 100.0f) * 0.4f;
+      float scale = baseScale * scaleVar;
+      t->scale = {scale, scale, scale};
     }
 
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
     if (mr) {
       mr->isVisible = true;
-      // パワーに応じて色変化（弱:黄→強:赤）
-      float colorRatio = std::clamp(power, 0.0f, 1.0f);
-      mr->color = {1.0f, 0.9f - colorRatio * 0.6f, 0.2f - colorRatio * 0.2f,
-                   1.0f};
+
+      float r, g, b;
+
+      // === 判定ごとの色設定 ===
+      switch (judge) {
+      case JudgeType::Great:
+        // 金色～白の豪華な爆発
+        {
+          float goldShift = (float)(rand() % 100) / 100.0f * 0.3f;
+          r = 1.0f;
+          g = 0.8f + goldShift;
+          b = 0.2f + goldShift * 0.5f;
+          // 中心は白く
+          if (layer == 0) {
+            r = 1.0f;
+            g = 1.0f;
+            b = 0.9f;
+          }
+        }
+        break;
+
+      case JudgeType::Nice:
+        // 青白い爽やかな爆発
+        {
+          float blueShift = (float)(rand() % 100) / 100.0f * 0.2f;
+          r = 0.4f + blueShift;
+          g = 0.7f + blueShift;
+          b = 1.0f;
+          if (layer == 0) {
+            r = 0.8f;
+            g = 0.95f;
+            b = 1.0f;
+          }
+        }
+        break;
+
+      case JudgeType::Miss:
+        // 赤～オレンジの残念な爆発
+        {
+          float redShift = (float)(rand() % 100) / 100.0f * 0.3f;
+          r = 1.0f;
+          g = 0.3f + redShift;
+          b = 0.1f;
+          if (layer == 0) {
+            r = 1.0f;
+            g = 0.5f;
+            b = 0.3f;
+          }
+        }
+        break;
+
+      default:
+        // 虹色（デフォルト）
+        {
+          float hue =
+              (float)i / (float)kImpactParticleCount * 360.0f + power * 60.0f;
+          hue = std::fmod(hue, 360.0f);
+          float h = hue / 60.0f;
+          int hi = (int)h % 6;
+          float f = h - (int)h;
+          switch (hi) {
+          case 0:
+            r = 1.0f;
+            g = f;
+            b = 0.0f;
+            break;
+          case 1:
+            r = 1.0f - f;
+            g = 1.0f;
+            b = 0.0f;
+            break;
+          case 2:
+            r = 0.0f;
+            g = 1.0f;
+            b = f;
+            break;
+          case 3:
+            r = 0.0f;
+            g = 1.0f - f;
+            b = 1.0f;
+            break;
+          case 4:
+            r = f;
+            g = 0.0f;
+            b = 1.0f;
+            break;
+          default:
+            r = 1.0f;
+            g = 0.0f;
+            b = 1.0f - f;
+            break;
+          }
+          if (layer == 0) {
+            r = 0.5f + r * 0.5f;
+            g = 0.5f + g * 0.5f;
+            b = 0.5f + b * 0.5f;
+          }
+        }
+        break;
+      }
+
+      // 発光感
+      float brightness = 1.5f + (1.0f - layerOffset) * 0.8f;
+      if (layer == 0) {
+        brightness = 2.5f;
+      }
+
+      mr->color = {r * brightness, g * brightness, b * brightness, 1.0f};
     }
   }
 }

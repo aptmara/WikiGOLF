@@ -41,6 +41,9 @@ public:
   /// @brief マウス位置取得
   DirectX::XMINT2 GetMousePosition() const { return m_mousePosition; }
 
+  /// @brief マウスホイール変位取得
+  float GetMouseScrollDelta() const;
+
   /// @brief マウスカーソルの表示/非表示
   void SetMouseCursorVisible(bool visible);
 
@@ -57,6 +60,7 @@ private:
   std::array<bool, 3> m_mouseButtonsUp;   ///< このフレームで離された
 
   DirectX::XMINT2 m_mousePosition;
+  float m_scrollDelta = 0.0f;
 
   // カーソル状態管理
   bool m_cursorVisible = true;

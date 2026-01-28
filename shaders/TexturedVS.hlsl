@@ -5,12 +5,15 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View;
     matrix Projection;
     float4 Color;
+    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap (unused here)
 };
 
 struct VS_INPUT {
     float3 Pos : POSITION;
     float3 Normal : NORMAL;
     float2 TexCoord : TEXCOORD0;
+    float3 Tangent : TANGENT;
+    float3 Bitangent : BINORMAL;
 };
 
 struct PS_INPUT {
