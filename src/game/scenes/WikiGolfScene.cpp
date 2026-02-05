@@ -38,6 +38,10 @@ namespace game::scenes {
 using namespace DirectX;
 using namespace game::components;
 
+namespace {
+constexpr float kFieldScale = 4.0f;
+} // namespace
+
 WikiGolfScene::~WikiGolfScene() = default;
 
 void WikiGolfScene::OnEnter(core::GameContext &ctx) {
@@ -73,8 +77,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   // カメラ（ボール追従）
   m_cameraEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_cameraEntity);
-  t.position = {0.0f, 15.0f,
-                -15.0f}; // 後ろ上から（UpdateCameraで即座に更新される）
+  t.position = {0.0f, 15.0f * kFieldScale,
+                -15.0f * kFieldScale}; // 後ろ上から（UpdateCameraで即座に更新される）
   LOG_DEBUG("WikiGolf", "Camera initial pos: ({}, {}, {})", t.position.x,
             t.position.y, t.position.z);
 
@@ -90,7 +94,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   // カメラ初期状態（TPSオービットカメラ）
   m_cameraYaw = 0.0f;                   // 初期方向: 北（Z+方向）
   m_cameraPitch = 0.5f;                 // 初期角度: 少し見下ろし（約28.6度）
-  m_cameraDistance = 15.0f;             // 初期距離
+  m_cameraDistance = 15.0f * kFieldScale; // 初期距離
   m_shotDirection = {0.0f, 0.0f, 1.0f}; // 初期ショット方向
 
   // ミニマップ初期化
@@ -350,7 +354,8 @@ void WikiGolfScene::CreateField(core::GameContext &ctx) {
   m_floorEntity = CreateEntity(ctx.world);
   auto &ft = ctx.world.Add<Transform>(m_floorEntity);
   ft.position = {0.0f, 0.0f, 0.0f};
-  ft.scale = {20.0f, 0.5f, 30.0f};
+  ft.scale = {20.0f * kFieldScale, 0.5f * kFieldScale,
+              30.0f * kFieldScale};
 
   auto &fmr = ctx.world.Add<MeshRenderer>(m_floorEntity);
   fmr.mesh = ctx.resource.LoadMesh("builtin/plane"); // 平面メッシュ
@@ -376,7 +381,8 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
 
   m_ballEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_ballEntity);
-  t.position = {0.0f, 1.0f, -8.0f}; // 初期位置を少し高くして床抜け防止
+  t.position = {0.0f, 0.022f,
+                -8.0f * kFieldScale}; // 地面(0.0) + 半径(0.02135) + マージン
   t.scale = {0.08f, 0.08f, 0.08f};
   LOG_DEBUG("WikiGolf", "Ball spawned at: ({}, {}, {})", t.position.x,
             t.position.y, t.position.z);
@@ -889,66 +895,88 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
     }
   }
 
-  // 軌道予測ドットを非表示にする
-  for (auto e : m_trajectoryDots) {
-    auto *mr = ctx.world.Get<MeshRenderer>(e);
-    if (mr)
-      mr->isVisible = false;
-  }
-
-  // 状態更新
-  state->shotCount++;
-  state->canShoot = false;
-  shot->phase = ShotState::Phase::Executing;
-
-  // マーカー非表示
-  auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
-  if (markerUI)
-    markerUI->visible = false;
-
-  // 判定表示用エンティティ取得
-  auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
-
-  // UI更新
-  auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
-  if (shotUI) {
-    std::wstring suffix = L" (推定)";
-    if (m_calculatedPar > 0) {
-      suffix = L" (残り最短 " + std::to_wstring(m_calculatedPar) + L" 記事)";
-    }
-    shotUI->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
-                   std::to_wstring(state->par) + suffix;
-  }
-
-  auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-
-  // 判定表示
-  std::string judgeTexPath;
-  switch (shot->judgement) {
-  case ShotJudgement::Great:
-    judgeTexPath = "ui_judge_great.png";
-    if (infoUI)
-      infoUI->text = L"★ GREAT ★";
-    break;
-  case ShotJudgement::Nice:
-    judgeTexPath = "ui_judge_nice.png";
-    if (infoUI)
-      infoUI->text = L"◎ NICE ◎";
-    break;
-  case ShotJudgement::Miss:
-    judgeTexPath = "ui_judge_miss.png";
-    if (infoUI)
-      infoUI->text = L"△ MISS △";
-    break;
-  default:
-    break;
-  }
-
-  if (judgeUI && !judgeTexPath.empty()) {
-    judgeUI->texturePath = judgeTexPath;
+// === 判定UI表示 ===
+auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
+if (judgeUI) {
+  if (shot->judgement == ShotJudgement::Special) {
+    judgeUI->texturePath = "ui_judge_perfect.png";
     judgeUI->visible = true;
-    LOG_INFO("WikiGolf", "Showing judge UI: {}", judgeTexPath);
+    // 幅調整 (Perfect画像は少し横長)
+    judgeUI->width = 300.0f;
+    judgeUI->height = 100.0f;
+  } else if (shot->judgement == ShotJudgement::Great) {
+    // ui_judge_great.png があれば表示
+    judgeUI->texturePath = "ui_judge_great.png"; // 既存アセット想定
+    judgeUI->visible = true; // アセットがない場合は表示されないだけ
+    judgeUI->width = 200.0f;
+    judgeUI->height = 80.0f;
+  } else {
+    // その他は表示しないか、既存用
+    judgeUI->visible = false;
   }
+
+  if (judgeUI->visible) {
+    m_judgeDisplayTimer = 3.0f; // 3秒表示
+  }
+}
+
+// 軌道予測ドットを非表示にする
+for (auto e : m_trajectoryDots) {
+  auto *mr = ctx.world.Get<MeshRenderer>(e);
+  if (mr)
+    mr->isVisible = false;
+}
+
+// 状態更新
+state->shotCount++;
+state->canShoot = false;
+shot->phase = ShotState::Phase::Executing;
+
+// マーカー非表示
+auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
+if (markerUI)
+  markerUI->visible = false;
+
+// UI更新
+auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
+if (shotUI) {
+  std::wstring suffix = L" (推定)";
+  if (m_calculatedPar > 0) {
+    suffix = L" (残り最短 " + std::to_wstring(m_calculatedPar) + L" 記事)";
+  }
+  shotUI->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
+                 std::to_wstring(state->par) + suffix;
+}
+
+auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
+
+// 判定表示
+std::string judgeTexPath;
+switch (shot->judgement) {
+case ShotJudgement::Great:
+  judgeTexPath = "ui_judge_great.png";
+  if (infoUI)
+    infoUI->text = L"★ GREAT ★";
+  break;
+case ShotJudgement::Nice:
+  judgeTexPath = "ui_judge_nice.png";
+  if (infoUI)
+    infoUI->text = L"◎ NICE ◎";
+  break;
+case ShotJudgement::Miss:
+  judgeTexPath = "ui_judge_miss.png";
+  if (infoUI)
+    infoUI->text = L"△ MISS △";
+  break;
+default:
+  break;
+}
+
+if (judgeUI && !judgeTexPath.empty()) {
+  judgeUI->texturePath = judgeTexPath;
+  judgeUI->visible = true;
+  LOG_INFO("WikiGolf", "Showing judge UI: {}", judgeTexPath);
+}
 }
 
 void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
@@ -1035,12 +1063,12 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   // カメラリセット（TPSオービットカメラ）
   m_cameraYaw = 0.0f;
   m_cameraPitch = 0.5f;
-  m_cameraDistance = 15.0f;
+  m_cameraDistance = 15.0f * kFieldScale;
   m_shotDirection = {0, 0, 1};
 
   auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
   if (ballT) {
-    ballT->position = {0.0f, 1.0f, -8.0f};
+    ballT->position = {0.0f, 1.0f, -8.0f * kFieldScale};
     auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
     if (rb)
       rb->velocity = {0, 0, 0};
@@ -1064,6 +1092,16 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // ガイドUI更新
   UpdateGuideUI(ctx);
+
+  // 判定UIのタイマー更新
+  if (m_judgeDisplayTimer > 0.0f) {
+    m_judgeDisplayTimer -= ctx.dt;
+    if (m_judgeDisplayTimer <= 0.0f) {
+      auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
+      if (judgeUI)
+        judgeUI->visible = false;
+    }
+  }
 
   // リザルト画面処理
   if (state && state->gameCleared) {
@@ -1178,9 +1216,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       // マウスホイールでズーム
       float wheel = ctx.input.GetMouseScrollDelta();
       if (wheel != 0.0f) {
-        m_cameraDistance -= wheel * 2.0f; // ホイール感度
+        m_cameraDistance -= wheel * 2.0f * kFieldScale; // ホイール感度
         m_cameraDistance =
-            std::clamp(m_cameraDistance, 3.0f, 30.0f); // 距離制限
+            std::clamp(m_cameraDistance, 3.0f * kFieldScale,
+                       30.0f * kFieldScale); // 距離制限
       }
     }
   }
@@ -1210,13 +1249,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
     // 落下チェック（Y < -5 でリスポーン）
     if (ballT && ballT->position.y < -5.0f) {
-      ballT->position = {0.0f, 1.0f, -8.0f}; // スタート位置に戻す
+      ballT->position = {0.0f, 1.0f,
+                         -8.0f * kFieldScale}; // スタート位置に戻す
       if (rb) {
         rb->velocity = {0, 0, 0};
       }
       state->canShoot = true;
-      state->shotCount++; // ペナルティ
-
       state->shotCount++; // ペナルティ
 
       LOG_INFO("WikiGolf", "Ball respawned (fell off)");
@@ -1675,10 +1713,10 @@ void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
     // texturePathを設定
     img = UIImage::Create(m_availableClubs[i].iconTexture, 0, 0);
 
-    // 画面下部、中央揃え
-    float startX = 1280.0f / 2.0f - (m_availableClubs.size() * 100.0f) / 2.0f;
-    img.x = startX + i * 100.0f;
-    img.y = 600.0f;
+    // 画面右端、垂直に配置
+    float startY = 720.0f / 2.0f - (m_availableClubs.size() * 100.0f) / 2.0f;
+    img.x = 1150.0f; // 右側
+    img.y = startY + i * 100.0f;
     img.width = 80.0f;
     img.height = 80.0f;
     img.layer = 20; // 手前に表示
@@ -2041,8 +2079,8 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   // まじめに実装しなおす。
 
   // 4. フィールドサイズ計算
-  const float minFieldWidth = 20.0f;
-  const float minFieldDepth = 30.0f;
+  const float minFieldWidth = 20.0f * kFieldScale;
+  const float minFieldDepth = 30.0f * kFieldScale;
   float articleLengthFactor =
       std::max(1.0f, (float)articleText.length() / 1000.0f);
   float fieldWidth = minFieldWidth * std::sqrt(articleLengthFactor);
@@ -2385,14 +2423,14 @@ void WikiGolfScene::SwitchClub(core::GameContext &ctx, int direction) {
 
   // カメラ設定更新
   if (m_currentClub.name == "Putter") {
-    m_targetCameraDistance = 4.0f;
-    m_targetCameraHeight = 8.0f; // 真上から見下ろす
+    m_targetCameraDistance = 4.0f * kFieldScale;
+    m_targetCameraHeight = 8.0f * kFieldScale; // 真上から見下ろす
   } else if (m_currentClub.name == "Wedge") {
-    m_targetCameraDistance = 10.0f;
-    m_targetCameraHeight = 6.0f;
+    m_targetCameraDistance = 10.0f * kFieldScale;
+    m_targetCameraHeight = 6.0f * kFieldScale;
   } else {
-    m_targetCameraDistance = 15.0f;
-    m_targetCameraHeight = 5.0f;
+    m_targetCameraDistance = 15.0f * kFieldScale;
+    m_targetCameraHeight = 5.0f * kFieldScale;
   }
 
   LOG_INFO("WikiGolf", "Switched Club: {}", m_currentClub.name);

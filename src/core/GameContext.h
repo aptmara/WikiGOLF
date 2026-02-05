@@ -12,7 +12,8 @@ class World;
 }
 namespace graphics {
 class GraphicsDevice;
-}
+class TextRenderer;
+} // namespace graphics
 namespace core {
 class Input;
 }
@@ -43,6 +44,8 @@ struct GameContext {
   // 時間管理
   float dt = 0.016f; // デルタタイム (秒)
   float time = 0.0f; // ゲーム開始からの経過時間 (秒)
+
+  graphics::TextRenderer *textRenderer = nullptr; // テキスト・D2D描画
 
   // コンストラクタ
   GameContext(resources::ResourceManager &r, ecs::World &w,
