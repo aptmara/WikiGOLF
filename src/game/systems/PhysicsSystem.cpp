@@ -445,7 +445,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
         // ゼロ速になっても斜面なら滑り出すための微小ブレークアウェイ
         float breakaway =
-            (slopeMag > 0.05f && SafeLength(vel) < 0.15f) ? 0.2f : 0.0f;
+            (slopeMag > 0.15f && SafeLength(vel) < 0.1f) ? 0.05f : 0.0f;
         if (breakaway > 0.0f) {
           vel = XMVectorAdd(vel, XMVectorScale(slopeDir, breakaway * subDt));
         }
@@ -484,7 +484,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
         // 斜面が急なほど摩擦を減らして滑りやすくする
         float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
-        float slopeFrictionScale = 0.3f + 0.7f * ny; // ny=1 ->1.0, ny=0 ->0.3
+        float slopeFrictionScale = 0.6f + 0.4f * ny; // ny=1 ->1.0, ny=0 ->0.6
         friction *= slopeFrictionScale;
 
         // 摩擦による減速
@@ -501,7 +501,9 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         // 低速減衰（平坦のみ）。斜面では止めない。
         float speedAfter = SafeLength(vel);
         float slopeFlatness = XMVectorGetY(groundNormal);
-        if (speedAfter < 0.5f && slopeFlatness > 0.98f) {
+        if (speedAfter < 0.2f && slopeFlatness > 0.95f) {
+          vel = XMVectorZero();
+        } else if (speedAfter < 0.5f && slopeFlatness > 0.98f) {
           vel = XMVectorScale(vel, 0.98f);
         }
       } else {

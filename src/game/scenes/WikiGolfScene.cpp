@@ -77,8 +77,9 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   // カメラ（ボール追従）
   m_cameraEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_cameraEntity);
-  t.position = {0.0f, 15.0f * kFieldScale,
-                -15.0f * kFieldScale}; // 後ろ上から（UpdateCameraで即座に更新される）
+  t.position = {
+      0.0f, 15.0f * kFieldScale,
+      -15.0f * kFieldScale}; // 後ろ上から（UpdateCameraで即座に更新される）
   LOG_DEBUG("WikiGolf", "Camera initial pos: ({}, {}, {})", t.position.x,
             t.position.y, t.position.z);
 
@@ -89,13 +90,13 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   camComp.fov = XMConvertToRadians(60.0f);
   camComp.aspectRatio = 1280.0f / 720.0f;
   camComp.nearZ = 0.1f;
-  camComp.farZ = 150.0f;
+  camComp.farZ = 500.0f; // 描画距離
 
   // カメラ初期状態（TPSオービットカメラ）
-  m_cameraYaw = 0.0f;                   // 初期方向: 北（Z+方向）
-  m_cameraPitch = 0.5f;                 // 初期角度: 少し見下ろし（約28.6度）
+  m_cameraYaw = 0.0f;                     // 初期方向: 北（Z+方向）
+  m_cameraPitch = 0.5f;                   // 初期角度: 少し見下ろし（約28.6度）
   m_cameraDistance = 15.0f * kFieldScale; // 初期距離
-  m_shotDirection = {0.0f, 0.0f, 1.0f}; // 初期ショット方向
+  m_shotDirection = {0.0f, 0.0f, 1.0f};   // 初期ショット方向
 
   // ミニマップ初期化
   if (!m_minimapRenderer) {
@@ -129,13 +130,13 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   for (int i = 0; i < 30; ++i) {
     auto e = CreateEntity(ctx.world);
     auto &t = ctx.world.Add<Transform>(e);
-    t.scale = {0.1f, 0.1f, 0.1f};
+    t.scale = {0.15f, 0.15f, 0.15f}; // 少し大きく
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");
     mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                         L"Assets/shaders/BasicPS.hlsl");
-    mr.color = {1.0f, 1.0f, 0.0f, 0.5f}; // 黄色半透明
+    mr.color = {1.0f, 1.0f, 0.0f, 0.9f}; // 明るい黄色で高透明度
     mr.isVisible = false;
 
     m_trajectoryDots.push_back(e);
@@ -145,7 +146,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   amr.mesh = ctx.resource.LoadMesh("builtin/cube");
   amr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                        L"Assets/shaders/BasicPS.hlsl");
-  amr.color = {1.0f, 0.2f, 0.2f, 0.8f}; // 赤半透明
+  amr.color = {1.0f, 0.4f, 0.2f, 1.0f}; // 明るい赤橙で強調
   amr.isVisible = false;
 
   // クラブ初期化
@@ -354,8 +355,7 @@ void WikiGolfScene::CreateField(core::GameContext &ctx) {
   m_floorEntity = CreateEntity(ctx.world);
   auto &ft = ctx.world.Add<Transform>(m_floorEntity);
   ft.position = {0.0f, 0.0f, 0.0f};
-  ft.scale = {20.0f * kFieldScale, 0.5f * kFieldScale,
-              30.0f * kFieldScale};
+  ft.scale = {20.0f * kFieldScale, 0.5f * kFieldScale, 30.0f * kFieldScale};
 
   auto &fmr = ctx.world.Add<MeshRenderer>(m_floorEntity);
   fmr.mesh = ctx.resource.LoadMesh("builtin/plane"); // 平面メッシュ
@@ -391,14 +391,14 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
   mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
   mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
                                       L"shaders/BasicPS.hlsl");
-  mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  mr.color = {1.0f, 0.6f, 0.2f, 1.0f}; // 少しオレンジで視認性アップ
 
   auto &rb = ctx.world.Add<RigidBody>(m_ballEntity);
   rb.isStatic = false;
-  rb.mass = 0.0459f;          // 規定質量 45.9g
-  rb.restitution = 0.35f;     // 反発係数 (現実の芝との衝突)
-  rb.drag = 0.30f;            // 空気抵抗係数 (Cd値)
-  rb.rollingFriction = 0.35f; // 転がり抵抗 (フェアウェイ基準)
+  rb.mass = 0.0459f;         // 規定質量 45.9g
+  rb.restitution = 0.35f;    // 反発係数 (現実の芝との衝突)
+  rb.drag = 0.30f;           // 空気抵抗係数 (Cd値)
+  rb.rollingFriction = 0.5f; // 転がり抵抗 (フェアウェイ基準を強めに)
   rb.velocity = {0, 0, 0};
 
   auto &c = ctx.world.Add<Collider>(m_ballEntity);
@@ -895,88 +895,88 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
     }
   }
 
-// === 判定UI表示 ===
-auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
-if (judgeUI) {
-  if (shot->judgement == ShotJudgement::Special) {
-    judgeUI->texturePath = "ui_judge_perfect.png";
+  // === 判定UI表示 ===
+  auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
+  if (judgeUI) {
+    if (shot->judgement == ShotJudgement::Special) {
+      judgeUI->texturePath = "ui_judge_perfect.png";
+      judgeUI->visible = true;
+      // 幅調整 (Perfect画像は少し横長)
+      judgeUI->width = 300.0f;
+      judgeUI->height = 100.0f;
+    } else if (shot->judgement == ShotJudgement::Great) {
+      // ui_judge_great.png があれば表示
+      judgeUI->texturePath = "ui_judge_great.png"; // 既存アセット想定
+      judgeUI->visible = true; // アセットがない場合は表示されないだけ
+      judgeUI->width = 200.0f;
+      judgeUI->height = 80.0f;
+    } else {
+      // その他は表示しないか、既存用
+      judgeUI->visible = false;
+    }
+
+    if (judgeUI->visible) {
+      m_judgeDisplayTimer = 3.0f; // 3秒表示
+    }
+  }
+
+  // 軌道予測ドットを非表示にする
+  for (auto e : m_trajectoryDots) {
+    auto *mr = ctx.world.Get<MeshRenderer>(e);
+    if (mr)
+      mr->isVisible = false;
+  }
+
+  // 状態更新
+  state->shotCount++;
+  state->canShoot = false;
+  shot->phase = ShotState::Phase::Executing;
+
+  // マーカー非表示
+  auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
+  if (markerUI)
+    markerUI->visible = false;
+
+  // UI更新
+  auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
+  if (shotUI) {
+    std::wstring suffix = L" (推定)";
+    if (m_calculatedPar > 0) {
+      suffix = L" (残り最短 " + std::to_wstring(m_calculatedPar) + L" 記事)";
+    }
+    shotUI->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
+                   std::to_wstring(state->par) + suffix;
+  }
+
+  auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
+
+  // 判定表示
+  std::string judgeTexPath;
+  switch (shot->judgement) {
+  case ShotJudgement::Great:
+    judgeTexPath = "ui_judge_great.png";
+    if (infoUI)
+      infoUI->text = L"★ GREAT ★";
+    break;
+  case ShotJudgement::Nice:
+    judgeTexPath = "ui_judge_nice.png";
+    if (infoUI)
+      infoUI->text = L"◎ NICE ◎";
+    break;
+  case ShotJudgement::Miss:
+    judgeTexPath = "ui_judge_miss.png";
+    if (infoUI)
+      infoUI->text = L"△ MISS △";
+    break;
+  default:
+    break;
+  }
+
+  if (judgeUI && !judgeTexPath.empty()) {
+    judgeUI->texturePath = judgeTexPath;
     judgeUI->visible = true;
-    // 幅調整 (Perfect画像は少し横長)
-    judgeUI->width = 300.0f;
-    judgeUI->height = 100.0f;
-  } else if (shot->judgement == ShotJudgement::Great) {
-    // ui_judge_great.png があれば表示
-    judgeUI->texturePath = "ui_judge_great.png"; // 既存アセット想定
-    judgeUI->visible = true; // アセットがない場合は表示されないだけ
-    judgeUI->width = 200.0f;
-    judgeUI->height = 80.0f;
-  } else {
-    // その他は表示しないか、既存用
-    judgeUI->visible = false;
+    LOG_INFO("WikiGolf", "Showing judge UI: {}", judgeTexPath);
   }
-
-  if (judgeUI->visible) {
-    m_judgeDisplayTimer = 3.0f; // 3秒表示
-  }
-}
-
-// 軌道予測ドットを非表示にする
-for (auto e : m_trajectoryDots) {
-  auto *mr = ctx.world.Get<MeshRenderer>(e);
-  if (mr)
-    mr->isVisible = false;
-}
-
-// 状態更新
-state->shotCount++;
-state->canShoot = false;
-shot->phase = ShotState::Phase::Executing;
-
-// マーカー非表示
-auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
-if (markerUI)
-  markerUI->visible = false;
-
-// UI更新
-auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
-if (shotUI) {
-  std::wstring suffix = L" (推定)";
-  if (m_calculatedPar > 0) {
-    suffix = L" (残り最短 " + std::to_wstring(m_calculatedPar) + L" 記事)";
-  }
-  shotUI->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
-                 std::to_wstring(state->par) + suffix;
-}
-
-auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-
-// 判定表示
-std::string judgeTexPath;
-switch (shot->judgement) {
-case ShotJudgement::Great:
-  judgeTexPath = "ui_judge_great.png";
-  if (infoUI)
-    infoUI->text = L"★ GREAT ★";
-  break;
-case ShotJudgement::Nice:
-  judgeTexPath = "ui_judge_nice.png";
-  if (infoUI)
-    infoUI->text = L"◎ NICE ◎";
-  break;
-case ShotJudgement::Miss:
-  judgeTexPath = "ui_judge_miss.png";
-  if (infoUI)
-    infoUI->text = L"△ MISS △";
-  break;
-default:
-  break;
-}
-
-if (judgeUI && !judgeTexPath.empty()) {
-  judgeUI->texturePath = judgeTexPath;
-  judgeUI->visible = true;
-  LOG_INFO("WikiGolf", "Showing judge UI: {}", judgeTexPath);
-}
 }
 
 void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
@@ -1217,9 +1217,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       float wheel = ctx.input.GetMouseScrollDelta();
       if (wheel != 0.0f) {
         m_cameraDistance -= wheel * 2.0f * kFieldScale; // ホイール感度
-        m_cameraDistance =
-            std::clamp(m_cameraDistance, 3.0f * kFieldScale,
-                       30.0f * kFieldScale); // 距離制限
+        m_cameraDistance = std::clamp(m_cameraDistance, 3.0f * kFieldScale,
+                                      30.0f * kFieldScale); // 距離制限
       }
     }
   }
@@ -1249,8 +1248,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
     // 落下チェック（Y < -5 でリスポーン）
     if (ballT && ballT->position.y < -5.0f) {
-      ballT->position = {0.0f, 1.0f,
-                         -8.0f * kFieldScale}; // スタート位置に戻す
+      ballT->position = {0.0f, 1.0f, -8.0f * kFieldScale}; // スタート位置に戻す
       if (rb) {
         rb->velocity = {0, 0, 0};
       }
@@ -2096,22 +2094,34 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   state->fieldDepth = fieldDepth;
 
   // 5. テクスチャ生成
+  // 最大サイズ制限
+  // (分割しても合計が大きすぎるとメモリ圧迫or頂点バッファ精度問題)
+  const uint32_t kMaxTotalHeight = 32768;
+
   uint32_t texWidth = static_cast<uint32_t>(fieldWidth * 100.0f);
   uint32_t texHeight = static_cast<uint32_t>(fieldDepth * 100.0f);
+
+  if (texHeight > kMaxTotalHeight) {
+    float scale = (float)kMaxTotalHeight / (float)texHeight;
+    texHeight = kMaxTotalHeight;
+    texWidth = (uint32_t)(texWidth * scale);
+
+    // フィールドサイズも合わせて縮小
+    fieldWidth *= scale;
+    fieldDepth *= scale;
+    state->fieldWidth = fieldWidth;
+    state->fieldDepth = fieldDepth;
+
+    LOG_INFO("WikiGolf", "Field resized due to size limit. New size: {}x{}",
+             fieldWidth, fieldDepth);
+  }
 
   std::vector<std::pair<std::wstring, std::string>> linkPairs;
   for (const auto &link : validLinks) {
     linkPairs.push_back({link.second, link.first});
   }
 
-  // === Skybox テクスチャ生成（プロシージャル） (無効化) ===
-  // if (m_skyboxGenerator) {
-  //   auto *skyboxComp = ctx.world.Get<components::Skybox>(m_skyboxEntity);
-  //   if (skyboxComp) {
-  //     // ... (Generation logic removed)
-  //   }
-  // }
-
+  // GenerateTexture呼び出し
   auto texResult = m_textureGenerator->GenerateTexture(
       core::ToWString(pageName), core::ToWString(articleText), linkPairs,
       state->targetPage, texWidth, texHeight);
