@@ -90,7 +90,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   camComp.fov = XMConvertToRadians(60.0f);
   camComp.aspectRatio = 1280.0f / 720.0f;
   camComp.nearZ = 0.1f;
-  camComp.farZ = 500.0f; // 描画距離
+  camComp.farZ = 750.0f; // 描画距離を拡張（5倍）
 
   // カメラ初期状態（TPSオービットカメラ）
   m_cameraYaw = 0.0f;                     // 初期方向: 北（Z+方向）
