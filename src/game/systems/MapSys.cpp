@@ -7,6 +7,7 @@
 #include "../../graphics/Shader.h"
 #include "../../resources/ResourceManager.h"
 #include "../components/MeshRenderer.h"
+#include "../components/Skybox.h"
 #include "../components/WikiComponents.h"
 #include "../components/Transform.h"
 #include <algorithm>
@@ -121,8 +122,11 @@ void MapSys::RenderMinimap(core::GameContext &ctx) {
   context->VSSetConstantBuffers(0, 1, m_cb.GetAddressOf());
 
   ctx.world.Query<components::Transform, components::MeshRenderer>().Each(
-      [&](ecs::Entity, components::Transform &t, components::MeshRenderer &r) {
+      [&](ecs::Entity e, components::Transform &t, components::MeshRenderer &r) {
         if (!r.isVisible)
+          return;
+        // スカイボックスはミニマップ描画対象外
+        if (ctx.world.Has<components::Skybox>(e))
           return;
         auto *mesh = ctx.resource.GetMesh(r.mesh);
         auto shader =
@@ -142,6 +146,11 @@ void MapSys::RenderMinimap(core::GameContext &ctx) {
           c->v = v;
           c->p = p;
           c->c = r.color;
+
+          // ボールは見やすい色で強調
+          if (state && e == state->ballEntity) {
+            c->c = {1.0f, 0.4f, 0.1f, 1.0f};
+          }
           context->Unmap(m_cb.Get(), 0);
         }
 
