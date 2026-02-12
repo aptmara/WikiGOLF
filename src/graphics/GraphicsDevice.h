@@ -49,6 +49,11 @@ public:
   ID3D11Device *GetDevice() const { return m_device.Get(); }
   ID3D11DeviceContext *GetContext() const { return m_context.Get(); }
   IDXGISwapChain *GetSwapChain() const { return m_swapChain.Get(); }
+  HRESULT GetDeviceRemovedReason() const {
+    return m_device ? m_device->GetDeviceRemovedReason() : E_FAIL;
+  }
+  D3D_DRIVER_TYPE GetDriverType() const { return m_driverType; }
+  D3D_FEATURE_LEVEL GetFeatureLevel() const { return m_featureLevel; }
   uint32_t GetWidth() const { return m_width; }
   uint32_t GetHeight() const { return m_height; }
   float GetAspectRatio() const {
@@ -76,6 +81,8 @@ private:
 
   uint32_t m_width = 0;
   uint32_t m_height = 0;
+  D3D_DRIVER_TYPE m_driverType = D3D_DRIVER_TYPE_UNKNOWN;
+  D3D_FEATURE_LEVEL m_featureLevel = D3D_FEATURE_LEVEL_11_0;
 };
 
 } // namespace graphics
