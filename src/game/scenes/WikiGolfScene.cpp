@@ -21,6 +21,7 @@
 #include "../systems/PhysicsSystem.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
+#include "../utils/JudgeFeedback.h"
 #include "TitleScene.h"
 #include <DirectXMath.h>
 #include <algorithm>
@@ -180,6 +181,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   //                                             skyboxComp.cubemapSRV);
 
   LOG_INFO("WikiGolf", "Skybox system disabled (Device Lost Prevention)");
+  m_mapViewSkyboxState.Reset(skyboxComp.isVisible);
 
   // ゲーム状態初期化
   // ターゲット記事選択（SDOWデータベース優先）
@@ -726,6 +728,13 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
   if (arrowMR)
     arrowMR->isVisible = false;
 
+  // カメラ追従初期化
+  auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
+  if (camT) {
+    m_shotStartCamPos = camT->position;
+  }
+  m_isCameraChasing = false;
+
   // パワーとインパクトからショット実行
   float power = shot->confirmedPower * m_currentClub.maxPower;
   float impactError = shot->confirmedImpact - 0.5f; // -0.5〜+0.5
@@ -895,31 +904,6 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
     }
   }
 
-  // === 判定UI表示 ===
-  auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
-  if (judgeUI) {
-    if (shot->judgement == ShotJudgement::Special) {
-      judgeUI->texturePath = "ui_judge_perfect.png";
-      judgeUI->visible = true;
-      // 幅調整 (Perfect画像は少し横長)
-      judgeUI->width = 300.0f;
-      judgeUI->height = 100.0f;
-    } else if (shot->judgement == ShotJudgement::Great) {
-      // ui_judge_great.png があれば表示
-      judgeUI->texturePath = "ui_judge_great.png"; // 既存アセット想定
-      judgeUI->visible = true; // アセットがない場合は表示されないだけ
-      judgeUI->width = 200.0f;
-      judgeUI->height = 80.0f;
-    } else {
-      // その他は表示しないか、既存用
-      judgeUI->visible = false;
-    }
-
-    if (judgeUI->visible) {
-      m_judgeDisplayTimer = 3.0f; // 3秒表示
-    }
-  }
-
   // 軌道予測ドットを非表示にする
   for (auto e : m_trajectoryDots) {
     auto *mr = ctx.world.Get<MeshRenderer>(e);
@@ -950,32 +934,43 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
 
   auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
 
-  // 判定表示
-  std::string judgeTexPath;
-  switch (shot->judgement) {
-  case ShotJudgement::Great:
-    judgeTexPath = "ui_judge_great.png";
-    if (infoUI)
+  // 判定表示・サウンド
+  auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
+
+  if (infoUI) {
+    switch (shot->judgement) {
+    case ShotJudgement::Special:
+      infoUI->text = L"★ SPECIAL ★";
+      break;
+    case ShotJudgement::Great:
       infoUI->text = L"★ GREAT ★";
-    break;
-  case ShotJudgement::Nice:
-    judgeTexPath = "ui_judge_nice.png";
-    if (infoUI)
+      break;
+    case ShotJudgement::Nice:
       infoUI->text = L"◎ NICE ◎";
-    break;
-  case ShotJudgement::Miss:
-    judgeTexPath = "ui_judge_miss.png";
-    if (infoUI)
+      break;
+    case ShotJudgement::Miss:
       infoUI->text = L"△ MISS △";
-    break;
-  default:
-    break;
+      break;
+    default:
+      break;
+    }
   }
 
-  if (judgeUI && !judgeTexPath.empty()) {
-    judgeUI->texturePath = judgeTexPath;
+  auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
+  if (judgeUI && feedback.HasVisual()) {
+    judgeUI->texturePath = feedback.texturePath;
     judgeUI->visible = true;
-    LOG_INFO("WikiGolf", "Showing judge UI: {}", judgeTexPath);
+    judgeUI->width = feedback.width;
+    judgeUI->height = feedback.height;
+    m_judgeDisplayTimer = feedback.displaySeconds;
+    LOG_INFO("WikiGolf", "Showing judge UI: {}", feedback.texturePath);
+  } else if (judgeUI) {
+    judgeUI->visible = false;
+    m_judgeDisplayTimer = 0.0f;
+  }
+
+  if (ctx.audio && feedback.HasSound()) {
+    ctx.audio->PlaySE(ctx, feedback.soundPath, feedback.soundVolume);
   }
 }
 
@@ -990,8 +985,97 @@ void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
     return;
   }
 
-  // === TPSオービットカメラ ===
-  // ボール位置を中心に、Yaw/Pitch/Distanceで球面座標上にカメラを配置
+  // === ショット中の追従ロジック (ハイブリッド追従) ===
+  auto *shotState = ctx.world.GetGlobal<ShotState>();
+  bool isExecuting =
+      (shotState && shotState->phase == ShotState::Phase::Executing);
+
+  if (isExecuting) {
+    XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
+    XMVECTOR startCamPos = XMLoadFloat3(&m_shotStartCamPos);
+
+    // ボールと初期カメラ位置の距離
+    float distFromStart =
+        XMVectorGetX(XMVector3Length(XMVectorSubtract(ballPos, startCamPos)));
+    float chaseThreshold = 15.0f * kFieldScale; // 追従開始距離 (60m)
+
+    // フェーズ1: 固定注視モード（まだ距離が近い場合、または追尾開始前）
+    if (!m_isCameraChasing) {
+      if (distFromStart < chaseThreshold) {
+        // カメラ位置は固定
+        camT->position = m_shotStartCamPos;
+
+        // ボールの方を向く (LookAt)
+        XMVECTOR lookDir = XMVectorSubtract(ballPos, startCamPos);
+        // 少し上を見るように調整（地面を見すぎない）
+        lookDir = XMVectorAdd(lookDir, XMVectorSet(0, 2.0f, 0, 0));
+
+        if (XMVectorGetX(XMVector3LengthSq(lookDir)) > 0.001f) {
+          lookDir = XMVector3Normalize(lookDir);
+
+          // LookDirからYaw/Pitchを計算
+          float yaw = std::atan2(XMVectorGetX(lookDir), XMVectorGetZ(lookDir));
+          float pitch = -std::asin(XMVectorGetY(
+              lookDir)); // Pitchは下向きが正と仮定される場合が多いが、ここでは逆オフセットに合わせる
+
+          // スムーズに視線を追う
+          float lerp = 10.0f * ctx.dt;
+          // 最短回転補正
+          float diff = yaw - m_cameraYaw;
+          while (diff > XM_PI)
+            diff -= XM_2PI;
+          while (diff < -XM_PI)
+            diff += XM_2PI;
+          m_cameraYaw += diff * lerp;
+
+          m_cameraPitch += (pitch - m_cameraPitch) * lerp;
+          m_cameraPitch = std::clamp(m_cameraPitch, -0.1f, 1.4f);
+
+          XMVECTOR q = XMQuaternionRotationRollPitchYaw(m_cameraPitch,
+                                                        m_cameraYaw, 0.0f);
+          XMStoreFloat4(&camT->rotation, q);
+        }
+        return; // ここでリターン
+      } else {
+        // 閾値を超えたら追尾開始
+        m_isCameraChasing = true;
+      }
+    }
+
+    // フェーズ2: 追尾モード（以後ショット終了まで継続）
+    if (m_isCameraChasing) {
+      auto *ballRB = ctx.world.Get<RigidBody>(m_ballEntity);
+      if (ballRB) {
+        float vx = ballRB->velocity.x;
+        float vz = ballRB->velocity.z;
+        float speedHoriz = std::sqrt(vx * vx + vz * vz);
+
+        if (speedHoriz > 1.0f) {
+          // ボール進行方向（の逆）を目標Yawにする
+          float targetYaw =
+              std::atan2(vx, vz); // 一般的な定義: Z+が0, 時計回り? atan2(x, z)
+          // ここでは m_cameraYaw の基準に合わせる。既存コードでは
+          // offset = XMVectorSet(0, 0, -dist, 0) を rot(Yaw) するので
+          // Yaw=0 なら (0,0,-dist) つまり +Z を見る。OK。
+
+          // 目標Yaw補間
+          float diff = targetYaw - m_cameraYaw;
+          while (diff > XM_PI)
+            diff -= XM_2PI;
+          while (diff < -XM_PI)
+            diff += XM_2PI;
+          m_cameraYaw += diff * 2.0f * ctx.dt; // ゆっくり合わせる
+        }
+      }
+
+      // Pitchは少し見下ろしに固定
+      float targetPitch = 0.5f;
+      m_cameraPitch += (targetPitch - m_cameraPitch) * 2.0f * ctx.dt;
+    }
+  }
+
+  // === TPSオービットカメラ基準計算 ===
+  // (Idle時、および追尾モード時にここを通る)
 
   XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
 
@@ -1007,21 +1091,21 @@ void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
   XMVECTOR camPos = XMVectorAdd(ballPos, offset);
   XMStoreFloat3(&camT->position, camPos);
 
-  // カメラの回転（ボールを見る向きではなく、Yaw/Pitchそのもの）
+  // カメラの回転
   XMStoreFloat4(&camT->rotation, camRotQ);
 
   // === ショット方向の同期 ===
-  // カメラの前方ベクトル（水平成分のみ）をショット方向とする
-  XMVECTOR forward = XMVectorSet(0, 0, 1, 0);
-  forward = XMVector3Rotate(forward, camRotQ);
+  if (!isExecuting) { // ショット中は方向更新しない（プレイヤー操作用）
+    XMVECTOR forward = XMVectorSet(0, 0, 1, 0);
+    forward = XMVector3Rotate(forward, camRotQ);
 
-  // 水平成分のみ抽出（Y成分をゼロにして正規化）
-  XMFLOAT3 fwd;
-  XMStoreFloat3(&fwd, forward);
-  fwd.y = 0.0f; // 水平方向のみ
-  XMVECTOR flatForward = XMLoadFloat3(&fwd);
-  flatForward = XMVector3Normalize(flatForward);
-  XMStoreFloat3(&m_shotDirection, flatForward);
+    XMFLOAT3 fwd;
+    XMStoreFloat3(&fwd, forward);
+    fwd.y = 0.0f;
+    XMVECTOR flatForward = XMLoadFloat3(&fwd);
+    flatForward = XMVector3Normalize(flatForward);
+    XMStoreFloat3(&m_shotDirection, flatForward);
+  }
 }
 
 void WikiGolfScene::CreateLinksFromTexture(core::GameContext &ctx) {
@@ -1137,6 +1221,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   if (ctx.input.GetKeyDown('M')) {
     m_isMapView = !m_isMapView;
     LOG_INFO("WikiGolf", "Map view: {}", m_isMapView ? "ON" : "OFF");
+  }
+
+  if (auto *skybox = ctx.world.Get<Skybox>(m_skyboxEntity)) {
+    m_mapViewSkyboxState.Sync(m_isMapView, *skybox);
   }
 
   // === カーソル制御とマウス入力 ===

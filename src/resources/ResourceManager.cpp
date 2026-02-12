@@ -4,6 +4,8 @@
 #include "../graphics/GraphicsDevice.h"
 #include "../graphics/MeshPrimitives.h"
 #include "../graphics/ObjLoader.h"
+#include "../core/StringUtils.h"
+#include <filesystem>
 #include <wincodec.h>
 #include <algorithm>
 #include <vector>
@@ -253,6 +255,13 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
   if (FAILED(hr)) {
     LOG_ERROR("Resource", "CreateTexture2D failed for {} (hr=0x{:08X})", path,
               static_cast<uint32_t>(hr));
+    HRESULT reason = m_device.GetDevice()
+                         ? m_device.GetDevice()->GetDeviceRemovedReason()
+                         : E_FAIL;
+    if (reason != S_OK) {
+      LOG_ERROR("Resource", "Device removed reason: 0x{:08X}",
+                static_cast<uint32_t>(reason));
+    }
     return {};
   }
 
@@ -402,13 +411,31 @@ ShaderHandle ResourceManager::LoadShader(const std::string &name,
   // 将来的には引数で指定可能にするか、シェーダーリフレクションを使用
   auto inputLayout = graphics::Shader::GetDefaultInputLayout();
 
+  // コンパイル（存在しなければ Assets/ パスをフォールバック）
   graphics::Shader shader;
-  bool success = shader.LoadFromFile(m_device.GetDevice(), vsPath, "main",
-                                     psPath, "main", inputLayout);
+  auto tryCompile = [&](const std::wstring &vs, const std::wstring &ps) {
+    return shader.LoadFromFile(m_device.GetDevice(), vs, "main", ps, "main",
+                               inputLayout);
+  };
+
+  std::wstring vsUsed = vsPath;
+  std::wstring psUsed = psPath;
+  bool success = tryCompile(vsPath, psPath);
 
   if (!success) {
-    // エラーログはShader内部で出力済み
-    // 無効ハンドルのまま返す（呼び出し元でチェック推奨）
+    std::filesystem::path vsAlt = std::filesystem::path(L"Assets") / vsPath;
+    std::filesystem::path psAlt = std::filesystem::path(L"Assets") / psPath;
+    if (std::filesystem::exists(vsAlt) && std::filesystem::exists(psAlt)) {
+      vsUsed = vsAlt.wstring();
+      psUsed = psAlt.wstring();
+      success = tryCompile(vsUsed, psUsed);
+    }
+  }
+
+  if (!success) {
+    LOG_ERROR("Resource", "Failed to compile shader: {} (VS: {}, PS: {})", name,
+              core::ToString(vsUsed), core::ToString(psUsed));
+    return {};
   }
 
   auto handle = m_shaderPool.Add(std::move(shader));

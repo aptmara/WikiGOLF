@@ -46,4 +46,35 @@ inline float ApplyRollingFriction(float speed, float frictionCoeff,
   return (speed <= drop) ? 0.0f : (speed - drop);
 }
 
+/// @brief 静止摩擦で速度を止められるか判定する
+/// @param speed 現在速度
+/// @param frictionCoeff 摩擦係数
+/// @param tangentialAccel 接地面に沿った加速度の大きさ
+/// @param dtSeconds 経過時間 (秒)
+/// @param stickSpeedThreshold 静止とみなす速度上限
+inline bool CanStaticFrictionHold(float speed, float frictionCoeff,
+                                  float tangentialAccel, float dtSeconds,
+                                  float stickSpeedThreshold = 0.35f) {
+  if (dtSeconds <= 0.0f || !std::isfinite(dtSeconds)) {
+    return false;
+  }
+  if (!std::isfinite(speed) || speed > stickSpeedThreshold) {
+    return false;
+  }
+
+  float coeff = std::max(frictionCoeff, 0.0f);
+  if (!std::isfinite(coeff)) {
+    return false;
+  }
+
+  float frictionDrop = ComputeRollingFrictionDrop(coeff, dtSeconds);
+  if (frictionDrop <= 0.0f) {
+    return false;
+  }
+
+  float tangentialPush =
+      std::max(tangentialAccel, 0.0f) * dtSeconds; // a * dt = Δv
+  return frictionDrop >= tangentialPush;
+}
+
 } // namespace game::systems
