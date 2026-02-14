@@ -221,7 +221,7 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
 
     auto &col = ctx.world.Add<Collider>(e);
     col.type = ColliderType::Box;
-    col.size = {w.w * 0.5f, wallHeight * 0.5f, w.d * 0.5f};
+    col.size = {0.5f, 0.5f, 0.5f};
 
     m_entities.push_back(e);
   }
@@ -264,7 +264,7 @@ void WikiTerrainSystem::CreateImageObstacles(
 
     auto &col = ctx.world.Add<Collider>(e);
     col.type = ColliderType::Box;
-    col.size = {worldW * 0.5f, height * 0.5f, worldD * 0.5f};
+    col.size = {0.5f, 0.5f, 0.5f};
 
     m_entities.push_back(e);
   }
