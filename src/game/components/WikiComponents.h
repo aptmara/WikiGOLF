@@ -39,6 +39,21 @@ struct Heading {
 };
 
 /**
+ * @brief 壁タグコンポーネント
+ */
+struct Wall {};
+
+/**
+ * @brief バリア接触エフェクト（波紋）
+ */
+struct RippleEffect {
+  float timer = 0.0f;
+  float duration = 0.5f;
+  float maxScale = 5.0f;
+  float initialAlpha = 0.5f;
+};
+
+/**
  * @brief ゲーム状態をシステム間で共有するためのグローバルデータ
  */
 struct WikiGameState {
@@ -101,6 +116,17 @@ struct Flipper {
 };
 
 /**
+ * @brief 地形マテリアル種別
+ */
+enum class TerrainMaterial : uint8_t {
+  Fairway = 0,
+  Rough = 1,
+  Bunker = 2,
+  Green = 3,
+  None = 255
+};
+
+/**
  * @brief ゴルフゲーム状態
  */
 struct GolfGameState {
@@ -124,7 +150,7 @@ struct GolfGameState {
   // 経路履歴
   std::vector<std::string> pathHistory; ///< 訪問した記事の履歴
 
-  float fieldWidth = 80.0f; ///< フィールド幅（最小80）
+  float fieldWidth = 80.0f;  ///< フィールド幅（最小80）
   float fieldDepth = 120.0f; ///< フィールド奥行（最小120）
 
   // 風システム
@@ -136,6 +162,11 @@ struct GolfGameState {
   int moveCount = 0;        ///< 遷移回数
   bool gameCleared = false; ///< クリアフラグ
   bool canShoot = true;     ///< ショット可能か
+
+  // 環境状態（エフェクト用）
+  TerrainMaterial currentMaterial = TerrainMaterial::Fairway;
+  float currentBallSpeed = 0.0f;
+  bool isBallGrounded = false;
 
   // 結果画面UI
   uint32_t resultBgEntity = 0;    ///< 結果画面背景

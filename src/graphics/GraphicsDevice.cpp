@@ -224,7 +224,7 @@ void GraphicsDevice::SetupRenderState() {
   // 1. Rasterizer State (カリングなし)
   D3D11_RASTERIZER_DESC rasterDesc = {};
   rasterDesc.AntialiasedLineEnable = FALSE;
-  rasterDesc.CullMode = D3D11_CULL_NONE; // 両面描画（安全策）
+  rasterDesc.CullMode = D3D11_CULL_BACK; // 背面カリング有効（裏面を描画しない）
   rasterDesc.DepthBias = 0;
   rasterDesc.DepthBiasClamp = 0.0f;
   rasterDesc.DepthClipEnable = TRUE;

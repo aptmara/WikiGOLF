@@ -29,12 +29,15 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float hasNormalMap = MaterialFlags.y;
 
     // テクスチャサンプリング
-    float4 baseColor = input.color;
+    // マテリアルカラーを乗算
+    float4 baseColor = input.color * MaterialColor;
+
+    // アルファテスト: 透明度が高いピクセルは描画しない（Zバッファへの書き込み防止）
+    clip(baseColor.a - 0.05f);
+
     if (hasDiffuse > 0.5f) {
         float4 texColor = diffuseTexture.Sample(texSampler, input.texCoord);
-        if (texColor.a > 0.01f) {
-            baseColor *= texColor;
-        }
+        baseColor *= texColor;
     }
     
     // 法線（必要ならノーマルマップで置換）

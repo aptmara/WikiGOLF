@@ -111,7 +111,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     terrainColor = {0.4f, 0.8f, 0.4f, 1.0f};
     break;
   case 1: // 砂漠
-    config.friction = 2.5f;
+    config.friction = 5.0f;
     config.restitution = 0.1f;
     config.heightScale = 2.5f;
     terrainColor = {0.9f, 0.8f, 0.5f, 1.0f};
@@ -187,43 +187,109 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
 void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
                                     float depth) {
-  float wallHeight = 8.0f;
-  float wallThickness = 6.0f;
+  float wallHeight = 100.0f; // 脱出不可能な高さ
   float halfW = width * 0.5f;
   float halfD = depth * 0.5f;
+  float wallThickness = 6.0f; // コライダ用厚み
 
-  struct WallDef {
-    float x, z, w, d;
-  };
-  WallDef walls[] = {
-      {0.0f, halfD + wallThickness * 0.5f, width + wallThickness * 2,
-       wallThickness},
-      {0.0f, -halfD - wallThickness * 0.5f, width + wallThickness * 2,
-       wallThickness},
-      {-halfW - wallThickness * 0.5f, 0.0f, wallThickness, depth},
-      {halfW + wallThickness * 0.5f, 0.0f, wallThickness, depth}};
-
-  for (const auto &w : walls) {
+  auto CreateWall = [&](XMFLOAT3 pos, XMFLOAT3 scale, XMFLOAT4 rot,
+                        XMFLOAT3 colliderSize) {
     auto e = ctx.world.CreateEntity();
     auto &t = ctx.world.Add<Transform>(e);
-    t.position = {w.x, wallHeight * 0.5f, w.z};
-    t.scale = {w.w, wallHeight, w.d};
+    t.position = pos;
+    // ビジュアルはTransformに従う（回転済み）
+    t.rotation = rot;
+    t.scale = scale;
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = ctx.resource.LoadMesh("builtin/cube");
+    mr.mesh = ctx.resource.LoadMesh("builtin/plane"); // 片面表示
     mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                         L"Assets/shaders/BasicPS.hlsl");
-    mr.color = {0.8f, 0.8f, 0.8f, 1.0f};
+    mr.color = {0.0f, 0.8f, 1.0f, 0.2f}; // 内側から見える（薄いシアン）
+
+    ctx.world.Add<Wall>(e);
 
     auto &rb = ctx.world.Add<RigidBody>(e);
     rb.isStatic = true;
-    rb.restitution = 0.8f;
+    rb.restitution = 0.5f; // 少し弾む
 
     auto &col = ctx.world.Add<Collider>(e);
     col.type = ColliderType::Box;
-    col.size = {0.5f, 0.5f, 0.5f};
+    // ColliderはTransformのScaleの影響を受けるが、PlaneのScaleは(W, 1, H)なので
+    // ColliderSizeはローカル座標系でのサイズを指定する。
+    // builtin/planeは1x1平面。BoxColliderのsize 1.0はMeshの1.0に対応。
+    // 厚みを持たせるため、Y軸（Planeの法線方向）に厚みを設定
+    col.size = colliderSize;
 
     m_entities.push_back(e);
+  };
+
+  // 共通設定
+  float colThickness = wallThickness / 1.0f; // Scale.Yが1.0なのでそのまま
+
+  // Left Wall (-X): Faces +X (East)
+  // Plane default: +Y. Rotate Z -90 deg -> +X.
+  // Rot Z -90: (0, 0, -1, 1) axis?
+  // XMQuaternionRotationRollPitchYaw(pitch, yaw, roll)
+  // Pitch(X), Yaw(Y), Roll(Z).
+  // Rotate Z -90: Roll = -90.
+  {
+    // West (-X) facing East (+X)
+    XMVECTOR rot = XMQuaternionRotationRollPitchYaw(0, 0, -XM_PIDIV2);
+    XMFLOAT4 rotF;
+    XMStoreFloat4(&rotF, rot);
+    // Scale: Height becomes width-visual (X-axis of plane is now Y-axis of
+    // world... wait) Plane (X, Z). Normal Y. Rot Z -90:
+    //   Old X -> New Y (Up)  => Wall Height
+    //   Old Z -> New Z (Depth) => Wall Depth
+    //   Old Y -> New -X (Normal faces -X... wait. I want Normal +X)
+    // To face +X, I need Normal +X.
+    // Plane Normal +Y.
+    // Rot Z -90 -> Noral +X. Correct.
+    // Dimensions: Plane X -> World Y (Height). Plane Z -> World Z (Depth).
+    // Pos: -halfW - thickness/2.
+    CreateWall({-halfW - wallThickness * 0.5f, wallHeight * 0.5f, 0.0f},
+               {wallHeight, 1.0f, depth}, rotF,
+               {1.0f, wallThickness, 1.0f}); // Local Y is thickness
+  }
+
+  // Right Wall (+X): Faces -X (West)
+  {
+    // Rot Z +90 -> Normal -X.
+    // Plane X -> World -Y (Height inverted? UVs might be flipped but plain
+    // color ok) Plane Z -> World Z.
+    XMVECTOR rot = XMQuaternionRotationRollPitchYaw(0, 0, XM_PIDIV2);
+    XMFLOAT4 rotF;
+    XMStoreFloat4(&rotF, rot);
+    CreateWall({halfW + wallThickness * 0.5f, wallHeight * 0.5f, 0.0f},
+               {wallHeight, 1.0f, depth}, rotF, {1.0f, wallThickness, 1.0f});
+  }
+
+  // Back Wall (+Z): Faces -Z (South)
+  {
+    // Plane Normal +Y.
+    // Want Normal -Z.
+    // Rotate X +90 -> Normal +Z. (Right Rule: Thumb +X, Fingers Y->Z. +90 moves
+    // Y to Z) Wait, Y to Z is +90 X. So Normal +Z. I want Normal -Z (Inward
+    // from +Z wall). So Rotate X -90? Y -> -Z. Yes.
+    XMVECTOR rot = XMQuaternionRotationRollPitchYaw(-XM_PIDIV2, 0, 0);
+    XMFLOAT4 rotF;
+    XMStoreFloat4(&rotF, rot);
+    // Plane X -> World X (Width).
+    // Plane Z -> World Y (Height).
+    CreateWall({0.0f, wallHeight * 0.5f, halfD + wallThickness * 0.5f},
+               {width, 1.0f, wallHeight}, rotF, {1.0f, wallThickness, 1.0f});
+  }
+
+  // Front Wall (-Z): Faces +Z (North)
+  {
+    // Want Normal +Z.
+    // Rotate X +90.
+    XMVECTOR rot = XMQuaternionRotationRollPitchYaw(XM_PIDIV2, 0, 0);
+    XMFLOAT4 rotF;
+    XMStoreFloat4(&rotF, rot);
+    CreateWall({0.0f, wallHeight * 0.5f, -halfD - wallThickness * 0.5f},
+               {width, 1.0f, wallHeight}, rotF, {1.0f, wallThickness, 1.0f});
   }
 }
 
