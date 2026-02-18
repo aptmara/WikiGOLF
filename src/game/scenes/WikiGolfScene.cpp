@@ -397,10 +397,11 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
 
   auto &rb = ctx.world.Add<RigidBody>(m_ballEntity);
   rb.isStatic = false;
-  rb.mass = 0.0459f;         // 規定質量 45.9g
-  rb.restitution = 0.35f;    // 反発係数 (現実の芝との衝突)
-  rb.drag = 0.30f;           // 空気抵抗係数 (Cd値)
-  rb.rollingFriction = 0.5f; // 転がり抵抗 (フェアウェイ基準を強めに)
+  rb.mass = 0.0459f;      // 規定質量 45.9g
+  rb.restitution = 0.35f; // 反発係数 (現実の芝との衝突)
+  rb.drag = 0.30f;        // 空気抵抗係数 (Cd値)
+  rb.rollingFriction =
+      0.25f; // 転がり抵抗 (0.5->0.25へ低減、空気抵抗でバランスを取る)
   rb.velocity = {0, 0, 0};
 
   auto &c = ctx.world.Add<Collider>(m_ballEntity);
@@ -766,6 +767,16 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
 
   power *= powerMultiplier;
 
+  // 初速度（パワー）から追従開始閾値を計算して適用
+  // powerは初速(m/s相当)なので、係数1.0なら「初速で1秒間進んだ距離」だけ待機する
+  m_cameraChaseThreshold = power * 1.0f;
+  // 最低距離保証（近すぎると酔うかもしれないため）
+  if (m_cameraChaseThreshold < 5.0f) {
+    m_cameraChaseThreshold = 5.0f;
+  }
+  LOG_INFO("WikiGolf", "Camera chase threshold set to: {:.1f}",
+           m_cameraChaseThreshold);
+
   // 方向計算（曲がり適用）
   XMVECTOR dir = XMLoadFloat3(&m_shotDirection);
   XMVECTOR right = XMVector3Cross(XMVectorSet(0, 1, 0, 0), dir);
@@ -974,6 +985,148 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
   }
 }
 
+// ==========================================
+// 衝突判定ヘルパー
+// ==========================================
+static bool IntersectRayAABBSlab(float start, float dir, float minVal, float maxVal,
+                                 float &tmin, float &tmax) {
+  if (std::abs(dir) < 1e-6f) {
+    return (start >= minVal && start <= maxVal);
+  }
+  float invDir = 1.0f / dir;
+  float t1 = (minVal - start) * invDir;
+  float t2 = (maxVal - start) * invDir;
+  if (t1 > t2)
+    std::swap(t1, t2);
+  tmin = std::max(tmin, t1);
+  tmax = std::min(tmax, t2);
+  return tmin <= tmax;
+}
+
+static bool IntersectRayOBB(XMVECTOR rayOrigin, XMVECTOR rayDir, float maxDist,
+                            XMVECTOR boxPos, XMVECTOR boxSize, XMVECTOR boxRot,
+                            float &outDist) {
+  // RayをBoxのローカル空間へ変換
+  XMVECTOR relOrigin = XMVectorSubtract(rayOrigin, boxPos);
+  XMVECTOR invRot = XMQuaternionInverse(boxRot);
+
+  XMVECTOR localOrigin = XMVector3Rotate(relOrigin, invRot);
+  XMVECTOR localDir = XMVector3Rotate(rayDir, invRot);
+
+  float tMin = 0.0f;
+  float tMax = maxDist;
+
+  // X軸
+  if (!IntersectRayAABBSlab(XMVectorGetX(localOrigin), XMVectorGetX(localDir),
+                            -XMVectorGetX(boxSize), XMVectorGetX(boxSize), tMin,
+                            tMax))
+    return false;
+
+  // Y軸
+  if (!IntersectRayAABBSlab(XMVectorGetY(localOrigin), XMVectorGetY(localDir),
+                            -XMVectorGetY(boxSize), XMVectorGetY(boxSize), tMin,
+                            tMax))
+    return false;
+
+  // Z軸
+  if (!IntersectRayAABBSlab(XMVectorGetZ(localOrigin), XMVectorGetZ(localDir),
+                            -XMVectorGetZ(boxSize), XMVectorGetZ(boxSize), tMin,
+                            tMax))
+    return false;
+
+  // ヒット判定
+  if (tMin <= tMax && tMax >= 0.0f) {
+    outDist = tMin;
+    return true;
+  }
+
+  return false;
+}
+
+bool WikiGolfScene::CheckCameraCollision(core::GameContext &ctx,
+                                         const DirectX::XMVECTOR &targetPos,
+                                         const DirectX::XMVECTOR &lookAtPos,
+                                         DirectX::XMVECTOR &outPos) {
+  outPos = targetPos;
+  bool collided = false;
+
+  XMVECTOR rayVec = XMVectorSubtract(targetPos, lookAtPos);
+  float dist = XMVectorGetX(XMVector3Length(rayVec));
+  if (dist < 0.01f)
+    return false;
+
+  XMVECTOR rayDir = XMVectorScale(rayVec, 1.0f / dist);
+
+  // 1. 壁・障害物による遮蔽（レイキャスト）
+  // シーン内のStatic RigidBodyを持つBox Colliderを対象にする
+  float closestHit = dist;
+  bool hitWall = false;
+
+  ctx.world.Query<Transform, RigidBody, Collider>().Each(
+      [&](ecs::Entity e, Transform &t, RigidBody &rb, Collider &c) {
+        if (!rb.isStatic || c.type != ColliderType::Box)
+          return;
+
+        // 自分（カメラ）やボール自体は除外（ボールはDynamicだが念のため）
+        if (e == m_ballEntity || e == m_cameraEntity)
+          return;
+
+        // 床（Floor）は除外したい（床はレイキャストではなく高さチェックで対応するため）
+        // 床エンティティIDと比較
+        if (e == m_floorEntity)
+          return;
+
+        XMVECTOR boxPos = XMLoadFloat3(&t.position);
+        XMVECTOR boxSize = XMLoadFloat3(&c.size);
+        // ColliderサイズとTransformスケールを合わせる
+        boxSize = XMVectorMultiply(boxSize, XMLoadFloat3(&t.scale));
+        XMVECTOR boxRot = XMLoadFloat4(&t.rotation);
+
+        float hitDist = 0.0f;
+        if (IntersectRayOBB(lookAtPos, rayDir, closestHit, boxPos, boxSize,
+                            boxRot, hitDist)) {
+          // 0距離（内部からの開始）は無視するか、最小距離を設定
+          if (hitDist > 0.1f) {
+            closestHit = hitDist;
+            hitWall = true;
+          }
+        }
+      });
+
+  if (hitWall) {
+    // 壁の手前に配置（少しマージンを取る）
+    float adjustedDist = std::max(0.5f, closestHit - 0.5f);
+    outPos = XMVectorAdd(lookAtPos, XMVectorScale(rayDir, adjustedDist));
+    collided = true;
+  } else {
+    outPos = targetPos;
+  }
+
+  // 2. 地形による高さ制限
+  // 補正後の位置でチェック
+  if (m_terrainSystem) {
+    float camX = XMVectorGetX(outPos);
+    float camZ = XMVectorGetZ(outPos);
+    float terrainH = m_terrainSystem->GetHeight(camX, camZ);
+
+    float currentY = XMVectorGetY(outPos);
+    float minHeight = terrainH + 0.5f; // 地形 + 0.5m
+
+    if (currentY < minHeight) {
+      outPos = XMVectorSetY(outPos, minHeight);
+      collided = true;
+    }
+  } else {
+    // TerrainSystemがない場合も、最低限Y=0.5以下にはならないようにする
+    if (XMVectorGetY(outPos) < 0.5f) {
+      outPos = XMVectorSetY(outPos, 0.5f);
+      collided = true;
+    }
+  }
+
+  return collided;
+}
+
 void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
   if (!ctx.world.IsAlive(m_ballEntity) || !ctx.world.IsAlive(m_cameraEntity)) {
     return;
@@ -997,7 +1150,8 @@ void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
     // ボールと初期カメラ位置の距離
     float distFromStart =
         XMVectorGetX(XMVector3Length(XMVectorSubtract(ballPos, startCamPos)));
-    float chaseThreshold = 15.0f * kFieldScale; // 追従開始距離 (60m)
+    float chaseThreshold =
+        m_cameraChaseThreshold; // 初速度から計算された閾値を使用
 
     // フェーズ1: 固定注視モード（まだ距離が近い場合、または追尾開始前）
     if (!m_isCameraChasing) {
@@ -1089,10 +1243,32 @@ void WikiGolfScene::UpdateCamera(core::GameContext &ctx) {
 
   // カメラ位置 = ボール位置 + オフセット
   XMVECTOR camPos = XMVectorAdd(ballPos, offset);
-  XMStoreFloat3(&camT->position, camPos);
+
+  // 衝突判定と補正
+  XMVECTOR adjustedPos;
+  bool collided = CheckCameraCollision(ctx, camPos, ballPos, adjustedPos);
+  XMStoreFloat3(&camT->position, adjustedPos);
 
   // カメラの回転
-  XMStoreFloat4(&camT->rotation, camRotQ);
+  if (collided) {
+    // 衝突があった場合は、補正後の位置からボールを見るように回転を修正
+    // 注視点: ボールの少し上
+    XMVECTOR focusPoint = XMVectorAdd(ballPos, XMVectorSet(0, 0.5f, 0, 0));
+    XMVECTOR lookDir = XMVectorSubtract(focusPoint, adjustedPos);
+    
+    if (XMVectorGetX(XMVector3LengthSq(lookDir)) > 0.001f) {
+        lookDir = XMVector3Normalize(lookDir);
+        // LookAt quaternion
+        XMMATRIX view = XMMatrixLookAtLH(adjustedPos, focusPoint, XMVectorSet(0, 1, 0, 0));
+        XMVECTOR det;
+        XMMATRIX camWorld = XMMatrixInverse(&det, view);
+        XMStoreFloat4(&camT->rotation, XMQuaternionRotationMatrix(camWorld));
+    } else {
+        XMStoreFloat4(&camT->rotation, camRotQ);
+    }
+  } else {
+    XMStoreFloat4(&camT->rotation, camRotQ);
+  }
 
   // === ショット方向の同期 ===
   if (!isExecuting) { // ショット中は方向更新しない（プレイヤー操作用）
@@ -1325,6 +1501,65 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // 物理更新
   game::systems::PhysicsSystem(ctx, ctx.dt);
+
+  // === バリアエフェクト（壁衝突） ===
+  auto *events = ctx.world.GetGlobal<game::components::CollisionEvents>();
+  if (events) {
+    for (const auto &ev : events->events) {
+      bool isWallA = ctx.world.Has<game::components::Wall>(ev.entityA);
+      bool isBallA = (ev.entityA == m_ballEntity);
+      bool isWallB = ctx.world.Has<game::components::Wall>(ev.entityB);
+      bool isBallB = (ev.entityB == m_ballEntity);
+
+      if ((isWallA && isBallB) || (isWallB && isBallA)) {
+        // エフェクト生成
+        auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
+        if (ballT) {
+          auto effectEntity = CreateEntity(ctx.world);
+          auto &t = ctx.world.Add<game::components::Transform>(effectEntity);
+          t.position = ballT->position;
+          t.scale = {0.1f, 0.1f, 0.1f};
+
+          auto &mr =
+              ctx.world.Add<game::components::MeshRenderer>(effectEntity);
+          mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
+          mr.shader =
+              ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
+          mr.color = {0.0f, 1.0f, 1.0f, 0.5f}; // Cyan semi-transparent
+
+          auto &re =
+              ctx.world.Add<game::components::RippleEffect>(effectEntity);
+          re.maxScale = 4.0f;
+          re.duration = 0.4f;
+
+          LOG_INFO("WikiGolf", "Wall Barrier Effect Spawned");
+        }
+      }
+    }
+  }
+
+  // === エフェクト更新 ===
+  std::vector<ecs::Entity> deadEffects;
+  ctx.world
+      .Query<game::components::RippleEffect, game::components::Transform,
+             game::components::MeshRenderer>()
+      .Each([&](ecs::Entity e, game::components::RippleEffect &re,
+                game::components::Transform &t,
+                game::components::MeshRenderer &mr) {
+        re.timer += ctx.dt;
+        float progress = re.timer / re.duration;
+        if (progress >= 1.0f) {
+          deadEffects.push_back(e);
+        } else {
+          float s = re.maxScale * std::sin(progress * 1.570796327f); // PI/2
+          t.scale = {s, s, s};
+          mr.color.w = 0.5f * (1.0f - progress);
+        }
+      });
+  for (auto e : deadEffects) {
+    ctx.world.DestroyEntity(e);
+  }
 
   // ショット処理
   ProcessShot(ctx);
@@ -1602,9 +1837,8 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
     XMVECTOR acc;
 
-    // 1. 空気抵抗 (二乗則)
-    // F = 0.5 * rho * v^2 * Cd * A => mで割って加速度a
-    // 係数 K = 0.000876 (PhysicsSystemと同じ)
+    // 1. 空気抵抗 (PhysicsSystemと同期: 常時適用)
+    // F = 0.5 * rho * v^2 * Cd * A
     if (speed > 0.001f) {
       float K = 0.000876f;
       float dragVal = rb ? rb->drag : 0.30f;
@@ -1614,24 +1848,14 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
       XMVECTOR dragDir = XMVectorScale(vel, -1.0f / speed);
       XMVECTOR dragAcc = XMVectorScale(dragDir, dragAccMag);
 
-      // マグヌス効果 (簡易計算 - 揚力として追加)
-      // 本来は角速度ベクトルとの外積だが、簡易的にY軸方向への揚力とXZ方向への曲がりを考慮
-      // ここでは重力とドラッグのみをメインとして計算し、マグヌスは以前の簡易実装を維持しつつ係数調整
-      XMVECTOR magnusAcc = XMVectorZero();
-      /*
-       * マグヌスは複雑なため、予測線では「曲がり」はショットパラメータで計算済みの
-       * 初期velocityに含まれるサイドスピン成分に任せ、
-       * ここでは追加の揚力（バックスピンによる滞空時間延長）のみ考慮する
-       */
-
       acc = XMVectorAdd(gravity, dragAcc);
     } else {
       acc = gravity;
     }
 
-    // 風の影響 (簡易: 加速度として加算 - 本来は相対速度だが予測線では近似)
+    // 風の影響
     if (golfState && golfState->windSpeed > 0.0f) {
-      float windForce = golfState->windSpeed * 0.1f; // 係数調整
+      float windForce = golfState->windSpeed * 0.1f;
       XMVECTOR windVec = XMVectorSet(golfState->windDirection.x, 0,
                                      golfState->windDirection.y, 0);
       acc = XMVectorAdd(acc, XMVectorScale(windVec, windForce));
@@ -1687,45 +1911,66 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
         vel = XMVectorSetY(vel, vy);
       }
 
-      // 転がり抵抗 (PhysicsSystemと同じ減算方式)
-      if (std::abs(XMVectorGetY(vel)) < 0.1f) { // ほぼ転がっている
-        float baseFriction = rb ? rb->rollingFriction : 0.35f;
-        float terrainFriction = 1.0f;
+      // 転がり抵抗 (PhysicsSystemと同じ減算方式 + 速度依存係数)
+      // ★芝生シミュレーション (PhysicsSystem同期: Heavy Ver.)
+      float currentSpeed = XMVectorGetX(XMVector3Length(vel));
 
-        if (terrainData) {
-          uint8_t mat =
-              GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
-          switch (mat) {
-          case 1:
-            terrainFriction = 2.0f;
-            break; // Rough
-          case 2:
-            terrainFriction = 3.0f;
-            break; // Bunker
-          case 3:
-            terrainFriction = 0.28f;
-            break; // Green
-          }
+      // 1. 沈み込み抵抗 (強力に!)
+      float sinkFactor = 1.0f;
+      if (currentSpeed < 3.0f) {
+        sinkFactor = 1.0f + (3.0f - currentSpeed) * 1.0f;
+      }
+
+      // 2. 基本係数 (0.5)
+      float baseFriction = 0.5f;
+      float terrainFriction = 1.0f;
+
+      if (terrainData) {
+        uint8_t mat =
+            GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
+        switch (mat) {
+        case 1:
+          terrainFriction = 3.0f; // Rough
+          break;
+        case 2:
+          terrainFriction = 5.0f; // Bunker
+          break;
+        case 3:
+          terrainFriction = 0.2f; // Green
+          break;
         }
+      }
 
-        float mu = baseFriction * terrainFriction;
+      float friction = baseFriction * terrainFriction * sinkFactor;
 
-        // 傾斜による加速/減速 (簡易: 重力の接線成分)
-        XMVECTOR slopeAcc = XMVectorZero();
-        // 重力 g * sin(theta) ... 簡易的に勾配から算出
-        // 摩擦による減速: a = -mu * g
-        float frictionDecel = mu * 9.8f;
+      // 3. 垂直抗力依存の摩擦減速 (a = mu * g * ny)
+      float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
+      float frictionAccel = friction * 9.8f * ny;
 
-        float currentSpeed = XMVectorGetX(XMVector3Length(vel));
-        if (currentSpeed > 0.0f) {
-          float dropSpeed = frictionDecel * dt;
-          if (currentSpeed <= dropSpeed) {
-            vel = XMVectorZero();
-            currentSpeed = 0.0f;
-          } else {
-            vel = XMVectorScale(vel, (currentSpeed - dropSpeed) / currentSpeed);
-          }
+      // ★草の抵抗定数項
+      frictionAccel += 1.0f;
+
+      // 簡易停止判定
+      // PhysicsSystem: staticLimit = frictionAccel * 1.5f; speed < 0.15f;
+      // しかし予測線では厳密な接線重力を計算していないため、
+      // 動き続けているなら単純に減速させる。
+      // 接地していて速度が十分小さければ停止とみなす。
+
+      if (currentSpeed > 0.0f) {
+        float dropSpeed = frictionAccel * dt;
+
+        if (currentSpeed <= dropSpeed) {
+          vel = XMVectorZero();
+          currentSpeed = 0.0f;
+        } else {
+          vel = XMVectorScale(vel, (currentSpeed - dropSpeed) / currentSpeed);
         }
+      }
+
+      // 低速カット (PhysicsSystem同期: 0.15f 未満で停止判定相当)
+      if (currentSpeed < 0.15f) {
+        // 接地しており、かつ速度が閾値以下なら停止
+        vel = XMVectorZero();
       }
     }
 
@@ -2691,14 +2936,25 @@ void WikiGolfScene::UpdateClubAnimation(core::GameContext &ctx, float dt) {
     break;
   }
 
-  // クラブの変形（位置・回転）を適用
-  XMStoreFloat3(&clubTr->position, clubBasePos);
-
   // スイング角度をX軸回転として適用（ピッチ）
   // Y軸はショット方向に合わせる
   float pitchRad = XMConvertToRadians(m_clubSwingAngle);
   XMVECTOR q = XMQuaternionRotationRollPitchYaw(pitchRad, yaw, 0);
   XMStoreFloat4(&clubTr->rotation, q);
+
+  // クラブの変形（位置）を適用
+  // モデルの原点(ヘッド終端)が原点のため、グリップ位置(clubBasePos)から逆算して配置
+  // モデル座標系でY軸プラス方向がシャフト(グリップ側)と仮定
+  float clubModelLength = 2.0f; // モデル上の長さ（スケール前）
+  float scaledLen = clubModelLength * clubTr->scale.y;
+
+  // HeadPos = GripPos - (Rotation * GripOffsetFromHead)
+  // グリップはヘッドから見て (0, Length, 0) にあると仮定
+  XMVECTOR gripOffset = XMVectorSet(0.0f, scaledLen, 0.0f, 0.0f);
+  gripOffset = XMVector3Rotate(gripOffset, q);
+
+  XMVECTOR headPos = XMVectorSubtract(clubBasePos, gripOffset);
+  XMStoreFloat3(&clubTr->position, headPos);
 }
 
 void WikiGolfScene::OnExit(core::GameContext &ctx) {

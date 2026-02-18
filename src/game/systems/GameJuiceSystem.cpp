@@ -11,6 +11,7 @@
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
+#include "../components/WikiComponents.h"
 #include <algorithm>
 #include <cmath>
 
@@ -33,6 +34,9 @@ void GameJuiceSystem::Initialize(core::GameContext &ctx) {
   // インパクトパーティクルエンティティ作成
   CreateImpactParticleEntities(ctx);
 
+  // 環境パーティクルエンティティ作成
+  CreateEnvironmentParticleEntities(ctx);
+
   // FOV初期化
   m_baseFov = 60.0f;
   m_currentFov = m_baseFov;
@@ -54,6 +58,10 @@ void GameJuiceSystem::Update(core::GameContext &ctx, ecs::Entity cameraEntity,
 
   // インパクトパーティクル更新
   UpdateImpactParticles(ctx);
+
+  // 環境パーティクル更新
+  EmitEnvironmentParticles(ctx, targetEntity);
+  UpdateEnvironmentParticles(ctx, targetEntity);
 }
 
 // =============================================================================
@@ -151,8 +159,9 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
-    mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                        L"shaders/BasicPS.hlsl");
+    mr.shader = ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
+                                        L"shaders/ParticlePS.hlsl");
+    mr.isTransparent = true;
 
     // 虹色グラデーション（派手に）
     float ratio = (float)i / (float)(kTrailCount - 1);
@@ -292,10 +301,11 @@ void GameJuiceSystem::CreateImpactParticleEntities(core::GameContext &ctx) {
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");
-    mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                        L"shaders/BasicPS.hlsl");
+    mr.shader = ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
+                                        L"shaders/ParticlePS.hlsl");
     mr.color = {1.0f, 0.8f, 0.2f, 1.0f}; // 黄金色
     mr.isVisible = false;
+    mr.isTransparent = true;
 
     ImpactParticle particle;
     particle.entity = e;
@@ -404,102 +414,32 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
           r = 1.0f;
           g = 0.8f + goldShift;
           b = 0.2f + goldShift * 0.5f;
-          // 中心は白く
           if (layer == 0) {
-            r = 1.0f;
-            g = 1.0f;
-            b = 0.9f;
+            r = 1.0f; g = 1.0f; b = 0.9f;
           }
         }
         break;
-
       case JudgeType::Nice:
-        // 青白い爽やかな爆発
+        // 青白い
         {
-          float blueShift = (float)(rand() % 100) / 100.0f * 0.2f;
-          r = 0.4f + blueShift;
-          g = 0.7f + blueShift;
-          b = 1.0f;
-          if (layer == 0) {
-            r = 0.8f;
-            g = 0.95f;
-            b = 1.0f;
-          }
+          r = 0.4f; g = 0.7f; b = 1.0f;
         }
         break;
-
       case JudgeType::Miss:
-        // 赤～オレンジの残念な爆発
+        // 赤
         {
-          float redShift = (float)(rand() % 100) / 100.0f * 0.3f;
-          r = 1.0f;
-          g = 0.3f + redShift;
-          b = 0.1f;
-          if (layer == 0) {
-            r = 1.0f;
-            g = 0.5f;
-            b = 0.3f;
-          }
+          r = 1.0f; g = 0.3f; b = 0.1f;
         }
         break;
-
       default:
-        // 虹色（デフォルト）
-        {
-          float hue =
-              (float)i / (float)kImpactParticleCount * 360.0f + power * 60.0f;
-          hue = std::fmod(hue, 360.0f);
-          float h = hue / 60.0f;
-          int hi = (int)h % 6;
-          float f = h - (int)h;
-          switch (hi) {
-          case 0:
-            r = 1.0f;
-            g = f;
-            b = 0.0f;
-            break;
-          case 1:
-            r = 1.0f - f;
-            g = 1.0f;
-            b = 0.0f;
-            break;
-          case 2:
-            r = 0.0f;
-            g = 1.0f;
-            b = f;
-            break;
-          case 3:
-            r = 0.0f;
-            g = 1.0f - f;
-            b = 1.0f;
-            break;
-          case 4:
-            r = f;
-            g = 0.0f;
-            b = 1.0f;
-            break;
-          default:
-            r = 1.0f;
-            g = 0.0f;
-            b = 1.0f - f;
-            break;
-          }
-          if (layer == 0) {
-            r = 0.5f + r * 0.5f;
-            g = 0.5f + g * 0.5f;
-            b = 0.5f + b * 0.5f;
-          }
-        }
+        r = 1.0f; g = 0.8f; b = 0.4f;
         break;
       }
 
       // 発光感
-      float brightness = 1.5f + (1.0f - layerOffset) * 0.8f;
-      if (layer == 0) {
-        brightness = 2.5f;
-      }
-
-      mr->color = {r * brightness, g * brightness, b * brightness, 1.0f};
+      float brightness = 2.0f + (1.0f - layerOffset) * 1.5f;
+      p.baseColor = {r * brightness, g * brightness, b * brightness, 1.0f};
+      mr->color = p.baseColor;
     }
   }
 }
@@ -515,6 +455,8 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
 
     // 物理更新
     p.velocity.y -= gravity * ctx.dt;
+    p.velocity.x *= 0.98f; // 空気抵抗
+    p.velocity.z *= 0.98f;
 
     auto *t = ctx.world.Get<Transform>(p.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
@@ -525,15 +467,210 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
       t->position.z += p.velocity.z * ctx.dt;
 
       // 縮小しながらフェードアウト
-      float lifeRatio = std::max(0.0f, p.lifetime / 0.5f);
-      float scale = 0.12f * lifeRatio;
+      float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
+      float scale = 0.15f * std::pow(lifeRatio, 0.5f);
       t->scale = {scale, scale, scale};
     }
 
     if (mr) {
-      // アルファフェード
-      float lifeRatio = std::max(0.0f, p.lifetime / 0.5f);
-      mr->color.w = lifeRatio;
+      float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
+      mr->color = p.baseColor;
+      mr->color.w = lifeRatio; // アルファ減衰
+
+      if (p.lifetime <= 0.0f) {
+        mr->isVisible = false;
+      }
+    }
+  }
+}
+
+// =============================================================================
+// 環境エフェクト（砂煙・芝片）
+// =============================================================================
+
+void GameJuiceSystem::CreateEnvironmentParticleEntities(core::GameContext &ctx) {
+  m_envParticles.clear();
+  m_envParticles.resize(kEnvParticleCount);
+
+  for (int i = 0; i < kEnvParticleCount; ++i) {
+    auto e = ctx.world.CreateEntity();
+
+    auto &t = ctx.world.Add<Transform>(e);
+    t.position = {0, -100, 0};
+    t.scale = {0.1f, 0.1f, 0.1f};
+
+    auto &mr = ctx.world.Add<MeshRenderer>(e);
+    // 初期は全てcube、Emit時にmeshを切り替える（リソースロード済み前提）
+    mr.mesh = ctx.resource.LoadMesh("builtin/cube");
+    mr.shader = ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
+                                        L"shaders/ParticlePS.hlsl");
+    mr.isVisible = false;
+    mr.isTransparent = true;
+
+    m_envParticles[i].entity = e;
+    m_envParticles[i].lifetime = 0.0f;
+  }
+  m_envWriteIndex = 0;
+}
+
+void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
+                                                ecs::Entity targetEntity) {
+  auto *state = ctx.world.GetGlobal<GolfGameState>();
+  if (!state || !state->isBallGrounded || state->currentBallSpeed < 0.5f) {
+    return;
+  }
+
+  m_envEmitTimer += ctx.dt;
+  // 速度が速いほどたくさん出す
+  float interval = 0.05f / (std::max<float>(1.0f, state->currentBallSpeed * 0.2f));
+
+  if (m_envEmitTimer >= interval) {
+    m_envEmitTimer = 0.0f;
+
+    auto *targetT = ctx.world.Get<Transform>(targetEntity);
+    if (!targetT)
+      return;
+
+    // 放出量
+    int count = (state->currentMaterial == TerrainMaterial::Bunker) ? 3 : 1;
+
+    for (int k = 0; k < count; ++k) {
+      auto &p = m_envParticles[m_envWriteIndex];
+      m_envWriteIndex = (m_envWriteIndex + 1) % kEnvParticleCount;
+
+      p.lifetime = 0.8f + ((float)(rand() % 100) / 100.0f) * 0.4f;
+      p.maxLifetime = p.lifetime;
+
+      auto *t = ctx.world.Get<Transform>(p.entity);
+      auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
+
+      if (t && mr) {
+        t->position = targetT->position;
+        // 地面にめり込まないよう少し上げる
+        t->position.y += 0.05f;
+
+        mr->isVisible = true;
+
+        // マテリアル別の設定
+        switch (state->currentMaterial) {
+        case TerrainMaterial::Bunker: {
+          // 砂煙: 球体、薄茶色、上昇・拡散
+          p.isDust = true;
+          mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+          mr->color = {0.85f, 0.75f, 0.55f, 0.6f}; // サンドベージュ
+          mr->customFlags.x = 1.0f; // isDustフラグをシェーダーへ
+          p.baseScale = 0.15f + ((float)(rand() % 100) / 100.0f) * 0.1f;
+          t->scale = {p.baseScale, p.baseScale, p.baseScale};
+
+          // 進行方向の逆にふわっと広がる
+          auto *rb = ctx.world.Get<RigidBody>(targetEntity);
+          XMVECTOR v = rb ? XMLoadFloat3(&rb->velocity) : XMVectorZero();
+          v = XMVectorScale(v, -0.3f); // 速度の3割で逆走
+          
+          float spread = 0.5f;
+          XMStoreFloat3(&p.velocity, v);
+          p.velocity.x += ((float)(rand() % 100) / 100.0f - 0.5f) * spread;
+          p.velocity.y += 0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f; // 少し浮く
+          p.velocity.z += ((float)(rand() % 100) / 100.0f - 0.5f) * spread;
+          
+          p.angularVelocity = {0, 0, 0};
+          break;
+        }
+        case TerrainMaterial::Rough:
+        case TerrainMaterial::Fairway: {
+          // 芝片: 立方体(薄く)、緑、弾ける、回転
+          p.isDust = false;
+          mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+          mr->customFlags.x = 0.0f; // 芝は通常の四角
+          if (state->currentMaterial == TerrainMaterial::Rough) {
+            mr->color = {0.1f, 0.4f, 0.1f, 1.0f}; // 深緑
+          } else {
+            mr->color = {0.3f, 0.7f, 0.2f, 1.0f}; // 明るい緑
+          }
+          p.baseScale = 0.05f + ((float)(rand() % 100) / 100.0f) * 0.05f;
+          // 板状にする
+          t->scale = {p.baseScale * 2.0f, p.baseScale * 0.2f, p.baseScale * 1.5f};
+
+          // 四方に弾ける
+          float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
+          float speed = 2.0f + ((float)(rand() % 100) / 100.0f) * 3.0f;
+          p.velocity.x = std::cos(angle) * speed;
+          p.velocity.y = 1.0f + ((float)(rand() % 100) / 100.0f) * 2.0f;
+          p.velocity.z = std::sin(angle) * speed;
+
+          p.angularVelocity.x = ((float)(rand() % 100) / 100.0f - 0.5f) * 20.0f;
+          p.angularVelocity.y = ((float)(rand() % 100) / 100.0f - 0.5f) * 20.0f;
+          p.angularVelocity.z = ((float)(rand() % 100) / 100.0f - 0.5f) * 20.0f;
+          break;
+        }
+        default:
+          mr->isVisible = false;
+          p.lifetime = 0;
+          break;
+        }
+      }
+    }
+  }
+}
+
+void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
+                                                   ecs::Entity targetEntity) {
+  const float gravity = 9.8f;
+  const float airResistance = 1.5f;
+
+  for (auto &p : m_envParticles) {
+    if (p.lifetime <= 0.0f)
+      continue;
+
+    p.lifetime -= ctx.dt;
+
+    auto *t = ctx.world.Get<Transform>(p.entity);
+    auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
+
+    if (t) {
+      if (p.isDust) {
+        // 砂煙: 重力少なめ、空気抵抗強め、拡大
+        p.velocity.x -= p.velocity.x * airResistance * ctx.dt;
+        p.velocity.y += (0.2f - p.velocity.y) * airResistance * ctx.dt; // わずかに上昇
+        p.velocity.z -= p.velocity.z * airResistance * ctx.dt;
+
+        t->position.x += p.velocity.x * ctx.dt;
+        t->position.y += p.velocity.y * ctx.dt;
+        t->position.z += p.velocity.z * ctx.dt;
+
+        // 拡大フェード
+        float progress = 1.0f - (p.lifetime / p.maxLifetime);
+        float scale = p.baseScale * (1.0f + progress * 3.0f);
+        t->scale = {scale, scale, scale};
+      } else {
+        // 芝片: 物理、回転
+        p.velocity.y -= gravity * ctx.dt;
+
+        t->position.x += p.velocity.x * ctx.dt;
+        t->position.y += p.velocity.y * ctx.dt;
+        t->position.z += p.velocity.z * ctx.dt;
+
+        // 回転更新
+        XMVECTOR rot = XMLoadFloat4(&t->rotation);
+        XMVECTOR angVel = XMLoadFloat3(&p.angularVelocity);
+        XMVECTOR deltaRot = XMQuaternionRotationRollPitchYaw(
+            angVel.m128_f32[0] * ctx.dt, angVel.m128_f32[1] * ctx.dt,
+            angVel.m128_f32[2] * ctx.dt);
+        rot = XMQuaternionMultiply(rot, deltaRot);
+        XMStoreFloat4(&t->rotation, rot);
+
+        // 地面で停止/消滅
+        if (t->position.y < 0.0f) {
+            t->position.y = 0.0f;
+            p.lifetime *= 0.5f; // 地面に付いたらすぐ消える
+            p.velocity = {0,0,0};
+        }
+      }
+    }
+
+    if (mr) {
+      float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
+      mr->color.w = lifeRatio; // アルファ減衰
 
       if (p.lifetime <= 0.0f) {
         mr->isVisible = false;
