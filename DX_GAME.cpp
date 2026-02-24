@@ -180,6 +180,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       uiButtonRenderSystem(ctx);
       uiRenderSystem(ctx);
 
+      // シーン固有描画 (ScreenFadeなど最前面)
+      sceneManager.Render(ctx);
+
       // 描画終了
       graphics.EndFrame();
 

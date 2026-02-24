@@ -3,7 +3,6 @@
 #include <cmath>
 #include <vector>
 
-
 namespace graphics {
 
 Mesh MeshPrimitives::CreateTriangle(ID3D11Device *device) {
@@ -142,6 +141,23 @@ Mesh MeshPrimitives::CreatePlane(ID3D11Device *device, float width,
       {{hw, 0.0f, hd}, {0, 1, 0}, {1, 0}, {1, 1, 1, 1}},
       {{hw, 0.0f, -hd}, {0, 1, 0}, {1, 1}, {1, 1, 1, 1}},
       {{-hw, 0.0f, -hd}, {0, 1, 0}, {0, 1}, {1, 1, 1, 1}},
+  };
+
+  std::vector<uint32_t> indices = {0, 1, 2, 0, 2, 3};
+
+  ComputeTangents(vertices, indices);
+
+  Mesh mesh;
+  mesh.Create(device, vertices, indices);
+  return mesh;
+}
+
+Mesh MeshPrimitives::CreateQuad(ID3D11Device *device) {
+  std::vector<Vertex> vertices = {
+      {{-0.5f, 0.5f, 0.0f}, {0, 0, -1}, {0, 0}, {1, 1, 1, 1}},
+      {{0.5f, 0.5f, 0.0f}, {0, 0, -1}, {1, 0}, {1, 1, 1, 1}},
+      {{0.5f, -0.5f, 0.0f}, {0, 0, -1}, {1, 1}, {1, 1, 1, 1}},
+      {{-0.5f, -0.5f, 0.0f}, {0, 0, -1}, {0, 1}, {1, 1, 1, 1}},
   };
 
   std::vector<uint32_t> indices = {0, 1, 2, 0, 2, 3};

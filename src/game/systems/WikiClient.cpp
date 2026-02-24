@@ -365,7 +365,10 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
       extract = ReplaceAll(extract, "\\\"", "\"");
       extract = ReplaceAll(extract, "\\/", "/");
 
-      LOG_INFO("WikiClient", "Extract fetched: {} chars", extract.length());
+      size_t originalLength = extract.length();
+
+      LOG_INFO("WikiClient", "Extract fetched: {} bytes (limit param {})",
+               originalLength, lengthLimit);
       return extract;
     }
   }

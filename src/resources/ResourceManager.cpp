@@ -1,18 +1,18 @@
 #include "ResourceManager.h"
 #include "../core/Logger.h"
+#include "../core/StringUtils.h"
 #include "../graphics/FbxLoader.h"
 #include "../graphics/GraphicsDevice.h"
 #include "../graphics/MeshPrimitives.h"
 #include "../graphics/ObjLoader.h"
-#include "../core/StringUtils.h"
-#include <filesystem>
-#include <wincodec.h>
 #include <algorithm>
-#include <vector>
+#include <filesystem>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <mmsystem.h>
+#include <vector>
+#include <wincodec.h>
 #include <windows.h>
 
 #pragma comment(lib, "mfplat.lib")
@@ -176,8 +176,9 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
   // WIC Factory (lazy init)
   static Microsoft::WRL::ComPtr<IWICImagingFactory> s_factory;
   if (!s_factory) {
-    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr,
-                                  CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&s_factory));
+    HRESULT hr =
+        CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                         IID_PPV_ARGS(&s_factory));
     if (FAILED(hr)) {
       LOG_ERROR("Resource", "Failed to create WICImagingFactory (hr=0x{:08X})",
                 static_cast<uint32_t>(hr));
@@ -275,8 +276,9 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
   hr = m_device.GetDevice()->CreateShaderResourceView(texture.Get(), &srvDesc,
                                                       &srv);
   if (FAILED(hr)) {
-    LOG_ERROR("Resource", "CreateShaderResourceView failed for {} (hr=0x{:08X})",
-              path, static_cast<uint32_t>(hr));
+    LOG_ERROR("Resource",
+              "CreateShaderResourceView failed for {} (hr=0x{:08X})", path,
+              static_cast<uint32_t>(hr));
     return {};
   }
 
@@ -310,6 +312,9 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   } else if (path == "builtin/plane" || path == "plane") {
     mesh =
         graphics::MeshPrimitives::CreatePlane(m_device.GetDevice(), 1.0f, 1.0f);
+    success = true;
+  } else if (path == "builtin/quad" || path == "quad") {
+    mesh = graphics::MeshPrimitives::CreateQuad(m_device.GetDevice());
     success = true;
   } else if (path == "builtin/cylinder" || path == "cylinder") {
     // TODO: CreateCylinder実装後に置換。現状はsphereで代用。
@@ -395,8 +400,9 @@ MeshHandle ResourceManager::CreateDynamicMesh(
 
   auto handle = m_meshPool.Add(std::move(mesh));
   m_meshCache[name] = handle;
-  
-  LOG_INFO("Resource", "Created dynamic mesh: {} ({} vertices)", name, vertices.size());
+
+  LOG_INFO("Resource", "Created dynamic mesh: {} ({} vertices)", name,
+           vertices.size());
   return handle;
 }
 

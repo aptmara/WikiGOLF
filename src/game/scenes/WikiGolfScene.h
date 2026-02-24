@@ -14,6 +14,7 @@
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
 #include "../utils/MapViewState.h"
+#include "../utils/ScreenFade.h"
 #include <DirectXMath.h>
 #include <memory>
 #include <string>
@@ -39,6 +40,7 @@ public:
 
   void OnEnter(core::GameContext &ctx) override;
   void OnUpdate(core::GameContext &ctx) override;
+  void Render(core::GameContext &ctx) override;
   void OnExit(core::GameContext &ctx) override;
 
 private:
@@ -76,6 +78,9 @@ private:
 
   /// @brief カメラ更新（ボール追従）
   void UpdateCamera(core::GameContext &ctx);
+
+  /// @brief マップ中心をボールに同期（必要に応じて補間）
+  void SyncMapCenterToBall(core::GameContext &ctx, float dt, bool forceSnap);
 
   /// @brief ハイスコア保存
   void SaveHighScore(const std::string &targetPage, int shots);
@@ -154,7 +159,10 @@ private:
   float m_fieldWidth = 80.0f;
   float m_fieldDepth = 120.0f;
   float m_mapZoom = 1.0f;
-  DirectX::XMFLOAT3 m_mapCenterOffset = {0.0f, 0.0f, 0.0f};
+  DirectX::XMFLOAT2 m_mapCenter = {0.0f, 0.0f};
+  float m_minMapZoom = 0.2f;
+  float m_maxMapZoom = 4.0f;
+  float m_mapFollowLerp = 8.0f;
   bool m_isMapView = false;
   game::utils::MapViewSkyboxState
       m_mapViewSkyboxState; ///< マップビュー時のスカイボックス制御
@@ -166,7 +174,7 @@ private:
   // カメラ追従用
   DirectX::XMFLOAT3 m_shotStartCamPos = {0, 0, 0}; // ショット瞬間のカメラ位置
   bool m_isCameraChasing = false;                  // 現在追尾モードに入ったか
-  float m_cameraChaseThreshold = 60.0f;            // 追従開始距離閾値（初速から計算）
+  float m_cameraChaseThreshold = 60.0f; // 追従開始距離閾値（初速から計算）
 
   /// @brief 俯瞰カメラ更新
   void UpdateMapCamera(core::GameContext &ctx);
@@ -174,7 +182,11 @@ private:
   // ミニマップ（右上常時表示）
   std::unique_ptr<game::systems::MapSys> m_minimapRenderer;
 
-  ecs::Entity m_minimapEntity; ///< ミニマップ表示用UIエンティティ
+  game::utils::ScreenFade m_screenFade;
+
+  ecs::Entity m_minimapEntity;       ///< ミニマップ表示用UIエンティティ
+  ecs::Entity m_minimapMarkerEntity; ///< ミニマップ上の現在地マーカー
+  ecs::Entity m_minimapHelpEntity = UINT32_MAX; ///< ミニマップ操作ヘルプ
 
   /// @brief ミニマップ更新・描画
   void UpdateMinimap(core::GameContext &ctx);
@@ -185,7 +197,10 @@ private:
   /// @param lookAtPos 注視点（ボール位置）
   /// @param outPos 補正後のカメラ位置
   /// @return 補正が行われたか
-  bool CheckCameraCollision(core::GameContext &ctx, const DirectX::XMVECTOR &targetPos, const DirectX::XMVECTOR &lookAtPos, DirectX::XMVECTOR &outPos);
+  bool CheckCameraCollision(core::GameContext &ctx,
+                            const DirectX::XMVECTOR &targetPos,
+                            const DirectX::XMVECTOR &lookAtPos,
+                            DirectX::XMVECTOR &outPos);
 
   // === Game Juice システム（演出効果） ===
   std::unique_ptr<game::systems::GameJuiceSystem> m_gameJuice;

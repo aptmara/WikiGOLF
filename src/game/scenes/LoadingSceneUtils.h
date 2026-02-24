@@ -29,4 +29,12 @@ inline float CombineLoadingProgress(float asyncProgress, float visualProgress) {
   return std::max(asyncProgress, visualProgress);
 }
 
+/// @brief フェードオーバーレイ用のアルファ値を算出（未開始なら0）
+inline float FadeOverlayAlpha(float fadeAlpha, bool fadeStarted) {
+  if (!fadeStarted) {
+    return 0.0f;
+  }
+  return std::clamp(fadeAlpha, 0.0f, 1.0f);
+}
+
 } // namespace game::scenes::loading_detail
