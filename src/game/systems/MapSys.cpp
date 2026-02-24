@@ -116,12 +116,16 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
   }
   float extent = std::max(fw, fd);
 
-  float zoom = std::max(0.01f, params.zoom);
+  float zoom = std::max(0.001f, params.zoom); // 大きいほど寄る（強ズーム対応）
   float heightScale = std::max(0.1f, params.heightScale);
   float orthoPadding = std::max(1.0f, params.orthoPadding);
 
-  float height = std::max(extent * zoom * heightScale, 5.0f);
-  float orthoWidth = std::max(extent * zoom * orthoPadding, extent * 0.5f);
+  // 表示幅（viewSpan）はフィールドサイズに対する割合で下限を小さく設定
+  float viewSpan = extent / zoom;
+  viewSpan = std::clamp(viewSpan, extent * 0.01f, extent * 6.0f);
+
+  float height = std::max(viewSpan * heightScale, 5.0f);
+  float orthoWidth = std::max(viewSpan * orthoPadding, viewSpan * 0.5f);
 
   XMMATRIX v = XMMatrixTranspose(
       GetViewMatrix(params.center.x, params.center.z, height));
