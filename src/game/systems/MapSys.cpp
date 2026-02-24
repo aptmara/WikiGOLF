@@ -103,11 +103,12 @@ struct MapVSConst {
   XMFLOAT4 c;
 };
 
-void MapSys::RenderMinimap(core::GameContext &ctx) {
+void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
   auto *context = ctx.graphics.GetContext();
   BeginRender(context);
 
-  float fw = 50.0f, fd = 50.0f;
+  float fw = params.extent;
+  float fd = params.extent;
   auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
   if (state) {
     fw = std::max(fw, state->fieldWidth);
@@ -115,24 +116,42 @@ void MapSys::RenderMinimap(core::GameContext &ctx) {
   }
   float extent = std::max(fw, fd);
 
-  XMMATRIX v =
-      XMMatrixTranspose(GetViewMatrix(0, 0, extent * 2.5f + 5.0f)); // 俯瞰高さ
-  XMMATRIX p = XMMatrixTranspose(GetProjMatrix(extent, extent));
+  float zoom = std::max(0.01f, params.zoom);
+  float heightScale = std::max(0.1f, params.heightScale);
+  float orthoPadding = std::max(1.0f, params.orthoPadding);
+
+  float height = std::max(extent * zoom * heightScale, 5.0f);
+  float orthoWidth = std::max(extent * zoom * orthoPadding, extent * 0.5f);
+
+  XMMATRIX v = XMMatrixTranspose(
+      GetViewMatrix(params.center.x, params.center.z, height));
+  XMMATRIX p = XMMatrixTranspose(GetProjMatrix(orthoWidth, orthoWidth));
 
   context->VSSetConstantBuffers(0, 1, m_cb.GetAddressOf());
+
+  auto shaderHandle =
+      ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                              L"Assets/shaders/BasicPS.hlsl");
+  auto *shaderPtr = ctx.resource.GetShader(shaderHandle);
+  if (!shaderPtr) {
+    EndRender(context);
+    return;
+  }
+
+  ecs::Entity ballEntity = UINT32_MAX;
+  if (state) {
+    ballEntity = state->ballEntity;
+  }
 
   ctx.world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t, components::MeshRenderer &r) {
         if (!r.isVisible)
           return;
         // スカイボックスはミニマップ描画対象外
-        if (ctx.world.Has<components::Skybox>(e))
+        if (params.cullSkybox && ctx.world.Has<components::Skybox>(e))
           return;
+
         auto *mesh = ctx.resource.GetMesh(r.mesh);
-        auto shader =
-            ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                    L"Assets/shaders/BasicPS.hlsl");
-        auto *shaderPtr = ctx.resource.GetShader(shader);
         if (!mesh || !shaderPtr)
           return;
 
@@ -148,7 +167,7 @@ void MapSys::RenderMinimap(core::GameContext &ctx) {
           c->c = r.color;
 
           // ボールは見やすい色で強調
-          if (state && e == state->ballEntity) {
+          if (params.highlightBall && e == ballEntity) {
             c->c = {1.0f, 0.4f, 0.1f, 1.0f};
           }
           context->Unmap(m_cb.Get(), 0);

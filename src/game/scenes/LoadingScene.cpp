@@ -8,6 +8,7 @@
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../core/SceneManager.h"
+#include "../../graphics/TextRenderer.h"
 #include "../components/Camera.h"
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
@@ -18,8 +19,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <d2d1_1.h>
 #include <random>
 #include <thread>
+
 
 namespace game::scenes {
 
@@ -345,25 +348,25 @@ void LoadingScene::SpawnBall(core::GameContext &ctx) {
   mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                       L"Assets/shaders/BasicPS.hlsl");
 
-    // 色の決定（5%の確率で上品なネオンカラー）
-    std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);
-    if (colorDist(rng) < 0.05f) {
-        // ネオンパレット (RGB) - 控えめな発光
-        const float intensity = 1.8f; 
-        const std::array<DirectX::XMFLOAT3, 5> neonColors = {{
-            {0.1f * intensity, 0.6f * intensity, 1.0f * intensity}, // Sky Blue
-            {0.9f * intensity, 0.2f * intensity, 0.6f * intensity}, // Rose
-            {1.0f * intensity, 0.8f * intensity, 0.1f * intensity}, // Amber
-            {0.2f * intensity, 0.9f * intensity, 0.4f * intensity}, // Soft Emerald
-            {0.6f * intensity, 0.3f * intensity, 1.0f * intensity}  // Violet
-        }};
-        std::uniform_int_distribution<size_t> paletteDist(0, neonColors.size() - 1);
-        DirectX::XMFLOAT3 c = neonColors[paletteDist(rng)];
-        mr.color = {c.x, c.y, c.z, 1.0f};
-    } else {
-        // ゴルフボールらしい白色
-        mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
-    }
+  // 色の決定（5%の確率で上品なネオンカラー）
+  std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);
+  if (colorDist(rng) < 0.05f) {
+    // ネオンパレット (RGB) - 控えめな発光
+    const float intensity = 1.8f;
+    const std::array<DirectX::XMFLOAT3, 5> neonColors = {{
+        {0.1f * intensity, 0.6f * intensity, 1.0f * intensity}, // Sky Blue
+        {0.9f * intensity, 0.2f * intensity, 0.6f * intensity}, // Rose
+        {1.0f * intensity, 0.8f * intensity, 0.1f * intensity}, // Amber
+        {0.2f * intensity, 0.9f * intensity, 0.4f * intensity}, // Soft Emerald
+        {0.6f * intensity, 0.3f * intensity, 1.0f * intensity}  // Violet
+    }};
+    std::uniform_int_distribution<size_t> paletteDist(0, neonColors.size() - 1);
+    DirectX::XMFLOAT3 c = neonColors[paletteDist(rng)];
+    mr.color = {c.x, c.y, c.z, 1.0f};
+  } else {
+    // ゴルフボールらしい白色
+    mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  }
   mr.isVisible = true;
   mr.normalMapSRV = ctx.resource.LoadTextureSRV("Assets/models/golfball_n.png");
   mr.hasNormalMap = static_cast<bool>(mr.normalMapSRV);
@@ -507,20 +510,30 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
           float jVal = -(1 + RESTITUTION) * velAlongNormal * 0.5f;
           float ix = nx * jVal, iy = ny * jVal, iz = nz * jVal;
           if (!ball.settled) {
-            ball.velocity.x -= ix; ball.velocity.y -= iy; ball.velocity.z -= iz;
+            ball.velocity.x -= ix;
+            ball.velocity.y -= iy;
+            ball.velocity.z -= iz;
           }
           if (!other.settled) {
-            other.velocity.x += ix; other.velocity.y += iy; other.velocity.z += iz;
+            other.velocity.x += ix;
+            other.velocity.y += iy;
+            other.velocity.z += iz;
           }
-          if (jVal > 0.5f) { ball.settled = other.settled = false; }
+          if (jVal > 0.5f) {
+            ball.settled = other.settled = false;
+          }
         }
       }
     }
 
-    float speedSq = ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y + ball.velocity.z * ball.velocity.z;
-    if (speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD * 0.5f && tr->position.y <= floorY + 0.1f) {
+    float speedSq = ball.velocity.x * ball.velocity.x +
+                    ball.velocity.y * ball.velocity.y +
+                    ball.velocity.z * ball.velocity.z;
+    if (speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD * 0.5f &&
+        tr->position.y <= floorY + 0.1f) {
       ball.settled = true;
-      ball.velocity = {0,0,0}; ball.angularVelocity = {0,0,0};
+      ball.velocity = {0, 0, 0};
+      ball.angularVelocity = {0, 0, 0};
     } else {
       ball.settled = false;
     }
@@ -533,30 +546,43 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
   int speedCount = 0;
   m_hasMovingSample = false;
   for (const auto &ball : m_balls) {
-    if (!ctx.world.IsAlive(ball.entity)) continue;
-    if (ball.settled) settledCount++;
+    if (!ctx.world.IsAlive(ball.entity))
+      continue;
+    if (ball.settled)
+      settledCount++;
     else {
       moving++;
-      float speed = std::sqrt(ball.velocity.x * ball.velocity.x + ball.velocity.y * ball.velocity.y + ball.velocity.z * ball.velocity.z);
+      float speed = std::sqrt(ball.velocity.x * ball.velocity.x +
+                              ball.velocity.y * ball.velocity.y +
+                              ball.velocity.z * ball.velocity.z);
       maxSpeed = std::max(maxSpeed, speed);
       speedAccum += speed;
       speedCount++;
       if (!m_hasMovingSample) {
         if (auto *tr = ctx.world.Get<components::Transform>(ball.entity)) {
-            m_lastMovingPos = tr->position;
-            m_hasMovingSample = true;
+          m_lastMovingPos = tr->position;
+          m_hasMovingSample = true;
         }
       }
     }
   }
-  m_movingCount = moving; m_maxSpeed = maxSpeed; m_settledCount = settledCount;
+  m_movingCount = moving;
+  m_maxSpeed = maxSpeed;
+  m_settledCount = settledCount;
   m_avgSpeed = (speedCount > 0) ? speedAccum / speedCount : 0.0f;
 }
 
 bool LoadingScene::AreAllBallsSettled() {
-  if (m_spawnedCount < TOTAL_BALLS) return false;
-  for (const auto &ball : m_balls) { if (!ball.settled) return false; }
-  if (!m_allSettledLogged) { LOG_INFO("LoadingScene", "All balls settled"); m_allSettledLogged = true; }
+  if (m_spawnedCount < TOTAL_BALLS)
+    return false;
+  for (const auto &ball : m_balls) {
+    if (!ball.settled)
+      return false;
+  }
+  if (!m_allSettledLogged) {
+    LOG_INFO("LoadingScene", "All balls settled");
+    m_allSettledLogged = true;
+  }
   return true;
 }
 
@@ -788,6 +814,30 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
       ctx.sceneManager->ChangeScene(m_nextSceneFactory());
     }
   }
+}
+
+void LoadingScene::Render(core::GameContext &ctx) {
+  if (!ctx.textRenderer) {
+    return;
+  }
+
+  const float overlayAlpha =
+      loading_detail::FadeOverlayAlpha(m_fadeAlpha, m_fadeStarted);
+  if (overlayAlpha <= 0.0f) {
+    return;
+  }
+
+  float width = ctx.textRenderer->GetWidth();
+  float height = ctx.textRenderer->GetHeight();
+  if (width <= 0.0f || height <= 0.0f) {
+    width = 1280.0f;
+    height = 720.0f;
+  }
+
+  ctx.textRenderer->BeginDraw();
+  ctx.textRenderer->FillRect(D2D1::RectF(0.0f, 0.0f, width, height),
+                             {0.0f, 0.0f, 0.0f, overlayAlpha});
+  ctx.textRenderer->EndDraw();
 }
 
 void LoadingScene::OnExit(core::GameContext &ctx) {

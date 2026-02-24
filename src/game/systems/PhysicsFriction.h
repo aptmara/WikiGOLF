@@ -4,6 +4,7 @@
  * @brief 転がり摩擦の共通計算ヘルパー
  */
 
+#include "../components/WikiComponents.h"
 #include <algorithm>
 #include <cmath>
 
@@ -75,6 +76,89 @@ inline bool CanStaticFrictionHold(float speed, float frictionCoeff,
   float tangentialPush =
       std::max(tangentialAccel, 0.0f) * dtSeconds; // a * dt = Δv
   return frictionDrop >= tangentialPush;
+}
+
+/**
+ * @brief ゴルフ用の芝フリクション設定
+ *
+ * ベース係数と速度に応じたブーストをまとめて管理する。
+ */
+struct SurfaceFrictionSettings {
+  float baseRollingFriction = 0.22f;
+  float sinkBoostScale = 0.25f;       ///< 低速時の沈み込み強化
+  float maxSinkBoost = 0.75f;         ///< 低速ブースト上限 ( +0.75 -> 1.75x )
+  float highSpeedBoostStart = 18.0f;  ///< ここから高速ブースト開始
+  float highSpeedBoostScale = 0.6f;   ///< 高速時の追加ブースト最大値
+  float slopeFrictionFloor = 0.35f;   ///< 急斜面でも残る摩擦割合
+  float constantBrake = 0.25f;        ///< 速度に依存しない追加減速 [m/s^2]
+  float greenMultiplier = 0.45f;
+  float roughMultiplier = 2.5f;
+  float bunkerMultiplier = 6.0f;
+};
+
+inline SurfaceFrictionSettings DefaultSurfaceFrictionSettings() {
+  return SurfaceFrictionSettings{};
+}
+
+inline float GetMaterialFrictionMultiplier(
+    game::components::TerrainMaterial mat,
+    const SurfaceFrictionSettings &settings) {
+  using game::components::TerrainMaterial;
+  switch (mat) {
+  case TerrainMaterial::Rough:
+    return settings.roughMultiplier;
+  case TerrainMaterial::Bunker:
+    return settings.bunkerMultiplier;
+  case TerrainMaterial::Green:
+    return settings.greenMultiplier;
+  default:
+    return 1.0f;
+  }
+}
+
+/// @brief 低速時の沈み込みブーストを計算
+inline float ComputeSinkBoost(float speed,
+                              const SurfaceFrictionSettings &settings) {
+  float boost = (3.0f - speed) * settings.sinkBoostScale;
+  return std::clamp(boost, 0.0f, settings.maxSinkBoost);
+}
+
+/// @brief 高速時の摩擦ブーストを計算
+inline float ComputeHighSpeedBoost(float speed,
+                                   const SurfaceFrictionSettings &settings) {
+  float over = speed - settings.highSpeedBoostStart;
+  float scale = settings.highSpeedBoostScale / 45.0f;
+  float boost = over * scale;
+  return std::clamp(boost, 0.0f, settings.highSpeedBoostScale);
+}
+
+/// @brief 斜面に応じた摩擦スケールを計算 (ny=1で1.0)
+inline float ComputeSlopeScale(float normalY,
+                               const SurfaceFrictionSettings &settings) {
+  float ny = std::clamp(normalY, 0.0f, 1.0f);
+  return settings.slopeFrictionFloor +
+         (1.0f - settings.slopeFrictionFloor) * ny;
+}
+
+/// @brief ゴルフボールの芝上減速 [m/s^2] を計算
+inline float ComputeGrassRollingAcceleration(
+    float speed, float normalY, game::components::TerrainMaterial mat,
+    float terrainScale,
+    const SurfaceFrictionSettings &settings = DefaultSurfaceFrictionSettings()) {
+  if (!std::isfinite(speed)) {
+    speed = 0.0f;
+  }
+  float sinkBoost = ComputeSinkBoost(speed, settings);
+  float speedBoost = ComputeHighSpeedBoost(speed, settings);
+  float materialMul = GetMaterialFrictionMultiplier(mat, settings);
+  float slopeScale = ComputeSlopeScale(normalY, settings);
+
+  float frictionCoeff = settings.baseRollingFriction * (1.0f + sinkBoost) *
+                        (1.0f + speedBoost) * materialMul *
+                        std::max(terrainScale, 0.0f);
+
+  float frictionAccel = frictionCoeff * 9.8f * slopeScale;
+  return frictionAccel + settings.constantBrake;
 }
 
 } // namespace game::systems

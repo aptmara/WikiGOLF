@@ -415,24 +415,32 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
           g = 0.8f + goldShift;
           b = 0.2f + goldShift * 0.5f;
           if (layer == 0) {
-            r = 1.0f; g = 1.0f; b = 0.9f;
+            r = 1.0f;
+            g = 1.0f;
+            b = 0.9f;
           }
         }
         break;
       case JudgeType::Nice:
         // 青白い
         {
-          r = 0.4f; g = 0.7f; b = 1.0f;
+          r = 0.4f;
+          g = 0.7f;
+          b = 1.0f;
         }
         break;
       case JudgeType::Miss:
         // 赤
         {
-          r = 1.0f; g = 0.3f; b = 0.1f;
+          r = 1.0f;
+          g = 0.3f;
+          b = 0.1f;
         }
         break;
       default:
-        r = 1.0f; g = 0.8f; b = 0.4f;
+        r = 1.0f;
+        g = 0.8f;
+        b = 0.4f;
         break;
       }
 
@@ -485,10 +493,103 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
 }
 
 // =============================================================================
-// 環境エフェクト（砂煙・芝片）
+// マテリアルエフェクト
 // =============================================================================
 
-void GameJuiceSystem::CreateEnvironmentParticleEntities(core::GameContext &ctx) {
+void GameJuiceSystem::TriggerMaterialEffect(
+    core::GameContext &ctx, const DirectX::XMFLOAT3 &position,
+    game::components::TerrainMaterial material, float strength) {
+
+  // マテリアルに応じたエフェクト発生
+  // EnvironmentParticle の放出ロジックを流用・拡張する
+
+  // 放出数（強さに応じて）
+  int count = std::max(1, (int)(strength * 10.0f));
+  if (material == game::components::TerrainMaterial::Bunker)
+    count *= 2; // バンカーは多め
+
+  for (int k = 0; k < count; ++k) {
+    auto &p = m_envParticles[m_envWriteIndex];
+    m_envWriteIndex = (m_envWriteIndex + 1) % kEnvParticleCount;
+
+    p.lifetime = 0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f;
+    p.maxLifetime = p.lifetime;
+
+    auto *t = ctx.world.Get<Transform>(p.entity);
+    auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
+
+    if (t && mr) {
+      t->position = position;
+      // 接地点より少し上
+      t->position.y += 0.1f;
+
+      mr->isVisible = true;
+
+      // 初速計算
+      float speed =
+          strength * 5.0f * (0.8f + ((float)(rand() % 100) / 100.0f) * 0.4f);
+      float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
+      float upBias = 0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f;
+
+      p.velocity.x = std::cos(angle) * speed * 0.5f;
+      p.velocity.y = speed * upBias;
+      p.velocity.z = std::sin(angle) * speed * 0.5f;
+
+      // 個別パラメータ
+      switch (material) {
+      case game::components::TerrainMaterial::Bunker:
+        // 砂煙
+        p.isDust = true;
+        mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+        mr->color = {0.85f, 0.75f, 0.55f, 0.7f};
+        mr->customFlags.x = 1.0f;
+        p.baseScale = 0.2f + strength * 0.2f;
+        t->scale = {p.baseScale, p.baseScale, p.baseScale};
+        p.angularVelocity = {0, 0, 0};
+        break;
+
+      case game::components::TerrainMaterial::Rough:
+      case game::components::TerrainMaterial::Fairway:
+      case game::components::TerrainMaterial::Green:
+        // 芝・葉っぱ
+        p.isDust = false;
+        mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+        mr->customFlags.x = 0.0f;
+
+        if (material == game::components::TerrainMaterial::Rough) {
+          mr->color = {0.15f, 0.45f, 0.15f, 1.0f}; // 濃い緑
+          p.baseScale = 0.1f + strength * 0.15f;
+        } else if (material == game::components::TerrainMaterial::Green) {
+          mr->color = {0.2f, 0.8f, 0.3f, 1.0f};   // 鮮やか
+          p.baseScale = 0.05f + strength * 0.05f; // 小さい
+        } else {
+          mr->color = {0.25f, 0.6f, 0.2f, 1.0f}; // 普通
+          p.baseScale = 0.08f + strength * 0.1f;
+        }
+
+        t->scale = {p.baseScale * 1.5f, p.baseScale * 0.1f, p.baseScale * 1.5f};
+
+        p.angularVelocity.x = ((float)(rand() % 100) / 100.0f - 0.5f) * 30.0f;
+        p.angularVelocity.y = ((float)(rand() % 100) / 100.0f - 0.5f) * 30.0f;
+        p.angularVelocity.z = ((float)(rand() % 100) / 100.0f - 0.5f) * 30.0f;
+        break;
+
+      default:
+        // 岩など（汎用拡散）
+        p.isDust = true; // 簡略化のためDust扱い
+        mr->mesh = ctx.resource.LoadMesh("builtin/cube"); // 岩片
+        mr->color = {0.5f, 0.5f, 0.5f, 1.0f};
+        mr->customFlags.x = 0.0f;
+        p.baseScale = 0.05f + strength * 0.1f;
+        t->scale = {p.baseScale, p.baseScale, p.baseScale};
+        break;
+      }
+    }
+  }
+}
+
+void GameJuiceSystem::CreateEnvironmentParticleEntities(
+    core::GameContext &ctx) {
   m_envParticles.clear();
   m_envParticles.resize(kEnvParticleCount);
 
@@ -514,7 +615,7 @@ void GameJuiceSystem::CreateEnvironmentParticleEntities(core::GameContext &ctx) 
 }
 
 void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
-                                                ecs::Entity targetEntity) {
+                                               ecs::Entity targetEntity) {
   auto *state = ctx.world.GetGlobal<GolfGameState>();
   if (!state || !state->isBallGrounded || state->currentBallSpeed < 0.5f) {
     return;
@@ -522,7 +623,8 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
 
   m_envEmitTimer += ctx.dt;
   // 速度が速いほどたくさん出す
-  float interval = 0.05f / (std::max<float>(1.0f, state->currentBallSpeed * 0.2f));
+  float interval =
+      0.05f / (std::max<float>(1.0f, state->currentBallSpeed * 0.2f));
 
   if (m_envEmitTimer >= interval) {
     m_envEmitTimer = 0.0f;
@@ -558,7 +660,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           p.isDust = true;
           mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
           mr->color = {0.85f, 0.75f, 0.55f, 0.6f}; // サンドベージュ
-          mr->customFlags.x = 1.0f; // isDustフラグをシェーダーへ
+          mr->customFlags.x = 1.0f;                // isDustフラグをシェーダーへ
           p.baseScale = 0.15f + ((float)(rand() % 100) / 100.0f) * 0.1f;
           t->scale = {p.baseScale, p.baseScale, p.baseScale};
 
@@ -566,13 +668,14 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           auto *rb = ctx.world.Get<RigidBody>(targetEntity);
           XMVECTOR v = rb ? XMLoadFloat3(&rb->velocity) : XMVectorZero();
           v = XMVectorScale(v, -0.3f); // 速度の3割で逆走
-          
+
           float spread = 0.5f;
           XMStoreFloat3(&p.velocity, v);
           p.velocity.x += ((float)(rand() % 100) / 100.0f - 0.5f) * spread;
-          p.velocity.y += 0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f; // 少し浮く
+          p.velocity.y +=
+              0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f; // 少し浮く
           p.velocity.z += ((float)(rand() % 100) / 100.0f - 0.5f) * spread;
-          
+
           p.angularVelocity = {0, 0, 0};
           break;
         }
@@ -589,7 +692,8 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           }
           p.baseScale = 0.05f + ((float)(rand() % 100) / 100.0f) * 0.05f;
           // 板状にする
-          t->scale = {p.baseScale * 2.0f, p.baseScale * 0.2f, p.baseScale * 1.5f};
+          t->scale = {p.baseScale * 2.0f, p.baseScale * 0.2f,
+                      p.baseScale * 1.5f};
 
           // 四方に弾ける
           float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
@@ -614,7 +718,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
 }
 
 void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
-                                                   ecs::Entity targetEntity) {
+                                                 ecs::Entity targetEntity) {
   const float gravity = 9.8f;
   const float airResistance = 1.5f;
 
@@ -631,7 +735,8 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
       if (p.isDust) {
         // 砂煙: 重力少なめ、空気抵抗強め、拡大
         p.velocity.x -= p.velocity.x * airResistance * ctx.dt;
-        p.velocity.y += (0.2f - p.velocity.y) * airResistance * ctx.dt; // わずかに上昇
+        p.velocity.y +=
+            (0.2f - p.velocity.y) * airResistance * ctx.dt; // わずかに上昇
         p.velocity.z -= p.velocity.z * airResistance * ctx.dt;
 
         t->position.x += p.velocity.x * ctx.dt;
@@ -661,9 +766,9 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
 
         // 地面で停止/消滅
         if (t->position.y < 0.0f) {
-            t->position.y = 0.0f;
-            p.lifetime *= 0.5f; // 地面に付いたらすぐ消える
-            p.velocity = {0,0,0};
+          t->position.y = 0.0f;
+          p.lifetime *= 0.5f; // 地面に付いたらすぐ消える
+          p.velocity = {0, 0, 0};
         }
       }
     }

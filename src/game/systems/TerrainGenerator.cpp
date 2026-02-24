@@ -136,7 +136,7 @@ void TerrainGenerator::CreatePlatforms(
     float targetHeight = currentCenterH + 0.05f; // わずかに持ち上げて埋没を防ぐ
 
     // Cup bowl depth
-    float bowlDepth = 0.15f;
+    float bowlDepth = 0.2f;
 
     // Bunker generation
     std::mt19937 tempRng(cx + cz * resX);
@@ -158,7 +158,7 @@ void TerrainGenerator::CreatePlatforms(
         if (dist < radius) {
           data.materialMap[idx] = 3; // Green
 
-          float cupRadius = 1.5f;
+          float cupRadius = 2.0f;
           if (dist < cupRadius) {
             float t = dist / cupRadius;
             float shape = std::cos(t * 3.14159f * 0.5f);
@@ -302,13 +302,13 @@ void TerrainGenerator::GenerateMesh(
 
       switch (mat) {
       case 0: // Fairway
-        vert.color = {0.2f, 0.6f, 0.2f, 1.0f};
+        vert.color = {0.2f, 0.6f, 0.2f, 0.25f};
         break;
       case 1: // Rough
-        vert.color = {0.1f, 0.35f, 0.1f, 1.0f};
+        vert.color = {0.1f, 0.35f, 0.1f, 0.50f};
         break;
       case 2: // Bunker
-        vert.color = {0.85f, 0.75f, 0.55f, 1.0f};
+        vert.color = {0.85f, 0.75f, 0.55f, 0.75f};
         break;
       case 3: // Green
         vert.color = {0.3f, 0.8f, 0.3f, 1.0f};
@@ -319,18 +319,7 @@ void TerrainGenerator::GenerateMesh(
       }
 
       // ホール可視化（黒く塗る）
-      // 座標系: px, pz (World)
-      for (const auto &hole : holePositions) {
-        float dx = px - hole.x;
-        float dz = pz - hole.y; // hole.y is Z
-        float distSq = dx * dx + dz * dz;
-
-        // 塗りつぶしは極小範囲に限定し、色も明るめにして黒ずみを避ける
-        if (distSq < 0.25f * 0.25f) {
-          vert.color = {0.9f, 0.95f, 0.9f, 1.0f};
-          break;
-        }
-      }
+      // ホール可視化オーバーレイは行わない（旗モデルで示す）
 
       vertices.push_back(vert);
     }

@@ -8,12 +8,14 @@
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
 #include "../../ecs/World.h"
+#include "../../resources/ResourceManager.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
 #include "TerrainGenerator.h"
 #include "WikiClient.h"
+#include <algorithm> // for std::max
 
 namespace game::systems {
 
@@ -36,32 +38,33 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
                                    float fieldWidth, float fieldDepth) {
   Clear(ctx);
 
-  LOG_INFO("WikiTerrain", "Building field {}x{} with {} images, {} headings",
-           fieldWidth, fieldDepth, result.images.size(),
-           result.headings.size());
+  LOG_INFO("WikiTerrain", "Building field {}x{} with {} tiles", fieldWidth,
+           fieldDepth, (int)result.tiles.size());
 
   CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle);
   CreateWalls(ctx, fieldWidth, fieldDepth);
-  // CreateImageObstacles(ctx, result, fieldWidth, fieldDepth);
 }
 
 void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
                                     const graphics::WikiTextureResult &result,
                                     float width, float depth,
                                     const std::string &pageTitle) {
-  // 地形生成設定
+  // 1. 地形解像度・設定の決定
+  int resX = 64;
+  int resZ = static_cast<int>(depth);
+  resZ = std::max(64, resZ);
+
   TerrainConfig config;
   config.worldWidth = width;
   config.worldDepth = depth;
-  config.resolutionX = 128; // 高解像度
-  config.resolutionZ = 128;
-  config.heightScale = 1.5f; // 高低差を抑えて読みやすく
+  config.resolutionX = resX;
+  config.resolutionZ = resZ;
+  config.heightScale = 1.5f;
 
-  // バイオーム決定 (カテゴリベース)
+  // バイオーム決定
   WikiClient client;
   auto categories = client.FetchPageCategories(pageTitle);
-
-  int biome = 0; // Default: 0
+  int biome = 0;
   bool found = false;
 
   for (const auto &cat : categories) {
@@ -145,119 +148,213 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     holePositions.push_back({worldX, worldZ});
   }
 
-  // 地形データ生成
+  // 2. 地形データ生成（物理・基準用）
   m_terrainData = std::make_shared<TerrainData>(
       TerrainGenerator::GenerateTerrain(seedText, holePositions, config));
 
-  // 単一メッシュを生成
-  auto meshHandle = ctx.resource.CreateDynamicMesh(
-      "TerrainFull", m_terrainData->vertices, m_terrainData->indices);
+  // 3. 物理エンティティ作成（不可視）
+  {
+    auto e = ctx.world.CreateEntity();
+    auto &transform = ctx.world.Add<Transform>(e);
+    transform.position = {0.0f, 0.0f, 0.0f};
 
-  // エンティティ作成
-  auto e = ctx.world.CreateEntity();
-  auto &t = ctx.world.Add<Transform>(e);
-  t.position = {0.0f, 0.0f, 0.0f};
-  t.scale = {1.0f, 1.0f, 1.0f};
+    auto &rb = ctx.world.Add<RigidBody>(e);
+    rb.isStatic = true;
+    rb.restitution = config.restitution;
+    rb.rollingFriction = config.friction;
 
-  auto &mr = ctx.world.Add<MeshRenderer>(e);
-  mr.mesh = meshHandle;
-  mr.shader =
-      ctx.resource.LoadShader("Terrain", L"Assets/shaders/TerrainVS.hlsl",
-                              L"Assets/shaders/TerrainPS.hlsl");
-  mr.color = terrainColor;
-  if (result.srv) {
-    mr.textureSRV = result.srv;
-    mr.hasTexture = true;
+    auto &tc = ctx.world.Add<TerrainCollider>(e);
+    tc.data = m_terrainData;
+
+    m_floorEntity = e;
+    m_entities.push_back(e);
   }
 
-  auto &rb = ctx.world.Add<RigidBody>(e);
-  rb.isStatic = true;
-  rb.restitution = 0.2f;
-  rb.rollingFriction = 0.5f;
+  // 4. タイルごとのビジュアルメッシュ生成とエンティティ作成
+  std::vector<graphics::WikiTextureResult::Tile> tilesToProcess;
+  // NOTE: WikiTextureResult::Tile is inside namespace graphics?
+  // graphics namespace is used in WikiTextureGenerator.h.
+  // result is graphics::WikiTextureResult.
+  // Tile is nested struct.
 
-  auto &tc = ctx.world.Add<TerrainCollider>(e);
-  tc.data = m_terrainData;
-  m_floorEntity = e;
+  // Check proper type name: graphics::WikiTextureResult::Tile
 
-  m_entities.push_back(e);
+  if (result.tiles.empty()) {
+    graphics::WikiTextureResult::Tile legacyTile;
+    legacyTile.texture = result.texture;
+    legacyTile.srv = result.srv;
+    legacyTile.width = result.width;
+    legacyTile.height = result.height;
+    legacyTile.offsetY = 0.0f;
+    tilesToProcess.push_back(legacyTile);
+  } else {
+    tilesToProcess = result.tiles;
+  }
 
-  LOG_INFO("WikiTerrain", "Generated terrain mesh with {} vertices",
-           m_terrainData->vertices.size());
+  for (const auto &tile : tilesToProcess) {
+    if (!tile.srv)
+      continue;
+
+    float vStart = tile.offsetY / (float)result.height;
+    float vEnd = (tile.offsetY + (float)tile.height) / (float)result.height;
+
+    float zTop = depth * (0.5f - vStart);
+    float zBottom = depth * (0.5f - vEnd);
+    float tileDepth = zTop - zBottom;
+    float zCenter = (zTop + zBottom) * 0.5f;
+
+    int tileResZ =
+        std::max(2, (int)(resZ * (tile.height / (float)result.height)));
+    std::vector<graphics::Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    for (int z = 0; z < tileResZ; ++z) {
+      float vLocal = (float)z / (tileResZ - 1); // 0..1 (Tile内UV)
+      float vGlobal = vStart + vLocal * (vEnd - vStart);
+      float worldZ = depth * (0.5f - vGlobal);
+
+      for (int x = 0; x < resX; ++x) {
+        float u = (float)x / (resX - 1);
+        float worldX = width * (u - 0.5f);
+
+        float h = GetHeight(worldX, worldZ);
+
+        float hL = GetHeight(worldX - 0.1f, worldZ);
+        float hR = GetHeight(worldX + 0.1f, worldZ);
+        float hD = GetHeight(worldX, worldZ - 0.1f);
+        float hU = GetHeight(worldX, worldZ + 0.1f);
+        XMVECTOR n = XMVectorSet(hL - hR, 0.2f, hD - hU, 0.0f);
+        n = XMVector3Normalize(n);
+        XMFLOAT3 normal;
+        XMStoreFloat3(&normal, n);
+
+        // マテリアルマップから頂点カラー決定
+        float gridU = worldX / width + 0.5f;
+        float gridV = 0.5f - worldZ / depth; // worldZは正手前が-なので反転
+        int gx =
+            std::clamp(static_cast<int>(gridU * (resX - 1) + 0.5f), 0, resX - 1);
+        int gz =
+            std::clamp(static_cast<int>(gridV * (resZ - 1) + 0.5f), 0, resZ - 1);
+        uint8_t mat = m_terrainData->materialMap[gz * resX + gx];
+
+        XMFLOAT4 vcolor;
+        // マテリアル別に色味を少しバリエーション付ける
+        switch (mat) {
+        case 0: { // Fairway
+          float shade = 0.9f + 0.1f * std::sin(worldX * 0.1f + worldZ * 0.08f);
+          vcolor = {0.18f * shade, 0.62f * shade, 0.24f * shade, 1.0f};
+          break;
+        }
+        case 1: { // Rough
+          float shade = 0.85f + 0.15f * std::cos(worldX * 0.12f + worldZ * 0.1f);
+          vcolor = {0.12f * shade, 0.32f * shade, 0.14f * shade, 1.0f};
+          break;
+        }
+        case 2: { // Bunker
+          float shade = 0.92f + 0.08f * std::sin(worldX * 0.05f + worldZ * 0.04f);
+          vcolor = {0.88f * shade, 0.80f * shade, 0.62f * shade, 1.0f};
+          break;
+        }
+        case 3: { // Green
+          float shade = 0.95f + 0.05f * std::cos(worldX * 0.15f + worldZ * 0.09f);
+          vcolor = {0.28f * shade, 0.82f * shade, 0.26f * shade, 1.0f};
+          break;
+        }
+        default:
+          vcolor = {1.0f, 1.0f, 1.0f, 1.0f};
+          break;
+        }
+
+        graphics::Vertex vert;
+        vert.position = {worldX, h, worldZ};
+        vert.normal = normal;
+        vert.texCoord = {u, vLocal};
+        vert.color = vcolor;
+
+        vertices.push_back(vert);
+      }
+    }
+
+    for (int z = 0; z < tileResZ - 1; ++z) {
+      for (int x = 0; x < resX - 1; ++x) {
+        uint32_t i0 = z * resX + x;
+        uint32_t i1 = z * resX + (x + 1);
+        uint32_t i2 = (z + 1) * resX + x;
+        uint32_t i3 = (z + 1) * resX + (x + 1);
+
+        indices.push_back(i0);
+        indices.push_back(i1);
+        indices.push_back(i2);
+        indices.push_back(i2);
+        indices.push_back(i1);
+        indices.push_back(i3);
+      }
+    }
+
+    // Explicit MeshHandle type
+    resources::MeshHandle handle = ctx.resource.CreateDynamicMesh(
+        "TerrainTile_" + std::to_string(tile.offsetY), vertices, indices);
+
+    auto e = ctx.world.CreateEntity();
+    Transform &transform = ctx.world.Add<Transform>(e);
+    transform.position = {0.0f, 0.0f, 0.0f};
+
+    MeshRenderer &meshRenderer = ctx.world.Add<MeshRenderer>(e);
+    meshRenderer.mesh = handle;
+    meshRenderer.shader =
+        ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                L"Assets/shaders/BasicPS.hlsl");
+    meshRenderer.color = terrainColor;
+    meshRenderer.textureSRV = tile.srv;
+    meshRenderer.hasTexture = true;
+
+    m_entities.push_back(e);
+  }
 }
 
 void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
                                     float depth) {
-  float wallHeight = 100.0f; // 脱出不可能な高さ
+  float wallHeight = 100.0f;
   float halfW = width * 0.5f;
   float halfD = depth * 0.5f;
-  float wallThickness = 6.0f; // コライダ用厚み
+  float wallThickness = 6.0f;
 
   auto CreateWall = [&](XMFLOAT3 pos, XMFLOAT3 scale, XMFLOAT4 rot,
                         XMFLOAT3 colliderSize) {
     auto e = ctx.world.CreateEntity();
-    auto &t = ctx.world.Add<Transform>(e);
-    t.position = pos;
-    // ビジュアルはTransformに従う（回転済み）
-    t.rotation = rot;
-    t.scale = scale;
+    Transform &transform = ctx.world.Add<Transform>(e);
+    transform.position = pos;
+    transform.rotation = rot;
+    transform.scale = scale;
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = ctx.resource.LoadMesh("builtin/plane"); // 片面表示
+    mr.mesh = ctx.resource.LoadMesh("builtin/plane");
     mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                         L"Assets/shaders/BasicPS.hlsl");
-    mr.color = {0.0f, 0.8f, 1.0f, 0.2f}; // 内側から見える（薄いシアン）
+    mr.color = {0.0f, 0.8f, 1.0f, 0.2f};
 
     ctx.world.Add<Wall>(e);
 
     auto &rb = ctx.world.Add<RigidBody>(e);
     rb.isStatic = true;
-    rb.restitution = 0.5f; // 少し弾む
+    rb.restitution = 0.5f;
 
     auto &col = ctx.world.Add<Collider>(e);
     col.type = ColliderType::Box;
-    // ColliderはTransformのScaleの影響を受けるが、PlaneのScaleは(W, 1, H)なので
-    // ColliderSizeはローカル座標系でのサイズを指定する。
-    // builtin/planeは1x1平面。BoxColliderのsize 1.0はMeshの1.0に対応。
-    // 厚みを持たせるため、Y軸（Planeの法線方向）に厚みを設定
     col.size = colliderSize;
 
     m_entities.push_back(e);
   };
 
-  // 共通設定
-  float colThickness = wallThickness / 1.0f; // Scale.Yが1.0なのでそのまま
-
-  // Left Wall (-X): Faces +X (East)
-  // Plane default: +Y. Rotate Z -90 deg -> +X.
-  // Rot Z -90: (0, 0, -1, 1) axis?
-  // XMQuaternionRotationRollPitchYaw(pitch, yaw, roll)
-  // Pitch(X), Yaw(Y), Roll(Z).
-  // Rotate Z -90: Roll = -90.
   {
-    // West (-X) facing East (+X)
     XMVECTOR rot = XMQuaternionRotationRollPitchYaw(0, 0, -XM_PIDIV2);
     XMFLOAT4 rotF;
     XMStoreFloat4(&rotF, rot);
-    // Scale: Height becomes width-visual (X-axis of plane is now Y-axis of
-    // world... wait) Plane (X, Z). Normal Y. Rot Z -90:
-    //   Old X -> New Y (Up)  => Wall Height
-    //   Old Z -> New Z (Depth) => Wall Depth
-    //   Old Y -> New -X (Normal faces -X... wait. I want Normal +X)
-    // To face +X, I need Normal +X.
-    // Plane Normal +Y.
-    // Rot Z -90 -> Noral +X. Correct.
-    // Dimensions: Plane X -> World Y (Height). Plane Z -> World Z (Depth).
-    // Pos: -halfW - thickness/2.
     CreateWall({-halfW - wallThickness * 0.5f, wallHeight * 0.5f, 0.0f},
-               {wallHeight, 1.0f, depth}, rotF,
-               {1.0f, wallThickness, 1.0f}); // Local Y is thickness
+               {wallHeight, 1.0f, depth}, rotF, {1.0f, wallThickness, 1.0f});
   }
 
-  // Right Wall (+X): Faces -X (West)
   {
-    // Rot Z +90 -> Normal -X.
-    // Plane X -> World -Y (Height inverted? UVs might be flipped but plain
-    // color ok) Plane Z -> World Z.
     XMVECTOR rot = XMQuaternionRotationRollPitchYaw(0, 0, XM_PIDIV2);
     XMFLOAT4 rotF;
     XMStoreFloat4(&rotF, rot);
@@ -265,26 +362,15 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
                {wallHeight, 1.0f, depth}, rotF, {1.0f, wallThickness, 1.0f});
   }
 
-  // Back Wall (+Z): Faces -Z (South)
   {
-    // Plane Normal +Y.
-    // Want Normal -Z.
-    // Rotate X +90 -> Normal +Z. (Right Rule: Thumb +X, Fingers Y->Z. +90 moves
-    // Y to Z) Wait, Y to Z is +90 X. So Normal +Z. I want Normal -Z (Inward
-    // from +Z wall). So Rotate X -90? Y -> -Z. Yes.
     XMVECTOR rot = XMQuaternionRotationRollPitchYaw(-XM_PIDIV2, 0, 0);
     XMFLOAT4 rotF;
     XMStoreFloat4(&rotF, rot);
-    // Plane X -> World X (Width).
-    // Plane Z -> World Y (Height).
     CreateWall({0.0f, wallHeight * 0.5f, halfD + wallThickness * 0.5f},
                {width, 1.0f, wallHeight}, rotF, {1.0f, wallThickness, 1.0f});
   }
 
-  // Front Wall (-Z): Faces +Z (North)
   {
-    // Want Normal +Z.
-    // Rotate X +90.
     XMVECTOR rot = XMQuaternionRotationRollPitchYaw(XM_PIDIV2, 0, 0);
     XMFLOAT4 rotF;
     XMStoreFloat4(&rotF, rot);
@@ -314,9 +400,9 @@ void WikiTerrainSystem::CreateImageObstacles(
     float height = 2.0f;
 
     auto e = ctx.world.CreateEntity();
-    auto &t = ctx.world.Add<Transform>(e);
-    t.position = {worldX, height * 0.5f, worldZ};
-    t.scale = {worldW, height, worldD};
+    Transform &transform = ctx.world.Add<Transform>(e);
+    transform.position = {worldX, height * 0.5f, worldZ};
+    transform.scale = {worldW, height, worldD};
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");

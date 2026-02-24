@@ -27,6 +27,7 @@ struct VS_OUTPUT {
     float4 color : COLOR;
     float3 tangent : TANGENT;
     float3 bitangent : BINORMAL;
+    float2 worldXZ : TEXCOORD1;
 };
 
 VS_OUTPUT main(VS_INPUT input) {
@@ -41,7 +42,14 @@ VS_OUTPUT main(VS_INPUT input) {
     output.tangent = mul(input.tangent, world3x3);
     output.bitangent = mul(input.bitangent, world3x3);
     output.texCoord = input.texCoord;
-    output.color = input.color * MaterialColor;
+    // 頂点カラーが未設定(0)の場合でも材質色をそのまま反映するが、
+    // 有効な頂点カラーがあればそれを優先する
+    float4 vcolor = (input.color.a <= 0.0001f && all(input.color.rgb == 0)) ?
+                    float4(1,1,1,1) : input.color;
+    output.color = vcolor * MaterialColor;
+
+    // ワールドXZを渡してPSでプロシージャル模様に使う
+    output.worldXZ = worldPos.xz;
     
     return output;
 }

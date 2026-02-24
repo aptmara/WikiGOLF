@@ -46,6 +46,13 @@ public:
     }
   }
 
+  /// @brief フレーム描画
+  void Render(GameContext &ctx) {
+    if (auto *scene = Current()) {
+      scene->Render(ctx);
+    }
+  }
+
   /// @brief シーンスタックが空か
   bool IsEmpty() const { return m_sceneStack.empty(); }
 

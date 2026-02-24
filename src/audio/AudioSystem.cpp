@@ -8,11 +8,37 @@
 #include "../core/Logger.h"
 #include "../resources/ResourceManager.h"
 #include "AudioClip.h"
+#include <cmath>
+#include <fstream>
 
 // XAudio2ライブラリリンク
 #pragma comment(lib, "xaudio2.lib")
 
 namespace game::systems {
+
+// ヘルパー：ファイルパス探索
+static std::string FindAudioPath(const std::string &filename) {
+  const char *searchPaths[] = {"Assets/sounds/",       "sounds/",
+                               "../sounds/",           "../../sounds/",
+                               "../../Assets/sounds/", "src/resources/sounds/"};
+
+  for (const char *prefix : searchPaths) {
+    std::string path = std::string(prefix) + filename;
+    {
+      std::ifstream f(path, std::ios::binary);
+      if (f.good())
+        return path;
+    }
+    // .mp3を試行
+    std::string pathMp3 = path + ".mp3";
+    {
+      std::ifstream f(pathMp3, std::ios::binary);
+      if (f.good())
+        return pathMp3;
+    }
+  }
+  return "sounds/" + filename; // デフォルト
+}
 
 AudioSystem::~AudioSystem() { Shutdown(); }
 
@@ -23,7 +49,6 @@ bool AudioSystem::Initialize() {
   hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
     LOG_ERROR("Audio", "Failed to init COM: {:08X}", (uint32_t)hr);
-    // すでに別モードで初期化されている場合は警告のみ出すのが一般的だが、ここではエラーにせず続行を試みる
   }
 
   hr = XAudio2Create(m_xaudio2.GetAddressOf(), 0, XAUDIO2_DEFAULT_PROCESSOR);
@@ -61,6 +86,14 @@ void AudioSystem::Shutdown() {
   }
   m_activeSEs.clear();
 
+  for (auto &pair : m_loopingSEs) {
+    if (pair.second->voice) {
+      pair.second->voice->Stop();
+      pair.second->voice->DestroyVoice();
+    }
+  }
+  m_loopingSEs.clear();
+
   if (m_masterVoice) {
     m_masterVoice->DestroyVoice();
     m_masterVoice = nullptr;
@@ -82,35 +115,16 @@ void AudioSystem::Update(core::GameContext &ctx) {
   }
 }
 
-// ヘルパー：ファイルパス探索
-static std::string FindAudioPath(const std::string &filename) {
-  const char *searchPaths[] = {"Assets/sounds/",       "sounds/",
-                               "../sounds/",           "../../sounds/",
-                               "../../Assets/sounds/", "src/resources/sounds/"};
-
-  for (const char *prefix : searchPaths) {
-    std::string path = std::string(prefix) + filename;
-    std::ifstream f(path, std::ios::binary);
-    if (f.good())
-      return path;
-  }
-  return "sounds/" + filename; // デフォルト
-}
-
 void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
                          float volume, float pitch) {
   if (!m_xaudio2)
     return;
 
   std::string path = FindAudioPath(name);
-
-  // リソースロード（キャッシュ有効）
   auto handle = ctx.resource.LoadAudio(path);
   auto *clip = ctx.resource.GetAudio(handle);
 
   if (!clip || clip->buffer.empty()) {
-    // 頻繁に出る警告を避けるため、初回のみまたは間引くなどの制御を入れると良いが、
-    // ここでは見つからない場合のみ警告
     static std::string lastMissingFile;
     if (lastMissingFile != name) {
       LOG_WARN("Audio", "SE not found: {} (searched as {})", name, path);
@@ -120,7 +134,6 @@ void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
   }
 
   auto activeVoice = std::make_unique<ActiveVoice>();
-
   HRESULT hr = m_xaudio2->CreateSourceVoice(
       &activeVoice->voice,
       reinterpret_cast<const WAVEFORMATEX *>(clip->format.data()), 0,
@@ -131,9 +144,36 @@ void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
     return;
   }
 
+  // 特定のSEの同時再生数制限（例：サンド音は重複がうるさすぎないよう3つまで）
+  if (name == "se_Bunker") {
+    int count = 0;
+    size_t oldestIdx = size_t(-1);
+    for (size_t i = 0; i < m_activeSEs.size(); ++i) {
+      if (m_activeSEs[i]->currentFile == name ||
+          m_activeSEs[i]->debugName == name) {
+        count++;
+        if (oldestIdx == size_t(-1))
+          oldestIdx = i;
+      }
+    }
+    if (count >= 3 && oldestIdx != size_t(-1)) {
+      m_activeSEs[oldestIdx]->voice->Stop();
+      m_activeSEs[oldestIdx]->voice->DestroyVoice();
+      m_activeSEs.erase(m_activeSEs.begin() + oldestIdx);
+    }
+  }
+
+  // 同時再生数管理（全体のキュー方式：古いものから破棄）
+  if (m_activeSEs.size() >= MAX_ACTIVE_SE) {
+    auto &oldest = m_activeSEs.front();
+    oldest->voice->Stop();
+    oldest->voice->DestroyVoice();
+    m_activeSEs.erase(m_activeSEs.begin());
+  }
+
   activeVoice->debugName = name;
   activeVoice->voice->SetVolume(volume);
-  activeVoice->voice->SetFrequencyRatio(std::pow(2.0f, pitch)); // ピッチ変換
+  activeVoice->voice->SetFrequencyRatio(std::pow(2.0f, pitch));
 
   XAUDIO2_BUFFER buffer = {};
   buffer.pAudioData = clip->buffer.data();
@@ -150,14 +190,79 @@ void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
   m_activeSEs.push_back(std::move(activeVoice));
 }
 
+void AudioSystem::SetLoopingSE(core::GameContext &ctx, const std::string &label,
+                               const std::string &name, float volume,
+                               float pitch) {
+  if (!m_xaudio2)
+    return;
+
+  bool shouldStop = (name.empty() || volume <= 0.001f);
+  auto it = m_loopingSEs.find(label);
+
+  if (shouldStop) {
+    if (it != m_loopingSEs.end()) {
+      it->second->voice->Stop();
+      it->second->voice->DestroyVoice();
+      m_loopingSEs.erase(it);
+    }
+    return;
+  }
+
+  if (it != m_loopingSEs.end() && it->second->currentFile == name) {
+    it->second->voice->SetVolume(volume);
+    it->second->voice->SetFrequencyRatio(std::pow(2.0f, pitch));
+    return;
+  }
+
+  if (it != m_loopingSEs.end()) {
+    it->second->voice->Stop();
+    it->second->voice->DestroyVoice();
+    m_loopingSEs.erase(it);
+  }
+
+  std::string path = FindAudioPath(name);
+  auto handle = ctx.resource.LoadAudio(path);
+  auto *clip = ctx.resource.GetAudio(handle);
+
+  if (!clip || clip->buffer.empty())
+    return;
+
+  auto activeVoice = std::make_unique<ActiveVoice>();
+  HRESULT hr = m_xaudio2->CreateSourceVoice(
+      &activeVoice->voice,
+      reinterpret_cast<const WAVEFORMATEX *>(clip->format.data()), 0,
+      XAUDIO2_DEFAULT_FREQ_RATIO, &activeVoice->callback);
+
+  if (FAILED(hr))
+    return;
+
+  activeVoice->currentFile = name;
+  activeVoice->voice->SetVolume(volume);
+  activeVoice->voice->SetFrequencyRatio(std::pow(2.0f, pitch));
+
+  XAUDIO2_BUFFER buffer = {};
+  buffer.pAudioData = clip->buffer.data();
+  buffer.AudioBytes = static_cast<UINT32>(clip->buffer.size());
+  buffer.Flags = XAUDIO2_END_OF_STREAM;
+  buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
+
+  hr = activeVoice->voice->SubmitSourceBuffer(&buffer);
+  if (FAILED(hr)) {
+    activeVoice->voice->DestroyVoice();
+    return;
+  }
+
+  activeVoice->voice->Start();
+  m_loopingSEs[label] = std::move(activeVoice);
+}
+
 void AudioSystem::PlayBGM(core::GameContext &ctx, const std::string &name,
                           float volume) {
   if (!m_xaudio2)
     return;
 
-  if (m_currentBgmName == name && m_bgmVoice) {
-    return; // 同じBGMなら何もしない
-  }
+  if (m_currentBgmName == name && m_bgmVoice)
+    return;
 
   StopBGM();
 
@@ -182,20 +287,16 @@ void AudioSystem::PlayBGM(core::GameContext &ctx, const std::string &name,
   buffer.pAudioData = clip->buffer.data();
   buffer.AudioBytes = static_cast<UINT32>(clip->buffer.size());
   buffer.Flags = XAUDIO2_END_OF_STREAM;
-  buffer.LoopCount = XAUDIO2_LOOP_INFINITE; // 無限ループ
+  buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
 
   m_bgmVoice->SetVolume(volume);
-  LOG_DEBUG("Audio", "Submitting BGM buffer ({} bytes)", buffer.AudioBytes);
   hr = m_bgmVoice->SubmitSourceBuffer(&buffer);
   if (FAILED(hr)) {
-    LOG_ERROR("Audio", "Failed to submit BGM buffer: {:08X}", (uint32_t)hr);
+    LOG_ERROR("Audio", "Failed to submit BGM buffer");
     return;
   }
-  LOG_DEBUG("Audio", "Starting BGM voice");
   m_bgmVoice->Start();
-
   m_currentBgmName = name;
-  LOG_INFO("Audio", "Playing BGM: {}", name);
 }
 
 void AudioSystem::StopBGM() {

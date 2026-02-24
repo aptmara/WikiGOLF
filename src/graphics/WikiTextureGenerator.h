@@ -50,10 +50,21 @@ struct HeadingRegion {
  * @brief Wikipedia風テクスチャ生成結果
  */
 struct WikiTextureResult {
+  struct Tile {
+    ComPtr<ID3D11Texture2D> texture;
+    ComPtr<ID3D11ShaderResourceView> srv;
+    uint32_t width;
+    uint32_t height;
+    float offsetY; // テクスチャ全体における開始Y位置
+  };
+  std::vector<Tile> tiles;
+
+  // 後方互換性用（最初のタイルまたは結合テクスチャ、単一タイルの場合はこれを使用）
   ComPtr<ID3D11Texture2D> texture;
   ComPtr<ID3D11ShaderResourceView> srv;
-  uint32_t width = 0;
-  uint32_t height = 0;
+
+  uint32_t width = 0;  // 全体幅
+  uint32_t height = 0; // 全体高さ
   std::vector<LinkRegion> links;
   std::vector<ImageRegion> images;
   std::vector<HeadingRegion> headings;

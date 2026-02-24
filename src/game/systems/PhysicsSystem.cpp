@@ -7,6 +7,7 @@
  */
 
 #include "PhysicsSystem.h"
+#include "../../audio/AudioSystem.h" // For SE
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../ecs/World.h"
@@ -14,7 +15,9 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
+#include "GameJuiceSystem.h" // For effects
 #include "PhysicsFriction.h"
+#include "TerrainGenerator.h"
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -380,14 +383,22 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       RigidBody &rb = *body.rb;
       Collider &col = *body.c;
 
-      // ボールの接地状態をリセット（衝突判定で接地していればtrueになる）
-      if (golfState && body.entity == ballEntity) {
-        golfState->isBallGrounded = false;
-        golfState->currentBallSpeed = SafeLength(XMLoadFloat3(&rb.velocity));
-      }
-
       XMVECTOR pos = XMLoadFloat3(&t.position);
       XMVECTOR vel = XMLoadFloat3(&rb.velocity);
+
+      // マテリアル判定（ループ冒頭で実施）
+      uint8_t mat = 0; // Fairway default
+      if (terrainData) {
+        float u = XMVectorGetX(pos) / terrainData->config.worldWidth + 0.5f;
+        float v = 0.5f - XMVectorGetZ(pos) / terrainData->config.worldDepth;
+        int ix = (int)(u * (terrainData->config.resolutionX - 1));
+        int iz = (int)(v * (terrainData->config.resolutionZ - 1));
+        if (ix >= 0 && ix < terrainData->config.resolutionX && iz >= 0 &&
+            iz < terrainData->config.resolutionZ) {
+          mat = terrainData
+                    ->materialMap[iz * terrainData->config.resolutionX + ix];
+        }
+      }
 
       // NaNチェック - 異常値なら位置リセット
       if (IsVectorNaN(pos) || IsVectorNaN(vel)) {
@@ -420,12 +431,35 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         float posY = XMVectorGetY(pos);
         float posZ = XMVectorGetZ(pos);
 
+        bool insideHole = false;
+        float carveDepth = 0.0f;
+        for (const auto &hole : holes) {
+          float dx = posX - XMVectorGetX(hole.position);
+          float dz = posZ - XMVectorGetZ(hole.position);
+          float distSq = dx * dx + dz * dz;
+          float radius = hole.radius;
+          if (distSq < radius * radius &&
+              std::abs(posY - XMVectorGetY(hole.position)) < 2.0f) {
+            insideHole = true;
+            carveDepth = std::max(0.4f, radius * 0.8f);
+            break;
+          }
+        }
+
         if (GetTerrainHeightAndNormal(*terrainData, posX, posZ, terrainH,
                                       terrainN)) {
+          if (insideHole) {
+            terrainH -= carveDepth;
+            terrainN = XMVectorSet(0, 1, 0, 0);
+          }
+
           float ballBottom = posY - col.radius;
           float penetration = terrainH - ballBottom;
 
           if (penetration > 0.0f) {
+            if (insideHole) {
+              penetration = std::min(penetration, 0.01f);
+            }
             // めり込み解消（法線方向に押し出し）
             float ny = std::max(XMVectorGetY(terrainN), 0.1f);
             float pushAmount = penetration / ny;
@@ -441,6 +475,69 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
               float bounce = rb.restitution * 0.5f;
               vel = XMVectorSubtract(
                   vel, XMVectorScale(terrainN, vn * (1.0f + bounce)));
+
+              // バウンドエフェクト & SE
+              // VNは負の値（衝突速度）なので、大きさは abs(vn)
+              float impactSpeed = std::abs(vn);
+              if (impactSpeed > 2.0f) { // ある程度以上の速度で
+                float strength =
+                    std::clamp((impactSpeed - 2.0f) / 10.0f, 0.0f, 1.0f);
+
+                // マテリアルエフェクト
+                auto *juice = ctx.world.GetGlobal<
+                    GameJuiceSystem>(); // Globalから取得できる想定(or
+                                        // SystemContext)
+                // GameJuiceSystemはEntityではなくGlobalポインタとして管理されているか確認が必要。
+                // DX_GAMEのアーキテクチャではSystemはWorldにない場合が多いので、ctxから取得するか、
+                // もしくはWikiGolfSceneでSystemを保持している。
+                // ここではPhysicsSystemがGameContextを持っているので、そこからアクセスしたいが...
+                // GameContextにはsystemsはない。
+                // しかしWikiGolfSceneがJuiceSystemを持っているので、WorldのGlobalにはないかもしれない。
+                // だが、PhysicsSystemはSceneから呼ばれる。
+
+                // 簡易的にWorldのSingletonコンポーネントとしてJuiceSystemポインタを登録しておくのが良いが、
+                // 現状のコードを見るとWikiGolfSceneのメンバ。
+                // 仕方ないので、イベントキューか、Worldを経由する。
+                // 今回はWikiGolfSceneで「GameJuiceSystem*」をWorldのGlobalにセットすることにする。
+                // もしくは、WorldにJuiceSystemポインタをComponentとして持つEntityを作る。
+
+                // とりあえず Global<GameJuiceSystem> があると仮定して書く。
+                // ※後でWikiGolfScene::OnEnterで登録する※
+                if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
+                  juiceSys->TriggerMaterialEffect(
+                      ctx, t.position, static_cast<TerrainMaterial>(mat),
+                      strength);
+                }
+
+                // SE再生
+                std::string seName = "se_shot_soft";
+                float volume = strength;
+                float pitch = 1.0f;
+
+                switch (static_cast<TerrainMaterial>(mat)) {
+                case TerrainMaterial::Bunker:
+                  seName = "se_Bunker"; // バンカーは鈍い音
+                  pitch = 0.8f;
+                  break;
+                case TerrainMaterial::Rough:
+                  seName = "se_Rough";
+                  volume *= 0.8f; // ラフは吸われる
+                  pitch = 0.9f;
+                  break;
+                case TerrainMaterial::Green:
+                  seName = "se_Fairway";
+                  pitch = 1.1f; // グリーンは硬め
+                  break;
+                default: // Fairway
+                  seName = "se_Fairway";
+                  break;
+                }
+
+                if (ctx.audio) {
+                  ctx.audio->PlaySE(ctx, seName, volume, pitch);
+                }
+                // なければ volumeのみ。
+              }
             }
 
             isGrounded = true;
@@ -471,19 +568,25 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         float ballY = XMVectorGetY(pos);
         for (const auto &hole : holes) {
           float holeY = XMVectorGetY(hole.position);
-          if (std::abs(ballY - holeY) > 0.5f)
+          if (std::abs(ballY - holeY) > 1.0f)
             continue;
 
           XMVECTOR toHole = XMVectorSubtract(hole.position, pos);
-          toHole = XMVectorSetY(toHole, 0.0f);
-
-          float distSq = XMVectorGetX(XMVector3LengthSq(toHole));
-          float range = hole.radius * 2.0f;
+          float distSq = XMVectorGetX(
+              XMVector3LengthSq(XMVectorSetY(toHole, 0.0f))); // XZ距離
+          float range = hole.radius * 2.5f;
 
           if (distSq < range * range && distSq > 0.001f) {
-            float dist = std::sqrt(distSq);
-            XMVECTOR dir = XMVectorScale(toHole, 1.0f / dist);
-            float factor = 1.0f - (dist / range);
+            float verticalBias =
+                XMVectorGetY(toHole) - 0.05f; // 常にわずかに下向きに引く
+            verticalBias = std::min(verticalBias, -0.05f);
+            XMVECTOR pullVec = XMVectorSetY(toHole, verticalBias);
+
+            float dirLen = SafeLength(pullVec);
+            XMVECTOR dir = (dirLen > 0.0001f)
+                               ? XMVectorScale(pullVec, 1.0f / dirLen)
+                               : XMVectorZero();
+            float factor = 1.0f - (std::sqrt(distSq) / range);
             factor = factor * factor;
             acc = XMVectorAdd(acc, XMVectorScale(dir, hole.gravity * factor));
           }
@@ -522,57 +625,11 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           vel = XMVectorAdd(vel, XMVectorScale(slopeDir, breakaway * subDt));
         }
 
-        // 摩擦係数計算（マテリアルと斜面考慮）
-        // 摩擦係数計算（マテリアルと斜面考慮）
-        // ★芝生シミュレーション:
-        // 1. 基本摩擦: 芝の種類によるベース抵抗
-        // 2. 沈み込み: 低速になるほどボールが芝に沈み、抵抗が増す (粘り)
-        // 3. 垂直抗力依存: 斜面では N = mg * cosθ に比例した摩擦力
-
         float currentSpeed = SafeLength(vel);
-
-        // 芝への沈み込み抵抗 (強力に!)
-        // 速度低下に伴い、急激に抵抗を増やす（芝に埋まる感覚）
-        float sinkFactor = 1.0f;
-        if (currentSpeed < 3.0f) {
-          sinkFactor =
-              1.0f + (3.0f - currentSpeed) * 1.0f; // Max 4.0x (at speed 0)
-        }
-
-        // 基本摩擦係数を上げる (0.35 -> 0.5)
-        float baseFriction = 0.5f;
-
-        float friction = baseFriction * sinkFactor;
-        uint8_t mat = 0;
-
-        if (terrainData) {
-          friction *= terrainData->config.friction;
-          if (!terrainData->materialMap.empty()) {
-            float u = XMVectorGetX(pos) / terrainData->config.worldWidth + 0.5f;
-            float v = 0.5f - XMVectorGetZ(pos) / terrainData->config.worldDepth;
-            int ix = (int)(u * (terrainData->config.resolutionX - 1));
-            int iz = (int)(v * (terrainData->config.resolutionZ - 1));
-            if (ix >= 0 && ix < terrainData->config.resolutionX && iz >= 0 &&
-                iz < terrainData->config.resolutionZ) {
-              mat =
-                  terrainData
-                      ->materialMap[iz * terrainData->config.resolutionX + ix];
-            }
-          }
-          switch (mat) {
-          case 1:
-            friction *= 3.0f; // Rough: かなり重い
-            break;
-          case 2:
-            friction *= 10.0f; // Bunker: 脱出困難
-            break;
-          case 3:
-            friction *= 0.2f; // Green: それなりに転がるが止まる
-            break;
-          default:
-            break;
-          }
-        }
+        float terrainScale = terrainData ? terrainData->config.friction : 1.0f;
+        float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
+        float frictionAccel = ComputeGrassRollingAcceleration(
+            currentSpeed, ny, static_cast<TerrainMaterial>(mat), terrainScale);
 
         // 環境状態の保存（ボールのみ対象）
         if (golfState && body.entity == ballEntity) {
@@ -581,28 +638,14 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           golfState->currentBallSpeed = currentSpeed;
         }
 
-        // 垂直抗力 N = mg * cos(theta) = mg * ny
-        // 摩擦力 F = mu * N
-        // 加速度 a = F / m = mu * g * ny
-        // 以前の slopeFrictionScale (摩擦係数を下げる処理) は廃止し、
-        // 物理的に正しい 垂直抗力比例 (= ny倍) を適用する。
-        // これにより斜面でも不自然に加速せず、適切な減速がかかる。
-
-        float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
-        float frictionAccel = friction * 9.8f * ny;
-
-        // ★草の抵抗定数項 (速度によらず一定のブレーキ)
-        // これがないと低摩擦時にいつまでも止まらない
-        frictionAccel += 1.0f; // 1.0 m/s^2 の定数減速を追加
-
-        // 接線方向の重力成分に対する静止摩擦チェック (簡易)
+        // 接線方向の重力成分に対する静止摩擦チェック
         float tangentialAcc = SafeLength(acc);
         // 静止摩擦力 (最大) > 重力引張力 なら停止維持
         // F_static_max = mu_static * N * g
         // ここでは動摩擦係数をベースに少し色をつけて判定
-        float staticLimit = frictionAccel * 1.5f; // 静止摩擦マージン拡大
+        float staticLimit = frictionAccel * 1.2f;
 
-        if (currentSpeed < 0.15f && tangentialAcc < staticLimit) {
+        if (currentSpeed < 0.08f && tangentialAcc < staticLimit) {
           // ほぼ停止 & 重力に勝てる摩擦がある -> 完全停止
           vel = XMVectorZero();
           acc = XMVectorZero();
@@ -620,7 +663,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         // 極低速時の微細振動カット (Green上などでのピク付き防止)
         float speedAfter = SafeLength(vel);
         float slopeFlatness = XMVectorGetY(groundNormal);
-        if (speedAfter < 0.02f && slopeFlatness > 0.90f) {
+        if (speedAfter < 0.03f && slopeFlatness > 0.90f) {
           vel = XMVectorZero();
         }
       }
@@ -663,8 +706,40 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         vel = XMVectorZero();
       }
 
+      // 値を書き戻す
       XMStoreFloat3(&t.position, pos);
       XMStoreFloat3(&rb.velocity, vel);
+
+      // 接地中の走行音 (Rolling SE)
+      if (ctx.audio && body.entity == ballEntity) {
+        if (isGrounded && speedFinal > 0.5f) {
+          std::string seName = "se_Fairway";
+          float pBase = 0.0f;
+          switch (static_cast<TerrainMaterial>(mat)) {
+          case TerrainMaterial::Bunker:
+            seName = "se_Bunker";
+            pBase = -0.2f;
+            break;
+          case TerrainMaterial::Rough:
+            seName = "se_Rough";
+            pBase = -0.1f;
+            break;
+          case TerrainMaterial::Green:
+            seName = "se_Fairway";
+            pBase = 0.1f;
+            break;
+          default:
+            break;
+          }
+          // 速度に応じて音量・ピッチ調整 (0.0~1.0)
+          float vol = std::clamp(speedFinal / 20.0f, 0.0f, 1.0f) * 0.4f;
+          float p = pBase + (speedFinal / 40.0f);
+          ctx.audio->SetLoopingSE(ctx, "BallRoll", seName, vol, p);
+        } else {
+          // 停止中または空中なら停止
+          ctx.audio->SetLoopingSE(ctx, "BallRoll", "", 0.0f);
+        }
+      }
     }
 
     // 静的オブジェクトとの衝突
@@ -703,7 +778,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           XMVECTOR vel = XMLoadFloat3(&dyn.rb->velocity);
           float vn = XMVectorGetX(XMVector3Dot(vel, normal));
           if (vn < 0.0f) {
-            float bounce = (dyn.rb->restitution + other.rb->restitution) * 0.4f;
+            float bounce = (dyn.rb->restitution + other.rb->restitution) * 0.5f;
             vel = XMVectorSubtract(vel,
                                    XMVectorScale(normal, vn * (1.0f + bounce)));
             XMStoreFloat3(&dyn.rb->velocity, vel);

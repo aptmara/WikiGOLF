@@ -4,13 +4,13 @@
  * @brief XAudio2を使用したオーディオ再生システム
  */
 
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
 #include <wrl/client.h>
 #include <xaudio2.h>
-
 
 namespace core {
 struct GameContext;
@@ -61,6 +61,16 @@ public:
   /// @brief 全体音量設定
   void SetMasterVolume(float volume);
 
+  /// @brief 同時再生最大数
+  static constexpr size_t MAX_ACTIVE_SE = 16;
+
+  /// @brief ループSEの設定（ラベルごとに状態管理）
+  /// @param label 識別子（"BallRoll"等）
+  /// @param name ファイル名。空文字、またはvolume=0で停止。
+  void SetLoopingSE(core::GameContext &ctx, const std::string &label,
+                    const std::string &name, float volume = 1.0f,
+                    float pitch = 0.0f);
+
 private:
   Microsoft::WRL::ComPtr<IXAudio2> m_xaudio2;
   IXAudio2MasteringVoice *m_masterVoice = nullptr;
@@ -69,10 +79,14 @@ private:
     IXAudio2SourceVoice *voice;
     VoiceCallback callback;
     std::string debugName;
+    std::string currentFile; // ループ用：現在流しているファイル名
   };
 
   // SE用プール（再生中リスト）
   std::vector<std::unique_ptr<ActiveVoice>> m_activeSEs;
+
+  // ループSE（ラベル管理）
+  std::map<std::string, std::unique_ptr<ActiveVoice>> m_loopingSEs;
 
   // BGM用
   IXAudio2SourceVoice *m_bgmVoice = nullptr;

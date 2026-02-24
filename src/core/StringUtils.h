@@ -22,4 +22,12 @@ std::wstring ToWString(const std::string &str);
  */
 std::string ToString(const std::wstring &wstr);
 
+/**
+ * @brief UTF-8文字列を最大文字数でトリミング（コードポイント単位）
+ * @param str UTF-8文字列
+ * @param maxChars 最大文字数（0以下なら無制限）
+ * @return トリミング済みUTF-8文字列
+ */
+std::string TrimUtf8ToLength(const std::string &str, size_t maxChars);
+
 } // namespace core

@@ -25,4 +25,17 @@ std::string ToString(const std::wstring &wstr) {
   return strTo;
 }
 
+std::string TrimUtf8ToLength(const std::string &str, size_t maxChars) {
+  if (maxChars == 0)
+    return str;
+
+  std::wstring wstr = ToWString(str);
+  if (wstr.size() <= maxChars) {
+    return str;
+  }
+
+  std::wstring trimmed = wstr.substr(0, maxChars);
+  return ToString(trimmed);
+}
+
 } // namespace core

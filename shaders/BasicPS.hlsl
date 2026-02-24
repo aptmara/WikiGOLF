@@ -15,6 +15,36 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags; // x: hasDiffuse, y: hasNormalMap
 };
 
+// シンプルな擬似ノイズ
+float hash21(float2 p) {
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
+}
+
+float noise2d(float2 p) {
+    float2 i = floor(p);
+    float2 f = frac(p);
+    float a = hash21(i);
+    float b = hash21(i + float2(1, 0));
+    float c = hash21(i + float2(0, 1));
+    float d = hash21(i + float2(1, 1));
+    float2 u = f * f * (3.0 - 2.0 * f);
+    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+}
+
+float fbm(float2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    float2 shift = float2(37.0, 17.0);
+    for (int i = 0; i < 4; ++i) {
+        v += a * noise2d(p);
+        p = p * 2.0 + shift;
+        a *= 0.5;
+    }
+    return v;
+}
+
 struct PS_INPUT {
     float4 position : SV_POSITION;
     float3 normal : NORMAL;
@@ -22,6 +52,7 @@ struct PS_INPUT {
     float4 color : COLOR;
     float3 tangent : TANGENT;
     float3 bitangent : BINORMAL;
+    float2 worldXZ : TEXCOORD1;
 };
 
 float4 main(PS_INPUT input) : SV_TARGET {
@@ -32,14 +63,32 @@ float4 main(PS_INPUT input) : SV_TARGET {
     // マテリアルカラーを乗算
     float4 baseColor = input.color * MaterialColor;
 
-    // アルファテスト: 透明度が高いピクセルは描画しない（Zバッファへの書き込み防止）
-    clip(baseColor.a - 0.05f);
-
     if (hasDiffuse > 0.5f) {
         float4 texColor = diffuseTexture.Sample(texSampler, input.texCoord);
         baseColor *= texColor;
     }
-    
+
+    // アルファテスト（地形用はほぼ不透明なので緩めのスレッショルド）
+    clip(baseColor.a - 0.02f);
+
+    // マテリアル種別をアルファから推定 (0:Fairway,1:Rough,2:Bunker,3:Green)
+    float matId = floor(input.color.a * 4.0f + 0.5f);
+    float2 wxz = input.worldXZ * 0.4f;
+    float texNoise = fbm(wxz * 0.8f);
+
+    // プロシージャルディテール（より自然なノイズベース）
+    float shade = 0.0f;
+    if (matId < 0.5f) { // Fairway
+        shade = (fbm(wxz * 1.1f) - 0.5f) * 0.08f + (texNoise - 0.5f) * 0.05f;
+    } else if (matId < 1.5f) { // Rough
+        shade = (fbm(wxz * 2.5f) - 0.5f) * 0.15f;
+    } else if (matId < 2.5f) { // Bunker
+        shade = (fbm(wxz * 1.5f + float2(5.0, 3.0)) - 0.5f) * 0.12f;
+    } else { // Green
+        shade = (fbm(wxz * 2.0f) - 0.5f) * 0.07f;
+    }
+    baseColor.rgb = saturate(baseColor.rgb * (1.0f + shade));
+
     // 法線（必要ならノーマルマップで置換）
     float3 normal = normalize(input.normal);
     if (hasNormalMap > 0.5f) {
@@ -72,4 +121,3 @@ float4 main(PS_INPUT input) : SV_TARGET {
     
     return float4(baseColor.rgb * lighting, baseColor.a);
 }
-

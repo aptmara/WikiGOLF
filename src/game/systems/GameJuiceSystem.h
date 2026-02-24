@@ -8,6 +8,7 @@
  */
 
 #include "../../ecs/Entity.h"
+#include "../components/WikiComponents.h"
 #include <DirectXMath.h>
 #include <vector>
 
@@ -78,6 +79,18 @@ public:
                            const DirectX::XMFLOAT3 &position, float power,
                            JudgeType judge = JudgeType::None);
 
+  // === マテリアルエフェクト ===
+
+  /// @brief マテリアルに応じたエフェクト発火
+  /// @param ctx ゲームコンテキスト
+  /// @param position 発生位置
+  /// @param material マテリアル種別
+  /// @param strength 強さ（0.0-1.0）
+  void TriggerMaterialEffect(core::GameContext &ctx,
+                             const DirectX::XMFLOAT3 &position,
+                             game::components::TerrainMaterial material,
+                             float strength);
+
   // === トレイル ===
 
   /// @brief トレイルをリセット（ページ遷移時などに呼ぶ）
@@ -134,8 +147,10 @@ private:
   void UpdateFov(core::GameContext &ctx, ecs::Entity cameraEntity);
   void UpdateTrail(core::GameContext &ctx, ecs::Entity targetEntity);
   void UpdateImpactParticles(core::GameContext &ctx);
-  void UpdateEnvironmentParticles(core::GameContext &ctx, ecs::Entity targetEntity);
-  void EmitEnvironmentParticles(core::GameContext &ctx, ecs::Entity targetEntity);
+  void UpdateEnvironmentParticles(core::GameContext &ctx,
+                                  ecs::Entity targetEntity);
+  void EmitEnvironmentParticles(core::GameContext &ctx,
+                                ecs::Entity targetEntity);
 
   void CreateTrailEntities(core::GameContext &ctx);
   void CreateImpactParticleEntities(core::GameContext &ctx);

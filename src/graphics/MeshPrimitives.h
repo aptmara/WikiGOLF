@@ -27,6 +27,9 @@ public:
   /// @brief 平面を生成（UV座標付き、テクスチャ用）
   static Mesh CreatePlane(ID3D11Device *device, float width = 1.0f,
                           float depth = 1.0f);
+
+  /// @brief スクリーン正面向きの四角形を生成。フェードやUI用。
+  static Mesh CreateQuad(ID3D11Device *device);
 };
 
 } // namespace graphics

@@ -1,3 +1,4 @@
+#include "src/game/components/WikiComponents.h"
 #include "src/game/systems/PhysicsFriction.h"
 #include <cmath>
 #include <iostream>
@@ -65,6 +66,30 @@ int main() {
     bool movingFast = game::systems::CanStaticFrictionHold(
         0.6f, frictionCoeff, gentleSlopeAcc, dt);
     CHECK(!movingFast, "Static friction is skipped once speed exceeds threshold");
+  }
+
+  // 6) ゴルフゲーム用の芝フリクションがマテリアルと斜面で変化する
+  {
+    game::systems::SurfaceFrictionSettings settings =
+        game::systems::DefaultSurfaceFrictionSettings();
+
+    float flatFairway = game::systems::ComputeGrassRollingAcceleration(
+        5.0f, 1.0f, game::components::TerrainMaterial::Fairway, 1.0f,
+        settings);
+    float flatGreen = game::systems::ComputeGrassRollingAcceleration(
+        5.0f, 1.0f, game::components::TerrainMaterial::Green, 1.0f, settings);
+    float steepFairway = game::systems::ComputeGrassRollingAcceleration(
+        10.0f, 0.2f, game::components::TerrainMaterial::Fairway, 1.0f,
+        settings);
+    float bunker = game::systems::ComputeGrassRollingAcceleration(
+        8.0f, 1.0f, game::components::TerrainMaterial::Bunker, 1.0f, settings);
+
+    CHECK(flatFairway > flatGreen,
+          "Green friction stays lighter than fairway");
+    CHECK(bunker > flatFairway * 1.5f,
+          "Bunker friction is stronger than fairway");
+    CHECK(steepFairway > settings.constantBrake * 0.5f,
+          "Steep slopes keep a friction floor to avoid endless sliding");
   }
 
   std::cout << "All physics friction tests passed!\n";

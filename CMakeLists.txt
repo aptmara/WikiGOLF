@@ -4,6 +4,9 @@ project(DX_GAME)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# テスト有効化
+enable_testing()
+
 # ソースファイルの収集
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h") 
 
@@ -61,6 +64,7 @@ add_custom_command(TARGET DX_GAME POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/resources/textures $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/sounds $<TARGET_FILE_DIR:DX_GAME>/Assets/sounds
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_driver.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_driver.png
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_iron.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_iron.png
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_putter.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_putter.png
@@ -82,3 +86,62 @@ if(MSVC)
                                                      -DWIN32_LEAN_AND_MEAN)
     target_compile_options(SkyboxGen PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
+
+# シンプルなユニットテスト（CupIn判定）
+add_executable(test_cupin_utils test_cupin_utils.cpp)
+target_include_directories(test_cupin_utils PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_cupin_utils PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                        -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_cupin_utils PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME cupin_utils COMMAND test_cupin_utils)
+
+# ローディングシーンのフェード計算テスト
+add_executable(test_loading_scene_fade test_loading_scene_fade.cpp)
+target_include_directories(test_loading_scene_fade PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_loading_scene_fade PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                               -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_loading_scene_fade PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME loading_scene_fade COMMAND test_loading_scene_fade)
+
+# 文字列トリミングテスト
+add_executable(test_string_utils_trim test_string_utils_trim.cpp
+                                        src/core/StringUtils.cpp)
+target_include_directories(test_string_utils_trim PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_string_utils_trim PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                              -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_string_utils_trim PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME string_utils_trim COMMAND test_string_utils_trim)
+
+# マップビューのナビゲーション純粋関数テスト
+add_executable(test_map_view_utils test_map_view_utils.cpp)
+target_include_directories(test_map_view_utils PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_map_view_utils PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                              -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_map_view_utils PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME map_view_utils COMMAND test_map_view_utils)
+
+# WikiTextureGeneratorのリンク生成テスト
+add_executable(test_wiki_texture_links test_wiki_texture_links.cpp
+                                       src/graphics/WikiTextureGenerator.cpp
+                                       src/core/Logger.cpp)
+target_include_directories(test_wiki_texture_links PRIVATE src)
+target_link_libraries(test_wiki_texture_links
+    d3d11
+    d2d1
+    dwrite
+    dxguid
+)
+if(MSVC)
+    target_compile_definitions(test_wiki_texture_links PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_texture_links PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME wiki_texture_links COMMAND test_wiki_texture_links)

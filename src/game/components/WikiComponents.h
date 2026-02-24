@@ -195,11 +195,12 @@ enum class ShotJudgement {
 struct ShotState {
   /// @brief ショットフェーズ
   enum class Phase {
-    Idle,          ///< 待機中（クリックでパワー開始）
-    PowerCharging, ///< パワーゲージ往復中
-    ImpactTiming,  ///< インパクト待ち
-    Executing,     ///< ショット実行中
-    ShowResult     ///< 判定結果表示中
+    Idle,           ///< 待機中（クリックでパワー開始）
+    PowerCharging,  ///< パワーゲージ往復中
+    ImpactTiming,   ///< インパクト待ち
+    Executing,      ///< ショット実行中
+    ShowResult,     ///< 判定結果表示中
+    RestoringCamera ///< カメラ復帰フェード中
   };
 
   Phase phase = Phase::Idle;
@@ -234,9 +235,16 @@ struct ShotState {
  */
 struct GolfHole {
   std::string linkTarget; ///< リンク先記事
-  float radius = 0.5f;    ///< 判定半径
+  float radius = 0.7f;    ///< 判定半径（吸い込み範囲も兼ねる）
   bool isTarget = false;  ///< 目的記事へのリンクか
   float gravity = 5.0f;   ///< 吸引力
+};
+
+/**
+ * @brief ホールの旗モデル用タグ
+ */
+struct HoleFlag {
+  uint32_t holeEntity = 0; ///< 紐づくホールエンティティ
 };
 
 /**
