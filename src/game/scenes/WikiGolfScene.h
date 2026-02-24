@@ -160,8 +160,8 @@ private:
   float m_fieldDepth = 120.0f;
   float m_mapZoom = 1.0f;
   DirectX::XMFLOAT2 m_mapCenter = {0.0f, 0.0f};
-  float m_minMapZoom = 0.2f;
-  float m_maxMapZoom = 4.0f;
+  float m_minMapZoom = 0.005f;
+  float m_maxMapZoom = 15.0f;
   float m_mapFollowLerp = 8.0f;
   bool m_isMapView = false;
   game::utils::MapViewSkyboxState

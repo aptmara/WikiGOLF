@@ -1537,24 +1537,26 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
     // Cキーで即座にボール中心へ戻す
     if (ctx.input.GetKeyDown('C')) {
       SyncMapCenterToBall(ctx, 0.0f, true);
-      m_mapZoom = game::utils::ClampMapZoom(1.0f, m_minMapZoom, m_maxMapZoom);
+      m_mapZoom =
+          game::utils::ClampMapZoom(m_fieldWidth / std::max(10.0f, m_fieldWidth * 0.2f),
+                                    m_minMapZoom, m_maxMapZoom);
     }
 
     // マップビューのズーム（ホイール + キー）
     float wheel = ctx.input.GetMouseScrollDelta();
     if (wheel != 0.0f) {
+      // ホイール上でズームイン、下でズームアウト（指数的に変化させスピード一定に）
       m_mapZoom = game::utils::ClampMapZoom(
-          m_mapZoom - wheel * 0.1f, m_minMapZoom,
-          m_maxMapZoom); // 最小値を0.3から0.1に緩和
+          m_mapZoom * std::pow(1.12f, wheel), m_minMapZoom, m_maxMapZoom);
     }
     if (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD)) {
-      m_mapZoom =
-          game::utils::ClampMapZoom(m_mapZoom - 0.1f, m_minMapZoom, m_maxMapZoom);
+      m_mapZoom = game::utils::ClampMapZoom(m_mapZoom * 1.12f, m_minMapZoom,
+                                            m_maxMapZoom);
     }
     if (ctx.input.GetKeyDown(VK_OEM_MINUS) ||
         ctx.input.GetKeyDown(VK_SUBTRACT)) {
-      m_mapZoom =
-          game::utils::ClampMapZoom(m_mapZoom + 0.1f, m_minMapZoom, m_maxMapZoom);
+      m_mapZoom = game::utils::ClampMapZoom(m_mapZoom / 1.12f, m_minMapZoom,
+                                            m_maxMapZoom);
     }
     m_mapCenter =
         game::utils::ClampMapCenter(m_mapCenter, m_fieldWidth, m_fieldDepth, 2.0f);
@@ -1602,8 +1604,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       float wheel = ctx.input.GetMouseScrollDelta();
       if (wheel != 0.0f) {
         m_cameraDistance -= wheel * 2.0f * kFieldScale; // ホイール感度
-        m_cameraDistance = std::clamp(m_cameraDistance, 3.0f * kFieldScale,
-                                      30.0f * kFieldScale); // 距離制限
+        m_cameraDistance = std::clamp(m_cameraDistance, 1.2f * kFieldScale,
+                                      35.0f * kFieldScale); // 距離制限（よりズーム可）
       }
     }
   }
@@ -1821,7 +1823,10 @@ void WikiGolfScene::UpdateMapCamera(core::GameContext &ctx) {
     return;
 
   // フィールド中央の真上から見下ろす
-  float height = std::max(m_fieldWidth, m_fieldDepth) * m_mapZoom;
+  float extent = std::max(m_fieldWidth, m_fieldDepth);
+  float viewSpan = extent / std::max(0.01f, m_mapZoom);
+  viewSpan = std::clamp(viewSpan, extent * 0.01f, extent * 6.0f);
+  float height = std::max(viewSpan * 1.6f, 5.0f);
 
   // 目標位置: オフセット適用
   XMVECTOR targetPos =
@@ -1860,17 +1865,23 @@ void WikiGolfScene::UpdateMinimap(core::GameContext &ctx) {
   m_minimapRenderer->Render(ctx, params);
 
   if (ui && marker && ballT) {
-    float extent = params.extent;
+    // MapSysの射影計算と同一の値を使ってUI座標に変換する
+    float viewSpan =
+        std::clamp(params.extent / std::max(0.01f, params.zoom),
+                   params.extent * 0.01f, params.extent * 6.0f);
     float orthoWidth =
-        std::max(extent * params.zoom * params.orthoPadding, extent * 0.5f);
+        std::max(viewSpan * params.orthoPadding, viewSpan * 0.5f);
+    // GetProjMatrixが幅・高さに1.2倍を掛ける点を反映
+    float clipWidth = orthoWidth * 1.2f;
+
     float dx = ballT->position.x - params.center.x;
     float dz = ballT->position.z - params.center.z;
-    float u = 0.5f + dx / (2.0f * orthoWidth);
-    float v = 0.5f - dz / (2.0f * orthoWidth);
+    float u = 0.5f + dx / clipWidth;
+    float v = 0.5f - dz / clipWidth;
     u = std::clamp(u, 0.02f, 0.98f);
     v = std::clamp(v, 0.02f, 0.98f);
-    marker->x = ui->x + u * ui->width - 6.0f;
-    marker->y = ui->y + v * ui->height - 6.0f;
+    marker->x = ui->x + u * ui->width - 10.0f;
+    marker->y = ui->y + v * ui->height - 10.0f;
     marker->visible = ui->visible;
   }
 }
@@ -2233,7 +2244,7 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
     marker.text = L"◎";
     marker.x = ui.x + ui.width * 0.5f - 10.0f;
     marker.y = ui.y + ui.height * 0.5f - 10.0f;
-    marker.style = graphics::TextStyle::Caption();
+    marker.style = graphics::TextStyle::Guide();
     marker.style.fontSize = 22.0f;                   // 少し大きめ
     marker.style.color = {1.0f, 0.9f, 0.2f, 1.0f};   // 黄色で視認性アップ
     marker.layer = ui.layer + 1;
@@ -2245,7 +2256,7 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
         L"Map: Drag/RMB/WASD pan | Wheel zoom | C center | M close";
     help.x = ui.x - 10.0f;
     help.y = ui.y + ui.height + 6.0f;
-    help.style = graphics::TextStyle::Caption();
+    help.style = graphics::TextStyle::Guide();
     help.style.color = {1.0f, 1.0f, 1.0f, 0.8f};
     help.layer = ui.layer + 1;
   }
@@ -2597,15 +2608,9 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   float fieldWidth = minFieldWidth * std::pow(articleLengthFactor, 0.45f);
   float fieldDepth = minFieldDepth * std::pow(articleLengthFactor, 0.65f);
 
-  // 安全策: 最小・最大サイズ保証 + アスペクトバランス
+  // 安全策: 最小サイズ保証 + 幅の上限
   fieldWidth = std::clamp(fieldWidth, minFieldWidth, minFieldWidth * 4.0f);
-  fieldDepth = std::clamp(fieldDepth, minFieldDepth, minFieldDepth * 8.0f);
-
-  // 縦横比が極端に崩れないよう奥行きを幅の5.0倍以内に抑える
-  float maxDepthForWidth = fieldWidth * 5.0f;
-  if (fieldDepth > maxDepthForWidth) {
-    fieldDepth = maxDepthForWidth;
-  }
+  fieldDepth = std::max(fieldDepth, minFieldDepth);
 
   // 5. テクスチャ生成
   // 幅は16384制限があるが、高さはタイリングで無限に対応可能なので制限しない
@@ -2638,16 +2643,26 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
       std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
 
   // 実際のテクスチャ高さに合わせてフィールド奥行きを再スケールする
-  float heightScale =
-      static_cast<float>(m_wikiTexture->height) / static_cast<float>(texHeight);
-  if (heightScale > 1.01f) {
-    fieldDepth *= heightScale;
-    // 縦長記事でも読みやすさを優先して広げる。過剰な伸長は幅の6倍でキャップ。
-    float depthCap = fieldWidth * 6.0f;
-    float maxDepth = std::max(depthCap, minFieldDepth * 10.0f);
-    fieldDepth = std::min(fieldDepth, maxDepth);
-    LOG_INFO("WikiGolf", "Expanded field depth for tall article: scale={:.2f} -> depth={:.1f}", heightScale, fieldDepth);
+  float desiredDepthFromTex = static_cast<float>(m_wikiTexture->height) / 100.0f;
+  if (desiredDepthFromTex > fieldDepth) {
+    // 全文を潰さずに表示するため少し余裕を持って拡張
+    fieldDepth = desiredDepthFromTex * 1.05f;
   }
+
+  // 異常な巨大値を防止しつつ、超長文でも収まるよう高めの上限を設定
+  const float kMaxSafeDepth = 20000.0f; // 20km相当
+  fieldDepth = std::min(fieldDepth, kMaxSafeDepth);
+  LOG_INFO("WikiGolf", "Final field depth after text fit: {:.1f}", fieldDepth);
+
+  // 実際のテクスチャ幅に合わせてフィールド横幅も調整（文字サイズは一定のまま）
+  float desiredWidthFromTex =
+      static_cast<float>(m_wikiTexture->width) / 100.0f;
+  if (desiredWidthFromTex > fieldWidth) {
+    fieldWidth = desiredWidthFromTex * 1.05f; // わずかに余白
+  }
+  const float kMaxSafeWidth = 20000.0f;
+  fieldWidth = std::clamp(fieldWidth, minFieldWidth, kMaxSafeWidth);
+  LOG_INFO("WikiGolf", "Final field width after text fit: {:.1f}", fieldWidth);
 
   // 再計上したフィールド寸法を保存
   m_fieldWidth = fieldWidth;
