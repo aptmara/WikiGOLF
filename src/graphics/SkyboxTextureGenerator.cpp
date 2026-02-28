@@ -144,10 +144,9 @@ bool SaveFaceToFile(const std::vector<uint8_t> &data, int faceSize,
     return false;
   }
 
-  hr = frame->WritePixels(faceSize, faceSize * 4,
-                          static_cast<UINT>(data.size()),
-                          reinterpret_cast<BYTE *>(
-                              const_cast<uint8_t *>(data.data())));
+  hr = frame->WritePixels(
+      faceSize, faceSize * 4, static_cast<UINT>(data.size()),
+      reinterpret_cast<BYTE *>(const_cast<uint8_t *>(data.data())));
   if (FAILED(hr)) {
     return false;
   }
@@ -161,7 +160,7 @@ bool SaveFaceToFile(const std::vector<uint8_t> &data, int faceSize,
   return SUCCEEDED(hr);
 }
 
-bool LoadFaceFromFile(const std::wstring &path, int expectedSize,
+bool LoadFaceFromFile(const std::wstring &path, int targetSize,
                       std::vector<uint8_t> &outData) {
   auto factory = GetWicFactory();
   if (!factory) {
@@ -169,9 +168,9 @@ bool LoadFaceFromFile(const std::wstring &path, int expectedSize,
   }
 
   Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
-  HRESULT hr =
-      factory->CreateDecoderFromFilename(path.c_str(), nullptr, GENERIC_READ,
-                                         WICDecodeMetadataCacheOnLoad, &decoder);
+  HRESULT hr = factory->CreateDecoderFromFilename(
+      path.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad,
+      &decoder);
   if (FAILED(hr)) {
     return false;
   }
@@ -185,15 +184,11 @@ bool LoadFaceFromFile(const std::wstring &path, int expectedSize,
   UINT width = 0;
   UINT height = 0;
   hr = frame->GetSize(&width, &height);
-  if (FAILED(hr)) {
+  if (FAILED(hr) || width == 0 || height == 0) {
     return false;
   }
 
-  if (width != static_cast<UINT>(expectedSize) ||
-      height != static_cast<UINT>(expectedSize)) {
-    return false;
-  }
-
+  // Convert to 32bpp RGBA first
   Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
   hr = factory->CreateFormatConverter(&converter);
   if (FAILED(hr)) {
@@ -207,14 +202,88 @@ bool LoadFaceFromFile(const std::wstring &path, int expectedSize,
     return false;
   }
 
-  outData.resize(expectedSize * expectedSize * 4);
-  hr = converter->CopyPixels(
-      nullptr, expectedSize * 4, static_cast<UINT>(outData.size()),
-      outData.data());
+  // Scale to target size if needed
+  IWICBitmapSource *source = converter.Get();
+  Microsoft::WRL::ComPtr<IWICBitmapScaler> scaler;
+
+  if (width != static_cast<UINT>(targetSize) ||
+      height != static_cast<UINT>(targetSize)) {
+    hr = factory->CreateBitmapScaler(&scaler);
+    if (FAILED(hr)) {
+      return false;
+    }
+    hr = scaler->Initialize(converter.Get(), targetSize, targetSize,
+                            WICBitmapInterpolationModeHighQualityCubic);
+    if (FAILED(hr)) {
+      return false;
+    }
+    source = scaler.Get();
+  }
+
+  outData.resize(targetSize * targetSize * 4);
+  hr = source->CopyPixels(nullptr, targetSize * 4,
+                          static_cast<UINT>(outData.size()), outData.data());
   return SUCCEEDED(hr);
 }
 
 } // namespace
+
+std::wstring SkyboxTextureGenerator::GetThemeFileName(SkyboxTheme theme) {
+  switch (theme) {
+  case SkyboxTheme::Default:
+    return L"Default";
+  case SkyboxTheme::HistoryAncient:
+    return L"history";
+  case SkyboxTheme::Medieval:
+    return L"medieval";
+  case SkyboxTheme::ScienceTech:
+    return L"science";
+  case SkyboxTheme::SpaceAstronomy:
+    return L"space";
+  case SkyboxTheme::Ocean:
+    return L"ocean";
+  case SkyboxTheme::Mountain:
+    return L"mountain";
+  case SkyboxTheme::Forest:
+    return L"forest";
+  case SkyboxTheme::Desert:
+    return L"desert";
+  case SkyboxTheme::Polar:
+    return L"polar";
+  case SkyboxTheme::Volcano:
+    return L"volcano";
+  case SkyboxTheme::Urban:
+    return L"urban";
+  case SkyboxTheme::Sunset:
+    return L"sunset";
+  case SkyboxTheme::Sports:
+    return L"sports";
+  case SkyboxTheme::Art:
+    return L"art";
+  case SkyboxTheme::Music:
+    return L"music";
+  case SkyboxTheme::Literature:
+    return L"literature";
+  case SkyboxTheme::Medical:
+    return L"medical";
+  case SkyboxTheme::Food:
+    return L"food";
+  case SkyboxTheme::Religion:
+    return L"religion";
+  case SkyboxTheme::War:
+    return L"war";
+  case SkyboxTheme::Fantasy:
+    return L"fantasy";
+  case SkyboxTheme::Horror:
+    return L"horror";
+  case SkyboxTheme::SciFi:
+    return L"scifi";
+  case SkyboxTheme::Retro:
+    return L"retro";
+  default:
+    return L"Default";
+  }
+}
 
 bool SkyboxTextureGenerator::GenerateCubemap(
     ID3D11Device *device, const std::string &pageTitle,
@@ -288,8 +357,7 @@ bool SkyboxTextureGenerator::LoadCubemapFromFiles(
       return false;
     }
 
-    if (!LoadFaceFromFile(facePath.wstring(), kDefaultFaceSize,
-                          faceData[i])) {
+    if (!LoadFaceFromFile(facePath.wstring(), kDefaultFaceSize, faceData[i])) {
       return false;
     }
   }
@@ -1031,7 +1099,6 @@ void SkyboxTextureGenerator::GetThemeColors(SkyboxTheme theme,
   }
 }
 
-
 void SkyboxTextureGenerator::GenerateFaceData(
     const XMFLOAT3 &topColor, const XMFLOAT3 &horizonColor,
     const XMFLOAT3 &bottomColor, int faceSize,
@@ -1099,9 +1166,8 @@ void SkyboxTextureGenerator::GenerateFaceData(
 
         XMFLOAT3 sunDir = {0.7f, 0.5f, 0.3f}; // デフォルト
 
-        float noise =
-            GenerateNoise(dir.x * 5.0f, dir.y * 5.0f, dir.z * 5.0f) *
-            params.noiseMult;
+        float noise = GenerateNoise(dir.x * 5.0f, dir.y * 5.0f, dir.z * 5.0f) *
+                      params.noiseMult;
         float starIntensity =
             GenerateStars(dir.x, dir.y, dir.z) * params.starMult;
         float galaxyIntensity =
@@ -1148,8 +1214,7 @@ void SkyboxTextureGenerator::GenerateFaceData(
         float brightness = (color.x + color.y + color.z) / 3.0f;
         if (brightness < 0.3f && starIntensity > 0.9f &&
             params.starMult > 0.0f) {
-          float starBoost =
-              (starIntensity - 0.9f) * 10.0f * params.starMult;
+          float starBoost = (starIntensity - 0.9f) * 10.0f * params.starMult;
           color.x += starBoost * (0.8f + noise * 0.2f);
           color.y += starBoost * (0.8f + noise * 0.15f);
           color.z += starBoost * (1.0f + noise * 0.1f);
@@ -1175,8 +1240,8 @@ void SkyboxTextureGenerator::GenerateFaceData(
 
         // ネビュラ（拡散した帯状の光）
         if (params.nebulaStrength > 0.0f) {
-          float nebula = GenerateFBM(dir.x * 4.0f, dir.y * 2.0f,
-                                     dir.z * 4.0f, 6);
+          float nebula =
+              GenerateFBM(dir.x * 4.0f, dir.y * 2.0f, dir.z * 4.0f, 6);
           nebula = std::pow(nebula, 3.0f) * params.nebulaStrength;
           color.x += nebula * params.nebulaColor.x;
           color.y += nebula * params.nebulaColor.y;
@@ -1187,8 +1252,9 @@ void SkyboxTextureGenerator::GenerateFaceData(
         if (params.ribbonStrength > 0.0f) {
           float ribbonWave = std::sin(dir.x * params.ribbonFrequency) *
                              std::cos(dir.z * params.ribbonFrequency * 0.7f);
-          float ribbon = std::pow(std::abs(ribbonWave), params.ribbonSharpness) *
-                         params.ribbonStrength;
+          float ribbon =
+              std::pow(std::abs(ribbonWave), params.ribbonSharpness) *
+              params.ribbonStrength;
           // 偏りをy方向で強調
           ribbon *= 0.5f + 0.5f * (1.0f - std::abs(dir.y));
           color.x += ribbon * params.ribbonColor.x;
@@ -1216,7 +1282,8 @@ void SkyboxTextureGenerator::GenerateFaceData(
         color.z *= params.tint.z;
 
         float radius = std::sqrt(u * u + v * v);
-        float vignette = std::pow(std::min(1.0f, radius), 2.2f) * params.vignette;
+        float vignette =
+            std::pow(std::min(1.0f, radius), 2.2f) * params.vignette;
         color.x *= (1.0f - vignette);
         color.y *= (1.0f - vignette);
         color.z *= (1.0f - vignette);

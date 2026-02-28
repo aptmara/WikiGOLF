@@ -65,10 +65,25 @@ public:
   /// @brief 現在のFOVを取得（度単位）
   float GetCurrentFov() const { return m_currentFov; }
 
+  // === タイムコントロール ===
+
+  /// @brief 一時的なヒットストップを発火
+  /// @param duration 継続時間（秒）
+  /// @param timeScale 停止中のスケール（0.0fで完全停止）
+  void TriggerHitStop(float duration, float timeScale = 0.0f);
+
+  /// @brief スローモーションを開始
+  /// @param duration 継続時間
+  /// @param scale 適用するスケール
+  void TriggerSlowMotion(float duration, float scale);
+
+  /// @brief 未スケールのdtから有効タイムスケールを計算
+  float ConsumeTimeScale(float unscaledDt);
+
   // === インパクトエフェクト ===
 
   /// @brief 判定タイプ（パーティクルの色・挙動に影響）
-  enum class JudgeType { None, Great, Nice, Miss };
+  enum class JudgeType { None, Great, Nice, Miss, Special };
 
   /// @brief インパクトエフェクト発火
   /// @param ctx ゲームコンテキスト
@@ -91,6 +106,15 @@ public:
                              game::components::TerrainMaterial material,
                              float strength);
 
+  /// @brief リップルエフェクトを発火（強いバウンド時）
+  void TriggerRippleEffect(core::GameContext &ctx,
+                           const DirectX::XMFLOAT3 &position,
+                           float baseRadius, float strength);
+
+  /// @brief カップインなど祝祭時の紙吹雪
+  void TriggerConfetti(core::GameContext &ctx,
+                       const DirectX::XMFLOAT3 &position, float burstPower);
+
   // === トレイル ===
 
   /// @brief トレイルをリセット（ページ遷移時などに呼ぶ）
@@ -103,18 +127,31 @@ private:
   float m_shakeTimer = 0.0f;
   float m_shakeFrequency = 25.0f;
 
+  // --- タイムコントロール ---
+  float m_timeScale = 1.0f;
+  float m_hitStopTimer = 0.0f;
+  float m_hitStopDuration = 0.0f;
+  float m_hitStopScale = 0.0f;
+  float m_slowMoTimer = 0.0f;
+  float m_slowMoDuration = 0.0f;
+  float m_slowMoScale = 1.0f;
+
   // --- FOV ---
   float m_baseFov = 60.0f;
   float m_currentFov = 60.0f;
   float m_targetFov = 60.0f;
+  float m_fovPunchTimer = 0.0f;
+  float m_fovPunchDuration = 0.0f;
+  float m_fovPunchStrength = 0.0f;
 
   // --- トレイル ---
   std::vector<ecs::Entity> m_trailEntities;
   std::vector<DirectX::XMFLOAT3> m_trailPositions;
+  std::vector<DirectX::XMFLOAT4> m_trailBaseColors;
   int m_trailWriteIndex = 0;
   float m_trailUpdateTimer = 0.0f;
-  static constexpr int kTrailCount = 40;               // 派手に増量
-  static constexpr float kTrailUpdateInterval = 0.02f; // 50Hz
+  static constexpr int kTrailCount = 40;                // 派手に増量
+  static constexpr float kTrailUpdateInterval = 0.01f;  // 高頻度生成
 
   // --- インパクトエフェクト ---
   struct ImpactParticle {
@@ -122,6 +159,7 @@ private:
     DirectX::XMFLOAT3 velocity = {0, 0, 0};
     float lifetime = 0.0f;
     float maxLifetime = 1.0f;
+    float baseScale = 0.1f;
     DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
   };
   std::vector<ImpactParticle> m_impactParticles;
@@ -142,6 +180,17 @@ private:
   float m_envEmitTimer = 0.0f;
   static constexpr int kEnvParticleCount = 120; // 豊かな環境表現のため多めに
 
+  // --- リップルエフェクト ---
+  struct Ripple {
+    ecs::Entity entity = UINT32_MAX;
+    float lifetime = 0.0f;
+    float maxLifetime = 1.0f;
+    float startScale = 1.0f;
+  };
+  std::vector<Ripple> m_ripples;
+  int m_rippleWriteIndex = 0;
+  static constexpr int kRippleCount = 24;
+
   // --- 内部処理 ---
   void UpdateCameraShake(core::GameContext &ctx, ecs::Entity cameraEntity);
   void UpdateFov(core::GameContext &ctx, ecs::Entity cameraEntity);
@@ -149,12 +198,15 @@ private:
   void UpdateImpactParticles(core::GameContext &ctx);
   void UpdateEnvironmentParticles(core::GameContext &ctx,
                                   ecs::Entity targetEntity);
+  void UpdateRipples(core::GameContext &ctx);
+  float UpdateFovPunch(float dt);
   void EmitEnvironmentParticles(core::GameContext &ctx,
                                 ecs::Entity targetEntity);
 
   void CreateTrailEntities(core::GameContext &ctx);
   void CreateImpactParticleEntities(core::GameContext &ctx);
   void CreateEnvironmentParticleEntities(core::GameContext &ctx);
+  void CreateRippleEntities(core::GameContext &ctx);
 };
 
 } // namespace game::systems

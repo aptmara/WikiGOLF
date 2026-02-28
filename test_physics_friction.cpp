@@ -90,6 +90,13 @@ int main() {
           "Bunker friction is stronger than fairway");
     CHECK(steepFairway > settings.constantBrake * 0.5f,
           "Steep slopes keep a friction floor to avoid endless sliding");
+
+    float creeping =
+        game::systems::ComputeGrassRollingAcceleration(
+            0.5f, 1.0f, game::components::TerrainMaterial::Fairway, 1.0f,
+            settings);
+    CHECK(creeping < flatFairway * 0.7f,
+          "Nonlinear friction eases at low speed to keep the ball creeping");
   }
 
   std::cout << "All physics friction tests passed!\n";

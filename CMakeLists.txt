@@ -61,7 +61,10 @@ endif()
 add_custom_command(TARGET DX_GAME POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:DX_GAME>/Assets
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/resources/textures $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEXTURE_FILES} $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/Fonts $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/sounds $<TARGET_FILE_DIR:DX_GAME>/Assets/sounds

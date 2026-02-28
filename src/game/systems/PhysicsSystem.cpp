@@ -472,7 +472,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             float vn = XMVectorGetX(XMVector3Dot(vel, terrainN));
             if (vn < 0.0f) {
               // 反射
-              float bounce = rb.restitution * 0.5f;
+              float jitter =
+                  1.0f +
+                  (((float)(rand() % 100) / 100.0f) - 0.5f) *
+                      0.18f; // 軽い乱数で跳ね方を変える
+              float bounce =
+                  std::max(0.0f, rb.restitution * 0.5f * jitter);
               vel = XMVectorSubtract(
                   vel, XMVectorScale(terrainN, vn * (1.0f + bounce)));
 
@@ -507,6 +512,11 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                   juiceSys->TriggerMaterialEffect(
                       ctx, t.position, static_cast<TerrainMaterial>(mat),
                       strength);
+                  if (impactSpeed > 3.0f) {
+                    float rippleRadius = col.radius * 8.0f;
+                    juiceSys->TriggerRippleEffect(
+                        ctx, t.position, rippleRadius, strength);
+                  }
                 }
 
                 // SE再生
@@ -586,9 +596,19 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             XMVECTOR dir = (dirLen > 0.0001f)
                                ? XMVectorScale(pullVec, 1.0f / dirLen)
                                : XMVectorZero();
-            float factor = 1.0f - (std::sqrt(distSq) / range);
-            factor = factor * factor;
-            acc = XMVectorAdd(acc, XMVectorScale(dir, hole.gravity * factor));
+            float dist = std::sqrt(distSq);
+            float normalized = std::clamp(dist / range, 0.0f, 1.0f);
+            float expo = std::exp(-normalized * normalized * 4.5f);
+            float ease = std::pow(std::max(0.0f, 1.0f - normalized), 2.2f);
+            float factor = std::clamp((expo * 0.65f + ease * 0.75f), 0.0f,
+                                      1.1f);
+            if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
+              float slowScale = 0.35f + normalized * 0.25f;
+              float slowDuration = 0.5f + (1.0f - normalized) * 0.4f;
+              juiceSys->TriggerSlowMotion(slowDuration, slowScale);
+            }
+            acc = XMVectorAdd(
+                acc, XMVectorScale(dir, hole.gravity * factor));
           }
         }
       }
@@ -645,7 +665,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         // ここでは動摩擦係数をベースに少し色をつけて判定
         float staticLimit = frictionAccel * 1.2f;
 
-        if (currentSpeed < 0.08f && tangentialAcc < staticLimit) {
+        if (currentSpeed < 0.05f && tangentialAcc < staticLimit) {
           // ほぼ停止 & 重力に勝てる摩擦がある -> 完全停止
           vel = XMVectorZero();
           acc = XMVectorZero();
@@ -696,7 +716,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       // 完全に止める閾値を 0.05 -> 0.01 に変更して粘りを出す
       float speedFinal = SafeLength(vel);
       float slopeFlatnessFinal = XMVectorGetY(groundNormal);
-      if (speedFinal < 0.01f && isGrounded && slopeFlatnessFinal > 0.98f) {
+      if (speedFinal < 0.008f && isGrounded && slopeFlatnessFinal > 0.98f) {
         vel = XMVectorZero();
       }
 
@@ -778,7 +798,13 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           XMVECTOR vel = XMLoadFloat3(&dyn.rb->velocity);
           float vn = XMVectorGetX(XMVector3Dot(vel, normal));
           if (vn < 0.0f) {
-            float bounce = (dyn.rb->restitution + other.rb->restitution) * 0.5f;
+            float jitter =
+                1.0f +
+                (((float)(rand() % 100) / 100.0f) - 0.5f) *
+                    0.2f; // 跳ね方に少しランダムさを付与
+            float bounce =
+                std::max(0.0f, (dyn.rb->restitution + other.rb->restitution) *
+                                   0.5f * jitter);
             vel = XMVectorSubtract(vel,
                                    XMVectorScale(normal, vn * (1.0f + bounce)));
             XMStoreFloat3(&dyn.rb->velocity, vel);

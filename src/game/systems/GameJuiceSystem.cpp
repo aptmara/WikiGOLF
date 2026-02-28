@@ -37,6 +37,9 @@ void GameJuiceSystem::Initialize(core::GameContext &ctx) {
   // 環境パーティクルエンティティ作成
   CreateEnvironmentParticleEntities(ctx);
 
+  // リップルエフェクト
+  CreateRippleEntities(ctx);
+
   // FOV初期化
   m_baseFov = 60.0f;
   m_currentFov = m_baseFov;
@@ -62,6 +65,45 @@ void GameJuiceSystem::Update(core::GameContext &ctx, ecs::Entity cameraEntity,
   // 環境パーティクル更新
   EmitEnvironmentParticles(ctx, targetEntity);
   UpdateEnvironmentParticles(ctx, targetEntity);
+
+  // リップル更新
+  UpdateRipples(ctx);
+}
+
+// =============================================================================
+// タイムコントロール
+// =============================================================================
+
+void GameJuiceSystem::TriggerHitStop(float duration, float timeScale) {
+  m_hitStopDuration = std::max(0.0f, duration);
+  m_hitStopTimer = m_hitStopDuration;
+  m_hitStopScale = std::clamp(timeScale, 0.0f, 1.0f);
+}
+
+void GameJuiceSystem::TriggerSlowMotion(float duration, float scale) {
+  m_slowMoDuration = std::max(0.0f, duration);
+  m_slowMoTimer = std::max(m_slowMoTimer, m_slowMoDuration);
+  m_slowMoScale = std::clamp(scale, 0.05f, 1.0f);
+}
+
+float GameJuiceSystem::ConsumeTimeScale(float unscaledDt) {
+  // ヒットストップ優先
+  float activeScale = 1.0f;
+  if (m_hitStopTimer > 0.0f) {
+    m_hitStopTimer = std::max(0.0f, m_hitStopTimer - unscaledDt);
+    activeScale = m_hitStopScale;
+  }
+
+  if (m_slowMoTimer > 0.0f && m_slowMoDuration > 0.0f) {
+    m_slowMoTimer = std::max(0.0f, m_slowMoTimer - unscaledDt);
+    float progress = 1.0f - (m_slowMoTimer / m_slowMoDuration);
+    float easeOut = 1.0f - std::pow(std::clamp(progress, 0.0f, 1.0f), 2.0f);
+    float slowScale = m_slowMoScale + (1.0f - m_slowMoScale) * easeOut;
+    activeScale = std::min(activeScale, slowScale);
+  }
+
+  m_timeScale = std::clamp(activeScale, 0.0f, 1.0f);
+  return m_timeScale;
 }
 
 // =============================================================================
@@ -130,7 +172,9 @@ void GameJuiceSystem::UpdateFov(core::GameContext &ctx,
                                 ecs::Entity cameraEntity) {
   // 滑らかに補間
   float speed = 8.0f;
-  m_currentFov += (m_targetFov - m_currentFov) * speed * ctx.dt;
+  float punchOffset = UpdateFovPunch(ctx.dt);
+  float desiredFov = m_targetFov - punchOffset;
+  m_currentFov += (desiredFov - m_currentFov) * speed * ctx.dt;
 
   if (!ctx.world.IsAlive(cameraEntity))
     return;
@@ -141,6 +185,19 @@ void GameJuiceSystem::UpdateFov(core::GameContext &ctx,
   }
 }
 
+float GameJuiceSystem::UpdateFovPunch(float dt) {
+  if (m_fovPunchTimer <= 0.0f || m_fovPunchDuration <= 0.0f ||
+      m_fovPunchStrength <= 0.0f) {
+    m_fovPunchTimer = 0.0f;
+    return 0.0f;
+  }
+
+  m_fovPunchTimer = std::max(0.0f, m_fovPunchTimer - dt);
+  float progress = 1.0f - (m_fovPunchTimer / m_fovPunchDuration);
+  float eased = std::sin(std::clamp(progress, 0.0f, 1.0f) * XM_PI);
+  return m_fovPunchStrength * eased;
+}
+
 // =============================================================================
 // トレイル
 // =============================================================================
@@ -148,14 +205,16 @@ void GameJuiceSystem::UpdateFov(core::GameContext &ctx,
 void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
   m_trailEntities.clear();
   m_trailPositions.clear();
+  m_trailBaseColors.clear();
   m_trailPositions.resize(kTrailCount, {0, -100, 0}); // 画面外で初期化
+  m_trailBaseColors.resize(kTrailCount);
 
   for (int i = 0; i < kTrailCount; ++i) {
     auto e = ctx.world.CreateEntity();
 
     auto &t = ctx.world.Add<Transform>(e);
-    t.position = {0, -100, 0};    // 画面外
-    t.scale = {0.1f, 0.1f, 0.1f}; // 大きめ
+    t.position = {0, -100, 0};     // 画面外
+    t.scale = {0.08f, 0.08f, 0.08f}; // 大きめ
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
@@ -204,6 +263,7 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
     }
     float alpha = 0.95f * (1.0f - ratio * 0.6f);
     mr.color = {r * 1.5f, g * 1.5f, b * 1.5f, alpha}; // 発光感
+    m_trailBaseColors[i] = mr.color;
     mr.isVisible = false;
 
     m_trailEntities.push_back(e);
@@ -244,11 +304,23 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
   if (!isMoving) {
     for (auto e : m_trailEntities) {
       auto *mr = ctx.world.Get<MeshRenderer>(e);
-      if (mr)
-        mr->isVisible = false;
+      if (mr) {
+        mr->color.w *= 0.85f;
+        if (mr->color.w < 0.02f) {
+          mr->isVisible = false;
+        }
+      }
     }
     return;
   }
+
+  float speed =
+      std::sqrt(rb->velocity.x * rb->velocity.x + rb->velocity.y * rb->velocity.y +
+                rb->velocity.z * rb->velocity.z);
+  float speedNormalized = std::clamp(speed / 35.0f, 0.0f, 1.0f);
+  auto *shotState = ctx.world.GetGlobal<components::ShotState>();
+  components::ShotJudgement judgement =
+      shotState ? shotState->judgement : components::ShotJudgement::None;
 
   // 一定間隔で位置を記録
   m_trailUpdateTimer += ctx.dt;
@@ -275,8 +347,26 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
 
       // 古いほど小さく
       float ratio = (float)i / (float)(kTrailCount - 1);
-      float scale = 0.08f * (1.0f - ratio * 0.7f);
-      t->scale = {scale, scale, scale};
+      float fade = std::pow(1.0f - ratio, 1.5f);
+      float sizeEase = 0.65f + 0.45f * std::pow(1.0f - ratio, 2.3f);
+      float scaleBase = (0.07f + speedNormalized * 0.05f) * sizeEase;
+      t->scale = {scaleBase, scaleBase, scaleBase};
+
+      DirectX::XMFLOAT4 baseColor = m_trailBaseColors[posIndex];
+      DirectX::XMFLOAT3 tint = {1.0f, 0.5f + speedNormalized * 0.5f, 0.15f};
+      if (judgement == components::ShotJudgement::Great) {
+        tint = {1.2f, 1.0f, 0.35f};
+      } else if (judgement == components::ShotJudgement::Nice) {
+        tint = {0.4f, 0.9f, 1.2f};
+      } else if (judgement == components::ShotJudgement::Miss) {
+        tint = {0.9f, 0.3f, 0.3f};
+      }
+
+      float mix = 0.25f + speedNormalized * 0.55f;
+      mr->color.x = baseColor.x * (1.0f - mix) + tint.x * mix;
+      mr->color.y = baseColor.y * (1.0f - mix) + tint.y * mix;
+      mr->color.z = baseColor.z * (1.0f - mix) + tint.z * mix;
+      mr->color.w = baseColor.w * fade;
 
       // 画面外でなければ表示
       mr->isVisible = (pos.y > -50.0f);
@@ -322,6 +412,12 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
             "judge={}",
             position.x, position.y, position.z, power, (int)judge);
 
+  // 演出テンポ: ヒットストップ + FOVパンチ
+  TriggerHitStop(0.06f + power * 0.04f);
+  m_fovPunchStrength = 8.0f + power * 6.0f;
+  m_fovPunchDuration = 0.18f;
+  m_fovPunchTimer = m_fovPunchDuration;
+
   // 判定によって派手さを調整
   float speedMultiplier = 1.0f;
   float sizeMultiplier = 1.0f;
@@ -329,9 +425,14 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
 
   switch (judge) {
   case JudgeType::Great:
-    speedMultiplier = 1.5f;    // より高速に飛び散る
-    sizeMultiplier = 1.5f;     // 大きめ
-    lifetimeMultiplier = 1.3f; // 長寿命
+    speedMultiplier = 1.8f;    // より高速に飛び散る
+    sizeMultiplier = 1.6f;     // 大きめ
+    lifetimeMultiplier = 1.35f; // 長寿命
+    break;
+  case JudgeType::Special:
+    speedMultiplier = 2.0f;
+    sizeMultiplier = 1.8f;
+    lifetimeMultiplier = 1.45f;
     break;
   case JudgeType::Nice:
     speedMultiplier = 1.2f;
@@ -384,6 +485,7 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
     p.lifetime =
         (0.6f + ((float)(rand() % 100) / 100.0f) * 0.5f + layer * 0.15f) *
         lifetimeMultiplier;
+    p.maxLifetime = p.lifetime;
 
     // 初期位置設定
     auto *t = ctx.world.Get<Transform>(p.entity);
@@ -397,6 +499,7 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
       float scaleVar = 0.8f + ((float)(rand() % 100) / 100.0f) * 0.4f;
       float scale = baseScale * scaleVar;
       t->scale = {scale, scale, scale};
+      p.baseScale = scale;
     }
 
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
@@ -419,6 +522,15 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
             g = 1.0f;
             b = 0.9f;
           }
+        }
+        break;
+      case JudgeType::Special:
+        // 虹色に近い強調
+        {
+          float hue = ((float)(rand() % 360)) * (XM_PI / 180.0f);
+          r = 0.6f + std::sin(hue) * 0.4f;
+          g = 0.6f + std::sin(hue + 2.094f) * 0.4f;
+          b = 0.6f + std::sin(hue + 4.188f) * 0.4f;
         }
         break;
       case JudgeType::Nice:
@@ -476,7 +588,7 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
 
       // 縮小しながらフェードアウト
       float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
-      float scale = 0.15f * std::pow(lifeRatio, 0.5f);
+      float scale = p.baseScale * std::pow(lifeRatio, 0.5f);
       t->scale = {scale, scale, scale};
     }
 
@@ -506,7 +618,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
   // 放出数（強さに応じて）
   int count = std::max(1, (int)(strength * 10.0f));
   if (material == game::components::TerrainMaterial::Bunker)
-    count *= 2; // バンカーは多め
+    count = std::max(2, count * 3); // バンカーはさらに多め
 
   for (int k = 0; k < count; ++k) {
     auto &p = m_envParticles[m_envWriteIndex];
@@ -543,14 +655,19 @@ void GameJuiceSystem::TriggerMaterialEffect(
         mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
         mr->color = {0.85f, 0.75f, 0.55f, 0.7f};
         mr->customFlags.x = 1.0f;
-        p.baseScale = 0.2f + strength * 0.2f;
+        p.baseScale = 0.24f + strength * 0.25f;
         t->scale = {p.baseScale, p.baseScale, p.baseScale};
+        p.lifetime *= 1.4f;
+        p.maxLifetime = p.lifetime;
+        p.velocity.x *= 0.55f;
+        p.velocity.z *= 0.55f;
+        p.velocity.y *= 0.85f;
         p.angularVelocity = {0, 0, 0};
         break;
 
       case game::components::TerrainMaterial::Rough:
       case game::components::TerrainMaterial::Fairway:
-      case game::components::TerrainMaterial::Green:
+      case game::components::TerrainMaterial::Green: {
         // 芝・葉っぱ
         p.isDust = false;
         mr->mesh = ctx.resource.LoadMesh("builtin/cube");
@@ -558,7 +675,8 @@ void GameJuiceSystem::TriggerMaterialEffect(
 
         if (material == game::components::TerrainMaterial::Rough) {
           mr->color = {0.15f, 0.45f, 0.15f, 1.0f}; // 濃い緑
-          p.baseScale = 0.1f + strength * 0.15f;
+          float sizeJitter = 0.7f + ((float)(rand() % 100) / 100.0f) * 0.6f;
+          p.baseScale = (0.1f + strength * 0.15f) * sizeJitter;
         } else if (material == game::components::TerrainMaterial::Green) {
           mr->color = {0.2f, 0.8f, 0.3f, 1.0f};   // 鮮やか
           p.baseScale = 0.05f + strength * 0.05f; // 小さい
@@ -569,10 +687,15 @@ void GameJuiceSystem::TriggerMaterialEffect(
 
         t->scale = {p.baseScale * 1.5f, p.baseScale * 0.1f, p.baseScale * 1.5f};
 
-        p.angularVelocity.x = ((float)(rand() % 100) / 100.0f - 0.5f) * 30.0f;
-        p.angularVelocity.y = ((float)(rand() % 100) / 100.0f - 0.5f) * 30.0f;
-        p.angularVelocity.z = ((float)(rand() % 100) / 100.0f - 0.5f) * 30.0f;
+        float spinScale = 45.0f;
+        p.angularVelocity.x =
+            ((float)(rand() % 100) / 100.0f - 0.5f) * spinScale;
+        p.angularVelocity.y =
+            ((float)(rand() % 100) / 100.0f - 0.5f) * spinScale;
+        p.angularVelocity.z =
+            ((float)(rand() % 100) / 100.0f - 0.5f) * spinScale;
         break;
+      }
 
       default:
         // 岩など（汎用拡散）
@@ -612,6 +735,30 @@ void GameJuiceSystem::CreateEnvironmentParticleEntities(
     m_envParticles[i].lifetime = 0.0f;
   }
   m_envWriteIndex = 0;
+}
+
+void GameJuiceSystem::CreateRippleEntities(core::GameContext &ctx) {
+  m_ripples.clear();
+  m_ripples.resize(kRippleCount);
+
+  for (int i = 0; i < kRippleCount; ++i) {
+    auto e = ctx.world.CreateEntity();
+    auto &t = ctx.world.Add<Transform>(e);
+    t.position = {0, -100, 0};
+    t.scale = {0.5f, 0.02f, 0.5f};
+
+    auto &mr = ctx.world.Add<MeshRenderer>(e);
+    mr.mesh = ctx.resource.LoadMesh("builtin/cylinder");
+    mr.shader = ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
+                                        L"shaders/ParticlePS.hlsl");
+    mr.isVisible = false;
+    mr.isTransparent = true;
+    mr.color = {0.6f, 0.8f, 1.2f, 0.0f};
+
+    m_ripples[i].entity = e;
+    m_ripples[i].lifetime = 0.0f;
+  }
+  m_rippleWriteIndex = 0;
 }
 
 void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
@@ -661,8 +808,10 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
           mr->color = {0.85f, 0.75f, 0.55f, 0.6f}; // サンドベージュ
           mr->customFlags.x = 1.0f;                // isDustフラグをシェーダーへ
-          p.baseScale = 0.15f + ((float)(rand() % 100) / 100.0f) * 0.1f;
+          p.baseScale = 0.18f + ((float)(rand() % 100) / 100.0f) * 0.14f;
           t->scale = {p.baseScale, p.baseScale, p.baseScale};
+          p.lifetime *= 1.4f;
+          p.maxLifetime = p.lifetime;
 
           // 進行方向の逆にふわっと広がる
           auto *rb = ctx.world.Get<RigidBody>(targetEntity);
@@ -675,6 +824,9 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           p.velocity.y +=
               0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f; // 少し浮く
           p.velocity.z += ((float)(rand() % 100) / 100.0f - 0.5f) * spread;
+          p.velocity.x *= 0.65f;
+          p.velocity.z *= 0.65f;
+          p.velocity.y *= 0.9f;
 
           p.angularVelocity = {0, 0, 0};
           break;
@@ -691,20 +843,27 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
             mr->color = {0.3f, 0.7f, 0.2f, 1.0f}; // 明るい緑
           }
           p.baseScale = 0.05f + ((float)(rand() % 100) / 100.0f) * 0.05f;
+          float sizeJitter =
+              0.6f + ((float)(rand() % 100) / 100.0f) * 0.8f;
+          p.baseScale *= sizeJitter;
           // 板状にする
           t->scale = {p.baseScale * 2.0f, p.baseScale * 0.2f,
                       p.baseScale * 1.5f};
 
           // 四方に弾ける
           float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
-          float speed = 2.0f + ((float)(rand() % 100) / 100.0f) * 3.0f;
+          float speed = 2.5f + ((float)(rand() % 100) / 100.0f) * 3.5f;
           p.velocity.x = std::cos(angle) * speed;
           p.velocity.y = 1.0f + ((float)(rand() % 100) / 100.0f) * 2.0f;
           p.velocity.z = std::sin(angle) * speed;
 
-          p.angularVelocity.x = ((float)(rand() % 100) / 100.0f - 0.5f) * 20.0f;
-          p.angularVelocity.y = ((float)(rand() % 100) / 100.0f - 0.5f) * 20.0f;
-          p.angularVelocity.z = ((float)(rand() % 100) / 100.0f - 0.5f) * 20.0f;
+          float angScale = 35.0f;
+          p.angularVelocity.x =
+              ((float)(rand() % 100) / 100.0f - 0.5f) * angScale;
+          p.angularVelocity.y =
+              ((float)(rand() % 100) / 100.0f - 0.5f) * angScale;
+          p.angularVelocity.z =
+              ((float)(rand() % 100) / 100.0f - 0.5f) * angScale;
           break;
         }
         default:
@@ -778,6 +937,96 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
       mr->color.w = lifeRatio; // アルファ減衰
 
       if (p.lifetime <= 0.0f) {
+        mr->isVisible = false;
+      }
+    }
+  }
+
+}
+
+void GameJuiceSystem::TriggerConfetti(core::GameContext &ctx,
+                                      const DirectX::XMFLOAT3 &position,
+                                      float burstPower) {
+  static const DirectX::XMFLOAT3 palette[] = {
+      {1.2f, 0.3f, 0.35f}, {0.3f, 1.1f, 0.5f}, {0.35f, 0.6f, 1.2f},
+      {1.0f, 0.9f, 0.35f}, {1.1f, 0.45f, 1.1f}};
+
+  int count = std::min(kImpactParticleCount, 60);
+  for (int i = 0; i < count; ++i) {
+    auto &p = m_impactParticles[i];
+    auto *t = ctx.world.Get<Transform>(p.entity);
+    auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
+    if (!t || !mr)
+      continue;
+
+    float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
+    float speed = (2.5f + burstPower * 3.0f) *
+                  (0.6f + ((float)(rand() % 100) / 100.0f) * 0.6f);
+    float up = 2.0f + burstPower * 2.0f;
+    p.velocity.x = std::cos(angle) * speed;
+    p.velocity.z = std::sin(angle) * speed;
+    p.velocity.y = up * (0.7f + ((float)(rand() % 100) / 100.0f) * 0.6f);
+
+    p.maxLifetime = 0.9f + ((float)(rand() % 100) / 100.0f) * 0.4f;
+    p.lifetime = p.maxLifetime;
+
+    t->position = position;
+    t->position.y += 0.2f;
+
+    float scale = 0.08f + burstPower * 0.05f;
+    t->scale = {scale, scale * 0.4f, scale};
+    p.baseScale = scale;
+
+    DirectX::XMFLOAT3 tint = palette[i % (sizeof(palette) / sizeof(palette[0]))];
+    p.baseColor = {tint.x, tint.y, tint.z, 1.0f};
+    mr->color = p.baseColor;
+    mr->isTransparent = true;
+    mr->isVisible = true;
+  }
+}
+
+void GameJuiceSystem::TriggerRippleEffect(core::GameContext &ctx,
+                                          const DirectX::XMFLOAT3 &position,
+                                          float baseRadius, float strength) {
+  if (m_ripples.empty())
+    return;
+
+  auto &r = m_ripples[m_rippleWriteIndex];
+  m_rippleWriteIndex = (m_rippleWriteIndex + 1) % kRippleCount;
+
+  r.maxLifetime = 0.45f + strength * 0.4f;
+  r.lifetime = r.maxLifetime;
+  r.startScale = std::max(baseRadius, 0.1f);
+
+  if (auto *t = ctx.world.Get<Transform>(r.entity)) {
+    t->position = position;
+    t->position.y += 0.02f; // 地面より少し上
+    t->scale = {r.startScale, 0.02f, r.startScale};
+  }
+
+  if (auto *mr = ctx.world.Get<MeshRenderer>(r.entity)) {
+    mr->isVisible = true;
+    mr->color.w = 0.6f;
+  }
+}
+
+void GameJuiceSystem::UpdateRipples(core::GameContext &ctx) {
+  for (auto &r : m_ripples) {
+    if (r.lifetime <= 0.0f)
+      continue;
+
+    r.lifetime -= ctx.dt;
+    float progress = 1.0f - (r.lifetime / r.maxLifetime);
+    float ease = std::pow(progress, 0.85f);
+
+    auto *t = ctx.world.Get<Transform>(r.entity);
+    auto *mr = ctx.world.Get<MeshRenderer>(r.entity);
+    if (t && mr) {
+      float scaleMul = 1.0f + ease * 3.0f;
+      t->scale = {r.startScale * scaleMul, 0.02f,
+                  r.startScale * scaleMul};
+      mr->color.w = (1.0f - ease) * 0.6f;
+      if (r.lifetime <= 0.0f) {
         mr->isVisible = false;
       }
     }
