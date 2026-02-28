@@ -12,7 +12,6 @@
 #include <vector>
 #include <wrl/client.h>
 
-
 namespace graphics {
 
 /**
@@ -103,7 +102,6 @@ public:
       ID3D11Device *device, const std::wstring &baseFilePath,
       Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);
 
-private:
   /**
    * @brief ページ情報からテーマを判定
    * @param pageTitle ページタイトル
@@ -113,6 +111,14 @@ private:
   SkyboxTheme DetermineTheme(const std::string &pageTitle,
                              const std::string &pageExtract);
 
+  /**
+   * @brief テーマからファイル名用文字列を取得
+   * @param theme スカイボックステーマ
+   * @return ファイル名用の文字列
+   */
+  static std::wstring GetThemeFileName(SkyboxTheme theme);
+
+private:
   /**
    * @brief テーマから色グラデーションを取得
    * @param theme テーマ

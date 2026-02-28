@@ -47,9 +47,9 @@ struct SkyboxRenderState {
  * @brief スカイボックス用キューブメッシュ初期化
  */
 bool InitializeSkyboxMesh(ID3D11Device *device, SkyboxRenderState &state) {
-  // キューブの頂点（中心原点、サイズ1の立方体）- デフォルト頂点レイアウトに合わせる
+  // キューブの頂点（中心原点）
   using graphics::Vertex;
-  const float s = 1.0f;
+  const float s = 500.0f; // サイズを大きくする
   Vertex vertices[] = {
       // 各面の頂点
       {{-s, -s, -s}, {0, 0, 0}, {0, 0}, {1, 1, 1, 1}, {1, 0, 0}, {0, 1, 0}},
@@ -172,11 +172,11 @@ bool InitializeSkyboxStates(ID3D11Device *device, SkyboxRenderState &state) {
     return false;
   }
 
-  // 深度ステンシルステート（深度書き込み無効、テストLESS_EQUAL）
+  // 深度ステンシルステート（深度書き込み無効、テストALWAYS）
   D3D11_DEPTH_STENCIL_DESC dsDesc = {};
   dsDesc.DepthEnable = TRUE;
   dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; // 深度書き込み無効
-  dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;      // 最も遠い位置
+  dsDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;          // 常に描画
   dsDesc.StencilEnable = FALSE;
 
   hr = device->CreateDepthStencilState(&dsDesc, &state.depthStencilState);
@@ -184,10 +184,10 @@ bool InitializeSkyboxStates(ID3D11Device *device, SkyboxRenderState &state) {
     return false;
   }
 
-  // ラスタライザーステート（カリング反転）
+  // ラスタライザーステート（カリングなし）
   D3D11_RASTERIZER_DESC rsDesc = {};
   rsDesc.FillMode = D3D11_FILL_SOLID;
-  rsDesc.CullMode = D3D11_CULL_FRONT; // 内側から見るため
+  rsDesc.CullMode = D3D11_CULL_NONE; // カリングなし
   rsDesc.FrontCounterClockwise = FALSE;
   rsDesc.DepthClipEnable = TRUE;
 
@@ -251,17 +251,27 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
     LOG_WARN("WikiGolf", "Skybox shader not loaded!");
     return; // シェーダーが読み込まれていない
   }
+  if (!skyboxShader->IsValid()) {
+    LOG_WARN("Skybox", "Skybox shader is loaded but not valid!");
+    return;
+  }
 
   // 転置（HLSLは列優先）
   view = XMMatrixTranspose(view);
   proj = XMMatrixTranspose(proj);
 
   // スカイボックスコンポーネントを持つエンティティを描画
+  int skyboxCount = 0;
   world.Query<components::Skybox>().Each([&](ecs::Entity e,
                                              components::Skybox &skybox) {
+    skyboxCount++;
     if (!skybox.isVisible || !skybox.cubemapSRV) {
+      LOG_INFO("Skybox", "Skipped: visible={}, hasSRV={}",
+               skybox.isVisible ? "true" : "false",
+               skybox.cubemapSRV ? "true" : "false");
       return;
     }
+    LOG_INFO("Skybox", "Drawing skybox entity {}", e);
 
     // 定数バッファ更新
     D3D11_MAPPED_SUBRESOURCE mapped;

@@ -61,8 +61,8 @@ struct MapViewSkyboxState {
 inline DirectX::XMFLOAT2 ClampMapCenter(const DirectX::XMFLOAT2 &center,
                                         float fieldWidth, float fieldDepth,
                                         float padding = 0.0f) {
-  float halfW = std::max(0.0f, fieldWidth * 0.5f - padding);
-  float halfD = std::max(0.0f, fieldDepth * 0.5f - padding);
+  float halfW = (std::max)(0.0f, fieldWidth * 0.5f - padding);
+  float halfD = (std::max)(0.0f, fieldDepth * 0.5f - padding);
   DirectX::XMFLOAT2 clamped = center;
   clamped.x = std::clamp(clamped.x, -halfW, halfW);
   clamped.y = std::clamp(clamped.y, -halfD, halfD);

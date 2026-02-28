@@ -172,8 +172,11 @@ void WikiPinballScene::OnEnter(core::GameContext &ctx) {
 }
 
 void WikiPinballScene::OnUpdate(core::GameContext &ctx) {
-  // リトライ
-  if (ctx.input.GetKeyDown('R')) {
+  auto *state = ctx.world.GetGlobal<WikiGameState>();
+
+  // リトライはゲームオーバー/クリア時のみ許可
+  if (state && (state->lives <= 0 || state->gameCleared) &&
+      ctx.input.GetKeyDown('R')) {
     OnEnter(ctx);
     return;
   }
@@ -184,7 +187,6 @@ void WikiPinballScene::OnUpdate(core::GameContext &ctx) {
   game::systems::PhysicsSystem(ctx, ctx.dt);
   game::systems::WikiGameSystem(ctx);
 
-  auto *state = ctx.world.GetGlobal<WikiGameState>();
   if (!state || state->gameCleared)
     return;
 

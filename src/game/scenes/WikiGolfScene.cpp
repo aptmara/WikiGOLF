@@ -18,8 +18,8 @@
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
-#include "../systems/PhysicsSystem.h"
 #include "../systems/PhysicsFriction.h"
+#include "../systems/PhysicsSystem.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
 #include "../utils/JudgeFeedback.h"
@@ -182,14 +182,17 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   skyboxComp.brightness = 0.7f; // 床の文字を見やすくするため控えめ
   skyboxComp.saturation = 0.8f; // 彩度も抑えめ
 
-  // デフォルト（静的）スカイボックスを生成して割り当て
-  // ページごとの動的生成は廃止
-  // デバイスロスト回避のため完全に無効化
-  // m_skyboxGenerator->GenerateCubemapFromTheme(ctx.graphics.GetDevice(),
-  //                                             graphics::SkyboxTheme::Default,
-  //                                             skyboxComp.cubemapSRV);
-
-  LOG_INFO("WikiGolf", "Skybox system disabled (Device Lost Prevention)");
+  // 事前生成された静的六面スカイボックスからロード
+  // ファイル形式: skybox_Default_{px,nx,py,ny,pz,nz}.png
+  std::wstring skyboxBasePath =
+      L"Assets/textures/runtime_skybox/skybox_Default";
+  if (m_skyboxGenerator->LoadCubemapFromFiles(
+          ctx.graphics.GetDevice(), skyboxBasePath, skyboxComp.cubemapSRV)) {
+    LOG_INFO("WikiGolf", "Skybox loaded from static files: skybox_Default");
+  } else {
+    LOG_WARN("WikiGolf", "Failed to load skybox from static files");
+    skyboxComp.isVisible = false;
+  }
   m_mapViewSkyboxState.Reset(skyboxComp.isVisible);
 
   // ゲーム状態初期化
@@ -880,6 +883,9 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
         case ShotJudgement::Great:
           judgeType = game::systems::GameJuiceSystem::JudgeType::Great;
           break;
+        case ShotJudgement::Special:
+          judgeType = game::systems::GameJuiceSystem::JudgeType::Special;
+          break;
         case ShotJudgement::Nice:
           judgeType = game::systems::GameJuiceSystem::JudgeType::Nice;
           break;
@@ -1378,6 +1384,10 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
 }
 
 void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
+  float baseDt = ctx.dt;
+  if (m_gameJuice) {
+    ctx.dt = baseDt * m_gameJuice->ConsumeTimeScale(baseDt);
+  }
   float dt = ctx.dt;
 
   // フェード更新
@@ -1470,17 +1480,18 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   L"\n\nClick to Next Level";
     }
 
+    // クリア後のみリトライを許可
+    if (ctx.input.GetKeyDown('R')) {
+      OnEnter(ctx);
+      return;
+    }
+
     if (ctx.input.GetMouseButtonDown(0)) {
       // タイトルへ戻る
       if (ctx.sceneManager) {
         ctx.sceneManager->ChangeScene(std::make_unique<TitleScene>());
       }
     }
-    return;
-  }
-
-  if (ctx.input.GetKeyDown('R')) {
-    OnEnter(ctx);
     return;
   }
 
@@ -1491,7 +1502,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
     if (m_isMapView) {
       SyncMapCenterToBall(ctx, 0.0f, true);
     }
-    m_mapZoom = game::utils::ClampMapZoom(m_mapZoom, m_minMapZoom, m_maxMapZoom);
+    m_mapZoom =
+        game::utils::ClampMapZoom(m_mapZoom, m_minMapZoom, m_maxMapZoom);
   }
 
   if (auto *skybox = ctx.world.Get<Skybox>(m_skyboxEntity)) {
@@ -1537,17 +1549,17 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
     // Cキーで即座にボール中心へ戻す
     if (ctx.input.GetKeyDown('C')) {
       SyncMapCenterToBall(ctx, 0.0f, true);
-      m_mapZoom =
-          game::utils::ClampMapZoom(m_fieldWidth / std::max(10.0f, m_fieldWidth * 0.2f),
-                                    m_minMapZoom, m_maxMapZoom);
+      m_mapZoom = game::utils::ClampMapZoom(
+          m_fieldWidth / std::max(10.0f, m_fieldWidth * 0.2f), m_minMapZoom,
+          m_maxMapZoom);
     }
 
     // マップビューのズーム（ホイール + キー）
     float wheel = ctx.input.GetMouseScrollDelta();
     if (wheel != 0.0f) {
       // ホイール上でズームイン、下でズームアウト（指数的に変化させスピード一定に）
-      m_mapZoom = game::utils::ClampMapZoom(
-          m_mapZoom * std::pow(1.12f, wheel), m_minMapZoom, m_maxMapZoom);
+      m_mapZoom = game::utils::ClampMapZoom(m_mapZoom * std::pow(1.12f, wheel),
+                                            m_minMapZoom, m_maxMapZoom);
     }
     if (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD)) {
       m_mapZoom = game::utils::ClampMapZoom(m_mapZoom * 1.12f, m_minMapZoom,
@@ -1558,8 +1570,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       m_mapZoom = game::utils::ClampMapZoom(m_mapZoom / 1.12f, m_minMapZoom,
                                             m_maxMapZoom);
     }
-    m_mapCenter =
-        game::utils::ClampMapCenter(m_mapCenter, m_fieldWidth, m_fieldDepth, 2.0f);
+    m_mapCenter = game::utils::ClampMapCenter(m_mapCenter, m_fieldWidth,
+                                              m_fieldDepth, 2.0f);
   } else {
     // 通常ビュー: UIモード時はカーソル表示、エイムモード時はロック
     auto *shotStateCheck = ctx.world.GetGlobal<ShotState>();
@@ -1604,8 +1616,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       float wheel = ctx.input.GetMouseScrollDelta();
       if (wheel != 0.0f) {
         m_cameraDistance -= wheel * 2.0f * kFieldScale; // ホイール感度
-        m_cameraDistance = std::clamp(m_cameraDistance, 1.2f * kFieldScale,
-                                      35.0f * kFieldScale); // 距離制限（よりズーム可）
+        m_cameraDistance =
+            std::clamp(m_cameraDistance, 1.2f * kFieldScale,
+                       35.0f * kFieldScale); // 距離制限（よりズーム可）
       }
     }
   }
@@ -1801,8 +1814,8 @@ void WikiGolfScene::SyncMapCenterToBall(core::GameContext &ctx, float dt,
     targetCenter = {ballT->position.x, ballT->position.z};
   }
 
-  targetCenter =
-      game::utils::ClampMapCenter(targetCenter, m_fieldWidth, m_fieldDepth, 2.0f);
+  targetCenter = game::utils::ClampMapCenter(targetCenter, m_fieldWidth,
+                                             m_fieldDepth, 2.0f);
 
   if (forceSnap || dt <= 0.0f) {
     m_mapCenter = targetCenter;
@@ -1829,8 +1842,7 @@ void WikiGolfScene::UpdateMapCamera(core::GameContext &ctx) {
   float height = std::max(viewSpan * 1.6f, 5.0f);
 
   // 目標位置: オフセット適用
-  XMVECTOR targetPos =
-      XMVectorSet(m_mapCenter.x, height, m_mapCenter.y, 0.0f);
+  XMVECTOR targetPos = XMVectorSet(m_mapCenter.x, height, m_mapCenter.y, 0.0f);
 
   // 少し手前に引く (Zマイナス方向)
   targetPos = XMVectorAdd(targetPos, XMVectorSet(0, 0, -height * 0.3f, 0));
@@ -1866,9 +1878,8 @@ void WikiGolfScene::UpdateMinimap(core::GameContext &ctx) {
 
   if (ui && marker && ballT) {
     // MapSysの射影計算と同一の値を使ってUI座標に変換する
-    float viewSpan =
-        std::clamp(params.extent / std::max(0.01f, params.zoom),
-                   params.extent * 0.01f, params.extent * 6.0f);
+    float viewSpan = std::clamp(params.extent / std::max(0.01f, params.zoom),
+                                params.extent * 0.01f, params.extent * 6.0f);
     float orthoWidth =
         std::max(viewSpan * params.orthoPadding, viewSpan * 0.5f);
     // GetProjMatrixが幅・高さに1.2倍を掛ける点を反映
@@ -2098,8 +2109,8 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
         // 転がり抵抗 (PhysicsSystem同期)
         float terrainScale = terrainData ? terrainData->config.friction : 1.0f;
-        TerrainMaterial mat = GetMaterial(XMVectorGetX(currentPos),
-                                          XMVectorGetZ(currentPos));
+        TerrainMaterial mat =
+            GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
         float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
         float frictionAccel = game::systems::ComputeGrassRollingAcceleration(
             SafeLength(vel), ny, mat, terrainScale);
@@ -2117,8 +2128,7 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
             vel = XMVectorZero();
             currentSpeed = 0.0f;
           } else {
-            vel = XMVectorScale(vel,
-                                (currentSpeed - dropSpeed) / currentSpeed);
+            vel = XMVectorScale(vel, (currentSpeed - dropSpeed) / currentSpeed);
           }
         }
 
@@ -2245,15 +2255,14 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
     marker.x = ui.x + ui.width * 0.5f - 10.0f;
     marker.y = ui.y + ui.height * 0.5f - 10.0f;
     marker.style = graphics::TextStyle::Guide();
-    marker.style.fontSize = 22.0f;                   // 少し大きめ
-    marker.style.color = {1.0f, 0.9f, 0.2f, 1.0f};   // 黄色で視認性アップ
+    marker.style.fontSize = 22.0f;                 // 少し大きめ
+    marker.style.color = {1.0f, 0.9f, 0.2f, 1.0f}; // 黄色で視認性アップ
     marker.layer = ui.layer + 1;
 
     // 操作ヘルプ
     m_minimapHelpEntity = CreateEntity(ctx.world);
     auto &help = ctx.world.Add<UIText>(m_minimapHelpEntity);
-    help.text =
-        L"Map: Drag/RMB/WASD pan | Wheel zoom | C center | M close";
+    help.text = L"Map: Drag/RMB/WASD pan | Wheel zoom | C center | M close";
     help.x = ui.x - 10.0f;
     help.y = ui.y + ui.height + 6.0f;
     help.style = graphics::TextStyle::Guide();
@@ -2642,8 +2651,40 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   m_wikiTexture =
       std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
 
+  // スカイボックスをページテーマに応じて動的ロード
+  auto *skyboxComp = ctx.world.Get<components::Skybox>(m_skyboxEntity);
+  if (skyboxComp && m_skyboxGenerator) {
+    graphics::SkyboxTheme theme =
+        m_skyboxGenerator->DetermineTheme(pageName, articleText);
+    std::wstring themeName =
+        graphics::SkyboxTextureGenerator::GetThemeFileName(theme);
+    std::wstring skyboxBasePath =
+        L"Assets/textures/runtime_skybox/skybox_" + themeName;
+
+    if (m_skyboxGenerator->LoadCubemapFromFiles(
+            ctx.graphics.GetDevice(), skyboxBasePath, skyboxComp->cubemapSRV)) {
+      LOG_INFO("WikiGolf", "Skybox loaded for theme: {}, SRV valid: {}",
+               core::ToString(themeName),
+               skyboxComp->cubemapSRV ? "yes" : "no");
+      skyboxComp->isVisible = true;
+    } else {
+      // Fallback to Default
+      std::wstring defaultPath =
+          L"Assets/textures/runtime_skybox/skybox_Default";
+      if (m_skyboxGenerator->LoadCubemapFromFiles(
+              ctx.graphics.GetDevice(), defaultPath, skyboxComp->cubemapSRV)) {
+        LOG_INFO("WikiGolf", "Skybox fallback to Default");
+        skyboxComp->isVisible = true;
+      } else {
+        LOG_WARN("WikiGolf", "Failed to load any skybox");
+        skyboxComp->isVisible = false;
+      }
+    }
+  }
+
   // 実際のテクスチャ高さに合わせてフィールド奥行きを再スケールする
-  float desiredDepthFromTex = static_cast<float>(m_wikiTexture->height) / 100.0f;
+  float desiredDepthFromTex =
+      static_cast<float>(m_wikiTexture->height) / 100.0f;
   if (desiredDepthFromTex > fieldDepth) {
     // 全文を潰さずに表示するため少し余裕を持って拡張
     fieldDepth = desiredDepthFromTex * 1.05f;
@@ -2655,8 +2696,7 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   LOG_INFO("WikiGolf", "Final field depth after text fit: {:.1f}", fieldDepth);
 
   // 実際のテクスチャ幅に合わせてフィールド横幅も調整（文字サイズは一定のまま）
-  float desiredWidthFromTex =
-      static_cast<float>(m_wikiTexture->width) / 100.0f;
+  float desiredWidthFromTex = static_cast<float>(m_wikiTexture->width) / 100.0f;
   if (desiredWidthFromTex > fieldWidth) {
     fieldWidth = desiredWidthFromTex * 1.05f; // わずかに余白
   }
@@ -2866,14 +2906,14 @@ void WikiGolfScene::CreateHole(core::GameContext &ctx, float x, float z,
   // 旗モデル（旗の根本が原点）
   auto flagE = CreateEntity(ctx.world);
   auto &flagT = ctx.world.Add<Transform>(flagE);
-  flagT.position = {x, terrainHeight + 0.15f, z}; // 少し上げて地面に埋もれないように
-  flagT.scale = {1.2f, 1.2f, 1.2f};               // 見やすいサイズに調整
+  flagT.position = {x, terrainHeight + 0.15f,
+                    z};             // 少し上げて地面に埋もれないように
+  flagT.scale = {1.2f, 1.2f, 1.2f}; // 見やすいサイズに調整
 
   auto &flagMr = ctx.world.Add<MeshRenderer>(flagE);
   flagMr.mesh = ctx.resource.LoadMesh("Assets/models/flag.obj");
-  flagMr.shader =
-      ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                              L"Assets/shaders/BasicPS.hlsl");
+  flagMr.shader = ctx.resource.LoadShader(
+      "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
   flagMr.color = isTargetHole ? XMFLOAT4{1.0f, 0.3f, 0.3f, 1.0f}
                               : XMFLOAT4{0.95f, 0.95f, 0.95f, 1.0f};
 
@@ -2926,6 +2966,8 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         XMFLOAT3 effectPos = holeT->position;
         effectPos.y += 0.5f; // ホールの上から発火
 
+        m_gameJuice->TriggerSlowMotion(0.8f, 0.25f);
+
         // 1回目：中央大爆発
         m_gameJuice->TriggerImpactEffect(ctx, effectPos, 1.0f);
 
@@ -2938,6 +2980,7 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
 
         // FOV変化（ズームイン→アウト）
         m_gameJuice->SetTargetFov(40.0f); // 一瞬ズームイン
+        m_gameJuice->TriggerConfetti(ctx, effectPos, 1.0f);
       }
 
       // 音楽と効果音
@@ -2964,6 +3007,7 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
                                      pos.z + offset.z};
           m_gameJuice->TriggerImpactEffect(ctx, effectPosExtra, 1.0f);
         }
+        m_gameJuice->TriggerConfetti(ctx, pos, 1.2f);
       }
 
       TransitionToPage(ctx, hole->linkTarget);

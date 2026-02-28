@@ -107,27 +107,23 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
   XMFLOAT4 terrainColor = {1.0f, 1.0f, 1.0f, 1.0f};
 
+  // 物理パラメータの統一 (環境によらず一定)
+  config.friction = 0.5f;    // 標準的な芝の摩擦
+  config.restitution = 0.3f; // 標準的な反発係数
+
   switch (biome) {
   case 0: // 草原
-    config.friction = 0.5f;
-    config.restitution = 0.3f;
     terrainColor = {0.4f, 0.8f, 0.4f, 1.0f};
     break;
   case 1: // 砂漠
-    config.friction = 5.0f;
-    config.restitution = 0.1f;
     config.heightScale = 2.5f;
     terrainColor = {0.9f, 0.8f, 0.5f, 1.0f};
     break;
   case 2: // 氷原
-    config.friction = 0.05f;
-    config.restitution = 0.6f;
     config.heightScale = 1.0f;
     terrainColor = {0.8f, 0.9f, 1.0f, 1.0f};
     break;
   case 3: // 岩場
-    config.friction = 0.6f;
-    config.restitution = 0.8f;
     config.heightScale = 3.0f;
     terrainColor = {0.6f, 0.5f, 0.5f, 1.0f};
     break;
@@ -231,10 +227,10 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
         // マテリアルマップから頂点カラー決定
         float gridU = worldX / width + 0.5f;
         float gridV = 0.5f - worldZ / depth; // worldZは正手前が-なので反転
-        int gx =
-            std::clamp(static_cast<int>(gridU * (resX - 1) + 0.5f), 0, resX - 1);
-        int gz =
-            std::clamp(static_cast<int>(gridV * (resZ - 1) + 0.5f), 0, resZ - 1);
+        int gx = std::clamp(static_cast<int>(gridU * (resX - 1) + 0.5f), 0,
+                            resX - 1);
+        int gz = std::clamp(static_cast<int>(gridV * (resZ - 1) + 0.5f), 0,
+                            resZ - 1);
         uint8_t mat = m_terrainData->materialMap[gz * resX + gx];
 
         XMFLOAT4 vcolor;
@@ -246,17 +242,20 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
           break;
         }
         case 1: { // Rough
-          float shade = 0.85f + 0.15f * std::cos(worldX * 0.12f + worldZ * 0.1f);
+          float shade =
+              0.85f + 0.15f * std::cos(worldX * 0.12f + worldZ * 0.1f);
           vcolor = {0.12f * shade, 0.32f * shade, 0.14f * shade, 1.0f};
           break;
         }
         case 2: { // Bunker
-          float shade = 0.92f + 0.08f * std::sin(worldX * 0.05f + worldZ * 0.04f);
+          float shade =
+              0.92f + 0.08f * std::sin(worldX * 0.05f + worldZ * 0.04f);
           vcolor = {0.88f * shade, 0.80f * shade, 0.62f * shade, 1.0f};
           break;
         }
         case 3: { // Green
-          float shade = 0.95f + 0.05f * std::cos(worldX * 0.15f + worldZ * 0.09f);
+          float shade =
+              0.95f + 0.05f * std::cos(worldX * 0.15f + worldZ * 0.09f);
           vcolor = {0.28f * shade, 0.82f * shade, 0.26f * shade, 1.0f};
           break;
         }
