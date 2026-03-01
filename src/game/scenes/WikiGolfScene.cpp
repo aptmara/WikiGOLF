@@ -10,6 +10,7 @@
 #include "../../graphics/TextRenderer.h"
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../components/Camera.h"
+#include "../components/EnvironmentPresets.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Skybox.h"
@@ -195,6 +196,15 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   }
   m_mapViewSkyboxState.Reset(skyboxComp.isVisible);
 
+  // === Environment システム初期化 ===
+  m_timeOfDay.Initialize(8.0f); // 朝8時スタート
+  m_postProcess.Initialize(ctx.graphics.GetDevice());
+  m_postProcess.ResetToDefaults();
+
+  // パーティクルレンダラー初期化
+  m_particleRenderSystem.Initialize(ctx.graphics.GetDevice());
+  // パーティクルはLoadPage時にテーマに応じて設定
+
   // ゲーム状態初期化
   // ターゲット記事選択（SDOWデータベース優先）
   std::string targetPage;
@@ -354,6 +364,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   state.canShoot = true;
   state.ballEntity = m_ballEntity;
   state.windSpeed = 0.0f; // LoadPageで設定
+  state.rollingFrictionScale = m_currentClub.rollingFrictionScale;
 
   // UI初期化
   InitializeUI(ctx, state);
@@ -962,6 +973,9 @@ void WikiGolfScene::ExecuteShot(core::GameContext &ctx) {
   state->canShoot = false;
   shot->phase = ShotState::Phase::Executing;
 
+  // ショットしたので時間を進める (30分)
+  m_timeOfDay.OnShot(0.5f);
+
   // マーカー非表示
   auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
   if (markerUI)
@@ -1356,6 +1370,9 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   state->shotCount = 0;
   state->canShoot = true;
 
+  // ページ移動時間進行 (2時間)
+  m_timeOfDay.OnPageTransition(2.0f);
+
   // カメラリセット（TPSオービットカメラ）
   m_cameraYaw = 0.0f;
   m_cameraPitch = 0.5f;
@@ -1392,6 +1409,36 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // フェード更新
   m_screenFade.Update(dt);
+
+  // === Environment システム更新 ===
+  // 1. 時間進行（日周変化）
+  m_timeOfDay.Update(dt); // 連続進行がある場合
+
+  // 2. 環境ステート更新
+  auto envState = game::components::GetEnvironmentPreset(m_currentSkyboxTheme);
+  m_timeOfDay.ApplyToEnvironment(
+      envState); // 時間による変化（太陽位置など）を適用
+
+  // 3. 環境音更新 (AudioSystem連携が必要)
+  // m_soundSystem.Update(dt);
+
+  // 4. ポストプロセスパラメータ更新
+  m_postProcess.UpdateFromEnvironment(envState, m_timeOfDay.GetCurrentHour());
+  // 定数バッファをGPUに転送
+  m_postProcess.BindConstants(ctx.graphics.GetContext());
+
+  // 5. パーティクル更新
+  // カメラ情報取得
+  if (ctx.world.IsAlive(m_cameraEntity)) {
+    auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
+    auto *camC = ctx.world.Get<Camera>(m_cameraEntity);
+    if (camT && camC) {
+      // 簡易的なカメラ位置周辺での生成と更新
+      // 風向きは一旦固定（将来的に動的化）
+      DirectX::XMFLOAT3 windDir = {0.5f, 0.0f, 0.2f};
+      m_particleSystem.Update(dt, camT->position, windDir);
+    }
+  }
 
   auto *state = ctx.world.GetGlobal<GolfGameState>();
   auto *shot = ctx.world.GetGlobal<ShotState>();
@@ -1467,17 +1514,92 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // リザルト画面処理
   if (state && state->gameCleared) {
     auto *bg = ctx.world.Get<UIImage>(state->resultBgEntity);
-    auto *txt = ctx.world.Get<UIText>(state->resultTextEntity);
-
     if (bg)
       bg->visible = true;
-    if (txt) {
+    if (auto *frame = ctx.world.Get<UIImage>(state->resultFrameEntity)) {
+      frame->visible = true;
+    }
+
+    // タイトルとバッジ
+    if (auto *title = ctx.world.Get<UIText>(state->resultTitleEntity)) {
+      title->text = L"STAGE CLEAR";
+      title->visible = true;
+    }
+
+    std::wstring grade = L"EXPLORER";
+    DirectX::XMFLOAT4 gradeColor = {0.9f, 0.9f, 0.95f, 1.0f};
+    if (state->par > 0) {
+      int diff = state->shotCount - state->par;
+      if (diff <= -2) {
+        grade = L"ALBATROSS";
+        gradeColor = {1.0f, 0.92f, 0.55f, 1.0f};
+      } else if (diff <= 0) {
+        grade = L"BIRDIE";
+        gradeColor = {0.7f, 1.0f, 0.7f, 1.0f};
+      } else if (diff <= 2) {
+        grade = L"PAR SAVE";
+        gradeColor = {0.6f, 0.85f, 1.0f, 1.0f};
+      } else if (diff <= 5) {
+        grade = L"BOGEY";
+        gradeColor = {1.0f, 0.85f, 0.6f, 1.0f};
+      } else {
+        grade = L"KEEP SWINGING";
+        gradeColor = {1.0f, 0.65f, 0.65f, 1.0f};
+      }
+    }
+    if (auto *badge = ctx.world.Get<UIText>(state->resultBadgeEntity)) {
+      badge->text = grade;
+      badge->style.color = gradeColor;
+      badge->visible = true;
+    }
+
+    if (auto *subtitle = ctx.world.Get<UIText>(state->resultSubtitleEntity)) {
+      std::wstring parLine =
+          (state->par > 0) ? (L" / Par " + std::to_wstring(state->par)) : L"";
+      subtitle->text =
+          L"Target: " + core::ToWString(state->targetPage) + parLine;
+      subtitle->visible = true;
+    }
+
+    int hops = 0;
+    if (!state->pathHistory.empty()) {
+      hops = static_cast<int>(state->pathHistory.size()) - 1;
+    }
+
+    std::wstring route = L"Route: ";
+    if (!state->pathHistory.empty()) {
+      size_t showCount = std::min<size_t>(state->pathHistory.size(), 4);
+      size_t startIdx = state->pathHistory.size() - showCount;
+      for (size_t i = startIdx; i < state->pathHistory.size(); ++i) {
+        if (i > startIdx)
+          route += L" -> ";
+        route += core::ToWString(state->pathHistory[i]);
+      }
+    } else {
+      route += L"N/A";
+    }
+
+    std::wstring stats = L"Shots: " + std::to_wstring(state->shotCount);
+    if (state->par > 0) {
+      stats += L" / Par " + std::to_wstring(state->par);
+    }
+    stats += L"  |  Hops: " + std::to_wstring(std::max(0, hops));
+    stats += L"\n" + route;
+
+    if (auto *txt = ctx.world.Get<UIText>(state->resultTextEntity)) {
+      txt->text = stats;
       txt->visible = true;
-      // 簡易テキスト整形
-      txt->text = L"STAGE CLEAR!\n\nScore: " +
-                  std::to_wstring(state->shotCount) + L"\nTarget: " +
-                  core::ToWString(state->targetPage) +
-                  L"\n\nClick to Next Level";
+    }
+    if (auto *hint = ctx.world.Get<UIText>(state->resultHintEntity)) {
+      hint->text = L"[Click] Return to Title  |  [R] Retry  |  [M] Map View";
+      hint->visible = true;
+    }
+    if (auto *retryBtn = ctx.world.Get<UIButton>(state->retryButtonEntity)) {
+      retryBtn->visible = true;
+      if (retryBtn->state == ButtonState::Pressed) {
+        OnEnter(ctx);
+        return;
+      }
     }
 
     // クリア後のみリトライを許可
@@ -1608,8 +1730,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
         // 垂直回転（Pitch）
         m_cameraPitch += deltaY * sensitivity;
 
-        // Pitch制限（上: -0.1rad, 下: 1.4rad ≒ 80度）
-        m_cameraPitch = std::clamp(m_cameraPitch, -0.1f, 1.4f);
+        // Pitch制限（上: -1.5rad, 下: 1.5rad ≒ 85度）
+        m_cameraPitch = std::clamp(m_cameraPitch, -1.5f, 1.5f);
       }
 
       // マウスホイールでズーム
@@ -1803,6 +1925,35 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 }
 
 void WikiGolfScene::Render(core::GameContext &ctx) {
+  // === パーティクル描画 (加算合成なので不透明描画の後) ===
+  // カメラ行列取得（View/Proj）
+  if (ctx.world.IsAlive(m_cameraEntity)) {
+    auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
+    auto *camC = ctx.world.Get<Camera>(m_cameraEntity);
+    if (camT && camC) {
+      XMMATRIX view = camC->GetViewMatrix(*camT);
+      XMMATRIX proj = camC->GetProjectionMatrix();
+
+      // ビルボード用カメラベクトル
+      XMFLOAT3 camRight, camUp;
+      XMVECTOR up = XMVectorSet(0, 1, 0, 0);
+      XMVECTOR fwd =
+          XMLoadFloat3(&m_shotDirection); // 簡易的にショット方向を使用
+      // 本来はカメラの回転行列から取得すべき
+      XMVECTOR cRight = XMVector3Cross(up, fwd); // 近似
+      // より正確にTransformから取得
+      XMMATRIX world = camT->GetWorldMatrix();
+      XMVECTOR cRightV = world.r[0];
+      XMVECTOR cUpV = world.r[1];
+      XMStoreFloat3(&camRight, cRightV);
+      XMStoreFloat3(&camUp, cUpV);
+
+      m_particleRenderSystem.Render(ctx.graphics.GetContext(),
+                                    m_particleSystem.GetParticles(), view, proj,
+                                    camRight, camUp);
+    }
+  }
+
   // フェード描画 (最前面)
   m_screenFade.Render(ctx);
 }
@@ -1887,9 +2038,38 @@ void WikiGolfScene::UpdateMinimap(core::GameContext &ctx) {
 
     float dx = ballT->position.x - params.center.x;
     float dz = ballT->position.z - params.center.z;
-    float u = 0.5f + dx / clipWidth;
+    float u = dx / clipWidth; // 実験的補正: 0.5f + ... を削除
     float v = 0.5f - dz / clipWidth;
-    u = std::clamp(u, 0.02f, 0.98f);
+
+    // DEBUG: マップオフセット調査
+    static int logCounter = 0;
+    if (logCounter++ % 60 == 0) {
+      LOG_DEBUG("WikiGolfMap",
+                "Ball:({:.1f},{:.1f}) Center:({:.1f},{:.1f}) d:({:.1f},{:.1f}) "
+                "ClipW:{:.1f} UV:({:.2f},{:.2f})",
+                ballT->position.x, ballT->position.z, params.center.x,
+                params.center.z, dx, dz, clipWidth, u, v);
+    }
+
+    // uの範囲を調整（補正により0.0中心になるため、表示範囲外に出る可能性があるがとりあえずそのまま）
+    // マーカーがImage基準で 0..1
+    // に収まるようにするには、Imageの座標系も考慮必要だが ここでは u を 0..1
+    // にクランプする処理が下にある。 もし u がマイナスなら 0.02f
+    // に張り付く。これでは左端に張り付くだけ。
+    // ユーザーの言う「右にずれてる」が「中央にあるべきものが右端(1.0)にある」なら、
+    // 0.5引けば中央(0.5)に来る。
+
+    // しかし、もし u = dx/W なら、中央(dx=0)で u=0 になる。
+    // この場合、marker->x = ui->x + 0 = 左端。
+    // これでは「左にずれる」。
+    // ユーザーは「右にずれてる」と言った。マーカーが右にある。
+    // これを左（中央）に戻したい。
+    // u=1.0 -> u=0.5. (-0.5).
+    // u=0.5 -> u=0.0.
+
+    // とりあえず dx/clipWidth にしてみる。
+
+    u = std::clamp(u, 0.0f, 1.0f); // 範囲を 0..1 に変更してみる
     v = std::clamp(v, 0.02f, 0.98f);
     marker->x = ui->x + u * ui->width - 10.0f;
     marker->y = ui->y + v * ui->height - 10.0f;
@@ -2195,10 +2375,10 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
 void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
   m_availableClubs.clear();
-  m_availableClubs.push_back({"Driver", 65.0f, 12.0f, "icon_driver.png"});
-  m_availableClubs.push_back({"Iron", 48.0f, 18.0f, "icon_iron.png"});
-  m_availableClubs.push_back({"Wedge", 35.0f, 26.0f, "icon_wedge.png"});
-  m_availableClubs.push_back({"Putter", 10.0f, 0.0f, "icon_putter.png"});
+  m_availableClubs.push_back({"Driver", 65.0f, 12.0f, "icon_driver.png", 3.0f});
+  m_availableClubs.push_back({"Iron", 48.0f, 18.0f, "icon_iron.png", 1.30f});
+  m_availableClubs.push_back({"Wedge", 35.0f, 26.0f, "icon_wedge.png", 2.5f});
+  m_availableClubs.push_back({"Putter", 10.0f, 0.0f, "icon_putter.png", 1.00f});
 
   // UI作成
   for (size_t i = 0; i < m_availableClubs.size(); ++i) {
@@ -2375,31 +2555,100 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
 
   // Result Screen UI
   LOG_INFO("WikiGolf", "Creating result UI...");
-  // リザルト背景は削除
-  // auto resultBgE = CreateEntity(ctx.world);
-  // auto &rbg = ctx.world.Add<UIImage>(resultBgE);
-  // rbg = UIImage::Create("ui_gauge_bg.png", 0, 0);
-  // rbg.width = 1280.0f;
-  // rbg.height = 720.0f;
-  // rbg.alpha = 0.8f;
-  // rbg.visible = false;
-  // rbg.layer = 50;
-  // state.resultBgEntity = resultBgE;
+  state.resultBgEntity = CreateEntity(ctx.world);
+  auto &rbg = ctx.world.Add<UIImage>(state.resultBgEntity);
+  rbg = UIImage::Create("ui_gauge_bg.png", 0, 0);
+  rbg.width = 1280.0f;
+  rbg.height = 720.0f;
+  rbg.alpha = 0.88f;
+  rbg.visible = false;
+  rbg.layer = 80;
+
+  state.resultFrameEntity = CreateEntity(ctx.world);
+  auto &rframe = ctx.world.Add<UIImage>(state.resultFrameEntity);
+  rframe = UIImage::Create("ui_gauge_bg.png", 140.0f, 120.0f);
+  rframe.width = 1000.0f;
+  rframe.height = 520.0f;
+  rframe.alpha = 0.95f;
+  rframe.visible = false;
+  rframe.layer = 81;
+
+  auto resultTitleE = CreateEntity(ctx.world);
+  auto &rtTitle = ctx.world.Add<UIText>(resultTitleE);
+  rtTitle.style = graphics::TextStyle::LuxuryTitle();
+  rtTitle.style.fontSize = 90.0f;
+  rtTitle.style.align = graphics::TextAlign::Center;
+  rtTitle.x = 640.0f;
+  rtTitle.y = 150.0f;
+  rtTitle.visible = false;
+  rtTitle.layer = 90;
+  state.resultTitleEntity = resultTitleE;
+
+  auto resultBadgeE = CreateEntity(ctx.world);
+  auto &rb = ctx.world.Add<UIText>(resultBadgeE);
+  rb.style = graphics::TextStyle::Status();
+  rb.style.fontSize = 42.0f;
+  rb.style.align = graphics::TextAlign::Center;
+  rb.style.hasOutline = true;
+  rb.style.outlineColor = {0.0f, 0.0f, 0.0f, 0.8f};
+  rb.style.outlineWidth = 2.5f;
+  rb.x = 640.0f;
+  rb.y = 240.0f;
+  rb.visible = false;
+  rb.layer = 91;
+  state.resultBadgeEntity = resultBadgeE;
+
+  auto resultSubtitleE = CreateEntity(ctx.world);
+  auto &rs = ctx.world.Add<UIText>(resultSubtitleE);
+  rs.style = graphics::TextStyle::ModernBlack();
+  rs.style.fontSize = 30.0f;
+  rs.style.align = graphics::TextAlign::Center;
+  rs.style.hasShadow = true;
+  rs.style.shadowColor = {0.0f, 0.0f, 0.0f, 0.7f};
+  rs.x = 640.0f;
+  rs.y = 300.0f;
+  rs.width = 900.0f;
+  rs.visible = false;
+  rs.layer = 91;
+  state.resultSubtitleEntity = resultSubtitleE;
 
   auto resultTextE = CreateEntity(ctx.world);
   auto &rt = ctx.world.Add<UIText>(resultTextE);
-  rt.x = 400.0f;
-  rt.y = 250.0f;
-  rt.text = L"🎉 クリア！";
+  rt.style = graphics::TextStyle::Status();
+  rt.style.fontSize = 30.0f;
+  rt.style.align = graphics::TextAlign::Center;
+  rt.style.hasOutline = true;
+  rt.style.outlineColor = {0.0f, 0.0f, 0.0f, 0.6f};
+  rt.style.outlineWidth = 2.0f;
+  rt.x = 640.0f;
+  rt.y = 360.0f;
+  rt.width = 920.0f;
   rt.visible = false;
-  rt.layer = 51;
-  rt.style.fontSize = 48.0f;
-  rt.style.color = {1.0f, 0.84f, 0.0f, 1.0f}; // 金色
+  rt.layer = 92;
   state.resultTextEntity = resultTextE;
+
+  auto hintE = CreateEntity(ctx.world);
+  auto &hint = ctx.world.Add<UIText>(hintE);
+  hint.style = graphics::TextStyle::Guide();
+  hint.style.fontSize = 22.0f;
+  hint.style.align = graphics::TextAlign::Center;
+  hint.x = 640.0f;
+  hint.y = 600.0f;
+  hint.width = 900.0f;
+  hint.visible = false;
+  hint.layer = 95;
+  state.resultHintEntity = hintE;
 
   auto retryBtnE = CreateEntity(ctx.world);
   auto &btn = ctx.world.Add<UIButton>(retryBtnE);
-  btn = UIButton::Create(L"もう一度", "retry", 540.0f, 400.0f, 200.0f, 50.0f);
+  btn = UIButton::Create(L"もう一度挑戦 (R)", "retry", 500.0f, 500.0f, 280.0f,
+                         64.0f);
+  btn.textStyle = graphics::TextStyle::LuxuryButton();
+  btn.textStyle.fontSize = 30.0f;
+  btn.normalColor = {0.15f, 0.18f, 0.28f, 1.0f};
+  btn.hoverColor = {0.22f, 0.26f, 0.38f, 1.0f};
+  btn.pressedColor = {0.1f, 0.12f, 0.2f, 1.0f};
+  btn.disabledColor = {0.08f, 0.08f, 0.12f, 0.6f};
   btn.visible = false;
   state.retryButtonEntity = retryBtnE;
 
@@ -2615,7 +2864,8 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
 
   // 横幅も適度にスケールさせつつ、縦長になりすぎないよう抑制する
   float fieldWidth = minFieldWidth * std::pow(articleLengthFactor, 0.45f);
-  float fieldDepth = minFieldDepth * std::pow(articleLengthFactor, 0.65f);
+  // 高さ（奥行き）は後で逆算するため、ここでは最小値を設定
+  float fieldDepth = minFieldDepth;
 
   // 安全策: 最小サイズ保証 + 幅の上限
   fieldWidth = std::clamp(fieldWidth, minFieldWidth, minFieldWidth * 4.0f);
@@ -2624,18 +2874,20 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   // 5. テクスチャ生成
   // 幅は16384制限があるが、高さはタイリングで無限に対応可能なので制限しない
   const uint32_t kMaxTexWidth = 16384;
+  float texScale = 1.0f;
 
   uint32_t texWidth = static_cast<uint32_t>(fieldWidth * 100.0f);
   uint32_t texHeight = static_cast<uint32_t>(fieldDepth * 100.0f);
 
   if (texWidth > kMaxTexWidth) {
-    float scale = (float)kMaxTexWidth / (float)texWidth;
+    texScale = (float)kMaxTexWidth / (float)texWidth;
     texWidth = kMaxTexWidth;
-    texHeight = (uint32_t)(texHeight *
-                           scale); // アスペクト比維持で高さ解像度も一応下げる
+    texHeight =
+        (uint32_t)(texHeight *
+                   texScale); // アスペクト比維持で高さ解像度も一応下げる
 
     LOG_INFO("WikiGolf", "Width capped to {}. Scale: {:.2f}", kMaxTexWidth,
-             scale);
+             texScale);
   }
 
   std::vector<std::pair<std::wstring, std::string>> linkPairs;
@@ -2647,6 +2899,23 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   auto texResult = m_textureGenerator->GenerateTexture(
       core::ToWString(pageName), core::ToWString(articleText), linkPairs,
       state->targetPage, texWidth, texHeight);
+
+  // 実態に合わせてフィールドサイズを計算（1m = 100px基準）
+  float actualFieldDepth = (float)texResult.height / (100.0f * texScale);
+  float actualFieldWidth = (float)texResult.width / (100.0f * texScale);
+
+  // アスペクト比を維持しつつ、最小サイズ(minFieldWidth/Depth)を満たすようにスケーリング
+  // 独立して max() をかけるとアスペクト比が崩れて文字が歪むため
+  float scaleFix = 1.0f;
+  if (actualFieldWidth < minFieldWidth) {
+    scaleFix = std::max(scaleFix, minFieldWidth / actualFieldWidth);
+  }
+  if (actualFieldDepth < minFieldDepth) {
+    scaleFix = std::max(scaleFix, minFieldDepth / actualFieldDepth);
+  }
+
+  fieldWidth = actualFieldWidth * scaleFix;
+  fieldDepth = actualFieldDepth * scaleFix;
 
   m_wikiTexture =
       std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
@@ -2667,6 +2936,28 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
                core::ToString(themeName),
                skyboxComp->cubemapSRV ? "yes" : "no");
       skyboxComp->isVisible = true;
+
+      // === 環境設定の適用 ===
+      m_currentSkyboxTheme = theme;
+      auto preset = game::components::GetEnvironmentPreset(theme);
+
+      // パーティクル設定
+      auto particleConfig =
+          game::systems::GetParticleConfig(preset.particlePreset);
+      m_particleSystem.Configure(particleConfig);
+
+      // 環境状態を反映（TimeOfDayシステムなどへ）
+      m_timeOfDay.SetTime(preset.timeOfDay); // テーマに応じた初期時間
+
+      // 環境音切り替え（AudioSystemが必要）
+      // TODO: AudioSystem連携
+
+      // ポストプロセス初期設定（霧など）
+      m_postProcess.SetFog(preset.fogColor, preset.fogDensity, preset.fogStart,
+                           preset.fogEnd);
+      m_postProcess.SetColorGrading(preset.colorTint, preset.brightness,
+                                    preset.saturation, preset.contrast);
+
     } else {
       // Fallback to Default
       std::wstring defaultPath =
@@ -2682,27 +2973,14 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
     }
   }
 
-  // 実際のテクスチャ高さに合わせてフィールド奥行きを再スケールする
-  float desiredDepthFromTex =
-      static_cast<float>(m_wikiTexture->height) / 100.0f;
-  if (desiredDepthFromTex > fieldDepth) {
-    // 全文を潰さずに表示するため少し余裕を持って拡張
-    fieldDepth = desiredDepthFromTex * 1.05f;
-  }
-
   // 異常な巨大値を防止しつつ、超長文でも収まるよう高めの上限を設定
   const float kMaxSafeDepth = 20000.0f; // 20km相当
-  fieldDepth = std::min(fieldDepth, kMaxSafeDepth);
-  LOG_INFO("WikiGolf", "Final field depth after text fit: {:.1f}", fieldDepth);
-
-  // 実際のテクスチャ幅に合わせてフィールド横幅も調整（文字サイズは一定のまま）
-  float desiredWidthFromTex = static_cast<float>(m_wikiTexture->width) / 100.0f;
-  if (desiredWidthFromTex > fieldWidth) {
-    fieldWidth = desiredWidthFromTex * 1.05f; // わずかに余白
-  }
   const float kMaxSafeWidth = 20000.0f;
-  fieldWidth = std::clamp(fieldWidth, minFieldWidth, kMaxSafeWidth);
-  LOG_INFO("WikiGolf", "Final field width after text fit: {:.1f}", fieldWidth);
+
+  fieldDepth = std::min(fieldDepth, kMaxSafeDepth);
+  fieldWidth = std::min(fieldWidth, kMaxSafeWidth);
+
+  LOG_INFO("WikiGolf", "Final field size: {}x{}", fieldWidth, fieldDepth);
 
   // 再計上したフィールド寸法を保存
   m_fieldWidth = fieldWidth;
@@ -2957,6 +3235,9 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       // カップイン！
       LOG_INFO("WikiGolf", "Cup In! Target: {}", hole->linkTarget);
 
+      // カップイン時間進行 (1時間)
+      m_timeOfDay.OnCupIn(1.0f);
+
       // === 超派手なホールイン演出 ===
       if (m_gameJuice) {
         // 巨大カメラシェイク
@@ -3024,6 +3305,9 @@ void WikiGolfScene::SwitchClub(core::GameContext &ctx, int direction) {
     m_currentClubIndex = 0;
 
   m_currentClub = m_availableClubs[m_currentClubIndex];
+  if (auto *state = ctx.world.GetGlobal<GolfGameState>()) {
+    state->rollingFrictionScale = m_currentClub.rollingFrictionScale;
+  }
 
   // カメラ設定更新
   if (m_currentClub.name == "Putter") {

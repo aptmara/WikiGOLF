@@ -650,6 +650,13 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
         float frictionAccel = ComputeGrassRollingAcceleration(
             currentSpeed, ny, static_cast<TerrainMaterial>(mat), terrainScale);
+        if (golfState && body.entity == ballEntity) {
+          float scale = golfState->rollingFrictionScale;
+          if (!std::isfinite(scale) || scale < 0.05f) {
+            scale = 1.0f;
+          }
+          frictionAccel *= scale;
+        }
 
         // 環境状態の保存（ボールのみ対象）
         if (golfState && body.entity == ballEntity) {

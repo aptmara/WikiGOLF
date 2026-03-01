@@ -185,8 +185,25 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
   uint32_t totalHeight =
       std::max(height, static_cast<uint32_t>(std::ceil(totalHeightFloat)));
 
-  result.width = width;
+  // 幅も実態に合わせて調整（余白削減）
+  // ただし最小幅は確保し、最大幅（引数width）は超えないようにする
+  float contentWidth =
+      textMetrics.widthIncludingTrailingWhitespace + marginX * 2;
+  // 最低でも512px程度は確保
+  uint32_t actualWidth =
+      std::max(512u, static_cast<uint32_t>(std::ceil(contentWidth)));
+  actualWidth = std::min(actualWidth, width);
+
+  // 16の倍数などに合わせるとGPUに優しいが、ここでは単純に偶数にする
+  if (actualWidth % 2 != 0)
+    actualWidth++;
+
+  result.width = actualWidth;
   result.height = totalHeight;
+
+  // 以降の処理のためにローカル変数widthも更新しておく（GenerateTexture引数のwidthはconstではないが...いやconstではない）
+  // 引数は値渡しなのでここで書き換えても呼び出し元には影響しないが、関数内の後続処理で使用される
+  width = actualWidth;
 
   // 2. 分割計算
   const uint32_t kMaxTileHeight = 8000; // 安全マージンをとって8000

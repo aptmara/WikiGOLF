@@ -10,6 +10,10 @@
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../systems/GameJuiceSystem.h"
 #include "../systems/MapSys.h"
+#include "../systems/ParticleRenderSystem.h"
+#include "../systems/ParticleSystem.h"
+#include "../systems/PostProcessSystem.h"
+#include "../systems/TimeOfDaySystem.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
@@ -19,6 +23,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+
 
 namespace core {
 struct GameContext;
@@ -128,10 +133,10 @@ private:
     float maxPower;          // 最大パワー
     float launchAngle;       // 打ち出し角度 (度)
     std::string iconTexture; // アイコンテクスチャ名
+    float rollingFrictionScale = 1.0f; // 摩擦スケール（グリーンの転がり調整）
   };
 
-  Club m_currentClub = {"Driver", 30.0f, 30.0f,
-                        "icon_driver.png"}; // デフォルト
+  Club m_currentClub = {"Driver", 30.0f, 30.0f, "icon_driver.png", 1.0f};
   int m_currentClubIndex = 0;               // 現在のクラブインデックス
   std::vector<Club> m_availableClubs;
   std::vector<ecs::Entity> m_clubUIEntities;
@@ -211,6 +216,13 @@ private:
   // === Skybox システム（背景スカイボックス） ===
   std::unique_ptr<graphics::SkyboxTextureGenerator> m_skyboxGenerator;
   ecs::Entity m_skyboxEntity = UINT32_MAX; ///< スカイボックスエンティティ
+
+  // === Environment システム（環境効果） ===
+  game::systems::EnvironmentParticleSystem m_particleSystem;
+  game::systems::ParticleRenderSystem m_particleRenderSystem;
+  game::systems::PostProcessSystem m_postProcess;
+  game::systems::TimeOfDaySystem m_timeOfDay;
+  graphics::SkyboxTheme m_currentSkyboxTheme = graphics::SkyboxTheme::Default;
 
   /// @brief UI要素の初期化（エンティティ作成）
   void InitializeUI(core::GameContext &ctx,
