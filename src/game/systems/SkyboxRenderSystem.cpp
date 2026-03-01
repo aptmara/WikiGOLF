@@ -172,11 +172,11 @@ bool InitializeSkyboxStates(ID3D11Device *device, SkyboxRenderState &state) {
     return false;
   }
 
-  // 深度ステンシルステート（深度書き込み無効、テストALWAYS）
+  // 深度ステンシルステート（深度書き込み無効、最遠景描画）
   D3D11_DEPTH_STENCIL_DESC dsDesc = {};
-  dsDesc.DepthEnable = TRUE;
-  dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; // 深度書き込み無効
-  dsDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;          // 常に描画
+  dsDesc.DepthEnable = FALSE; // 深度テスト無効（常に最背面）
+  dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+  dsDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;
   dsDesc.StencilEnable = FALSE;
 
   hr = device->CreateDepthStencilState(&dsDesc, &state.depthStencilState);
@@ -261,17 +261,11 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
   proj = XMMatrixTranspose(proj);
 
   // スカイボックスコンポーネントを持つエンティティを描画
-  int skyboxCount = 0;
   world.Query<components::Skybox>().Each([&](ecs::Entity e,
                                              components::Skybox &skybox) {
-    skyboxCount++;
     if (!skybox.isVisible || !skybox.cubemapSRV) {
-      LOG_INFO("Skybox", "Skipped: visible={}, hasSRV={}",
-               skybox.isVisible ? "true" : "false",
-               skybox.cubemapSRV ? "true" : "false");
       return;
     }
-    LOG_INFO("Skybox", "Drawing skybox entity {}", e);
 
     // 定数バッファ更新
     D3D11_MAPPED_SUBRESOURCE mapped;

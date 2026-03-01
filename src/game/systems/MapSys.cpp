@@ -8,8 +8,8 @@
 #include "../../resources/ResourceManager.h"
 #include "../components/MeshRenderer.h"
 #include "../components/Skybox.h"
-#include "../components/WikiComponents.h"
 #include "../components/Transform.h"
+#include "../components/WikiComponents.h"
 #include <algorithm>
 
 using namespace DirectX;
@@ -107,22 +107,19 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
   auto *context = ctx.graphics.GetContext();
   BeginRender(context);
 
-  float fw = params.extent;
-  float fd = params.extent;
+  // GolfGameStateへの依存を削除し、params.extentを正とする
+  float extent = params.extent;
+
+  // ボール位置取得などのためにstateは必要
   auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
-  if (state) {
-    fw = std::max(fw, state->fieldWidth);
-    fd = std::max(fd, state->fieldDepth);
-  }
-  float extent = std::max(fw, fd);
 
   float zoom = std::max(0.001f, params.zoom); // 大きいほど寄る（強ズーム対応）
   float heightScale = std::max(0.1f, params.heightScale);
   float orthoPadding = std::max(1.0f, params.orthoPadding);
 
-  // 表示幅（viewSpan）はフィールドサイズに対する割合で下限を小さく設定
+  // 表示幅（viewSpan）の制限：下限を固定値にしてマップサイズに関係なく寄れるように
   float viewSpan = extent / zoom;
-  viewSpan = std::clamp(viewSpan, extent * 0.01f, extent * 6.0f);
+  viewSpan = std::clamp(viewSpan, 5.0f, extent * 6.0f);
 
   float height = std::max(viewSpan * heightScale, 5.0f);
   float orthoWidth = std::max(viewSpan * orthoPadding, viewSpan * 0.5f);
@@ -133,9 +130,8 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
 
   context->VSSetConstantBuffers(0, 1, m_cb.GetAddressOf());
 
-  auto shaderHandle =
-      ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                              L"Assets/shaders/BasicPS.hlsl");
+  auto shaderHandle = ctx.resource.LoadShader(
+      "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
   auto *shaderPtr = ctx.resource.GetShader(shaderHandle);
   if (!shaderPtr) {
     EndRender(context);
@@ -148,7 +144,8 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
   }
 
   ctx.world.Query<components::Transform, components::MeshRenderer>().Each(
-      [&](ecs::Entity e, components::Transform &t, components::MeshRenderer &r) {
+      [&](ecs::Entity e, components::Transform &t,
+          components::MeshRenderer &r) {
         if (!r.isVisible)
           return;
         // スカイボックスはミニマップ描画対象外

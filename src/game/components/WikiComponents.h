@@ -167,10 +167,16 @@ struct GolfGameState {
   TerrainMaterial currentMaterial = TerrainMaterial::Fairway;
   float currentBallSpeed = 0.0f;
   bool isBallGrounded = false;
+  float rollingFrictionScale = 1.0f; ///< クラブごとの摩擦スケール
 
   // 結果画面UI
   uint32_t resultBgEntity = 0;    ///< 結果画面背景
+  uint32_t resultFrameEntity = 0; ///< 結果パネル
+  uint32_t resultTitleEntity = 0; ///< 結果タイトル
+  uint32_t resultSubtitleEntity = 0; ///< ターゲット/ステージ情報
+  uint32_t resultBadgeEntity = 0; ///< 評価バッジ
   uint32_t resultTextEntity = 0;  ///< 結果テキスト
+  uint32_t resultHintEntity = 0;  ///< 操作ヒント
   uint32_t retryButtonEntity = 0; ///< おあいこボタン
   uint32_t guideBgEntity = 0;     ///< ガイド背景（半透明帯）
   uint32_t guideEntity = 0;       ///< ガイドUIエンティティ
