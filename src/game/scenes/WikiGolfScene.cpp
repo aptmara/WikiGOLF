@@ -350,6 +350,12 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     m_mapCenter = {0.0f, 0.0f};
   }
   m_mapZoom = 1.0f;
+  m_targetMapZoom = 1.0f;
+  m_mapPanVelocity = {0.0f, 0.0f};
+  m_lastMapClickTime = 0.0f;
+  m_mapBoundaryHitTime = 0.0f;
+  m_markerPulseTimer = 0.0f;
+  m_mapHelpVisible = false;
   m_minimapMarkerEntity = UINT32_MAX;
 
   GolfGameState state;
@@ -1644,56 +1650,155 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
     ctx.input.SetMouseCursorVisible(true);
     ctx.input.SetMouseCursorLocked(false);
 
-    if (ctx.input.GetMouseButton(1)) {
+    // === 左/右ドラッグでパン（慣性スクロール付き） ===
+    static bool wasDragging = false;
+    bool isDragging =
+        ctx.input.GetMouseButton(0) || ctx.input.GetMouseButton(1);
+
+    if (isDragging) {
       int deltaX = mouseX - m_prevMouseX;
       int deltaY = mouseY - m_prevMouseY;
 
       float sensitivity = 0.12f * std::max(0.5f, m_mapZoom);
-      m_mapCenter.x -= deltaX * sensitivity;
-      m_mapCenter.y += deltaY * sensitivity;
+
+      // 速度を更新
+      m_mapPanVelocity.x = -deltaX * sensitivity / std::max(0.001f, ctx.dt);
+      m_mapPanVelocity.y = deltaY * sensitivity / std::max(0.001f, ctx.dt);
+
+      wasDragging = true;
+    } else if (wasDragging) {
+      // ドラッグ終了→慣性開始
+      wasDragging = false;
     }
 
-    // WASD/矢印キーでパン
+    // 慣性スクロール適用（常時）
+    m_mapCenter.x += m_mapPanVelocity.x * ctx.dt;
+    m_mapCenter.y += m_mapPanVelocity.y * ctx.dt;
+
+    // 減衰
+    float damping = 0.92f;
+    m_mapPanVelocity.x *= damping;
+    m_mapPanVelocity.y *= damping;
+
+    // 閾値以下で停止
+    if (std::abs(m_mapPanVelocity.x) < 0.1f)
+      m_mapPanVelocity.x = 0.0f;
+    if (std::abs(m_mapPanVelocity.y) < 0.1f)
+      m_mapPanVelocity.y = 0.0f;
+
+    // === ダブルクリックで中心移動 ===
+    if (ctx.input.GetMouseButtonDown(0)) {
+      float currentTime = ctx.time;
+      float timeDiff = currentTime - m_lastMapClickTime;
+      int clickDist =
+          abs(mouseX - m_lastMapClickX) + abs(mouseY - m_lastMapClickY);
+
+      if (timeDiff < 0.3f && clickDist < 10) {
+        // ダブルクリック検出→その位置を中心に
+        // TODO: マウス座標→ワールド座標変換の実装
+        // 現在は単純にボール中心に移動
+        SyncMapCenterToBall(ctx, 0.0f, true);
+      }
+
+      m_lastMapClickTime = currentTime;
+      m_lastMapClickX = mouseX;
+      m_lastMapClickY = mouseY;
+    }
+
+    // WASD/矢印キーでパン（速度ベース）
     float panSpeed = 20.0f * ctx.dt * std::max(0.5f, m_mapZoom);
     if (ctx.input.GetKey(VK_LEFT) || ctx.input.GetKey('A')) {
       m_mapCenter.x -= panSpeed;
+      m_mapPanVelocity.x = 0.0f; // キー入力時は慣性リセット
     }
     if (ctx.input.GetKey(VK_RIGHT) || ctx.input.GetKey('D')) {
       m_mapCenter.x += panSpeed;
+      m_mapPanVelocity.x = 0.0f;
     }
     if (ctx.input.GetKey(VK_UP) || ctx.input.GetKey('W')) {
       m_mapCenter.y -= panSpeed;
+      m_mapPanVelocity.y = 0.0f;
     }
     if (ctx.input.GetKey(VK_DOWN) || ctx.input.GetKey('S')) {
       m_mapCenter.y += panSpeed;
+      m_mapPanVelocity.y = 0.0f;
     }
 
-    // Cキーで即座にボール中心へ戻す
-    if (ctx.input.GetKeyDown('C')) {
+    // === 新しいキーボードショートカット ===
+
+    // ESCキー: マップビュー終了
+    if (ctx.input.GetKeyDown(VK_ESCAPE)) {
+      m_isMapView = false;
+      LOG_INFO("WikiGolf", "Map view closed (ESC)");
+    }
+
+    // Spaceキー: ボール中心（Cキーと同じ）
+    if (ctx.input.GetKeyDown(VK_SPACE) || ctx.input.GetKeyDown('C')) {
       SyncMapCenterToBall(ctx, 0.0f, true);
-      m_mapZoom = game::utils::ClampMapZoom(
-          m_fieldWidth / std::max(10.0f, m_fieldWidth * 0.2f), m_minMapZoom,
-          m_maxMapZoom);
+      m_targetMapZoom =
+          std::clamp(m_fieldWidth / std::max(10.0f, m_fieldWidth * 0.25f),
+                     m_minMapZoom, m_maxMapZoom);
     }
 
-    // マップビューのズーム（ホイール + キー）
+    // Fキー: 全体表示
+    if (ctx.input.GetKeyDown('F')) {
+      SyncMapCenterToBall(ctx, 0.0f, true);
+      // フィールド全体が収まる最小ズーム（少し余裕を持たせて90%）
+      float extent = std::max(m_fieldWidth, m_fieldDepth);
+      m_targetMapZoom = extent / 220.0f * 0.9f; // ミニマップサイズ基準
+      m_targetMapZoom = std::clamp(m_targetMapZoom, m_minMapZoom, m_maxMapZoom);
+    }
+
+    // 0キー: ズームリセット
+    if (ctx.input.GetKeyDown('0')) {
+      m_targetMapZoom = 1.0f;
+    }
+
+    // ?キー: ヘルプパネルトグル
+    if (ctx.input.GetKeyDown(VK_OEM_2)) { // '/' or '?'
+      m_mapHelpVisible = !m_mapHelpVisible;
+    }
+
+    // === スムーズズーム ===
     float wheel = ctx.input.GetMouseScrollDelta();
     if (wheel != 0.0f) {
-      // ホイール上でズームイン、下でズームアウト（指数的に変化させスピード一定に）
-      m_mapZoom = game::utils::ClampMapZoom(m_mapZoom * std::pow(1.12f, wheel),
-                                            m_minMapZoom, m_maxMapZoom);
+      // 目標ズームを即座に変更
+      m_targetMapZoom *= std::pow(1.12f, wheel);
+      m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, m_minMapZoom,
+                                                  m_maxMapZoom);
     }
     if (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD)) {
-      m_mapZoom = game::utils::ClampMapZoom(m_mapZoom * 1.12f, m_minMapZoom,
-                                            m_maxMapZoom);
+      m_targetMapZoom *= 1.12f;
+      m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, m_minMapZoom,
+                                                  m_maxMapZoom);
     }
     if (ctx.input.GetKeyDown(VK_OEM_MINUS) ||
         ctx.input.GetKeyDown(VK_SUBTRACT)) {
-      m_mapZoom = game::utils::ClampMapZoom(m_mapZoom / 1.12f, m_minMapZoom,
-                                            m_maxMapZoom);
+      m_targetMapZoom /= 1.12f;
+      m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, m_minMapZoom,
+                                                  m_maxMapZoom);
     }
+
+    // 現在のズームを補間（0.1秒で90%到達）
+    float zoomLerp = 1.0f - std::exp(-10.0f * ctx.dt);
+    m_mapZoom += (m_targetMapZoom - m_mapZoom) * zoomLerp;
+
+    // === マップ中心の境界チェック（バウンスエフェクト付き） ===
+    DirectX::XMFLOAT2 beforeClamp = m_mapCenter;
     m_mapCenter = game::utils::ClampMapCenter(m_mapCenter, m_fieldWidth,
                                               m_fieldDepth, 2.0f);
+
+    if (beforeClamp.x != m_mapCenter.x || beforeClamp.y != m_mapCenter.y) {
+      // 境界到達→バウンス
+      m_mapBoundaryHitTime = ctx.time;
+
+      if (beforeClamp.x != m_mapCenter.x) {
+        m_mapPanVelocity.x *= -0.3f; // 30%で反転
+      }
+      if (beforeClamp.y != m_mapCenter.y) {
+        m_mapPanVelocity.y *= -0.3f;
+      }
+    }
   } else {
     // 通常ビュー: UIモード時はカーソル表示、エイムモード時はロック
     auto *shotStateCheck = ctx.world.GetGlobal<ShotState>();
@@ -2075,6 +2180,115 @@ void WikiGolfScene::UpdateMinimap(core::GameContext &ctx) {
     marker->y = ui->y + v * ui->height - 10.0f;
     marker->visible = ui->visible;
   }
+
+  // === Phase 2: マーカーパルスアニメーション ===
+  if (marker && ui && ui->visible) {
+    m_markerPulseTimer += ctx.dt;
+    float pulse = 1.0f + 0.2f * std::sin(m_markerPulseTimer * 4.0f);
+    marker->style.fontSize = 22.0f * pulse;
+
+    // 色もパルス
+    float alphaPulse = 0.8f + 0.2f * std::sin(m_markerPulseTimer * 4.0f);
+    marker->style.color.w = alphaPulse;
+  }
+
+  // === Phase 3: 座標・距離表示（マップビュー時のみ） ===
+  if (m_isMapView && ui && ballT) {
+    int mouseX = ctx.input.GetMousePosition().x;
+    int mouseY = ctx.input.GetMousePosition().y;
+
+    // マウスがマップ内かチェック
+    bool inMap = (mouseX >= ui->x && mouseX <= ui->x + ui->width &&
+                  mouseY >= ui->y && mouseY <= ui->y + ui->height);
+
+    auto *coordTxt = ctx.world.Get<UIText>(m_mapCoordText);
+    auto *distTxt = ctx.world.Get<UIText>(m_mapDistanceText);
+
+    if (inMap && coordTxt && distTxt) {
+      float u = (mouseX - ui->x) / ui->width;
+      float v = (mouseY - ui->y) / ui->height;
+
+      // UV→ワールド座標
+      float clipWidth = params.extent / std::max(0.01f, params.zoom);
+      clipWidth = std::clamp(clipWidth, 5.0f, params.extent * 6.0f);
+
+      float worldX = params.center.x + (u - 0.5f) * clipWidth;
+      float worldZ = params.center.z - (v - 0.5f) * clipWidth;
+
+      // 座標表示（ミニマップ内固定位置）
+      coordTxt->x = ui->x + 10.0f;
+      coordTxt->y = ui->y + ui->height - 35.0f;
+      coordTxt->text = std::format(L"座標: ({:.1f}, {:.1f})", worldX, worldZ);
+      coordTxt->visible = true;
+
+      // ボールからの距離
+      float dx = worldX - ballT->position.x;
+      float dz = worldZ - ballT->position.z;
+      float distance = std::sqrt(dx * dx + dz * dz);
+
+      distTxt->x = ui->x + 10.0f;
+      distTxt->y = ui->y + ui->height - 20.0f;
+      distTxt->text = std::format(L"距離: {:.1f}m", distance);
+      distTxt->visible = true;
+    } else {
+      if (coordTxt)
+        coordTxt->visible = false;
+      if (distTxt)
+        distTxt->visible = false;
+    }
+  } else {
+    // 非マップビューでは非表示
+    if (auto *coordTxt = ctx.world.Get<UIText>(m_mapCoordText))
+      coordTxt->visible = false;
+    if (auto *distTxt = ctx.world.Get<UIText>(m_mapDistanceText))
+      distTxt->visible = false;
+  }
+
+  // === Phase 2: ズームインジケーター（マップビュー時のみ） ===
+  auto *zoomBg = ctx.world.Get<UIImage>(m_mapZoomIndicatorBg);
+  auto *zoomTxt = ctx.world.Get<UIText>(m_mapZoomIndicatorText);
+
+  if (m_isMapView && zoomBg && zoomTxt) {
+    // ズーム率を計算（基準1.0 = 100%）
+    int zoomPercent = (int)(m_mapZoom * 100.0f);
+    zoomTxt->text = std::format(L"{}%", zoomPercent);
+
+    zoomBg->visible = true;
+    zoomTxt->visible = true;
+  } else {
+    if (zoomBg)
+      zoomBg->visible = false;
+    if (zoomTxt)
+      zoomTxt->visible = false;
+  }
+
+  // === Phase 3: ヘルプパネルフェードイン/アウト ===
+  static float helpFadeAlpha = 0.0f;
+  float targetHelpAlpha = m_mapHelpVisible ? 1.0f : 0.0f;
+  float fadeSpeed = 5.0f; // 0.2秒で完了
+  helpFadeAlpha += (targetHelpAlpha - helpFadeAlpha) * fadeSpeed * ctx.dt;
+
+  bool shouldShowHelp = helpFadeAlpha > 0.01f;
+
+  auto *helpBg = ctx.world.Get<UIImage>(m_mapHelpPanelBg);
+  auto *helpTitle = ctx.world.Get<UIText>(m_mapHelpTitle);
+
+  if (helpBg) {
+    helpBg->visible = shouldShowHelp;
+    helpBg->alpha = helpFadeAlpha * 0.85f;
+  }
+
+  if (helpTitle) {
+    helpTitle->visible = shouldShowHelp;
+    helpTitle->style.color.w = helpFadeAlpha;
+  }
+
+  for (auto lineE : m_mapHelpLines) {
+    if (auto *line = ctx.world.Get<UIText>(lineE)) {
+      line->visible = shouldShowHelp;
+      line->style.color.w = helpFadeAlpha;
+    }
+  }
 }
 
 void WikiGolfScene::SaveHighScore(const std::string &targetPage, int shots) {
@@ -2141,6 +2355,24 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
   if (m_trajectoryDots.empty())
     return;
 
+  // ボールが動いている場合は予測線を表示しない
+  auto *ballRB = ctx.world.Get<RigidBody>(m_ballEntity);
+  if (ballRB) {
+    float ballSpeed = std::sqrt(ballRB->velocity.x * ballRB->velocity.x +
+                                ballRB->velocity.y * ballRB->velocity.y +
+                                ballRB->velocity.z * ballRB->velocity.z);
+    if (ballSpeed > 0.1f) {
+      // ボールが動いている: 全ての予測線ドットを非表示
+      for (auto e : m_trajectoryDots) {
+        auto *mr = ctx.world.Get<MeshRenderer>(e);
+        if (mr) {
+          mr->isVisible = false;
+        }
+      }
+      return;
+    }
+  }
+
   // 現在のクラブ設定
   float maxPower = m_currentClub.maxPower;
   float launchAngleDeg = m_currentClub.launchAngle;
@@ -2168,6 +2400,16 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
   if (!ballT)
     return;
   XMVECTOR pos = XMLoadFloat3(&ballT->position);
+
+  // 開始位置を地面高さに合わせて調整（位置ずれ防止）
+  if (m_terrainSystem) {
+    float startX = XMVectorGetX(pos);
+    float startZ = XMVectorGetZ(pos);
+    float startGroundY = m_terrainSystem->GetHeight(startX, startZ);
+    // ボール半径分だけ地面より上に設定
+    float ballRadius = 0.2f; // ゴルフボールの半径
+    pos = XMVectorSetY(pos, startGroundY + ballRadius);
+  }
 
   // RigidBody設定（ボールと同じ値を使う）
   auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
@@ -2224,12 +2466,106 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
     XMVECTOR currentPos = prevPos;
 
-    // --- 物理ステップ (PhysicsSystemのロジックを模倣) ---
+    // --- 物理ステップ (PhysicsSystemのロジックを正確に模倣) ---
     for (int step = 0; step < simSubStepsPerDot; ++step) {
-      float speed = SafeLength(vel);
       XMVECTOR acc = gravity;
 
-      // 1. 空気抵抗
+      // 地面との接触判定
+      float groundY = 0.0f;
+      XMVECTOR groundNormal = XMVectorSet(0, 1, 0, 0);
+      bool isGrounded = false;
+
+      if (m_terrainSystem) {
+        float px = XMVectorGetX(currentPos);
+        float pz = XMVectorGetZ(currentPos);
+        groundY = m_terrainSystem->GetHeight(px, pz);
+
+        float hX = m_terrainSystem->GetHeight(px + 0.1f, pz);
+        float hZ = m_terrainSystem->GetHeight(px, pz + 0.1f);
+        float gradX = (hX - groundY) / 0.1f;
+        float gradZ = (hZ - groundY) / 0.1f;
+        XMVECTOR slopeVec = XMVectorSet(-gradX, 1.0f, -gradZ, 0.0f);
+        groundNormal = XMVector3Normalize(slopeVec);
+
+        float ballBottom = XMVectorGetY(currentPos);
+        float penetration = groundY - ballBottom;
+
+        if (penetration > 0.0f) {
+          // 着地
+          currentPos = XMVectorSetY(currentPos, groundY);
+
+          // 速度のY成分を反転・減衰 (バウンド)
+          float vn = XMVectorGetX(XMVector3Dot(vel, groundNormal));
+          if (vn < 0.0f) {
+            vel = XMVectorSubtract(
+                vel, XMVectorScale(groundNormal, vn * (1.0f + restitution)));
+          }
+
+          isGrounded = true;
+        } else if (penetration > -0.1f) {
+          isGrounded = true;
+        }
+      }
+
+      // 接地時は法線方向の加速度を除去し、斜面方向の重力のみを残す
+      if (isGrounded) {
+        XMVECTOR normalComponent = XMVectorScale(
+            groundNormal, XMVectorGetX(XMVector3Dot(acc, groundNormal)));
+        acc = XMVectorSubtract(acc, normalComponent);
+      }
+
+      // 接地時の摩擦と斜面処理
+      if (isGrounded) {
+        // 法線成分を除去
+        float vn = XMVectorGetX(XMVector3Dot(vel, groundNormal));
+        if (vn < 0.0f) {
+          vel = XMVectorSubtract(vel, XMVectorScale(groundNormal, vn));
+        }
+
+        float currentSpeed = SafeLength(vel);
+        float terrainScale = terrainData ? terrainData->config.friction : 1.0f;
+        TerrainMaterial mat =
+            GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
+        float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
+        float frictionAccel = game::systems::ComputeGrassRollingAcceleration(
+            currentSpeed, ny, mat, terrainScale);
+
+        // クラブ固有のrollingFrictionScaleを適用 (PhysicsSystemと同じ)
+        if (golfState) {
+          float scale = golfState->rollingFrictionScale;
+          if (!std::isfinite(scale) || scale < 0.05f) {
+            scale = 1.0f;
+          }
+          frictionAccel *= scale;
+        }
+
+        float tangentialAcc = SafeLength(acc);
+        float staticLimit = frictionAccel * 1.2f;
+
+        if (currentSpeed < 0.05f && tangentialAcc < staticLimit) {
+          // ほぼ停止 & 重力に勝てる摩擦がある -> 完全停止
+          vel = XMVectorZero();
+          acc = XMVectorZero();
+        } else if (currentSpeed > 0.0001f) {
+          // 動摩擦減衰
+          float drop = frictionAccel * subDt;
+          if (currentSpeed <= drop) {
+            vel = XMVectorZero();
+          } else {
+            vel = XMVectorScale(vel, (currentSpeed - drop) / currentSpeed);
+          }
+        }
+
+        // 極低速時の微細振動カット
+        float speedAfter = SafeLength(vel);
+        float slopeFlatness = XMVectorGetY(groundNormal);
+        if (speedAfter < 0.03f && slopeFlatness > 0.90f) {
+          vel = XMVectorZero();
+        }
+      }
+
+      // 空気抵抗 (PhysicsSystemと同じタイミングで適用)
+      float speed = SafeLength(vel);
       if (speed > 0.001f) {
         float K = 0.000876f;
         float dragForce = K * drag * speed * speed;
@@ -2249,74 +2585,46 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
         acc = XMVectorAdd(acc, XMVectorScale(windVec, windForce));
       }
 
-      // 速度更新 (オイラー積分)
+      // オイラー積分
       vel = XMVectorAdd(vel, XMVectorScale(acc, subDt));
-
-      // 位置更新
       currentPos = XMVectorAdd(currentPos, XMVectorScale(vel, subDt));
 
-      // 地面との接触判定
-      float groundY = 0.0f;
-      XMVECTOR groundNormal = XMVectorSet(0, 1, 0, 0);
+      // 最終停止判定（PhysicsSystemと同じ閾値）
+      float speedFinal = SafeLength(vel);
+      float slopeFlatnessFinal = XMVectorGetY(groundNormal);
+      if (speedFinal < 0.008f && isGrounded && slopeFlatnessFinal > 0.98f) {
+        vel = XMVectorZero();
+      }
+    }
 
-      if (m_terrainSystem) {
-        float px = XMVectorGetX(currentPos);
-        float pz = XMVectorGetZ(currentPos);
-        groundY = m_terrainSystem->GetHeight(px, pz);
+    // === 停止判定: 速度がゼロかつ地面接地で予測終了 ===
+    float finalSpeed = SafeLength(vel);
 
-        float hX = m_terrainSystem->GetHeight(px + 0.1f, pz);
-        float hZ = m_terrainSystem->GetHeight(px, pz + 0.1f);
-        float gradX = (hX - groundY) / 0.1f;
-        float gradZ = (hZ - groundY) / 0.1f;
-        XMVECTOR slopeVec = XMVectorSet(-gradX, 1.0f, -gradZ, 0.0f);
-        groundNormal = XMVector3Normalize(slopeVec);
+    // 地面高さを再計算
+    float currentGroundY = 0.0f;
+    if (m_terrainSystem) {
+      float px = XMVectorGetX(currentPos);
+      float pz = XMVectorGetZ(currentPos);
+      currentGroundY = m_terrainSystem->GetHeight(px, pz);
+    }
+
+    bool isOnGround = XMVectorGetY(currentPos) <= currentGroundY + 0.01f;
+
+    // PhysicsSystemと同じ閾値(0.008f)を使用
+    if (finalSpeed < 0.008f && isOnGround) {
+      // このドットは停止位置なので非表示化
+      mr->isVisible = false;
+
+      // 残りの未使用ドットも非表示化
+      for (size_t j = i + 1; j < m_trajectoryDots.size(); ++j) {
+        auto *remainMR = ctx.world.Get<MeshRenderer>(m_trajectoryDots[j]);
+        if (remainMR) {
+          remainMR->isVisible = false;
+        }
       }
 
-      if (XMVectorGetY(currentPos) <= groundY) {
-        // 着地
-        currentPos = XMVectorSetY(currentPos, groundY);
-
-        // 速度のY成分を反転・減衰 (バウンド)
-        float vyCur = XMVectorGetY(vel);
-        if (vyCur < 0.0f) {
-          if (std::abs(vyCur) < 2.0f) {
-            vyCur = 0.0f;
-          } else {
-            vyCur = -vyCur * restitution;
-          }
-          vel = XMVectorSetY(vel, vyCur);
-        }
-
-        // 転がり抵抗 (PhysicsSystem同期)
-        float terrainScale = terrainData ? terrainData->config.friction : 1.0f;
-        TerrainMaterial mat =
-            GetMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
-        float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
-        float frictionAccel = game::systems::ComputeGrassRollingAcceleration(
-            SafeLength(vel), ny, mat, terrainScale);
-
-        float tangentialAcc = XMVectorGetX(XMVector3Length(acc));
-        float staticLimit = frictionAccel * 1.2f;
-        float currentSpeed = SafeLength(vel);
-
-        if (currentSpeed < 0.08f && tangentialAcc < staticLimit) {
-          vel = XMVectorZero();
-          acc = XMVectorZero();
-        } else if (currentSpeed > 0.0f) {
-          float dropSpeed = frictionAccel * subDt;
-          if (currentSpeed <= dropSpeed) {
-            vel = XMVectorZero();
-            currentSpeed = 0.0f;
-          } else {
-            vel = XMVectorScale(vel, (currentSpeed - dropSpeed) / currentSpeed);
-          }
-        }
-
-        float flatness = XMVectorGetY(groundNormal);
-        if (SafeLength(vel) < 0.03f && flatness > 0.90f) {
-          vel = XMVectorZero();
-        }
-      }
+      // 予測完了: ループを抜ける
+      break;
     }
 
     // セグメント計算
@@ -2331,6 +2639,20 @@ void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
 
     // 中点
     XMVECTOR midPoint = XMVectorAdd(prevPos, XMVectorScale(segmentVec, 0.5f));
+
+    // 中点が地面より下にある場合は、地面より少し上に調整
+    if (m_terrainSystem) {
+      float midX = XMVectorGetX(midPoint);
+      float midZ = XMVectorGetZ(midPoint);
+      float midGroundY = m_terrainSystem->GetHeight(midX, midZ);
+
+      float midY = XMVectorGetY(midPoint);
+      if (midY < midGroundY + 0.1f) {
+        // 地面より下または地面すれすれなら、少し上に調整
+        midPoint = XMVectorSetY(midPoint, midGroundY + 0.1f);
+      }
+    }
+
     XMStoreFloat3(&t->position, midPoint);
 
     // 視認性調整
@@ -2389,9 +2711,9 @@ void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
     // texturePathを設定
     img = UIImage::Create(m_availableClubs[i].iconTexture, 0, 0);
 
-    // 画面右端、垂直に配置
+    // 画面右側、垂直に配置（左に移動）
     float startY = 720.0f / 2.0f - (m_availableClubs.size() * 100.0f) / 2.0f;
-    img.x = 1150.0f; // 右側
+    img.x = 20.0f; // 左側に変更
     img.y = startY + i * 100.0f;
     img.width = 80.0f;
     img.height = 80.0f;
@@ -2439,15 +2761,15 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
     marker.style.color = {1.0f, 0.9f, 0.2f, 1.0f}; // 黄色で視認性アップ
     marker.layer = ui.layer + 1;
 
-    // 操作ヘルプ
-    m_minimapHelpEntity = CreateEntity(ctx.world);
-    auto &help = ctx.world.Add<UIText>(m_minimapHelpEntity);
-    help.text = L"Map: Drag/RMB/WASD pan | Wheel zoom | C center | M close";
-    help.x = ui.x - 10.0f;
-    help.y = ui.y + ui.height + 6.0f;
-    help.style = graphics::TextStyle::Guide();
-    help.style.color = {1.0f, 1.0f, 1.0f, 0.8f};
-    help.layer = ui.layer + 1;
+    // 操作ヘルプ（削除 - 新ヘルプパネルと重複のため）
+    // m_minimapHelpEntity = CreateEntity(ctx.world);
+    // auto &help = ctx.world.Add<UIText>(m_minimapHelpEntity);
+    // help.text = L"Map: Drag/RMB/WASD pan | Wheel zoom | C center | M close";
+    // help.x = ui.x - 10.0f;
+    // help.y = ui.y + ui.height + 6.0f;
+    // help.style = graphics::TextStyle::Guide();
+    // help.style.color = {1.0f, 1.0f, 1.0f, 0.8f};
+    // help.layer = ui.layer + 1;
   }
 
   // Header
@@ -2472,20 +2794,20 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   st.layer = 10;
   state.shotCountEntity = shotE;
 
-  // Wind UI
+  // Wind UI（さらに左に移動）
   auto windE = CreateEntity(ctx.world);
   auto &wt = ctx.world.Add<UIText>(windE);
-  wt.x = 950; // 左に移動
+  wt.x = 820; // さらに左に移動
   wt.y = 10;
   wt.visible = true;
   wt.layer = 10;
   state.windEntity = windE;
 
-  // Wind Arrow
+  // Wind Arrow（Wind Textと合わせて左に移動）
   LOG_INFO("WikiGolf", "Creating wind arrow UI...");
   auto windArrowE = CreateEntity(ctx.world);
   auto &wa = ctx.world.Add<UIImage>(windArrowE);
-  wa = UIImage::Create("ui_wind_arrow.png", 970.0f, 40.0f);
+  wa = UIImage::Create("ui_wind_arrow.png", 840.0f, 40.0f);
   wa.width = 64.0f;
   wa.height = 64.0f;
   wa.visible = true;
@@ -2535,6 +2857,7 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   pathT.text = L"History: ";
   pathT.x = 20;
   pathT.y = 130;
+  pathT.width = 600.0f; // 幅制限を追加
   pathT.visible = true;
   pathT.layer = 10;
   pathT.style = graphics::TextStyle::ModernBlack();
@@ -2671,13 +2994,108 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   auto guideE = CreateEntity(ctx.world);
   auto &gt = ctx.world.Add<UIText>(guideE);
   gt.text = L"";
-  gt.x = 600.0f;                           // 左寄りに配置
-  gt.y = 640.0f;                           // 少し上に調整
-  gt.width = 800.0f;                       // 幅を調整
+  gt.x = 240.0f;     // 中央配置（画面幅1280 - 幅800 = 480、480/2 = 240）
+  gt.y = 685.0f;     // 下に移動
+  gt.width = 800.0f; // 幅を800に戻す（長いテキスト対応）
   gt.style = graphics::TextStyle::Guide(); // 新しいガイドスタイル（24pt）
   gt.visible = true;
   gt.layer = 100; // 最前面
   state.guideEntity = guideE;
+
+  // === マップビュー強化UI ===
+
+  // ズームインジケーター背景（右下に移動）
+  m_mapZoomIndicatorBg = CreateEntity(ctx.world);
+  auto &zoomBg = ctx.world.Add<UIImage>(m_mapZoomIndicatorBg);
+  zoomBg = UIImage::Create("", 1040.0f, 680.0f);
+  zoomBg.width = 100.0f;
+  zoomBg.height = 20.0f;
+  zoomBg.alpha = 0.7f; // 半透明
+  zoomBg.visible = false;
+  zoomBg.layer = 105;
+
+  // ズームインジケーターテキスト
+  m_mapZoomIndicatorText = CreateEntity(ctx.world);
+  auto &zoomTxt = ctx.world.Add<UIText>(m_mapZoomIndicatorText);
+  zoomTxt.text = L"100%";
+  zoomTxt.x = 1065.0f;
+  zoomTxt.y = 683.0f;
+  zoomTxt.style = graphics::TextStyle::Guide();
+  zoomTxt.style.fontSize = 16.0f;
+  zoomTxt.style.color = {1.0f, 1.0f, 1.0f, 0.9f};
+  zoomTxt.visible = false;
+  zoomTxt.layer = 106;
+
+  // マップ座標表示（ミニマップ内左下に配置）
+  m_mapCoordText = CreateEntity(ctx.world);
+  auto &coordTxt = ctx.world.Add<UIText>(m_mapCoordText);
+  coordTxt.text = L"";
+  coordTxt.x = 1050.0f; // ミニマップ基準
+  coordTxt.y = 205.0f;  // ミニマップ下部（20+220-35=205）
+  coordTxt.style = graphics::TextStyle::Guide();
+  coordTxt.style.fontSize = 14.0f;
+  coordTxt.style.color = {1.0f, 1.0f, 1.0f, 0.8f};
+  coordTxt.visible = false;
+  coordTxt.layer = 102;
+
+  // マップ距離表示
+  m_mapDistanceText = CreateEntity(ctx.world);
+  auto &distTxt = ctx.world.Add<UIText>(m_mapDistanceText);
+  distTxt.text = L"";
+  distTxt.x = 1050.0f;
+  distTxt.y = 220.0f;
+  distTxt.style = graphics::TextStyle::Guide();
+  distTxt.style.fontSize = 14.0f;
+  distTxt.style.color = {0.3f, 1.0f, 0.5f, 0.8f};
+  distTxt.visible = false;
+  distTxt.layer = 102;
+
+  // ヘルプパネル背景（縮小・右寄せ）
+  m_mapHelpPanelBg = CreateEntity(ctx.world);
+  auto &helpBg = ctx.world.Add<UIImage>(m_mapHelpPanelBg);
+  helpBg = UIImage::Create("", 870.0f, 240.0f);
+  helpBg.width = 360.0f;
+  helpBg.height = 340.0f;
+  helpBg.alpha = 0.85f; // 半透明黒
+  helpBg.visible = false;
+  helpBg.layer = 200;
+
+  // ヘルプパネルタイトル
+  m_mapHelpTitle = CreateEntity(ctx.world);
+  auto &helpTitle = ctx.world.Add<UIText>(m_mapHelpTitle);
+  helpTitle.text = L"マップ操作";
+  helpTitle.x = 890.0f;
+  helpTitle.y = 260.0f;
+  helpTitle.style = graphics::TextStyle::Status();
+  helpTitle.style.fontSize = 32.0f;
+  helpTitle.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  helpTitle.visible = false;
+  helpTitle.layer = 201;
+
+  // ヘルプ項目
+  const wchar_t *helpTexts[] = {L"左/右ドラッグ : マップ移動",
+                                L"ホイール / +/- : ズーム",
+                                L"WASD / 矢印 : マップ移動",
+                                L"Space / C : ボール中心",
+                                L"F : 全体表示",
+                                L"0 : ズームリセット",
+                                L"ESC / M : マップ終了",
+                                L"? : ヘルプ表示/非表示"};
+
+  float helpStartY = 310.0f;
+  for (int i = 0; i < 8; ++i) {
+    auto helpLineE = CreateEntity(ctx.world);
+    auto &helpLine = ctx.world.Add<UIText>(helpLineE);
+    helpLine.text = helpTexts[i];
+    helpLine.x = 890.0f;
+    helpLine.y = helpStartY + i * 35.0f;
+    helpLine.style = graphics::TextStyle::Guide();
+    helpLine.style.fontSize = 20.0f;
+    helpLine.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    helpLine.visible = false;
+    helpLine.layer = 201;
+    m_mapHelpLines.push_back(helpLineE);
+  }
 }
 
 void WikiGolfScene::UpdateGuideUI(core::GameContext &ctx) {
@@ -2697,7 +3115,8 @@ void WikiGolfScene::UpdateGuideUI(core::GameContext &ctx) {
   if (state->gameCleared) {
     text = L"[クリック] 次へ";
   } else if (m_isMapView) {
-    text = L"[右ドラッグ] 移動  [ホイール] ズーム  [M] 戻る";
+    text = L"[左/右ドラッグ] 移動  [WASD] パン  [Wheel/+/-] ズーム  [Space/C] "
+           L"中心  [F] 全体  [?] ヘルプ  [ESC/M] 戻る";
   } else {
     // カーソルモード判定
     bool isUIMode = ctx.input.GetKey(VK_MENU);
@@ -2710,7 +3129,8 @@ void WikiGolfScene::UpdateGuideUI(core::GameContext &ctx) {
       } else if (isPrecision) {
         text = L"[精密エイム] マウスでゆっくり狙う";
       } else {
-        text = L"[マウス] 狙う  [Shift] 精密  [Q/E] クラブ  [M] マップ";
+        text = L"[左クリック] ショット  [マウス] エイム  [Shift] 精密  [Q/E] "
+               L"クラブ  [M] マップ  [Alt] UI";
       }
       break;
     case game::components::ShotState::Phase::PowerCharging:
@@ -2818,15 +3238,27 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   };
 
   for (const auto &link : allLinks) {
+    // ターゲットページは無条件で追加（フィルタリングや本文チェックをバイパス）
+    if (link.title == state->targetPage) {
+      // 既に追加済みかチェック（念のため）
+      bool exists = false;
+      for (const auto &v : validLinks) {
+        if (v.first == link.title) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists) {
+        validLinks.push_back({link.title, core::ToWString(link.title)});
+      }
+      continue;
+    }
+
     if (isIgnored(link.title))
       continue;
 
     // 本文に含まれているかチェック
     if (articleText.find(link.title) != std::string::npos) {
-      validLinks.push_back({link.title, core::ToWString(link.title)});
-    }
-    // ターゲットページは必ず含める
-    else if (link.title == state->targetPage) {
       validLinks.push_back({link.title, core::ToWString(link.title)});
     }
 
