@@ -24,7 +24,6 @@
 #include <string>
 #include <vector>
 
-
 namespace core {
 struct GameContext;
 }
@@ -130,14 +129,14 @@ private:
   // クラブ定義
   struct Club {
     std::string name;
-    float maxPower;          // 最大パワー
-    float launchAngle;       // 打ち出し角度 (度)
-    std::string iconTexture; // アイコンテクスチャ名
+    float maxPower;                    // 最大パワー
+    float launchAngle;                 // 打ち出し角度 (度)
+    std::string iconTexture;           // アイコンテクスチャ名
     float rollingFrictionScale = 1.0f; // 摩擦スケール（グリーンの転がり調整）
   };
 
   Club m_currentClub = {"Driver", 30.0f, 30.0f, "icon_driver.png", 1.0f};
-  int m_currentClubIndex = 0;               // 現在のクラブインデックス
+  int m_currentClubIndex = 0; // 現在のクラブインデックス
   std::vector<Club> m_availableClubs;
   std::vector<ecs::Entity> m_clubUIEntities;
 
@@ -176,6 +175,16 @@ private:
 
   float m_judgeDisplayTimer = 0.0f; // 判定表示タイマー
 
+  // マップビューUX強化
+  float m_targetMapZoom = 1.0f;                      // スムーズズーム目標値
+  DirectX::XMFLOAT2 m_mapPanVelocity = {0.0f, 0.0f}; // 慣性スクロール速度
+  float m_lastMapClickTime = 0.0f;                   // ダブルクリック検出用
+  int m_lastMapClickX = 0;
+  int m_lastMapClickY = 0;
+  float m_mapBoundaryHitTime = 0.0f; // 境界衝突時刻
+  float m_markerPulseTimer = 0.0f;   // マーカーパルスアニメーション
+  bool m_mapHelpVisible = false;     // ヘルプパネル表示状態
+
   // カメラ追従用
   DirectX::XMFLOAT3 m_shotStartCamPos = {0, 0, 0}; // ショット瞬間のカメラ位置
   bool m_isCameraChasing = false;                  // 現在追尾モードに入ったか
@@ -192,6 +201,22 @@ private:
   ecs::Entity m_minimapEntity;       ///< ミニマップ表示用UIエンティティ
   ecs::Entity m_minimapMarkerEntity; ///< ミニマップ上の現在地マーカー
   ecs::Entity m_minimapHelpEntity = UINT32_MAX; ///< ミニマップ操作ヘルプ
+
+  // マップビュー追加UI
+  ecs::Entity m_mapZoomIndicatorBg = UINT32_MAX;
+  ecs::Entity m_mapZoomIndicatorText = UINT32_MAX;
+  ecs::Entity m_mapCoordText = UINT32_MAX;
+  ecs::Entity m_mapDistanceText = UINT32_MAX;
+  ecs::Entity m_mapHelpPanelBg = UINT32_MAX;
+  ecs::Entity m_mapHelpTitle = UINT32_MAX;
+  std::vector<ecs::Entity> m_mapHelpLines;
+
+  struct MapHoleIcon {
+    ecs::Entity iconEntity;
+    DirectX::XMFLOAT2 worldPos;
+    bool isTarget;
+  };
+  std::vector<MapHoleIcon> m_mapHoleIcons;
 
   /// @brief ミニマップ更新・描画
   void UpdateMinimap(core::GameContext &ctx);
