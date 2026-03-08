@@ -16,6 +16,7 @@
 #include "TerrainGenerator.h"
 #include "WikiClient.h"
 #include <algorithm> // for std::max
+#include <random>    // for std::mt19937, std::uniform_*_distribution
 
 namespace game::systems {
 
@@ -43,6 +44,7 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
 
   CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle);
   CreateWalls(ctx, fieldWidth, fieldDepth);
+  CreateDecorations(ctx, fieldWidth, fieldDepth, m_biome);
 }
 
 void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
@@ -105,6 +107,9 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     biome = h % 4;
   }
 
+  // configにバイオーム設定を反映
+  config.biome = biome;
+
   XMFLOAT4 terrainColor = {1.0f, 1.0f, 1.0f, 1.0f};
 
   // 物理パラメータの統一 (環境によらず一定)
@@ -112,22 +117,25 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   config.restitution = 0.3f; // 標準的な反発係数
 
   switch (biome) {
-  case 0: // 草原
+  case 0: // 草原 - 標準的なゴルフ場
     terrainColor = {0.4f, 0.8f, 0.4f, 1.0f};
     break;
-  case 1: // 砂漠
+  case 1: // 砂漠 - 大きな砂丘
     config.heightScale = 2.5f;
     terrainColor = {0.9f, 0.8f, 0.5f, 1.0f};
     break;
-  case 2: // 氷原
+  case 2: // 氷原 - なだらかで広い
     config.heightScale = 1.0f;
     terrainColor = {0.8f, 0.9f, 1.0f, 1.0f};
     break;
-  case 3: // 岩場
+  case 3: // 岩場 - 急峻で複雑
     config.heightScale = 3.0f;
     terrainColor = {0.6f, 0.5f, 0.5f, 1.0f};
     break;
   }
+
+  // バイオームID保存
+  m_biome = biome;
 
   std::string seedText = pageTitle;
 
@@ -257,6 +265,30 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
           float shade =
               0.95f + 0.05f * std::cos(worldX * 0.15f + worldZ * 0.09f);
           vcolor = {0.28f * shade, 0.82f * shade, 0.26f * shade, 1.0f};
+          break;
+        }
+        case 4: { // Ice
+          float shade =
+              0.95f + 0.05f * std::sin(worldX * 0.2f + worldZ * 0.15f);
+          vcolor = {0.70f * shade, 0.88f * shade, 0.98f * shade, 0.85f};
+          break;
+        }
+        case 5: { // Water
+          float shade =
+              0.90f + 0.10f * std::cos(worldX * 0.08f + worldZ * 0.06f);
+          vcolor = {0.20f * shade, 0.45f * shade, 0.85f * shade, 0.7f};
+          break;
+        }
+        case 6: { // Lava
+          float shade =
+              0.85f + 0.15f * std::sin(worldX * 0.15f + worldZ * 0.12f);
+          vcolor = {0.95f * shade, 0.35f * shade, 0.12f * shade, 0.95f};
+          break;
+        }
+        case 7: { // Stone
+          float shade =
+              0.88f + 0.12f * std::cos(worldX * 0.1f + worldZ * 0.08f);
+          vcolor = {0.50f * shade, 0.48f * shade, 0.52f * shade, 1.0f};
           break;
         }
         default:
@@ -453,6 +485,104 @@ float WikiTerrainSystem::GetHeight(float x, float z) const {
     iz = resZ - 1;
 
   return m_terrainData->heightMap[iz * resX + ix];
+}
+
+void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
+                                          float fieldWidth, float fieldDepth,
+                                          int biome) {
+  // 装飾数設定（バイオームごとに調整）
+  int numDecorations = 15;
+  std::mt19937 rng(static_cast<unsigned>(biome * 12345 + 67890));
+  std::uniform_real_distribution<float> distX(-fieldWidth * 0.4f,
+                                              fieldWidth * 0.4f);
+  std::uniform_real_distribution<float> distZ(-fieldDepth * 0.4f,
+                                              fieldDepth * 0.4f);
+  std::uniform_real_distribution<float> distScale(0.5f, 1.5f);
+  std::uniform_real_distribution<float> distRot(0.0f, 6.28f);
+
+  // バイオーム別装飾設定
+  struct DecorationInfo {
+    XMFLOAT4 color;
+    XMFLOAT3 baseScale;
+    std::string meshName;
+  };
+
+  std::vector<DecorationInfo> decorations;
+
+  switch (biome) {
+  case 0: // 草原 - 木（縦長の緑色キューブ）
+    decorations.push_back(
+        {{0.15f, 0.5f, 0.15f, 1.0f}, {0.3f, 2.0f, 0.3f}, "builtin/cube"});
+    decorations.push_back(
+        {{0.2f, 0.6f, 0.2f, 1.0f}, {0.8f, 0.5f, 0.8f}, "builtin/cube"});
+    break;
+  case 1: // 砂漠 - サボテン風（縦長の緑、岩）
+    decorations.push_back(
+        {{0.2f, 0.55f, 0.2f, 1.0f}, {0.15f, 1.2f, 0.15f}, "builtin/cube"});
+    decorations.push_back(
+        {{0.7f, 0.6f, 0.45f, 1.0f}, {0.8f, 0.4f, 0.6f}, "builtin/cube"});
+    numDecorations = 12;
+    break;
+  case 2: // 氷原 - 氷塊（青白いキューブ）
+    decorations.push_back(
+        {{0.75f, 0.88f, 0.98f, 0.8f}, {0.6f, 0.8f, 0.5f}, "builtin/cube"});
+    decorations.push_back(
+        {{0.85f, 0.92f, 1.0f, 0.9f}, {0.4f, 1.2f, 0.3f}, "builtin/cube"});
+    numDecorations = 10;
+    break;
+  case 3: // 岩場 - 岩石（灰色キューブ）、溶岩光（赤オレンジ）
+    decorations.push_back(
+        {{0.45f, 0.42f, 0.48f, 1.0f}, {1.0f, 0.6f, 0.8f}, "builtin/cube"});
+    decorations.push_back(
+        {{0.95f, 0.4f, 0.15f, 0.9f}, {0.3f, 0.2f, 0.3f}, "builtin/cube"});
+    numDecorations = 18;
+    break;
+  default:
+    return;
+  }
+
+  if (decorations.empty())
+    return;
+
+  std::uniform_int_distribution<size_t> distType(0, decorations.size() - 1);
+
+  for (int i = 0; i < numDecorations; ++i) {
+    float x = distX(rng);
+    float z = distZ(rng);
+    float terrainHeight = GetHeight(x, z);
+
+    // 装飾タイプ選択
+    const auto &deco = decorations[distType(rng)];
+
+    auto e = ctx.world.CreateEntity();
+    Transform &transform = ctx.world.Add<Transform>(e);
+    float scale = distScale(rng);
+    transform.position = {x, terrainHeight + deco.baseScale.y * scale * 0.5f,
+                          z};
+    transform.scale = {deco.baseScale.x * scale, deco.baseScale.y * scale,
+                       deco.baseScale.z * scale};
+
+    // Y軸回転
+    float rot = distRot(rng);
+    XMVECTOR quat = XMQuaternionRotationRollPitchYaw(0.0f, rot, 0.0f);
+    XMFLOAT4 rotF;
+    XMStoreFloat4(&rotF, quat);
+    transform.rotation = rotF;
+
+    auto &mr = ctx.world.Add<MeshRenderer>(e);
+    mr.mesh = ctx.resource.LoadMesh(deco.meshName);
+    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                        L"Assets/shaders/BasicPS.hlsl");
+    mr.color = deco.color;
+
+    // 当たり判定なし（ユーザー指示）
+    // RigidBody、Colliderは追加しない
+
+    m_entities.push_back(e);
+  }
+
+  LOG_INFO("WikiTerrain", "Created {} decorations for biome {}", numDecorations,
+           biome);
 }
 
 } // namespace game::systems

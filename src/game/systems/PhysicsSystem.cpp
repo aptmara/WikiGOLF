@@ -400,6 +400,18 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
+      // Lavaエリアに静止したらOBフラグを立てる（通過時はセーフ）
+      if (static_cast<TerrainMaterial>(mat) == TerrainMaterial::Lava) {
+        if (golfState && body.entity == ballEntity) {
+          float speed = SafeLength(vel);
+          // 速度が十分低い(静止状態)ときのみOB
+          if (speed < 0.5f) {
+            golfState->isOB = true;
+            LOG_INFO("Physics", "Ball stopped in Lava zone - OB!");
+          }
+        }
+      }
+
       // NaNチェック - 異常値なら位置リセット
       if (IsVectorNaN(pos) || IsVectorNaN(vel)) {
         LOG_DEBUG("Physics", "NaN detected, resetting position");
@@ -433,15 +445,35 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
         bool insideHole = false;
         float carveDepth = 0.0f;
+        XMVECTOR holeCenter = XMVectorZero();
         for (const auto &hole : holes) {
           float dx = posX - XMVectorGetX(hole.position);
           float dz = posZ - XMVectorGetZ(hole.position);
           float distSq = dx * dx + dz * dz;
-          float radius = hole.radius;
-          if (distSq < radius * radius &&
+          // ホール視覚サイズに合わせた判定（scale 0.5 = 半径0.5）
+          float holeVisualRadius = 0.5f; // ビジュアルと統一
+          if (distSq < holeVisualRadius * holeVisualRadius &&
               std::abs(posY - XMVectorGetY(hole.position)) < 2.0f) {
             insideHole = true;
-            carveDepth = std::max(0.4f, radius * 0.8f);
+            carveDepth = 0.6f; // 穴の深さ
+            holeCenter = hole.position;
+
+            // ホール内からの脱出防止：縁に向かう速度をカット
+            float dist = std::sqrt(distSq);
+            if (dist > 0.01f) {
+              // ボールからホール中心への方向
+              XMVECTOR toCenter = XMVectorSubtract(hole.position, pos);
+              toCenter = XMVectorSetY(toCenter, 0.0f); // XZ平面のみ
+              toCenter = XMVector3Normalize(toCenter);
+
+              // 現在の速度のうち、縁に向かう成分（中心から離れる方向）
+              float velOutward = -XMVectorGetX(XMVector3Dot(vel, toCenter));
+              if (velOutward > 0.0f) {
+                // 縁に向かう速度を大幅カット（脱出防止）
+                vel = XMVectorAdd(vel,
+                                  XMVectorScale(toCenter, velOutward * 0.9f));
+              }
+            }
             break;
           }
         }
@@ -472,12 +504,9 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             float vn = XMVectorGetX(XMVector3Dot(vel, terrainN));
             if (vn < 0.0f) {
               // 反射
-              float jitter =
-                  1.0f +
-                  (((float)(rand() % 100) / 100.0f) - 0.5f) *
-                      0.18f; // 軽い乱数で跳ね方を変える
-              float bounce =
-                  std::max(0.0f, rb.restitution * 0.5f * jitter);
+              float jitter = 1.0f + (((float)(rand() % 100) / 100.0f) - 0.5f) *
+                                        0.18f; // 軽い乱数で跳ね方を変える
+              float bounce = std::max(0.0f, rb.restitution * 0.5f * jitter);
               vel = XMVectorSubtract(
                   vel, XMVectorScale(terrainN, vn * (1.0f + bounce)));
 
@@ -514,8 +543,8 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                       strength);
                   if (impactSpeed > 3.0f) {
                     float rippleRadius = col.radius * 8.0f;
-                    juiceSys->TriggerRippleEffect(
-                        ctx, t.position, rippleRadius, strength);
+                    juiceSys->TriggerRippleEffect(ctx, t.position, rippleRadius,
+                                                  strength);
                   }
                 }
 
@@ -600,15 +629,14 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             float normalized = std::clamp(dist / range, 0.0f, 1.0f);
             float expo = std::exp(-normalized * normalized * 4.5f);
             float ease = std::pow(std::max(0.0f, 1.0f - normalized), 2.2f);
-            float factor = std::clamp((expo * 0.65f + ease * 0.75f), 0.0f,
-                                      1.1f);
+            float factor =
+                std::clamp((expo * 0.65f + ease * 0.75f), 0.0f, 1.1f);
             if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
               float slowScale = 0.35f + normalized * 0.25f;
               float slowDuration = 0.5f + (1.0f - normalized) * 0.4f;
               juiceSys->TriggerSlowMotion(slowDuration, slowScale);
             }
-            acc = XMVectorAdd(
-                acc, XMVectorScale(dir, hole.gravity * factor));
+            acc = XMVectorAdd(acc, XMVectorScale(dir, hole.gravity * factor));
           }
         }
       }
@@ -805,10 +833,8 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           XMVECTOR vel = XMLoadFloat3(&dyn.rb->velocity);
           float vn = XMVectorGetX(XMVector3Dot(vel, normal));
           if (vn < 0.0f) {
-            float jitter =
-                1.0f +
-                (((float)(rand() % 100) / 100.0f) - 0.5f) *
-                    0.2f; // 跳ね方に少しランダムさを付与
+            float jitter = 1.0f + (((float)(rand() % 100) / 100.0f) - 0.5f) *
+                                      0.2f; // 跳ね方に少しランダムさを付与
             float bounce =
                 std::max(0.0f, (dyn.rb->restitution + other.rb->restitution) *
                                    0.5f * jitter);

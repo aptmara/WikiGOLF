@@ -14,18 +14,21 @@ namespace game::components {
 struct UIImage {
   std::string texturePath; ///< 画像パス（resourcesフォルダからの相対パス）
   ID3D11ShaderResourceView *textureSRV =
-      nullptr; ///< 動的テクスチャ用 (Raw Pointer)
+      nullptr; ///< テクスチャ用 (Raw Pointer)
 
   float x = 0.0f;      ///< X座標
   float y = 0.0f;      ///< Y座標
-  float width = 0.0f;  ///< 幅（0 = 元サイズ）
-  float height = 0.0f; ///< 高さ（0 = 元サイズ）
+  float width = 0.0f;  ///< 幅（0 = 自動サイズ）
+  float height = 0.0f; ///< 高さ（0 = 自動サイズ）
 
   float rotation = 0.0f; ///< 回転角（ラジアン）
   float alpha = 1.0f;    ///< 透明度（0.0-1.0）
 
-  bool visible = true; ///< 可視性
-  int layer = 0;       ///< レイヤー（大きいほど手前）
+  bool visible = true; ///< 表示可否
+  int layer = 0;       ///< レイヤー（大きいほど前面）
+
+  /// @brief テクスチャを持っているか
+  bool HasTexture() const { return textureSRV != nullptr || !texturePath.empty(); }
 
   /// @brief 簡易コンストラクタ
   static UIImage Create(const std::string &path, float x, float y) {

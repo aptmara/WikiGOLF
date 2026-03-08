@@ -76,4 +76,21 @@ inline float ClampMapZoom(float zoom, float minZoom, float maxZoom) {
   return std::clamp(zoom, minZoom, maxZoom);
 }
 
+/**
+ * @brief フィールドの広さに応じたズーム上限を計算する
+ * @param fieldExtent 幅と奥行の大きい方（0を許容）
+ * @param desiredMinViewSpan これ以上は寄りたい最小ビュー幅
+ * @param baseMaxZoom デフォルト上限
+ * @return 実質的な最大ズーム値
+ */
+inline float CalculateMaxMapZoom(float fieldExtent, float desiredMinViewSpan,
+                                 float baseMaxZoom) {
+  if (desiredMinViewSpan <= 0.0f)
+    return baseMaxZoom;
+
+  float extentBased =
+      (fieldExtent > 0.0f) ? fieldExtent / desiredMinViewSpan : baseMaxZoom;
+  return std::max(baseMaxZoom, extentBased);
+}
+
 } // namespace game::utils

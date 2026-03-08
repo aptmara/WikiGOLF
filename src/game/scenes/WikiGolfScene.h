@@ -55,8 +55,10 @@ private:
   void CreateField(core::GameContext &ctx);
 
   /// @brief ホール（リンク）作成
+  /// @param hopsToTarget ターゲットまでのリンク数 (-1=未計算)
   void CreateHole(core::GameContext &ctx, float x, float z,
-                  const std::string &linkTarget, bool isTargetHole);
+                  const std::string &linkTarget, bool isTargetHole,
+                  int hopsToTarget = -1);
 
   /// @brief 記事テキスト背景UIセットアップ
   void SetupArticleBackground(core::GameContext &ctx);
@@ -165,7 +167,8 @@ private:
   float m_mapZoom = 1.0f;
   DirectX::XMFLOAT2 m_mapCenter = {0.0f, 0.0f};
   float m_minMapZoom = 0.005f;
-  float m_maxMapZoom = 15.0f;
+  const float m_baseMaxMapZoom = 15.0f;
+  float m_maxMapZoom = m_baseMaxMapZoom;
   float m_mapFollowLerp = 8.0f;
   bool m_isMapView = false;
   game::utils::MapViewSkyboxState

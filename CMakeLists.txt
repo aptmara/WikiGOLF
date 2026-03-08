@@ -131,6 +131,25 @@ if(MSVC)
 endif()
 add_test(NAME map_view_utils COMMAND test_map_view_utils)
 
+# UIImage のテクスチャ有無チェック
+add_executable(test_ui_image_has_texture test_ui_image_has_texture.cpp)
+target_include_directories(test_ui_image_has_texture PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_ui_image_has_texture PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                 -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_ui_image_has_texture PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME ui_image_has_texture COMMAND test_ui_image_has_texture)
+
+add_executable(test_post_process_readability test_post_process_readability.cpp)
+target_include_directories(test_post_process_readability PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_post_process_readability PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                    -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_post_process_readability PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME post_process_readability COMMAND test_post_process_readability)
+
 # WikiTextureGeneratorのリンク生成テスト
 add_executable(test_wiki_texture_links test_wiki_texture_links.cpp
                                        src/graphics/WikiTextureGenerator.cpp

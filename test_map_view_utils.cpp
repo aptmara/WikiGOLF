@@ -32,6 +32,17 @@ int main() {
   CHECK(std::abs(ClampMapZoom(1.2f, 0.3f, 2.0f) - 1.2f) < 1e-4f,
         "ClampMapZoom leaves in-range values");
 
+  // フィールドが小さい場合はデフォルト上限をそのまま返す
+  CHECK(std::abs(game::utils::CalculateMaxMapZoom(50.0f, 5.0f, 15.0f) - 15.0f) <
+            1e-4f,
+        "CalculateMaxMapZoom keeps base cap for small maps");
+
+  // 大きいフィールドでも最小ビュー幅5mまで寄れる上限を返す
+  float expectedZoom = 500.0f / 5.0f; // extent / minViewSpan
+  CHECK(std::abs(game::utils::CalculateMaxMapZoom(500.0f, 5.0f, 15.0f) -
+                 expectedZoom) < 1e-4f,
+        "CalculateMaxMapZoom scales with field extent for deep zoom");
+
   std::cout << "All MapView utils tests passed.\n";
   return 0;
 }

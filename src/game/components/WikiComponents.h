@@ -116,6 +116,16 @@ struct Flipper {
 };
 
 /**
+ * @brief 3Dワールド座標に追従するUIラベル
+ */
+struct World3DLabel {
+  DirectX::XMFLOAT3 worldPos = {0, 0, 0}; ///< ワールド座標
+  uint32_t uiTextEntity = 0;              ///< 紐づくUITextエンティティ
+  float offsetY = 0.0f;                   ///< Y軸オフセット
+  bool visible = true;                    ///< 表示フラグ
+};
+
+/**
  * @brief 地形マテリアル種別
  */
 enum class TerrainMaterial : uint8_t {
@@ -123,6 +133,10 @@ enum class TerrainMaterial : uint8_t {
   Rough = 1,
   Bunker = 2,
   Green = 3,
+  Ice = 4,   ///< 極地テーマ用（低摩擦）
+  Water = 5, ///< 海洋テーマ用（スリップ+減速）
+  Lava = 6,  ///< 火山テーマ用（OB扱い）
+  Stone = 7, ///< 中世/遺跡テーマ用（高反発）
   None = 255
 };
 
@@ -169,17 +183,21 @@ struct GolfGameState {
   bool isBallGrounded = false;
   float rollingFrictionScale = 1.0f; ///< クラブごとの摩擦スケール
 
+  // OB（アウトオブバウンズ）
+  bool isOB = false;                              ///< OBフラグ
+  DirectX::XMFLOAT3 lastShotPosition = {0, 0, 0}; ///< 最後のショット位置
+
   // 結果画面UI
-  uint32_t resultBgEntity = 0;    ///< 結果画面背景
-  uint32_t resultFrameEntity = 0; ///< 結果パネル
-  uint32_t resultTitleEntity = 0; ///< 結果タイトル
+  uint32_t resultBgEntity = 0;       ///< 結果画面背景
+  uint32_t resultFrameEntity = 0;    ///< 結果パネル
+  uint32_t resultTitleEntity = 0;    ///< 結果タイトル
   uint32_t resultSubtitleEntity = 0; ///< ターゲット/ステージ情報
-  uint32_t resultBadgeEntity = 0; ///< 評価バッジ
-  uint32_t resultTextEntity = 0;  ///< 結果テキスト
-  uint32_t resultHintEntity = 0;  ///< 操作ヒント
-  uint32_t retryButtonEntity = 0; ///< おあいこボタン
-  uint32_t guideBgEntity = 0;     ///< ガイド背景（半透明帯）
-  uint32_t guideEntity = 0;       ///< ガイドUIエンティティ
+  uint32_t resultBadgeEntity = 0;    ///< 評価バッジ
+  uint32_t resultTextEntity = 0;     ///< 結果テキスト
+  uint32_t resultHintEntity = 0;     ///< 操作ヒント
+  uint32_t retryButtonEntity = 0;    ///< おあいこボタン
+  uint32_t guideBgEntity = 0;        ///< ガイド背景（半透明帯）
+  uint32_t guideEntity = 0;          ///< ガイドUIエンティティ
 
   std::vector<uint32_t> holes; ///< ホールエンティティリスト
 };
@@ -240,10 +258,13 @@ struct ShotState {
  * @brief ゴルフホール（リンク用）
  */
 struct GolfHole {
-  std::string linkTarget; ///< リンク先記事
-  float radius = 0.7f;    ///< 判定半径（吸い込み範囲も兼ねる）
-  bool isTarget = false;  ///< 目的記事へのリンクか
-  float gravity = 5.0f;   ///< 吸引力
+  std::string linkTarget;    ///< リンク先記事
+  float radius = 0.7f;       ///< 判定半径（吸い込み範囲も兼ねる）
+  bool isTarget = false;     ///< 目的記事へのリンクか
+  float gravity = 5.0f;      ///< 吸引力
+  int hopsToTarget = -1;     ///< ターゲットまでのリンク数 (-1=未計算)
+  uint32_t labelEntity = 0;  ///< ★ラベルUIエンティティ
+  uint32_t pillarEntity = 0; ///< 光柱エンティティ
 };
 
 /**
