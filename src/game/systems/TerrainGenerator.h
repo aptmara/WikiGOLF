@@ -16,6 +16,9 @@ struct TerrainConfig {
   float heightScale = 5.0f; // 高低差の最大値
   float friction = 0.5f;    // 地形の基本摩擦
   float restitution = 0.2f; // 地形の基本反発
+
+  // バイオーム設定 (0:草原, 1:砂漠, 2:氷原, 3:岩場)
+  int biome = 0;
 };
 
 struct TerrainData {

@@ -77,6 +77,12 @@ private:
   void CreateHeadingSteps(core::GameContext &ctx,
                           const graphics::WikiTextureResult &result,
                           float fieldWidth, float fieldDepth);
+
+  /// @brief バイオーム別装飾オブジェクト作成
+  void CreateDecorations(core::GameContext &ctx, float fieldWidth,
+                         float fieldDepth, int biome);
+
+  int m_biome = 0; ///< 現在のバイオーム
 };
 
 } // namespace game::systems

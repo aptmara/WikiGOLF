@@ -23,7 +23,7 @@ public:
     if (!m_renderer.IsValid())
       return;
 
-    // 1. 可視 UIImage を収集
+    // 1. 表示中の UIImage を収集
     std::vector<const components::UIImage *> images;
     ctx.world.Query<components::UIImage>().Each(
         [&](ecs::Entity e, const components::UIImage &ui) {
@@ -32,7 +32,7 @@ public:
           }
         });
 
-    // 2. レイヤーでソート（小さい順 = 奥から描画）
+    // 2. レイヤーでソート（数値小さい = 背面描画）
     std::sort(images.begin(), images.end(),
               [](const auto *a, const auto *b) { return a->layer < b->layer; });
 
@@ -40,16 +40,20 @@ public:
     m_renderer.BeginDraw();
 
     for (const auto *ui : images) {
-      // 描画領域を計算
+      if (!ui->HasTexture()) {
+        continue;
+      }
+
+      // 描画領域の計算
       float w = (ui->width > 0) ? ui->width : 100.0f; // デフォルトサイズ
       float h = (ui->height > 0) ? ui->height : 100.0f;
       D2D1_RECT_F rect = D2D1::RectF(ui->x, ui->y, ui->x + w, ui->y + h);
 
       if (ui->textureSRV) {
-        // 動的テクスチャ描画
+        // 既存テクスチャで描画
         m_renderer.RenderImage(ui->textureSRV, rect, ui->alpha, ui->rotation);
       } else {
-        // ファイルテクスチャ描画
+        // ファイルテクスチャで描画
         std::string path = "Assets/textures/" + ui->texturePath;
         m_renderer.RenderImage(path, rect, ui->alpha, ui->rotation);
       }

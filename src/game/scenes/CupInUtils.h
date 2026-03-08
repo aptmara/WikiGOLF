@@ -12,15 +12,17 @@ inline bool IsBallReadyForCupIn(const DirectX::XMFLOAT3 &ballPos,
   float dz = ballPos.z - holePos.z;
   float distSq = dx * dx + dz * dz;
 
-  float captureRadius = holeRadius * 0.9f; // さらに広めに捕捉
+  float captureRadius = holeRadius * 0.9f;
   if (distSq > captureRadius * captureRadius)
     return false;
 
+  // 高さチェック：穴の底にいる場合のみ判定（上を通過中は無視）
   float dy = ballPos.y - holePos.y;
-  bool inCupDepth = (dy < 0.2f && dy > -0.6f); // 底に向かう広いレンジを許容
-  bool slowEnough = speedSq < 0.05f;
+  // dyが負（ホールより下）かつ穴の深さ内にいる
+  bool inHoleBottom = (dy < -0.1f && dy > -1.0f);
 
-  return inCupDepth && slowEnough;
+  // 速度条件なし：穴の底にいれば判定
+  return inHoleBottom;
 }
 
 } // namespace game::scenes::cupin

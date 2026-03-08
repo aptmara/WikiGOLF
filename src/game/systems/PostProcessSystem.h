@@ -7,6 +7,7 @@
 
 #include "../../core/GameContext.h"
 #include "../components/EnvironmentState.h"
+#include <algorithm>
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -114,12 +115,17 @@ public:
                              float time) {
     using LightingMood = game::components::LightingMood;
 
+    constexpr float kMinBrightnessForReadability = 0.85f;
+    float brightness =
+        std::max(env.brightness, kMinBrightnessForReadability); // 暗いテーマでの視認性確保
+    bool brightnessClamped = brightness > env.brightness;
+
     m_constants.fogColor = {env.fogColor.x, env.fogColor.y, env.fogColor.z,
                             env.fogDensity};
     m_constants.fogParams = {env.fogStart, env.fogEnd, 0, 0};
 
     m_constants.colorTint = {env.colorTint.x, env.colorTint.y, env.colorTint.z,
-                             env.brightness};
+                             brightness};
     m_constants.colorParams = {env.saturation, env.contrast, 0, 0};
 
     // ビネットはライティングムードに応じて調整
@@ -139,6 +145,9 @@ public:
       vignetteIntensity = 0.2f;
     } else {
       vignetteIntensity = 0.25f;
+    }
+    if (brightnessClamped) {
+      vignetteIntensity = std::max(0.2f, vignetteIntensity * 0.7f);
     }
     m_constants.vignetteParams = {vignetteIntensity, 0.7f, 0.5f, 0};
     m_constants.timeParams = {time, 0, 0, 0};
