@@ -82,19 +82,7 @@ private:
   /// @brief テクスチャからリンク領域を作成
   void CreateLinksFromTexture(core::GameContext &ctx);
 
-  /// @brief カメラ更新（ボール追従）
-  void UpdateCamera(core::GameContext &ctx);
-
-  /// @brief マップ中心をボールに同期（必要に応じて補間）
-  void SyncMapCenterToBall(core::GameContext &ctx, float dt, bool forceSnap);
-
-  /// @brief ハイスコア保存
-  void SaveHighScore(const std::string &targetPage, int shots);
-
-  /// @brief ハイスコア読み込み
-  int LoadHighScore(const std::string &targetPage);
-
-  ecs::Entity m_ballEntity = UINT32_MAX; // 無効値で初期化（ID競合防止）
+  ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;
   ecs::Entity m_cameraEntity = UINT32_MAX;
   ecs::Entity m_arrowEntity = UINT32_MAX; // 矢印表示用（パワーチャージ時）
@@ -153,6 +141,9 @@ private:
   std::vector<game::WikiLink> m_preloadedLinks;
   std::string m_preloadedExtract;
 
+  /// @brief 通常カメラ更新
+  void UpdateCamera(core::GameContext &ctx);
+
   // テクスチャ関連
   std::unique_ptr<graphics::WikiTextureGenerator> m_textureGenerator;
   std::unique_ptr<graphics::WikiTextureResult> m_wikiTexture;
@@ -195,6 +186,10 @@ private:
 
   /// @brief 俯瞰カメラ更新
   void UpdateMapCamera(core::GameContext &ctx);
+
+  /// @brief マップ中心をボール位置に同期
+  void SyncMapCenterToBall(core::GameContext &ctx, float dt,
+                           bool forceSnap = false);
 
   // ミニマップ（右上常時表示）
   std::unique_ptr<game::systems::MapSys> m_minimapRenderer;

@@ -113,16 +113,17 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
   // ボール位置取得などのためにstateは必要
   auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
 
-  float zoom = std::max(0.001f, params.zoom); // 大きいほど寄る（強ズーム対応）
-  float heightScale = std::max(0.1f, params.heightScale);
-  float orthoPadding = std::max(1.0f, params.orthoPadding);
+  float zoom =
+      (std::max)(0.001f, params.zoom); // 大きいほど寄る（強ズーム対応）
+  float heightScale = (std::max)(0.1f, params.heightScale);
+  float orthoPadding = (std::max)(1.0f, params.orthoPadding);
 
   // 表示幅（viewSpan）の制限：下限を固定値にしてマップサイズに関係なく寄れるように
   float viewSpan = extent / zoom;
   viewSpan = std::clamp(viewSpan, 5.0f, extent * 6.0f);
 
-  float height = std::max(viewSpan * heightScale, 5.0f);
-  float orthoWidth = std::max(viewSpan * orthoPadding, viewSpan * 0.5f);
+  float height = (std::max)(viewSpan * heightScale, 5.0f);
+  float orthoWidth = (std::max)(viewSpan * orthoPadding, viewSpan * 0.5f);
 
   XMMATRIX v = XMMatrixTranspose(
       GetViewMatrix(params.center.x, params.center.z, height));

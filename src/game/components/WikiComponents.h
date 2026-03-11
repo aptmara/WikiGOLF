@@ -44,6 +44,12 @@ struct Heading {
 struct Wall {};
 
 /**
+ * @brief 地形オブジェクトタグ（フロア、装飾など）
+ * シーン遷移時に手動削除するために使用
+ */
+struct TerrainObject {};
+
+/**
  * @brief バリア接触エフェクト（波紋）
  */
 struct RippleEffect {

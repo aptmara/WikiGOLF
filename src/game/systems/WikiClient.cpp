@@ -11,7 +11,6 @@
 namespace game::systems {
 
 WikiClient::WikiClient() {
-  // セッションの確立
   m_hSession =
       WinHttpOpen(L"WikiPinball/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                   WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
@@ -19,7 +18,6 @@ WikiClient::WikiClient() {
     LOG_ERROR("WikiClient", "Failed to open WinHttp session");
   }
 
-  // 接続の確立 (ja.wikipedia.org)
   if (m_hSession) {
     m_hConnect = WinHttpConnect(m_hSession, L"ja.wikipedia.org",
                                 INTERNET_DEFAULT_HTTPS_PORT, 0);
@@ -59,7 +57,6 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
     return "";
   }
 
-  // レスポンスの読み取り
   std::string response;
   DWORD dwSize = 0;
   DWORD dwDownloaded = 0;
@@ -84,14 +81,11 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
 }
 
 std::string WikiClient::FetchRandomPageTitle() {
-  // API:
-  // /w/api.php?action=query&list=random&rnnamespace=0&rnlimit=1&format=json
   std::string response = PerformGetRequest(
       L"ja.wikipedia.org", L"/w/"
                            L"api.php?action=query&list=random&rnnamespace=0&"
                            L"rnlimit=1&format=json&formatversion=2");
 
-  // 簡易JSONパース: "title":" を探す
   size_t titlePos = response.find("\"title\":\"");
   if (titlePos != std::string::npos) {
     size_t start = titlePos + 9;
@@ -104,7 +98,6 @@ std::string WikiClient::FetchRandomPageTitle() {
   return "Error";
 }
 
-// 簡易的な文字列置換
 std::string ReplaceAll(std::string str, const std::string &from,
                        const std::string &to) {
   size_t start_pos = 0;
@@ -116,13 +109,7 @@ std::string ReplaceAll(std::string str, const std::string &from,
 }
 
 /**
- * @brief JSONの\uXXXX形式UnicodeエスケープをUTF-8に変換
- * @param str 変換対象文字列
- * @return UTF-8デコード済み文字列
- *
- * - 入力: JSONレスポンス内の文字列（\uXXXX形式を含む可能性）
- * - 変更: \uXXXXを対応するUTF-8バイト列に置換
- * - 出力: UTF-8エンコードされた文字列
+ * @brief JSON Unicode escape to UTF-8 conversion
  */
 std::string DecodeUnicodeEscape(const std::string &str) {
   std::string result;
@@ -130,7 +117,6 @@ std::string DecodeUnicodeEscape(const std::string &str) {
 
   for (size_t i = 0; i < str.size(); ++i) {
     if (i + 5 < str.size() && str[i] == '\\' && str[i + 1] == 'u') {
-      // \uXXXX形式を検出
       std::string hex = str.substr(i + 2, 4);
       bool validHex = true;
       for (char c : hex) {
@@ -143,9 +129,7 @@ std::string DecodeUnicodeEscape(const std::string &str) {
       if (validHex) {
         unsigned int codepoint = std::stoul(hex, nullptr, 16);
 
-        // サロゲートペア処理（絵文字など）
         if (codepoint >= 0xD800 && codepoint <= 0xDBFF) {
-          // High surrogate - 次のlow surrogateを探す
           if (i + 11 < str.size() && str[i + 6] == '\\' && str[i + 7] == 'u') {
             std::string lowHex = str.substr(i + 8, 4);
             bool validLow = true;
@@ -158,16 +142,14 @@ std::string DecodeUnicodeEscape(const std::string &str) {
             if (validLow) {
               unsigned int lowSurrogate = std::stoul(lowHex, nullptr, 16);
               if (lowSurrogate >= 0xDC00 && lowSurrogate <= 0xDFFF) {
-                // サロゲートペアからコードポイント計算
                 codepoint = 0x10000 + ((codepoint - 0xD800) << 10) +
                             (lowSurrogate - 0xDC00);
-                i += 6; // 追加のエスケープシーケンス分スキップ
+                i += 6;
               }
             }
           }
         }
 
-        // UTF-8エンコード
         if (codepoint <= 0x7F) {
           result += static_cast<char>(codepoint);
         } else if (codepoint <= 0x7FF) {
@@ -184,7 +166,7 @@ std::string DecodeUnicodeEscape(const std::string &str) {
           result += static_cast<char>(0x80 | (codepoint & 0x3F));
         }
 
-        i += 5; // \uXXXX の6文字分スキップ（forのi++で+1される）
+        i += 5;
         continue;
       }
     }
@@ -212,42 +194,77 @@ std::vector<game::WikiLink> WikiClient::FetchPageLinks(const std::string &title,
   std::vector<game::WikiLink> links;
 
   std::string encodedTitle = UrlEncode(title);
-
-  // string -> wstring
   std::wstring wtitle = core::ToWString(encodedTitle);
 
-  // URL構築: prop=links で内部リンク取得
-  std::wstring path = L"/w/api.php?action=query&titles=" + wtitle +
-                      L"&prop=links&pllimit=" + std::to_wstring(limit) +
-                      L"&plnamespace=0&redirects=1&format=json&formatversion=2";
+  // API負荷軽減: 1リクエストで最大500、最大3リクエスト（=1500リンク）
+  // limit <= 0 の場合はデフォルト500に制限
+  const int batchSize = 500;
+  const int maxRequests = 3;
+  const int effectiveLimit = (limit <= 0) ? 500 : limit;
 
-  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
-  LOG_INFO("WikiClient", "FetchPageLinks response length: {}",
-           response.length());
+  std::wstring plcontinue = L"";
+  bool hasMore = true;
+  int requestCount = 0;
 
-  size_t linksStart = response.find("\"links\":");
-  if (linksStart == std::string::npos) {
-    LOG_WARN("WikiClient", "No links found in response");
-    return links;
-  }
+  while (hasMore && requestCount < maxRequests) {
+    std::wstring path =
+        L"/w/api.php?action=query&titles=" + wtitle + L"&prop=links&pllimit=" +
+        std::to_wstring(batchSize) +
+        L"&plnamespace=0&redirects=1&format=json&formatversion=2";
 
-  size_t pos = linksStart;
-  while ((pos = response.find("\"title\":\"", pos)) != std::string::npos) {
-    size_t start = pos + 9;
-    size_t end = response.find("\"", start);
-    if (end == std::string::npos)
-      break;
-
-    std::string linkTitle = response.substr(start, end - start);
-    // エスケープ解除（\uXXXX形式のUnicodeエスケープ含む）
-    linkTitle = ReplaceAll(linkTitle, "\\\"", "\"");
-    linkTitle = ReplaceAll(linkTitle, "\\/", "/");
-    linkTitle = DecodeUnicodeEscape(linkTitle);
-
-    if (linkTitle != title) {
-      links.push_back({linkTitle, linkTitle});
+    if (!plcontinue.empty()) {
+      path += L"&plcontinue=" + plcontinue;
     }
-    pos = end;
+
+    std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+    requestCount++;
+
+    if (links.empty()) {
+      LOG_INFO("WikiClient", "FetchPageLinks response length: {}",
+               response.length());
+    }
+
+    size_t linksStart = response.find("\"links\":");
+    if (linksStart != std::string::npos) {
+      size_t pos = linksStart;
+      while ((pos = response.find("\"title\":\"", pos)) != std::string::npos) {
+        size_t start = pos + 9;
+        size_t end = response.find("\"", start);
+        if (end == std::string::npos)
+          break;
+
+        std::string linkTitle = response.substr(start, end - start);
+        linkTitle = ReplaceAll(linkTitle, "\\\"", "\"");
+        linkTitle = ReplaceAll(linkTitle, "\\/", "/");
+        linkTitle = DecodeUnicodeEscape(linkTitle);
+
+        if (linkTitle != title) {
+          links.push_back({linkTitle, linkTitle});
+        }
+        pos = end;
+
+        if ((int)links.size() >= effectiveLimit) {
+          hasMore = false;
+          break;
+        }
+      }
+    }
+
+    size_t contPos = response.find("\"plcontinue\":\"");
+    if (contPos != std::string::npos && hasMore) {
+      size_t contStart = contPos + 14;
+      size_t contEnd = response.find("\"", contStart);
+      if (contEnd != std::string::npos) {
+        std::string continueValue =
+            response.substr(contStart, contEnd - contStart);
+        continueValue = ReplaceAll(continueValue, "\\|", "|");
+        plcontinue = core::ToWString(UrlEncode(continueValue));
+      } else {
+        hasMore = false;
+      }
+    } else {
+      hasMore = false;
+    }
   }
 
   LOG_INFO("WikiClient", "Found {} links", links.size());
@@ -260,21 +277,17 @@ WikiClient::FetchPageCategories(const std::string &title) {
   std::string encodedTitle = UrlEncode(title);
   std::wstring wtitle = core::ToWString(encodedTitle);
 
-  // prop=categories
   std::wstring path =
       L"/w/api.php?action=query&titles=" + wtitle +
       L"&prop=categories&cllimit=50&format=json&formatversion=2";
 
   std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
 
-  // "categories": [...] を探す
   size_t catStart = response.find("\"categories\":");
   if (catStart == std::string::npos) {
-    // カテゴリがない、またはエラー
     return categories;
   }
 
-  // カテゴリ配列の終わりの括弧を探す（簡易パースの限界として、次のキーまでを範囲とする）
   size_t catEnd = response.find("]", catStart);
   if (catEnd == std::string::npos)
     catEnd = response.length();
@@ -282,7 +295,7 @@ WikiClient::FetchPageCategories(const std::string &title) {
   size_t pos = catStart;
   while ((pos = response.find("\"title\":\"", pos)) != std::string::npos) {
     if (pos > catEnd)
-      break; // 範囲外
+      break;
 
     size_t start = pos + 9;
     size_t end = response.find("\"", start);
@@ -318,7 +331,7 @@ std::string WikiClient::FetchTargetPageTitle() {
       return title;
     }
   }
-  return "日本"; // フォールバック
+  return "Japan";
 }
 
 std::string WikiClient::FetchPageExtract(const std::string &title,
@@ -341,7 +354,6 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
     size_t start = pos + key.length();
     size_t end = std::string::npos;
 
-    // エスケープを考慮して終端の " を探す
     bool escaped = false;
     for (size_t i = start; i < response.length(); ++i) {
       if (escaped) {
@@ -358,7 +370,6 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
 
     if (end != std::string::npos) {
       std::string extract = response.substr(start, end - start);
-      // Unicodeエスケープを先にデコード（\uXXXX形式）
       extract = DecodeUnicodeEscape(extract);
       extract = ReplaceAll(extract, "\\n", "\n");
       extract = ReplaceAll(extract, "\\t", "\t");
@@ -372,7 +383,7 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
       return extract;
     }
   }
-  return "(概要を取得できませんでした)";
+  return "(Failed to fetch extract)";
 }
 
 } // namespace game::systems

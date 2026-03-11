@@ -121,13 +121,18 @@ void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
     return;
 
   std::string path = FindAudioPath(name);
-  auto handle = ctx.resource.LoadAudio(path);
-  auto *clip = ctx.resource.GetAudio(handle);
+  resources::AudioHandle handle = {};
+  audio::AudioClip *clip = nullptr;
+  if (!path.empty()) {
+    handle = ctx.resource.LoadAudio(path);
+    clip = ctx.resource.GetAudio(handle);
+  }
 
   if (!clip || clip->buffer.empty()) {
     static std::string lastMissingFile;
     if (lastMissingFile != name) {
-      LOG_WARN("Audio", "SE not found: {} (searched as {})", name, path);
+      LOG_WARN("Audio", "SE not found: {}{}", name,
+               path.empty() ? "" : std::format(" (searched as {})", path));
       lastMissingFile = name;
     }
     return;
