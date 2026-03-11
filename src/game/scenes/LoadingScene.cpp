@@ -23,7 +23,6 @@
 #include <random>
 #include <thread>
 
-
 namespace game::scenes {
 
 LoadingScene::LoadingScene(
@@ -158,7 +157,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
 
     // 初回ページのデータを先行ロード（通信ラグ解消）
     if (!data->startPage.empty()) {
-      data->cachedLinks = wikiClient.FetchPageLinks(data->startPage, 100);
+      data->cachedLinks = wikiClient.FetchPageLinks(data->startPage, 0);
       data->cachedExtract = wikiClient.FetchPageExtract(data->startPage, 5000);
       data->hasCachedData = true;
       setProgress(0.97f);

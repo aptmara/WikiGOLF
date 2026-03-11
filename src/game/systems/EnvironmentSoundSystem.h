@@ -33,76 +33,76 @@ inline EnvironmentSoundPreset GetSoundPreset(graphics::SkyboxTheme theme) {
 
   switch (theme) {
   case graphics::SkyboxTheme::Forest:
-    preset.ambientPath = "Assets/sounds/ambient_forest.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_forest.mp3";
     preset.ambientVolume = 0.35f;
     break;
 
   case graphics::SkyboxTheme::Ocean:
-    preset.ambientPath = "Assets/sounds/ambient_ocean.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_ocean.mp3";
     preset.ambientVolume = 0.4f;
     break;
 
   case graphics::SkyboxTheme::Desert:
-    preset.ambientPath = "Assets/sounds/ambient_desert.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_desert.mp3";
     preset.ambientVolume = 0.25f;
     break;
 
   case graphics::SkyboxTheme::Mountain:
-    preset.ambientPath = "Assets/sounds/ambient_wind.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_wind.mp3";
     preset.ambientVolume = 0.3f;
     break;
 
   case graphics::SkyboxTheme::Polar:
-    preset.ambientPath = "Assets/sounds/ambient_wind.mp3";
-    preset.weatherPath = "Assets/sounds/weather_snow.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_wind.mp3";
+    // preset.weatherPath = "Assets/sounds/weather_snow.mp3";
     preset.ambientVolume = 0.35f;
     preset.weatherVolume = 0.2f;
     preset.hasWeather = true;
     break;
 
   case graphics::SkyboxTheme::Volcano:
-    preset.ambientPath = "Assets/sounds/ambient_volcano.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_volcano.mp3";
     preset.ambientVolume = 0.4f;
     break;
 
   case graphics::SkyboxTheme::SpaceAstronomy:
-    preset.ambientPath = "Assets/sounds/ambient_space.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_space.mp3";
     preset.ambientVolume = 0.2f;
     break;
 
   case graphics::SkyboxTheme::Horror:
-    preset.ambientPath = "Assets/sounds/ambient_horror.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_horror.mp3";
     preset.ambientVolume = 0.3f;
     break;
 
   case graphics::SkyboxTheme::Medieval:
-    preset.ambientPath = "Assets/sounds/ambient_medieval.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_medieval.mp3";
     preset.ambientVolume = 0.25f;
     break;
 
   case graphics::SkyboxTheme::Urban:
-    preset.ambientPath = "Assets/sounds/ambient_city.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_city.mp3";
     preset.ambientVolume = 0.3f;
     break;
 
   case graphics::SkyboxTheme::War:
-    preset.ambientPath = "Assets/sounds/ambient_battle.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_battle.mp3";
     preset.ambientVolume = 0.35f;
     break;
 
   case graphics::SkyboxTheme::Fantasy:
-    preset.ambientPath = "Assets/sounds/ambient_mystical.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_mystical.mp3";
     preset.ambientVolume = 0.3f;
     break;
 
   case graphics::SkyboxTheme::SciFi:
-    preset.ambientPath = "Assets/sounds/ambient_scifi.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_scifi.mp3";
     preset.ambientVolume = 0.25f;
     break;
 
   default:
     // デフォルト: 自然環境音
-    preset.ambientPath = "Assets/sounds/ambient_nature.mp3";
+    // preset.ambientPath = "Assets/sounds/ambient_nature.mp3";
     preset.ambientVolume = 0.25f;
     break;
   }

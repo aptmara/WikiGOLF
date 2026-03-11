@@ -320,6 +320,10 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
     // TODO: CreateCylinder実装後に置換。現状はsphereで代用。
     mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
     success = true;
+  } else if (path == "builtin/torus" || path == "torus") {
+    // TODO: CreateTorus実装後に置換。現状はsphereで代用。
+    mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
+    success = true;
   } else {
     // ファイル拡張子を判定してローダーを選択
     std::vector<graphics::Vertex> vertices;

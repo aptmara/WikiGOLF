@@ -54,7 +54,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   // 1. 地形解像度・設定の決定
   int resX = 64;
   int resZ = static_cast<int>(depth);
-  resZ = std::max(64, resZ);
+  resZ = (std::max)(64, resZ);
 
   TerrainConfig config;
   config.worldWidth = width;
@@ -172,6 +172,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
     m_floorEntity = e;
     m_entities.push_back(e);
+    ctx.world.Add<TerrainObject>(e);
   }
 
   // 4. タイルごとのビジュアルメッシュ生成とエンティティ作成
@@ -208,7 +209,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     float zCenter = (zTop + zBottom) * 0.5f;
 
     int tileResZ =
-        std::max(2, (int)(resZ * (tile.height / (float)result.height)));
+        (std::max)(2, (int)(resZ * (tile.height / (float)result.height)));
     std::vector<graphics::Vertex> vertices;
     std::vector<uint32_t> indices;
 
@@ -235,10 +236,10 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
         // マテリアルマップから頂点カラー決定
         float gridU = worldX / width + 0.5f;
         float gridV = 0.5f - worldZ / depth; // worldZは正手前が-なので反転
-        int gx = std::clamp(static_cast<int>(gridU * (resX - 1) + 0.5f), 0,
-                            resX - 1);
-        int gz = std::clamp(static_cast<int>(gridV * (resZ - 1) + 0.5f), 0,
-                            resZ - 1);
+        int gx = (std::clamp)(static_cast<int>(gridU * (resX - 1) + 0.5f), 0,
+                              resX - 1);
+        int gz = (std::clamp)(static_cast<int>(gridV * (resZ - 1) + 0.5f), 0,
+                              resZ - 1);
         uint8_t mat = m_terrainData->materialMap[gz * resX + gx];
 
         XMFLOAT4 vcolor;
@@ -340,6 +341,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     meshRenderer.hasTexture = true;
 
     m_entities.push_back(e);
+    ctx.world.Add<TerrainObject>(e);
   }
 }
 
@@ -375,6 +377,7 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
     col.size = colliderSize;
 
     m_entities.push_back(e);
+    ctx.world.Add<TerrainObject>(e);
   };
 
   {
@@ -450,6 +453,7 @@ void WikiTerrainSystem::CreateImageObstacles(
     col.size = {0.5f, 0.5f, 0.5f};
 
     m_entities.push_back(e);
+    ctx.world.Add<TerrainObject>(e);
   }
 }
 
@@ -472,19 +476,29 @@ float WikiTerrainSystem::GetHeight(float x, float z) const {
   if (u < 0.0f || u >= 1.0f || v < 0.0f || v >= 1.0f)
     return 0.0f;
 
-  int ix = (int)(u * (resX - 1));
-  int iz = (int)(v * (resZ - 1));
+  float fx = u * (resX - 1);
+  float fz = v * (resZ - 1);
 
-  if (ix < 0)
-    ix = 0;
-  if (ix >= resX)
-    ix = resX - 1;
-  if (iz < 0)
-    iz = 0;
-  if (iz >= resZ)
-    iz = resZ - 1;
+  int ix = static_cast<int>(fx);
+  int iz = static_cast<int>(fz);
 
-  return m_terrainData->heightMap[iz * resX + ix];
+  // Clamp indices for interpolation (safe up to res-2)
+  ix = std::clamp(ix, 0, resX - 2);
+  iz = std::clamp(iz, 0, resZ - 2);
+
+  float dx = fx - ix;
+  float dz = fz - iz;
+
+  float h00 = m_terrainData->heightMap[iz * resX + ix];
+  float h10 = m_terrainData->heightMap[iz * resX + (ix + 1)];
+  float h01 = m_terrainData->heightMap[(iz + 1) * resX + ix];
+  float h11 = m_terrainData->heightMap[(iz + 1) * resX + (ix + 1)];
+
+  // Bilinear interpolation
+  float h0 = h00 * (1.0f - dx) + h10 * dx;
+  float h1 = h01 * (1.0f - dx) + h11 * dx;
+  
+  return h0 * (1.0f - dz) + h1 * dz;
 }
 
 void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
@@ -578,7 +592,10 @@ void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
     // 当たり判定なし（ユーザー指示）
     // RigidBody、Colliderは追加しない
 
+    // RigidBody、Colliderは追加しない
+
     m_entities.push_back(e);
+    ctx.world.Add<TerrainObject>(e);
   }
 
   LOG_INFO("WikiTerrain", "Created {} decorations for biome {}", numDecorations,

@@ -25,6 +25,7 @@
 #include "../systems/WikiClient.h"
 #include "../utils/JudgeFeedback.h"
 #include "CupInUtils.h"
+#include "ResultScene.h"
 #include "TitleScene.h"
 #include <DirectXMath.h>
 #include <algorithm>
@@ -1655,7 +1656,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       shot->phase = ShotState::Phase::Idle;
       shot->judgement = ShotJudgement::None;
 
-      // フェードイン開始 (サークルワイプ)
       m_screenFade.FadeIn(0.4f, game::utils::FadeType::CircleWipe, {0, 0, 0});
     }
   }
@@ -1671,112 +1671,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (judgeUI)
         judgeUI->visible = false;
     }
-  }
-
-  // リザルト画面処理
-  if (state && state->gameCleared) {
-    auto *bg = ctx.world.Get<UIImage>(state->resultBgEntity);
-    if (bg)
-      bg->visible = true;
-    if (auto *frame = ctx.world.Get<UIImage>(state->resultFrameEntity)) {
-      frame->visible = true;
-    }
-
-    // タイトルとバッジ
-    if (auto *title = ctx.world.Get<UIText>(state->resultTitleEntity)) {
-      title->text = L"STAGE CLEAR";
-      title->visible = true;
-    }
-
-    std::wstring grade = L"EXPLORER";
-    DirectX::XMFLOAT4 gradeColor = {0.9f, 0.9f, 0.95f, 1.0f};
-    if (state->par > 0) {
-      int diff = state->shotCount - state->par;
-      if (diff <= -2) {
-        grade = L"ALBATROSS";
-        gradeColor = {1.0f, 0.92f, 0.55f, 1.0f};
-      } else if (diff <= 0) {
-        grade = L"BIRDIE";
-        gradeColor = {0.7f, 1.0f, 0.7f, 1.0f};
-      } else if (diff <= 2) {
-        grade = L"PAR SAVE";
-        gradeColor = {0.6f, 0.85f, 1.0f, 1.0f};
-      } else if (diff <= 5) {
-        grade = L"BOGEY";
-        gradeColor = {1.0f, 0.85f, 0.6f, 1.0f};
-      } else {
-        grade = L"KEEP SWINGING";
-        gradeColor = {1.0f, 0.65f, 0.65f, 1.0f};
-      }
-    }
-    if (auto *badge = ctx.world.Get<UIText>(state->resultBadgeEntity)) {
-      badge->text = grade;
-      badge->style.color = gradeColor;
-      badge->visible = true;
-    }
-
-    if (auto *subtitle = ctx.world.Get<UIText>(state->resultSubtitleEntity)) {
-      std::wstring parLine =
-          (state->par > 0) ? (L" / Par " + std::to_wstring(state->par)) : L"";
-      subtitle->text =
-          L"Target: " + core::ToWString(state->targetPage) + parLine;
-      subtitle->visible = true;
-    }
-
-    int hops = 0;
-    if (!state->pathHistory.empty()) {
-      hops = static_cast<int>(state->pathHistory.size()) - 1;
-    }
-
-    std::wstring route = L"Route: ";
-    if (!state->pathHistory.empty()) {
-      size_t showCount = std::min<size_t>(state->pathHistory.size(), 4);
-      size_t startIdx = state->pathHistory.size() - showCount;
-      for (size_t i = startIdx; i < state->pathHistory.size(); ++i) {
-        if (i > startIdx)
-          route += L" -> ";
-        route += core::ToWString(state->pathHistory[i]);
-      }
-    } else {
-      route += L"N/A";
-    }
-
-    std::wstring stats = L"Shots: " + std::to_wstring(state->shotCount);
-    if (state->par > 0) {
-      stats += L" / Par " + std::to_wstring(state->par);
-    }
-    stats += L"  |  Hops: " + std::to_wstring(std::max(0, hops));
-    stats += L"\n" + route;
-
-    if (auto *txt = ctx.world.Get<UIText>(state->resultTextEntity)) {
-      txt->text = stats;
-      txt->visible = true;
-    }
-    if (auto *hint = ctx.world.Get<UIText>(state->resultHintEntity)) {
-      hint->text = L"[Click] Return to Title  |  [R] Retry  |  [M] Map View";
-      hint->visible = true;
-    }
-    if (auto *retryBtn = ctx.world.Get<UIButton>(state->retryButtonEntity)) {
-      retryBtn->visible = true;
-      if (retryBtn->state == ButtonState::Pressed) {
-        OnEnter(ctx);
-        return;
-      }
-    }
-
-    // クリア後のみリトライを許可
-    if (ctx.input.GetKeyDown('R')) {
-      OnEnter(ctx);
-      return;
-    }
-
-    if (ctx.input.GetMouseButtonDown(0)) {
-      // タイトルへ戻る
-      if (ctx.sceneManager) {
-        ctx.sceneManager->ChangeScene(std::make_unique<TitleScene>());
-      }
-    }
-    return;
   }
 
   // マップビュー切り替え (Mキー)
@@ -2019,15 +1913,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   m_prevMouseX = mouseX;
   m_prevMouseY = mouseY;
-
-  // クリア済みの場合、リトライボタンのみチェック
-  if (state->gameCleared) {
-    auto *retryBtn = ctx.world.Get<UIButton>(state->retryButtonEntity);
-    if (retryBtn && retryBtn->state == ButtonState::Pressed) {
-      OnEnter(ctx);
-    }
-    return;
-  }
 
   // 物理更新
   game::systems::PhysicsSystem(ctx, ctx.dt);
@@ -2451,59 +2336,6 @@ void WikiGolfScene::UpdateMinimap(core::GameContext &ctx) {
       line->style.color.w = helpFadeAlpha;
     }
   }
-}
-
-void WikiGolfScene::SaveHighScore(const std::string &targetPage, int shots) {
-  // 既存のスコアを読み込み
-  std::map<std::string, int> scores;
-  std::ifstream inFile("../../scores.txt");
-  if (inFile.is_open()) {
-    std::string line;
-    while (std::getline(inFile, line)) {
-      size_t pos = line.find('|');
-      if (pos != std::string::npos) {
-        std::string page = line.substr(0, pos);
-        int score = std::stoi(line.substr(pos + 1));
-        scores[page] = score;
-      }
-    }
-    inFile.close();
-  }
-
-  // 新記録か確認
-  if (scores.find(targetPage) == scores.end() || shots < scores[targetPage]) {
-    scores[targetPage] = shots;
-    LOG_INFO("WikiGolf", "New high score for '{}': {} shots", targetPage,
-             shots);
-
-    // ファイルに書き込み
-    std::ofstream outFile("../../scores.txt");
-    if (outFile.is_open()) {
-      for (const auto &[page, score] : scores) {
-        outFile << page << "|" << score << "\n";
-      }
-      outFile.close();
-    }
-  }
-}
-
-int WikiGolfScene::LoadHighScore(const std::string &targetPage) {
-  std::ifstream inFile("../../scores.txt");
-  if (!inFile.is_open()) {
-    return -1; // 記録なし
-  }
-
-  std::string line;
-  while (std::getline(inFile, line)) {
-    size_t pos = line.find('|');
-    if (pos != std::string::npos) {
-      std::string page = line.substr(0, pos);
-      if (page == targetPage) {
-        return std::stoi(line.substr(pos + 1));
-      }
-    }
-  }
-  return -1; // 記録なし
 }
 
 void WikiGolfScene::UpdateTrajectory(core::GameContext &ctx, float powerRatio) {
@@ -3039,107 +2871,7 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   ji.width = 200.0f;                                          // 小さく
   ji.height = 80.0f;                                          // 小さく
   ji.visible = false;
-  ji.layer = 20;
   state.judgeEntity = judgeE;
-
-  // Result Screen UI
-  LOG_INFO("WikiGolf", "Creating result UI...");
-  state.resultBgEntity = CreateEntity(ctx.world);
-  auto &rbg = ctx.world.Add<UIImage>(state.resultBgEntity);
-  rbg = UIImage::Create("ui_gauge_bg.png", 0, 0);
-  rbg.width = 1280.0f;
-  rbg.height = 720.0f;
-  rbg.alpha = 0.88f;
-  rbg.visible = false;
-  rbg.layer = 80;
-
-  state.resultFrameEntity = CreateEntity(ctx.world);
-  auto &rframe = ctx.world.Add<UIImage>(state.resultFrameEntity);
-  rframe = UIImage::Create("ui_gauge_bg.png", 140.0f, 120.0f);
-  rframe.width = 1000.0f;
-  rframe.height = 520.0f;
-  rframe.alpha = 0.95f;
-  rframe.visible = false;
-  rframe.layer = 81;
-
-  auto resultTitleE = CreateEntity(ctx.world);
-  auto &rtTitle = ctx.world.Add<UIText>(resultTitleE);
-  rtTitle.style = graphics::TextStyle::LuxuryTitle();
-  rtTitle.style.fontSize = 90.0f;
-  rtTitle.style.align = graphics::TextAlign::Center;
-  rtTitle.x = 640.0f;
-  rtTitle.y = 150.0f;
-  rtTitle.visible = false;
-  rtTitle.layer = 90;
-  state.resultTitleEntity = resultTitleE;
-
-  auto resultBadgeE = CreateEntity(ctx.world);
-  auto &rb = ctx.world.Add<UIText>(resultBadgeE);
-  rb.style = graphics::TextStyle::Status();
-  rb.style.fontSize = 42.0f;
-  rb.style.align = graphics::TextAlign::Center;
-  rb.style.hasOutline = true;
-  rb.style.outlineColor = {0.0f, 0.0f, 0.0f, 0.8f};
-  rb.style.outlineWidth = 2.5f;
-  rb.x = 640.0f;
-  rb.y = 240.0f;
-  rb.visible = false;
-  rb.layer = 91;
-  state.resultBadgeEntity = resultBadgeE;
-
-  auto resultSubtitleE = CreateEntity(ctx.world);
-  auto &rs = ctx.world.Add<UIText>(resultSubtitleE);
-  rs.style = graphics::TextStyle::ModernBlack();
-  rs.style.fontSize = 30.0f;
-  rs.style.align = graphics::TextAlign::Center;
-  rs.style.hasShadow = true;
-  rs.style.shadowColor = {0.0f, 0.0f, 0.0f, 0.7f};
-  rs.x = 640.0f;
-  rs.y = 300.0f;
-  rs.width = 900.0f;
-  rs.visible = false;
-  rs.layer = 91;
-  state.resultSubtitleEntity = resultSubtitleE;
-
-  auto resultTextE = CreateEntity(ctx.world);
-  auto &rt = ctx.world.Add<UIText>(resultTextE);
-  rt.style = graphics::TextStyle::Status();
-  rt.style.fontSize = 30.0f;
-  rt.style.align = graphics::TextAlign::Center;
-  rt.style.hasOutline = true;
-  rt.style.outlineColor = {0.0f, 0.0f, 0.0f, 0.6f};
-  rt.style.outlineWidth = 2.0f;
-  rt.x = 640.0f;
-  rt.y = 360.0f;
-  rt.width = 920.0f;
-  rt.visible = false;
-  rt.layer = 92;
-  state.resultTextEntity = resultTextE;
-
-  auto hintE = CreateEntity(ctx.world);
-  auto &hint = ctx.world.Add<UIText>(hintE);
-  hint.style = graphics::TextStyle::Guide();
-  hint.style.fontSize = 22.0f;
-  hint.style.align = graphics::TextAlign::Center;
-  hint.x = 640.0f;
-  hint.y = 600.0f;
-  hint.width = 900.0f;
-  hint.visible = false;
-  hint.layer = 95;
-  state.resultHintEntity = hintE;
-
-  auto retryBtnE = CreateEntity(ctx.world);
-  auto &btn = ctx.world.Add<UIButton>(retryBtnE);
-  btn = UIButton::Create(L"もう一度挑戦 (R)", "retry", 500.0f, 500.0f, 280.0f,
-                         64.0f);
-  btn.textStyle = graphics::TextStyle::LuxuryButton();
-  btn.textStyle.fontSize = 30.0f;
-  btn.normalColor = {0.15f, 0.18f, 0.28f, 1.0f};
-  btn.hoverColor = {0.22f, 0.26f, 0.38f, 1.0f};
-  btn.pressedColor = {0.1f, 0.12f, 0.2f, 1.0f};
-  btn.disabledColor = {0.08f, 0.08f, 0.12f, 0.6f};
-  btn.visible = false;
-  state.retryButtonEntity = retryBtnE;
 
   // Context-Sensitive Guide UI
   LOG_INFO("WikiGolf", "Creating guide UI...");
@@ -3392,7 +3124,7 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   } else {
     LOG_INFO("WikiGolf", "Fetching live data for {}", pageName);
     // リンク取得（多めに取得してフィルタリング）
-    allLinks = wikiClient.FetchPageLinks(pageName, 100);
+    allLinks = wikiClient.FetchPageLinks(pageName, 0);
     // 記事テキスト取得
     articleText = wikiClient.FetchPageExtract(pageName, 5000);
   }
@@ -3417,24 +3149,20 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
     return false;
   };
 
-  for (const auto &link : allLinks) {
-    // ターゲットページは無条件で追加（フィルタリングや本文チェックをバイパス）
-    if (link.title == state->targetPage) {
-      // 既に追加済みかチェック（念のため）
-      bool exists = false;
-      for (const auto &v : validLinks) {
-        if (v.first == link.title) {
-          exists = true;
-          break;
-        }
-      }
-      if (!exists) {
-        validLinks.push_back({link.title, core::ToWString(link.title)});
-      }
-      continue;
-    }
+  // リンク数の動的上限を計算（本文2000文字につき5リンク、固定上限50）
+  const size_t kLinksPerChars = 5;
+  const size_t kCharsPerUnit = 2000;
+  const size_t kMaxLinks = 50;
+  size_t dynamicLimit =
+      (articleText.length() / kCharsPerUnit + 1) * kLinksPerChars;
+  size_t linkLimit = (dynamicLimit < kMaxLinks) ? dynamicLimit : kMaxLinks;
 
+  for (const auto &link : allLinks) {
     if (isIgnored(link.title))
+      continue;
+
+    // ターゲットページは別枠で処理するのでスキップ
+    if (link.title == state->targetPage)
       continue;
 
     // 本文に含まれているかチェック
@@ -3442,8 +3170,26 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
       validLinks.push_back({link.title, core::ToWString(link.title)});
     }
 
-    if (validLinks.size() >= 20)
+    if (validLinks.size() >= linkLimit)
       break;
+  }
+
+  // ターゲットページは本文に含まれていれば無条件追加
+  if (!state->targetPage.empty() &&
+      articleText.find(state->targetPage) != std::string::npos) {
+    bool targetExists = false;
+    for (const auto &v : validLinks) {
+      if (v.first == state->targetPage) {
+        targetExists = true;
+        break;
+      }
+    }
+    if (!targetExists) {
+      validLinks.push_back(
+          {state->targetPage, core::ToWString(state->targetPage)});
+      LOG_INFO("WikiGolf", "Target page '{}' added (in article)",
+               state->targetPage);
+    }
   }
 
   // リンク不足時の補充
@@ -3453,7 +3199,7 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
       for (const auto &v : validLinks)
         if (v.first == link.title)
           exists = true;
-      if (!exists && !isIgnored(link.title)) { // ここでもignoreチェック
+      if (!exists && !isIgnored(link.title)) {
         validLinks.push_back({link.title, core::ToWString(link.title)});
         if (validLinks.size() >= 5)
           break;
@@ -4007,13 +3753,24 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         m_gameJuice->TriggerConfetti(ctx, pos, 1.2f);
       }
 
-      // ターゲットホールに入った場合はリザルト表示
+      // ターゲットホールに入った場合はリザルト画面へ遷移
       if (hole->isTarget) {
         LOG_INFO("WikiGolf", "GAME CLEAR! Reached target page!");
-        state->gameCleared = true;
-        // 既存のリザルト表示ロジック（ProcessShot内）がgameClearedを見てUI表示
+
         if (ctx.audio) {
           ctx.audio->PlaySE(ctx, "se_goal", 1.0f);
+        }
+
+        // ResultSceneへ遷移
+        ResultData data;
+        data.targetPage = state->targetPage;
+        data.shotCount = state->shotCount;
+        data.par = state->par;
+        data.pathHistory = state->pathHistory;
+        data.isNewRecord = false; // TODO: スコア保存ロジック
+
+        if (ctx.sceneManager) {
+          ctx.sceneManager->ChangeScene(std::make_unique<ResultScene>(data));
         }
         return;
       }
@@ -4230,6 +3987,9 @@ void WikiGolfScene::UpdateClubAnimation(core::GameContext &ctx, float dt) {
 }
 
 void WikiGolfScene::OnExit(core::GameContext &ctx) {
+  if (m_terrainSystem) {
+    m_terrainSystem->Clear(ctx);
+  }
   m_screenFade.Shutdown(ctx);
   DestroyAllEntities(ctx);
   LOG_INFO("WikiGolf", "Exiting WikiGolfScene");

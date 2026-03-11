@@ -14,8 +14,10 @@
 #include "../components/UIButton.h"
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
+#include "../components/WikiComponents.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "LoadingScene.h"
+#include "ResultScene.h"
 #include "WikiGolfScene.h"
 #include <DirectXMath.h>
 #include <cmath>
@@ -602,10 +604,37 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
   if (ctx.input.GetKeyDown(VK_ESCAPE)) {
     ctx.shouldClose = true;
   }
+
+  // --- DEBUG: Sample Result Scene Trigger ---
+  if (ctx.input.GetKeyDown('Z')) {
+    ResultData dummy;
+    dummy.targetPage = "Universe";
+    dummy.shotCount = 3;
+    dummy.par = 5;
+    dummy.pathHistory = {"Physics", "Astronomy", "Cosmology", "Universe"};
+
+    // Use LoadingScene for smooth transition
+    auto loadingScene = std::make_unique<LoadingScene>(
+        [dummy]() { return std::make_unique<ResultScene>(dummy); });
+    ctx.sceneManager->ChangeScene(std::move(loadingScene));
+  }
 }
 
 void TitleScene::OnExit(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnExit");
+
+  // Clean up any persistent terrain objects (WikiGolf leftovers)
+  std::vector<ecs::Entity> toDestroy;
+  ctx.world.Query<game::components::TerrainObject>().Each(
+      [&](ecs::Entity e, game::components::TerrainObject &) {
+        toDestroy.push_back(e);
+      });
+
+  for (auto e : toDestroy) {
+    if (ctx.world.IsAlive(e))
+      ctx.world.DestroyEntity(e);
+  }
+
   // 全エンティティ破壊
   DestroyAllEntities(ctx);
 
