@@ -209,6 +209,10 @@ private:
   ecs::Entity m_mapHelpTitle = UINT32_MAX;
   std::vector<ecs::Entity> m_mapHelpLines;
 
+  // 地形表示用UI
+  ecs::Entity m_terrainImageEntity = UINT32_MAX;
+  float m_terrainDisplayTimer = 0.0f;
+
   struct MapHoleIcon {
     ecs::Entity iconEntity;
     DirectX::XMFLOAT2 worldPos;

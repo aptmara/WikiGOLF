@@ -60,7 +60,6 @@ endif()
 # Post-build: Copy Assets
 add_custom_command(TARGET DX_GAME POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:DX_GAME>/Assets
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEXTURE_FILES} $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
