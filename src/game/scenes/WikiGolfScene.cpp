@@ -498,15 +498,12 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       if (speed < 0.1f) {
         rb->velocity = {0, 0, 0};
 
+        std::string terrainTex = "";
+
         // OB判定：Lavaに静止したらOB
         if (state->isOB) {
-          auto *judgeUI = ctx.world.Get<UIImage>(state->judgeEntity);
-          if (judgeUI) {
-            judgeUI->texturePath = "ui_judge_ob.png";
-            judgeUI->visible = true;
-            judgeUI->width = 256.0f;
-            judgeUI->height = 128.0f;
-          }
+          terrainTex = "ui_judge_ob.png";
+
           LOG_INFO("WikiGolf", "OB! Returning to last shot position");
           state->shotCount++;
           auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
@@ -516,7 +513,65 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
           }
           state->isOB = false;
           if (ctx.audio) {
-            ctx.audio->PlaySE(ctx, "se_ob", 0.8f);
+            ctx.audio->PlaySE(ctx, "se_judge_ob.mp3", 0.8f);
+          }
+        } else {
+          // 通常の地形判定
+          switch (state->currentMaterial) {
+          case game::components::TerrainMaterial::Fairway:
+            terrainTex = "ui_terrain_fairway.png";
+            break;
+          case game::components::TerrainMaterial::Rough:
+            terrainTex = "ui_terrain_rough.png";
+            break;
+          case game::components::TerrainMaterial::Bunker:
+            terrainTex = "ui_terrain_bunker.png";
+            break;
+          case game::components::TerrainMaterial::Green:
+            terrainTex = "ui_terrain_green.png";
+            break;
+          default:
+            break;
+          }
+        }
+
+        // 統合表示ロジック
+        if (!terrainTex.empty() && m_terrainImageEntity != UINT32_MAX) {
+          auto *ui =
+              ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
+          if (ui) {
+            ui->texturePath = terrainTex;
+            ui->visible = true;
+            ui->alpha = 1.0f;
+
+            // 初期状態: スケール0 (中央)
+            ui->width = 0.0f;
+            ui->height = 0.0f;
+            ui->x = 1280.0f * 0.5f;
+            ui->y = 720.0f * 0.5f;
+
+            m_terrainDisplayTimer = 2.0f;
+
+            // 統合SEロジック
+            if (ctx.audio) {
+              if (state->isOB) {
+                // OBの場合は ProcessShot の冒頭で se_ob or se_cancel
+                // を再生済みのためここでは再生しない
+              } else {
+                // Fairway / Green -> Good (judge_Good.mp3)
+                // Rough / Bunker -> Bad (judge_Bad.wav)
+                bool isGood = (state->currentMaterial ==
+                                   game::components::TerrainMaterial::Fairway ||
+                               state->currentMaterial ==
+                                   game::components::TerrainMaterial::Green);
+
+                if (isGood) {
+                  ctx.audio->PlaySE(ctx, "judge_Good.mp3", 0.8f);
+                } else {
+                  ctx.audio->PlaySE(ctx, "judge_Bad.wav", 0.8f);
+                }
+              }
+            }
           }
         }
 
@@ -1673,6 +1728,48 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
     }
   }
 
+  // 地形表示UIの更新
+  if (m_terrainDisplayTimer > 0.0f) {
+    m_terrainDisplayTimer -= ctx.dt;
+    if (m_terrainImageEntity != UINT32_MAX) {
+      auto *ui = ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
+      if (ui) {
+        if (m_terrainDisplayTimer <= 0.0f) {
+          ui->visible = false;
+        } else {
+          // 演出: 最初の0.2秒でズームイン、最後0.5秒でフェードアウト
+          float lifeTime = 2.0f - m_terrainDisplayTimer;
+          float s = 1.0f; // Scale factor
+
+          if (lifeTime < 0.2f) {
+            float t = lifeTime / 0.2f;
+            // バウンスアウト気味のイージング
+            s = std::sin(t * 3.14159f * 0.5f + 0.2f) * 1.2f;
+            if (t >= 1.0f)
+              s = 1.0f;
+            s = std::min(s, 1.2f); // Cap
+          } else if (m_terrainDisplayTimer < 0.5f) {
+            ui->alpha = m_terrainDisplayTimer / 0.5f;
+            s = 1.0f;
+          } else {
+            ui->alpha = 1.0f;
+            s = 1.0f;
+          }
+
+          // スケール適用 (基準サイズ: 512x256)
+          float baseW = 512.0f;
+          float baseH = 256.0f;
+          ui->width = baseW * s;
+          ui->height = baseH * s;
+
+          // 中央寄せ (1280x720)
+          ui->x = (1280.0f - ui->width) * 0.5f;
+          ui->y = (720.0f - ui->height) * 0.5f;
+        }
+      }
+    }
+  }
+
   // マップビュー切り替え (Mキー)
   if (ctx.input.GetKeyDown('M')) {
     m_isMapView = !m_isMapView;
@@ -2004,7 +2101,44 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
         state->canShoot = true;
         rb->velocity = {0, 0, 0};
 
-        rb->velocity = {0, 0, 0};
+        // 地形表示ロジック
+        if (m_terrainImageEntity != UINT32_MAX) {
+          auto *ui =
+              ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
+          if (ui) {
+            std::string texPath = "";
+            switch (state->currentMaterial) {
+            case game::components::TerrainMaterial::Fairway:
+              texPath = "ui_terrain_fairway.png";
+              break;
+            case game::components::TerrainMaterial::Rough:
+              texPath = "ui_terrain_rough.png";
+              break;
+            case game::components::TerrainMaterial::Bunker:
+              texPath = "ui_terrain_bunker.png";
+              break;
+            case game::components::TerrainMaterial::Green:
+              texPath = "ui_terrain_green.png";
+              break;
+            default:
+              break;
+            }
+
+            if (!texPath.empty()) {
+              ui->texturePath = texPath;
+              ui->visible = true;
+              ui->alpha = 1.0f;
+
+              // 初期状態: スケール0 (中央)
+              ui->width = 0.0f;
+              ui->height = 0.0f;
+              ui->x = 1280.0f * 0.5f;
+              ui->y = 720.0f * 0.5f;
+
+              m_terrainDisplayTimer = 2.0f; // 2秒間表示
+            }
+          }
+        }
       }
     }
   }
@@ -2993,6 +3127,19 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
     helpLine.visible = false;
     helpLine.layer = 201;
     m_mapHelpLines.push_back(helpLineE);
+  }
+  // 地形表示UI
+  if (m_terrainImageEntity == UINT32_MAX) {
+    auto e = CreateEntity(ctx.world);
+    auto &ui = ctx.world.Add<game::components::UIImage>(e);
+    ui.texturePath = "";              // 初期は空、表示時に設定
+    ui.x = (1280.0f - 512.0f) * 0.5f; // 中央 (512x256想定)
+    ui.y = (720.0f - 256.0f) * 0.5f;
+    ui.width = 512.0f;
+    ui.height = 256.0f;
+    ui.visible = false;
+    ui.layer = 20; // 判定より手前
+    m_terrainImageEntity = e;
   }
 }
 
