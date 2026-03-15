@@ -280,6 +280,8 @@ std::wstring SkyboxTextureGenerator::GetThemeFileName(SkyboxTheme theme) {
     return L"scifi";
   case SkyboxTheme::Retro:
     return L"retro";
+  case SkyboxTheme::GolfCourseClear:
+    return L"golf_course_clear";
   default:
     return L"Default";
   }
@@ -749,6 +751,21 @@ ThemeParams GetThemeParams(SkyboxTheme theme) {
     p.vignette = 0.12f;
     p.tint = {1.05f, 1.02f, 0.95f};
     break;
+  case SkyboxTheme::GolfCourseClear: // 晴天ゴルフコース：大きな白雲・爽やかな青空
+    p.cloudMult      = 1.8f;    // 大きな白雲をしっかり出す
+    p.noiseMult      = 1.2f;    // 空のテクスチャ感
+    p.saturation     = 1.18f;   // 鮮やかな青空
+    p.fogStrength    = 0.12f;   // 地平線の大気霞
+    p.fogExponent    = 0.7f;    // 霞が広範囲に広がる
+    p.gradientExponent = 1.3f;  // 天頂の青が強く出る
+    p.contrast       = 1.08f;   // 若干強め
+    p.sunSize        = 0.022f;  // やや大きい太陽
+    p.tint           = {0.96f, 0.98f, 1.02f}; // わずかにクール寄り
+    p.accentStrength = 0.20f;   // 雲の縁の白い輝き
+    p.accentFrequency = 3.0f;   // 大きな波長（雲スケール）
+    p.accentColor    = {1.0f, 1.0f, 1.0f}; // 純白
+    p.vignette       = 0.04f;
+    break;
   default:
     break;
   }
@@ -1091,6 +1108,12 @@ void SkyboxTextureGenerator::GetThemeColors(SkyboxTheme theme,
     outBottomColor = {0.55f, 0.5f, 0.4f};
     break;
 
+  case SkyboxTheme::GolfCourseClear:
+    outTopColor     = {0.10f, 0.32f, 0.72f};  // 深コバルトブルー（天頂）
+    outHorizonColor = {0.62f, 0.78f, 0.92f};  // 明るい空色（地平線）
+    outBottomColor  = {0.42f, 0.60f, 0.75f};  // 地平線以下（反射空）
+    break;
+
   default:
     outTopColor = {0.4f, 0.6f, 0.9f};
     outHorizonColor = {0.7f, 0.8f, 0.95f};
@@ -1164,7 +1187,9 @@ void SkyboxTextureGenerator::GenerateFaceData(
 
         // === プロシージャル要素 ===
 
-        XMFLOAT3 sunDir = {0.7f, 0.5f, 0.3f}; // デフォルト
+        XMFLOAT3 sunDir = (theme == SkyboxTheme::GolfCourseClear)
+                              ? XMFLOAT3{0.6f, 0.75f, 0.4f}  // 右後方から高い位置
+                              : XMFLOAT3{0.7f, 0.5f, 0.3f}; // デフォルト
 
         float noise = GenerateNoise(dir.x * 5.0f, dir.y * 5.0f, dir.z * 5.0f) *
                       params.noiseMult;
@@ -1200,10 +1225,16 @@ void SkyboxTextureGenerator::GenerateFaceData(
           color.z += sunIntensity * 0.5f;
         }
 
-        if (yFactor > -0.2f && yFactor < 0.8f && params.cloudMult > 0.0f) {
-          float cloudBase = cloudPattern * 0.2f * params.cloudMult;
+        float cloudYMax = (theme == SkyboxTheme::GolfCourseClear) ? 0.95f : 0.8f;
+        if (yFactor > -0.2f && yFactor < cloudYMax && params.cloudMult > 0.0f) {
+          float currentCloudPattern = cloudPattern;
+          if (theme == SkyboxTheme::GolfCourseClear) {
+              // 積雲: worley ノイズを強めて輪郭をくっきりさせる
+              currentCloudPattern = std::pow(cloudPattern, 2.0f);
+          }
+          float cloudBase = currentCloudPattern * 0.28f * params.cloudMult;
           float lightingFactor = std::max(0.0f, -dir.x * 0.5f + 0.5f);
-          float cloudHighlight = cloudPattern * cloudPattern * 0.3f *
+          float cloudHighlight = currentCloudPattern * currentCloudPattern * 0.3f *
                                  lightingFactor * params.cloudMult;
 
           color.x += cloudBase + cloudHighlight;

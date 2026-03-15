@@ -251,19 +251,6 @@ void TerrainGenerator::CreatePlatforms(
   float worldW = data.config.worldWidth;
   float worldD = data.config.worldDepth;
 
-  // 頂点カラー初期化（全体を白に）
-  // 頂点生成前だが、ここでフラグなどを持てないので、一旦GenerateMesh内でやるか、
-  // あるいはここでハイトマップ以外の情報も操作するか。
-  // 今回はGenerateMeshで色を決めるために、TerrainDataに「地形属性マップ」を追加するのが正しいが、
-  // 簡易的に「GenerateMeshで色を塗る際のロジック」を修正する方針にする。
-  // しかしGenerateMeshは座標を知らない。
-  // なので、GenerateMeshを修正し、holePositionsを参照できるようにするか、
-  // データに色情報を埋め込むか。
-  // verticesはこの後生成されるので、Vertex.colorをいじるなら生成時。
-  // ひとまずここは形状のみに注力し、色は別途考える（あるいはGenerateMeshにholePositionsを渡す？）。
-  // いや、頂点ごとに属性を持つ配列を追加しよう。
-  // TerrainDataにはまだないので、GenerateMesh内で色を決定するロジックをハードコードする。
-
   // リンク位置に基づいてプラットフォームを作る
   for (const auto &pos : holePositions) {
     // ワールド座標 -> グリッドUV -> インデックス
@@ -478,9 +465,6 @@ void TerrainGenerator::GenerateMesh(
         break;
       }
 
-      // ホール可視化（黒く塗る）
-      // ホール可視化オーバーレイは行わない（旗モデルで示す）
-
       vertices.push_back(vert);
     }
   }
@@ -499,10 +483,6 @@ void TerrainGenerator::GenerateMesh(
       uint32_t i1 = z * resX + (x + 1);
       uint32_t i2 = (z + 1) * resX + x;
       uint32_t i3 = (z + 1) * resX + (x + 1);
-
-      // 時計回りか反時計回りかはカリング設定による
-      // 通常DirectXは時計回りが表面だが、CullNoneならどちらでも見える
-      // ここでは標準的な時計回りで定義
 
       // Tri 1
       indices.push_back(i0);

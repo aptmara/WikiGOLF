@@ -211,6 +211,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   // ターゲット記事選択（SDOWデータベース優先）
   std::string targetPage;
   int targetId = -1;
+  bool isUserOverride = false;
 
   // 事前ロードデータの確認
   game::components::WikiGlobalData *preloadedData =
@@ -224,6 +225,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     startPage = preloadedData->startPage;
     targetPage = preloadedData->targetPage;
     targetId = preloadedData->targetPageId;
+    isUserOverride = preloadedData->isUserOverride;
 
     // グローバルデータから削除（二重使用防止）
     // ただし ECSの実装上、コンポーネントを削除するのは面倒かもしれないので、
@@ -279,8 +281,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     }
   }
 
-  // 最短距離が1記事以内のターゲットはスキップして再抽選
-  if (m_shortestPath && m_shortestPath->IsAvailable() && !startPage.empty() &&
+  // 最短距離が1記事以内のターゲットはスキップして再抽選（ユーザー指定時はスキップ）
+  if (!isUserOverride && m_shortestPath && m_shortestPath->IsAvailable() && !startPage.empty() &&
       !targetPage.empty()) {
     const int maxRetry = 5;
     for (int attempt = 0; attempt < maxRetry; ++attempt) {
@@ -2864,247 +2866,446 @@ void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
 
 void WikiGolfScene::InitializeUI(core::GameContext &ctx,
                                  game::components::GolfGameState &state) {
-  LOG_INFO("WikiGolf", "Initializing UI elements...");
+  LOG_INFO("WikiGolf", "Initializing UI elements (Browser HUD v2)...");
 
-  // ミニマップUI作成 (右上)
+  // =========================================================
+  // ミニマップUI (右上 x=1040, y=20, 220x220)
+  // =========================================================
   if (m_minimapRenderer) {
     m_minimapEntity = CreateEntity(ctx.world);
     auto &ui = ctx.world.Add<UIImage>(m_minimapEntity);
     ui.textureSRV = m_minimapRenderer->GetSRV();
-    ui.width = 220.0f; // 少し大きく
+    ui.width = 220.0f;
     ui.height = 220.0f;
-    ui.x = 1040.0f; // 右上寄せ
+    ui.x = 1040.0f;
     ui.y = 20.0f;
     ui.visible = true;
-    ui.layer = 100; // 手前に表示
+    ui.layer = 100;
 
-    // 現在地マーカー（テキストで中央表示）
+    // 現在地マーカー（パルスアニメーション対応）
     m_minimapMarkerEntity = CreateEntity(ctx.world);
     auto &marker = ctx.world.Add<UIText>(m_minimapMarkerEntity);
     marker.text = L"◎";
     marker.x = ui.x + ui.width * 0.5f - 10.0f;
     marker.y = ui.y + ui.height * 0.5f - 10.0f;
     marker.style = graphics::TextStyle::Guide();
-    marker.style.fontSize = 22.0f;                 // 少し大きめ
-    marker.style.color = {1.0f, 0.9f, 0.2f, 1.0f}; // 黄色で視認性アップ
+    marker.style.fontSize = 22.0f;
+    marker.style.color = {1.0f, 0.9f, 0.2f, 1.0f};
     marker.layer = ui.layer + 1;
-
-    // 操作ヘルプ（削除 - 新ヘルプパネルと重複のため）
-    // m_minimapHelpEntity = CreateEntity(ctx.world);
-    // auto &help = ctx.world.Add<UIText>(m_minimapHelpEntity);
-    // help.text = L"Map: Drag/RMB/WASD pan | Wheel zoom | C center | M close";
-    // help.x = ui.x - 10.0f;
-    // help.y = ui.y + ui.height + 6.0f;
-    // help.style = graphics::TextStyle::Guide();
-    // help.style.color = {1.0f, 1.0f, 1.0f, 0.8f};
-    // help.layer = ui.layer + 1;
   }
 
-  // Header
-  auto headerE = CreateEntity(ctx.world);
-  auto &ht = ctx.world.Add<UIText>(headerE);
-  ht.text = L"Loading..."; // 初期値
-  ht.x = 20;
-  ht.y = 20;
-  ht.style = graphics::TextStyle::Status(); // ステータススタイル（40pt）
-  ht.visible = true;
-  ht.layer = 10;
-  state.headerEntity = headerE;
+  // =========================================================
+  // 提案2: 風カード (右上 ミニマップ下: x=1040, y=248)
+  // カード背景はUITextのbgColorで実現
+  // =========================================================
+  constexpr float kWindCardX = 1040.0f;
+  constexpr float kWindCardY = 248.0f;
+  constexpr float kWindCardW = 220.0f;
 
-  // Shot HUD
-  auto shotE = CreateEntity(ctx.world);
-  auto &st = ctx.world.Add<UIText>(shotE);
-  st.text = L""; // 初期化はUpdateHUDで行う
-  st.x = 20;
-  st.y = 70;
-  st.style = graphics::TextStyle::Status(); // ステータススタイル（40pt）
-  st.visible = true;
-  st.layer = 10;
-  state.shotCountEntity = shotE;
+  // "WIND" ラベル（カード背景込み）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"WIND";
+    t.x = kWindCardX + 10.0f;
+    t.y = kWindCardY + 8.0f;
+    t.width = kWindCardW - 20.0f;
+    t.height = 20.0f;
+    t.style = graphics::TextStyle::CardLabel();
+    // カード背景（このラベルで代表して背景描画）
+    t.style.bgColor = {0.059f, 0.090f, 0.165f, 0.88f};
+    t.style.cornerRadius = 10.0f;
+    t.style.borderWidth = 1.0f;
+    t.style.borderColor = {0.220f, 0.380f, 0.600f, 0.4f};
+    t.visible = true;
+    t.layer = 100;
+    state.windCardLabelEntity = e;
+  }
 
-  // Wind UI（さらに左に移動）
-  auto windE = CreateEntity(ctx.world);
-  auto &wt = ctx.world.Add<UIText>(windE);
-  wt.x = 820; // さらに左に移動
-  wt.y = 10;
-  wt.style = graphics::TextStyle::Status();
-  wt.style.fontSize = 26.0f;
-  wt.style.hasOutline = true;
-  wt.style.outlineColor = {0.0f, 0.0f, 0.0f, 0.9f};
-  wt.visible = true;
-  wt.layer = 10;
-  state.windEntity = windE;
+  // 風速数値（大きく）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"-- m/s";
+    t.x = kWindCardX + 10.0f;
+    t.y = kWindCardY + 30.0f;
+    t.width = 120.0f;
+    t.height = 38.0f;
+    t.style = graphics::TextStyle::CardValue();
+    t.visible = true;
+    t.layer = 101;
+    state.windCardValueEntity = e;
+  }
 
-  // Wind Arrow（Wind Textと合わせて左に移動）
-  LOG_INFO("WikiGolf", "Creating wind arrow UI...");
-  auto windArrowE = CreateEntity(ctx.world);
-  auto &wa = ctx.world.Add<UIImage>(windArrowE);
-  wa = UIImage::Create("ui_wind_arrow.png", 840.0f, 40.0f);
-  wa.width = 64.0f;
-  wa.height = 64.0f;
-  wa.visible = true;
-  wa.layer = 10;
-  state.windArrowEntity = windArrowE;
+  // 方向矢印 + 向き（右側に配置）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"→";
+    t.x = kWindCardX + 130.0f;
+    t.y = kWindCardY + 30.0f;
+    t.width = 80.0f;
+    t.height = 38.0f;
+    t.style = graphics::TextStyle::CardValue();
+    t.style.color = {0.220f, 0.745f, 0.973f, 1.0f}; // 風矢印はスカイブルー
+    t.style.fontSize = 32.0f;
+    t.style.align = graphics::TextAlign::Center;
+    t.visible = true;
+    t.layer = 101;
+    state.windCardUnitEntity = e;
+  }
 
-  // Gauge (Bg, Fill, Marker)
-  LOG_INFO("WikiGolf", "Creating gauge UI...");
-  // ゲージ背景は削除
-  // auto gaugeBarE = CreateEntity(ctx.world);
-  // auto &gb = ctx.world.Add<UIImage>(gaugeBarE);
-  // gb = UIImage::Create("ui_gauge_bg.png", 440.0f, 650.0f);
-  // gb.width = 400.0f;
-  // gb.height = 30.0f;
-  // gb.visible = true;
-  // gb.layer = 10;
-  // state.gaugeBarEntity = gaugeBarE;
+  // 既存互換エンティティ（windEntityはLoadPage側で使う参照が残るため空で保持）
+  {
+    auto windE = CreateEntity(ctx.world);
+    auto &wt = ctx.world.Add<UIText>(windE);
+    wt.visible = false; // 新UIに移行したため非表示
+    state.windEntity = windE;
+  }
 
-  // --- パワーゲージ (D2D UIBarGauge) ---
+  // 既存互換: 風矢印画像（LoadPage側でrotation設定される参照が残るため保持）
+  {
+    auto windArrowE = CreateEntity(ctx.world);
+    auto &wa = ctx.world.Add<UIImage>(windArrowE);
+    wa = UIImage::Create("", 0.0f, 0.0f);
+    wa.width = 0.0f;
+    wa.height = 0.0f;
+    wa.visible = false; // 新UIでは不使用
+    state.windArrowEntity = windArrowE;
+  }
+
+  // =========================================================
+  // 提案1: ブラウザ風HUD (左上)
+  // 構成:
+  //  🌐 [現在ページ]  →  [ターゲットページ(金)]   (URLバー風)
+  //  打数: X / Par Y (残り最短 N 記事)            (副情報)
+  //  History: A > B > ...                         (パンくずリスト)
+  // =========================================================
+  constexpr float kHudX = 14.0f;
+  constexpr float kHudY = 14.0f;
+
+  // タブアイコン
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"\U0001f310"; // 🌐
+    t.x = kHudX;
+    t.y = kHudY + 2.0f;
+    t.width = 32.0f;
+    t.height = 30.0f;
+    t.style = graphics::TextStyle::Guide();
+    t.style.fontSize = 20.0f;
+    t.style.color = {0.220f, 0.745f, 0.973f, 1.0f};
+    t.style.align = graphics::TextAlign::Center;
+    // タブアイコンの背景 = URLバー全体の背景をここで描画
+    t.style.bgColor = {0.059f, 0.090f, 0.165f, 0.88f};
+    t.style.cornerRadius = 10.0f;
+    t.style.borderWidth = 1.0f;
+    t.style.borderColor = {0.220f, 0.380f, 0.600f, 0.4f};
+    t.visible = true;
+    t.layer = 10;
+    state.browserTabIconEntity = e;
+  }
+
+  // 現在ページ名（URLバー風 白テキスト）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"Loading...";
+    t.x = kHudX + 36.0f;
+    t.y = kHudY + 2.0f;
+    t.width = 500.0f;
+    t.height = 30.0f;
+    t.style = graphics::TextStyle::BrowserURL();
+    t.style.bgColor = {0.0f, 0.0f, 0.0f, 0.0f}; // 背景はタブアイコン側で描画
+    t.style.borderWidth = 0.0f;
+    t.visible = true;
+    t.layer = 11;
+    state.browserCurrentPageEntity = e;
+    // 後方互換: headerEntityも同一エンティティ
+    state.headerEntity = e;
+  }
+
+  // 矢印セパレーター + ターゲットページ名（金色）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"→ 目標ページ...";
+    t.x = kHudX + 36.0f;
+    t.y = kHudY + 32.0f;
+    t.width = 600.0f;
+    t.height = 28.0f;
+    t.style = graphics::TextStyle::GoalHighlight();
+    t.style.fontSize = 18.0f;
+    t.visible = true;
+    t.layer = 11;
+    state.browserTargetEntity = e;
+  }
+
+  // 打数/Par + 最短距離（副情報テキスト）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"打数: 0 / Par ?";
+    t.x = kHudX + 36.0f;
+    t.y = kHudY + 58.0f;
+    t.width = 600.0f;
+    t.height = 24.0f;
+    t.style = graphics::TextStyle::BrowserSub();
+    t.visible = true;
+    t.layer = 11;
+    state.browserShotInfoEntity = e;
+    // 後方互換: shotCountEntityも同一エンティティ
+    state.shotCountEntity = e;
+  }
+
+  // 経路ブレッドクラム（履歴）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"";
+    t.x = kHudX + 36.0f;
+    t.y = kHudY + 80.0f;
+    t.width = 700.0f;
+    t.height = 22.0f;
+    t.style = graphics::TextStyle::BrowserSub();
+    t.style.fontSize = 14.0f;
+    t.style.color = {0.569f, 0.639f, 0.729f, 0.9f}; // より薄い
+    t.visible = true;
+    t.layer = 11;
+    state.browserHistoryEntity = e;
+    // 後方互換: pathEntityも同一エンティティ
+    state.pathEntity = e;
+  }
+
+  // 後方互換: infoEntityは空エンティティ（古いコードの参照が残るため）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.visible = false;
+    state.infoEntity = e;
+  }
+
+  // =========================================================
+  // 提案5: ショットパネル (画面下中央)
+  // 構成: POWER [████░░░] XX% | ACCURACY [●] | CLUB: Driver
+  // 位置: x=300, y=620, 幅680
+  // =========================================================
+  constexpr float kPanelX = 300.0f;
+  constexpr float kPanelY = 622.0f;
+  constexpr float kPanelW = 680.0f;
+
+  // POWER ラベル
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"POWER";
+    t.x = kPanelX;
+    t.y = kPanelY;
+    t.width = 100.0f;
+    t.height = 22.0f;
+    t.style = graphics::TextStyle::ShotPanelLabel();
+    // パネル背景をここで描画
+    t.style.bgColor = {0.059f, 0.090f, 0.165f, 0.82f};
+    t.style.cornerRadius = 12.0f;
+    t.style.borderWidth = 1.0f;
+    t.style.borderColor = {0.220f, 0.380f, 0.600f, 0.4f};
+    t.visible = false; // ショット時のみ表示
+    t.layer = 50;
+    state.shotPanelPowerLabelEntity = e;
+  }
+
+  // POWER値（パーセント表示）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"0%";
+    t.x = kPanelX + kPanelW - 70.0f;
+    t.y = kPanelY;
+    t.width = 65.0f;
+    t.height = 22.0f;
+    t.style = graphics::TextStyle::ShotPanelValue();
+    t.visible = false;
+    t.layer = 51;
+    state.shotPanelPowerValueEntity = e;
+  }
+
+  // ACCURACY ラベル
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"ACCURACY";
+    t.x = kPanelX;
+    t.y = kPanelY + 50.0f;
+    t.width = 120.0f;
+    t.height = 22.0f;
+    t.style = graphics::TextStyle::ShotPanelLabel();
+    t.visible = false;
+    t.layer = 50;
+    state.shotPanelAccuracyLabelEntity = e;
+  }
+
+  // ACCURACY値（評価テキスト）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"---";
+    t.x = kPanelX + kPanelW - 160.0f;
+    t.y = kPanelY + 50.0f;
+    t.width = 155.0f;
+    t.height = 22.0f;
+    t.style = graphics::TextStyle::ShotPanelValue();
+    t.visible = false;
+    t.layer = 51;
+    state.shotPanelAccuracyValueEntity = e;
+  }
+
+  // CLUB表示（クラブ名）
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"CLUB: Driver";
+    t.x = kPanelX;
+    t.y = kPanelY + 95.0f;
+    t.width = kPanelW;
+    t.height = 22.0f;
+    t.style = graphics::TextStyle::ClubName();
+    t.style.align = graphics::TextAlign::Center;
+    t.style.fontSize = 14.0f;
+    t.style.color = {0.569f, 0.639f, 0.729f, 0.9f};
+    t.visible = false;
+    t.layer = 50;
+    state.shotPanelClubLabelEntity = e;
+  }
+
+  // --- パワーゲージ (D2D UIBarGauge) - 提案5準拠の大型中央配置 ---
   state.gaugeBarEntity = CreateEntity(ctx.world);
   auto &gauge = ctx.world.Add<UIBarGauge>(state.gaugeBarEntity);
-  gauge.x = 440.0f;
-  gauge.y = 650.0f;
-  gauge.width = 400.0f;
-  gauge.height = 30.0f;
+  gauge.x = kPanelX;
+  gauge.y = kPanelY + 22.0f;
+  gauge.width = kPanelW;
+  gauge.height = 24.0f;
 
   gauge.value = 0.0f;
   gauge.maxValue = 1.0f;
-  gauge.color = {0.2f, 0.8f, 1.0f, 1.0f}; // 青
-  gauge.bgColor = {0.0f, 0.0f, 0.0f, 0.8f};
-  gauge.borderColor = {1.0f, 1.0f, 1.0f, 1.0f};
-  gauge.borderWidth = 2.0f;
+  gauge.color = {0.133f, 0.773f, 0.369f, 1.0f}; // #22C55E 成功色デフォルト
+  gauge.bgColor = {0.020f, 0.039f, 0.090f, 0.9f}; // 濃紺背景
+  gauge.borderColor = {0.220f, 0.380f, 0.600f, 0.6f};
+  gauge.borderWidth = 1.5f;
   gauge.isVisible = false;
 
   gauge.showImpactZones = false;
   gauge.impactCenter = 0.5f;
-  gauge.impactWidthGreat = 0.1f;
-  gauge.impactWidthNice = 0.3f;
+  gauge.impactWidthGreat = 0.10f; // Great幅を少し広く
+  gauge.impactWidthNice = 0.28f;  // Nice幅
   gauge.showMarker = false;
+
+  // ACCURACY ゲージ行（インパクトゲージ）
+  // 既存gaugeBarEntityをフェーズで切り替えして使用するため単一ゲージを維持
 
   state.gaugeFillEntity = 0;
   state.gaugeMarkerEntity = 0;
 
-  // Path History
-  auto pathE = CreateEntity(ctx.world);
-  auto &pathT = ctx.world.Add<UIText>(pathE);
-  pathT.text = L"History: ";
-  pathT.x = 20;
-  pathT.y = 130;
-  pathT.width = 600.0f; // 幅制限を追加
-  pathT.visible = true;
-  pathT.layer = 10;
-  pathT.style = graphics::TextStyle::Guide();
-  pathT.style.align = graphics::TextAlign::Left;
-  pathT.style.fontSize = 24.0f; // 24ptに拡大
-  state.pathEntity = pathE;
-
-  // Judge Result
-  LOG_INFO("WikiGolf", "Creating judge UI...");
+  // =========================================================
+  // 判定結果 (中央に大きく)
+  // =========================================================
   auto judgeE = CreateEntity(ctx.world);
   auto &ji = ctx.world.Add<UIImage>(judgeE);
-  ji = UIImage::Create("ui_judge_great.png", 540.0f, 280.0f); // 画面中央に配置
-  ji.width = 200.0f;                                          // 小さく
-  ji.height = 80.0f;                                          // 小さく
+  ji = UIImage::Create("ui_judge_great.png", 540.0f, 280.0f);
+  ji.width = 200.0f;
+  ji.height = 80.0f;
   ji.visible = false;
   state.judgeEntity = judgeE;
 
-  // Context-Sensitive Guide UI
-  LOG_INFO("WikiGolf", "Creating guide UI...");
-
-  // 背景（Message Bar）は削除
-  // auto guideBgE = CreateEntity(ctx.world);
-  // auto &gbg = ctx.world.Add<UIImage>(guideBgE);
-  // // ui_gauge_bg.png（半透明黒）を画面幅いっぱいに引き伸ばして使用
-  // gbg = UIImage::Create("ui_gauge_bg.png", 0.0f, 660.0f);
-  // gbg.width = 1280.0f;
-  // gbg.height = 60.0f;
-  // gbg.alpha = 0.9f; // 濃いめ
-  // gbg.visible = true;
-  // gbg.layer = 90; // テキストより奥
-  // state.guideBgEntity = guideBgE;
-
-  // テキスト
+  // =========================================================
+  // ガイドUI (下部)
+  // =========================================================
   auto guideE = CreateEntity(ctx.world);
   auto &gt = ctx.world.Add<UIText>(guideE);
   gt.text = L"";
-  gt.x = 240.0f;     // 中央配置（画面幅1280 - 幅800 = 480、480/2 = 240）
-  gt.y = 685.0f;     // 下に移動
-  gt.width = 800.0f; // 幅を800に戻す（長いテキスト対応）
-  gt.style = graphics::TextStyle::Guide(); // 新しいガイドスタイル（24pt）
+  gt.x = 200.0f;
+  gt.y = 688.0f;
+  gt.width = 880.0f;
+  gt.style = graphics::TextStyle::Guide();
+  gt.style.fontSize = 20.0f;
+  gt.style.color = {0.792f, 0.835f, 0.886f, 0.9f};
   gt.visible = true;
-  gt.layer = 100; // 最前面
+  gt.layer = 100;
   state.guideEntity = guideE;
 
-  // === マップビュー強化UI ===
+  // 後方互換: guideBgEntityは空
+  {
+    auto e = CreateEntity(ctx.world);
+    auto &im = ctx.world.Add<UIImage>(e);
+    im.visible = false;
+    state.guideBgEntity = e;
+  }
 
-  // ズームインジケーター背景（右下に移動）
+  // =========================================================
+  // マップビュー強化UI
+  // =========================================================
+
+  // ズームインジケーター背景
   m_mapZoomIndicatorBg = CreateEntity(ctx.world);
   auto &zoomBg = ctx.world.Add<UIImage>(m_mapZoomIndicatorBg);
   zoomBg = UIImage::Create("", 1040.0f, 680.0f);
   zoomBg.width = 100.0f;
   zoomBg.height = 20.0f;
-  zoomBg.alpha = 0.7f; // 半透明
+  zoomBg.alpha = 0.7f;
   zoomBg.visible = false;
   zoomBg.layer = 105;
 
-  // ズームインジケーターテキスト
   m_mapZoomIndicatorText = CreateEntity(ctx.world);
   auto &zoomTxt = ctx.world.Add<UIText>(m_mapZoomIndicatorText);
   zoomTxt.text = L"100%";
   zoomTxt.x = 1065.0f;
   zoomTxt.y = 683.0f;
-  zoomTxt.style = graphics::TextStyle::Guide();
-  zoomTxt.style.fontSize = 16.0f;
-  zoomTxt.style.color = {1.0f, 1.0f, 1.0f, 0.9f};
+  zoomTxt.style = graphics::TextStyle::BrowserSub();
+  zoomTxt.style.fontSize = 14.0f;
   zoomTxt.visible = false;
   zoomTxt.layer = 106;
 
-  // マップ座標表示（ミニマップ内左下に配置）
   m_mapCoordText = CreateEntity(ctx.world);
   auto &coordTxt = ctx.world.Add<UIText>(m_mapCoordText);
   coordTxt.text = L"";
-  coordTxt.x = 1050.0f; // ミニマップ基準
-  coordTxt.y = 205.0f;  // ミニマップ下部（20+220-35=205）
-  coordTxt.style = graphics::TextStyle::Guide();
-  coordTxt.style.fontSize = 14.0f;
-  coordTxt.style.color = {1.0f, 1.0f, 1.0f, 0.8f};
+  coordTxt.x = 1050.0f;
+  coordTxt.y = 205.0f;
+  coordTxt.style = graphics::TextStyle::BrowserSub();
+  coordTxt.style.fontSize = 13.0f;
   coordTxt.visible = false;
   coordTxt.layer = 102;
 
-  // マップ距離表示
   m_mapDistanceText = CreateEntity(ctx.world);
   auto &distTxt = ctx.world.Add<UIText>(m_mapDistanceText);
   distTxt.text = L"";
   distTxt.x = 1050.0f;
   distTxt.y = 220.0f;
-  distTxt.style = graphics::TextStyle::Guide();
-  distTxt.style.fontSize = 14.0f;
-  distTxt.style.color = {0.3f, 1.0f, 0.5f, 0.8f};
+  distTxt.style = graphics::TextStyle::BrowserSub();
+  distTxt.style.fontSize = 13.0f;
+  distTxt.style.color = {0.133f, 0.773f, 0.369f, 0.9f}; // 成功色
   distTxt.visible = false;
   distTxt.layer = 102;
 
-  // ヘルプパネル背景（縮小・右寄せ）
+  // ヘルプパネル
   m_mapHelpPanelBg = CreateEntity(ctx.world);
   auto &helpBg = ctx.world.Add<UIImage>(m_mapHelpPanelBg);
   helpBg = UIImage::Create("", 870.0f, 240.0f);
   helpBg.width = 360.0f;
   helpBg.height = 340.0f;
-  helpBg.alpha = 0.85f; // 半透明黒
+  helpBg.alpha = 0.85f;
   helpBg.visible = false;
   helpBg.layer = 200;
 
-  // ヘルプパネルタイトル
   m_mapHelpTitle = CreateEntity(ctx.world);
   auto &helpTitle = ctx.world.Add<UIText>(m_mapHelpTitle);
   helpTitle.text = L"マップ操作";
   helpTitle.x = 890.0f;
   helpTitle.y = 260.0f;
-  helpTitle.style = graphics::TextStyle::Status();
-  helpTitle.style.fontSize = 32.0f;
-  helpTitle.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  helpTitle.style = graphics::TextStyle::CardValue();
+  helpTitle.style.fontSize = 28.0f;
   helpTitle.visible = false;
   helpTitle.layer = 201;
 
-  // ヘルプ項目
   const wchar_t *helpTexts[] = {L"左/右ドラッグ : マップ移動",
                                 L"ホイール / +/- : ズーム",
                                 L"WASD / 矢印 : マップ移動",
@@ -3114,34 +3315,39 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
                                 L"ESC / M : マップ終了",
                                 L"? : ヘルプ表示/非表示"};
 
-  float helpStartY = 310.0f;
+  float helpStartY = 300.0f;
   for (int i = 0; i < 8; ++i) {
     auto helpLineE = CreateEntity(ctx.world);
     auto &helpLine = ctx.world.Add<UIText>(helpLineE);
     helpLine.text = helpTexts[i];
     helpLine.x = 890.0f;
-    helpLine.y = helpStartY + i * 35.0f;
-    helpLine.style = graphics::TextStyle::Guide();
-    helpLine.style.fontSize = 20.0f;
-    helpLine.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    helpLine.y = helpStartY + i * 30.0f;
+    helpLine.style = graphics::TextStyle::BrowserSub();
+    helpLine.style.fontSize = 16.0f;
     helpLine.visible = false;
     helpLine.layer = 201;
     m_mapHelpLines.push_back(helpLineE);
   }
+
+  // =========================================================
   // 地形表示UI
+  // =========================================================
   if (m_terrainImageEntity == UINT32_MAX) {
     auto e = CreateEntity(ctx.world);
     auto &ui = ctx.world.Add<game::components::UIImage>(e);
-    ui.texturePath = "";              // 初期は空、表示時に設定
-    ui.x = (1280.0f - 512.0f) * 0.5f; // 中央 (512x256想定)
+    ui.texturePath = "";
+    ui.x = (1280.0f - 512.0f) * 0.5f;
     ui.y = (720.0f - 256.0f) * 0.5f;
     ui.width = 512.0f;
     ui.height = 256.0f;
     ui.visible = false;
-    ui.layer = 20; // 判定より手前
+    ui.layer = 20;
     m_terrainImageEntity = e;
   }
 }
+
+
+
 
 void WikiGolfScene::UpdateGuideUI(core::GameContext &ctx) {
   auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();

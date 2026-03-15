@@ -348,6 +348,10 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
 
   std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
 
+  if (response.find("\"missing\":true") != std::string::npos) {
+    return "ERROR";
+  }
+
   std::string key = "\"extract\":\"";
   size_t pos = response.find(key);
   if (pos != std::string::npos) {

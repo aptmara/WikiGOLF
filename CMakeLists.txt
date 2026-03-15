@@ -14,10 +14,8 @@ file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
 
 # アセット（テクスチャ／モデル）コピー用のファイルリスト
-file(GLOB TEXTURE_FILES "${CMAKE_SOURCE_DIR}/src/resources/textures/*.png")
-file(GLOB ICON_FILES
-     "${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_*.png")
-set(ALL_TEXTURE_FILES ${TEXTURE_FILES} ${ICON_FILES})
+# テクスチャ・モデル・サウンドはすべて Assets/ 配下に統一されている
+file(GLOB TEXTURE_FILES "${CMAKE_SOURCE_DIR}/Assets/textures/*.png")
 
 # インクルードディレクトリの設定
 target_include_directories(DX_GAME PRIVATE 
@@ -61,18 +59,19 @@ endif()
 add_custom_command(TARGET DX_GAME POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
+    # Assets/textures 配下の PNG を一括コピー
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEXTURE_FILES} $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/Fonts $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
+    # Fonts は Assets/Fonts 配下から
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/Fonts $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
+    # shaders はプロジェクトルートの shaders/ から
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/sounds $<TARGET_FILE_DIR:DX_GAME>/Assets/sounds
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_driver.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_driver.png
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_iron.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_iron.png
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_putter.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_putter.png
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/src/resources/textures/Assets/icon_wedge.png $<TARGET_FILE_DIR:DX_GAME>/Assets/textures/icon_wedge.png
+    # models/sounds は Assets/ 配下から（修正前: ルートの仮ディレクトリを参照していた）
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/sounds $<TARGET_FILE_DIR:DX_GAME>/Assets/sounds
+    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/data
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow.sqlite $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow.sqlite
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll $<TARGET_FILE_DIR:DX_GAME>/assimp-vc143-mt.dll
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/jawiki_sdow.sqlite $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow.sqlite
     COMMENT "Deploying assets to output directory..."
 )
 

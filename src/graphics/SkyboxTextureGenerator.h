@@ -42,7 +42,8 @@ enum class SkyboxTheme {
   Fantasy,        // ファンタジー
   Horror,         // ホラー・オカルト
   SciFi,          // 未来・SF
-  Retro           // レトロ
+  Retro,           // レトロ
+  GolfCourseClear  // タイトル用：晴天・白雲・青空のゴルフコース
 };
 
 /**

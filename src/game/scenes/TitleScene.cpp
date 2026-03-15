@@ -14,34 +14,75 @@
 #include "../components/UIButton.h"
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
+#include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../systems/SkyboxRenderSystem.h"
+#include "../systems/TerrainGenerator.h"
+#include "../systems/WikiClient.h"
+#include "../../core/StringUtils.h"
 #include "LoadingScene.h"
-#include "ResultScene.h"
 #include "WikiGolfScene.h"
 #include <DirectXMath.h>
+#include <algorithm>
 #include <cmath>
-#include <random>
+#include <windows.h>
+#include <shellapi.h> // ShellExecuteA用
 
 namespace game::scenes {
 
 using namespace DirectX;
 
+namespace {
+std::string UrlDecode(const std::string& src) {
+  std::string ret;
+  for (size_t i = 0; i < src.length(); i++) {
+    if (src[i] == '%' && i + 2 < src.length()) {
+      int ii;
+      if (sscanf_s(src.substr(i + 1, 2).c_str(), "%x", &ii) == 1) {
+        ret += static_cast<char>(ii);
+        i += 2;
+      } else {
+        ret += src[i];
+      }
+    } else if (src[i] == '+') {
+      ret += ' ';
+    } else {
+      ret += src[i];
+    }
+  }
+  return ret;
+}
+
+std::string ExtractWikiTitle(const std::string& input) {
+  std::string prefix = "wikipedia.org/wiki/";
+  size_t pos = input.find(prefix);
+  std::string title = input;
+  if (pos != std::string::npos) {
+    title = input.substr(pos + prefix.length());
+    size_t hashPos = title.find('#');
+    if (hashPos != std::string::npos) title = title.substr(0, hashPos);
+    size_t qPos = title.find('?');
+    if (qPos != std::string::npos) title = title.substr(0, qPos);
+    title = UrlDecode(title);
+  }
+  return title;
+}
+} // namespace
+
+// ===========================================================================
+// OnEnter
+// ===========================================================================
 void TitleScene::OnEnter(core::GameContext &ctx) {
-  LOG_INFO("TitleScene", "OnEnter (Luxury Mode)");
+  LOG_INFO("TitleScene", "OnEnter (WIKI GOLF High-End UI Style)");
 
   m_time = 0.0f;
-  m_uiElements.clear();
-  m_particles.clear();
-  m_clubs.clear();
-  m_ringObjects.clear();
-  m_reflections.clear();
+  m_menuEntries.clear();
 
   // マウスカーソル表示
   ctx.input.SetMouseCursorVisible(true);
   ctx.input.SetMouseCursorLocked(false);
 
-  // BGM再生
+  // BGM 再生
   if (ctx.audio) {
     ctx.audio->PlayBGM(ctx, "bgm_title.mp3", 0.5f);
   }
@@ -49,602 +90,816 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
   // --- リソースロード ---
   auto basicShader = ctx.resource.LoadShader(
       "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
-  auto ballMesh = ctx.resource.LoadMesh("Assets/models/golfball.fbx");
-  auto clubMesh = ctx.resource.LoadMesh("Assets/models/golf_club.fbx");
-  auto cubeMesh = ctx.resource.LoadMesh("builtin/cube");
   auto sphereMesh = ctx.resource.LoadMesh("builtin/sphere");
-  auto planeMesh = ctx.resource.LoadMesh("builtin/plane");
-  LOG_INFO("TitleScene", "Resources loaded (Basic shader, meshes)");
+  auto globeMesh  = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
 
-  LOG_INFO("TitleScene", "Resources loaded (Basic shader, meshes)");
-
-  // --- 1. アビス・フロア (The Abyssal Mirror) ---
-  m_floorEntity = CreateEntity(ctx.world);
-  auto &floorTr = ctx.world.Add<components::Transform>(m_floorEntity);
-  floorTr.position = {0.0f, 0.0f, 0.0f};
-  floorTr.scale = {500.0f, 1.0f, 500.0f}; // より広大に
-  auto &floorMr = ctx.world.Add<components::MeshRenderer>(m_floorEntity);
-  floorMr.mesh = planeMesh;
-  floorMr.shader = basicShader;
-  // 深淵の黒＋わずかな紫
-  floorMr.color = {0.02f, 0.0f, 0.05f, 0.9f};
-  floorMr.isVisible = true;
-
-  // 深淵グリッド（フロアの下で明滅する）
+  // --- [1] スカイボックス ---
+  m_skyboxEntity = CreateEntity(ctx.world);
+  auto &skybox = ctx.world.Add<components::Skybox>(m_skyboxEntity);
   {
-    int gridLines = 40;
-    float spacing = 20.0f;
-    // 実装簡略化のため、いくつか代表的なラインだけ引くか、ここではスキップして他の演出にリソースを割く
-    // (今回はオーロラ等に注力)
-  }
-  LOG_INFO("TitleScene", "Abyssal Floor created");
-
-  // --- 2. 浮遊ボール (神器) -> 削除済み ---
-
-  // ボールの反射 -> 削除済み
-
-  LOG_INFO("TitleScene", "Creating clubs...");
-  // --- 3. 衛星クラブ (守護者) ---
-  for (int i = 0; i < 3; ++i) {
-    auto e = CreateEntity(ctx.world);
-    auto &t = ctx.world.Add<components::Transform>(e);
-    // 位置はUpdateで動かす
-    float angle = (float)i * (DirectX::XM_2PI / 3.0f);
-    float r = 1.0f;
-    t.position = {std::cos(angle) * r, 1.8f, std::sin(angle) * r};
-    t.scale = {0.8f, 0.8f, 0.8f};
-
-    auto &mr = ctx.world.Add<components::MeshRenderer>(e);
-    mr.mesh = clubMesh;
-    mr.shader = basicShader;
-    mr.color = {1.0f, 0.8f, 0.2f, 1.0f}; // ゴールドクラブ
-    mr.isVisible = true;
-    m_clubs.push_back(e);
-
-    // 反射
-    auto re = CreateEntity(ctx.world);
-    auto &rt = ctx.world.Add<components::Transform>(re);
-    rt.position = t.position;
-    rt.position.y *= -1.0f;
-    rt.scale = {0.8f, -0.8f, 0.8f};
-
-    auto &rmr = ctx.world.Add<components::MeshRenderer>(re);
-    rmr.mesh = clubMesh;
-    rmr.shader = basicShader;
-    rmr.color = {0.4f, 0.3f, 0.1f, 1.0f}; // 暗いゴールド
-    rmr.isVisible = true;
-    m_reflections.push_back(re);
-  }
-  LOG_INFO("TitleScene", "Clubs and reflections created");
-
-  // --- 4. インフィニティ・ハイパードライブ・リング (Infinity Hyperdrive) ---
-  // リングを三重構造に増強 (3層 x 40個 = 120個)
-  int ringLayers = 3;
-  int ringsPerLayer = 40;
-
-  for (int layer = 0; layer < ringLayers; ++layer) {
-    float baseRadius = 12.0f + layer * 8.0f; // 12, 20, 28
-    float heightScale = 4.0f + layer * 2.0f; // 奥ほど巨大
-
-    for (int i = 0; i < ringsPerLayer; ++i) {
-      auto e = CreateEntity(ctx.world);
-      auto &t = ctx.world.Add<components::Transform>(e);
-      float angle = (float)i * (DirectX::XM_2PI / ringsPerLayer);
-
-      t.position = {std::cos(angle) * baseRadius,
-                    6.0f + std::sin(angle * 3.0f) * 2.0f,
-                    std::sin(angle) * baseRadius};
-
-      // 柱の太さも変える
-      t.scale = {0.5f + layer * 0.2f, heightScale, 0.5f + layer * 0.2f};
-
-      // 中心を向く回転
-      XMVECTOR q = XMQuaternionRotationRollPitchYaw(0.0f, -angle, 0.0f);
-      XMStoreFloat4(&t.rotation, q);
-
-      auto &mr = ctx.world.Add<components::MeshRenderer>(e);
-      mr.mesh = cubeMesh;
-      mr.shader = basicShader;
-
-      // 層ごとに色味を変える (Cyan -> Blue -> Purple)
-      if (layer == 0)
-        mr.color = {0.0f, 0.8f, 1.0f, 1.0f}; // Cyan
-      else if (layer == 1)
-        mr.color = {0.1f, 0.3f, 1.0f, 1.0f}; // Blue
-      else
-        mr.color = {0.6f, 0.0f, 1.0f, 1.0f}; // Purple
-
-      mr.isVisible = true;
-      m_ringObjects.push_back(e);
+    graphics::SkyboxTextureGenerator gen;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
+    bool ok = gen.GenerateCubemapFromTheme(
+        ctx.graphics.GetDevice(),
+        graphics::SkyboxTheme::GolfCourseClear,
+        cubemapSRV);
+    if (ok) {
+      skybox.cubemapSRV  = cubemapSRV;
+      skybox.isVisible   = true;
+      skybox.brightness  = 1.25f;
+      skybox.saturation  = 1.18f;
     }
   }
-  LOG_INFO("TitleScene", "Infinity Rings created (Triple Layer)");
 
-  // --- 4.5. Wikipedia地球儀 (シンボル) ---
+  // --- [2] ゴルフコース地面 ---
+  m_floorEntity = CreateEntity(ctx.world);
+  auto &floorTr = ctx.world.Add<components::Transform>(m_floorEntity);
+  floorTr.position = {0.0f, -0.5f, 0.0f};
+  
+  auto &floorMr  = ctx.world.Add<components::MeshRenderer>(m_floorEntity);
+  game::systems::TerrainConfig tconf;
+  tconf.worldWidth = 150.0f;
+  tconf.worldDepth = 150.0f;
+  tconf.resolutionX = 64;
+  tconf.resolutionZ = 64;
+  tconf.baseHeight = 0.0f;
+  tconf.heightScale = 2.5f;
+  tconf.biome = 0; // 草原
+  
+  auto tdata = game::systems::TerrainGenerator::GenerateTerrain("TitleSeed", {}, tconf);
+  floorMr.mesh = ctx.resource.CreateDynamicMesh("TitleTerrain", tdata.vertices, tdata.indices);
+  floorMr.shader = basicShader;
+  floorMr.isVisible = true;
+  floorMr.textureSRV = ctx.resource.LoadTextureSRV("Assets/textures/GRASS_BASE.png");
+  floorMr.hasTexture = true;
+  floorMr.customFlags.x = 30.0f; // UV Scale
+
+  // --- [3] Wikipedia パズル地球儀 & ティー ---
   m_globeEntity = CreateEntity(ctx.world);
   auto &globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
-  globeTr.position = {0.0f, 2.0f, 0.0f}; // クラブの上、高い位置に浮遊
-  globeTr.scale = {2.0f, 2.0f, 2.0f};
+  globeTr.position = {0.0f, 2.7f, 0.0f};
+  globeTr.scale    = {3.0f, 3.0f, 3.0f}; // 大きく
+  XMVECTOR gq = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(15.0f), 0.0f, 0.0f);
+  XMStoreFloat4(&globeTr.rotation, gq);
 
   auto &globeMr = ctx.world.Add<components::MeshRenderer>(m_globeEntity);
-  globeMr.mesh = ctx.resource.LoadMesh(
-      "Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
+  globeMr.mesh = globeMesh;
   globeMr.shader = basicShader;
-  globeMr.color = {0.9f, 0.9f, 0.95f, 1.0f}; // 白っぽいシルバー
+  globeMr.color = {0.95f, 0.95f, 0.98f, 1.0f}; // 少し白く
   globeMr.isVisible = true;
 
-  LOG_INFO("TitleScene", "Wikipedia globe loaded");
+  // 白いティー（球体を縦に伸ばしてティーに見立てる）
+  m_teeLoEntity = CreateEntity(ctx.world);
+  auto &teeLoTr = ctx.world.Add<components::Transform>(m_teeLoEntity);
+  teeLoTr.position = {0.0f, 0.5f, 0.0f};
+  teeLoTr.scale    = {0.1f, 1.5f, 0.1f};
+  auto &teeLoMr = ctx.world.Add<components::MeshRenderer>(m_teeLoEntity);
+  teeLoMr.mesh = sphereMesh;
+  teeLoMr.shader = basicShader;
+  teeLoMr.color = {0.9f, 0.9f, 0.9f, 1.0f};
+  teeLoMr.isVisible = true;
 
-  // --- 5. パーティクル (控えめに調整) ---
-  std::mt19937 rng(9999);
-  std::uniform_real_distribution<float> distPos(-20.0f, 20.0f);
-  std::uniform_real_distribution<float> distHeight(-3.0f, 15.0f);
-  std::uniform_real_distribution<float> distPhase(0.0f, 6.28f);
-  std::uniform_real_distribution<float> distSpeed(0.2f, 1.0f); // 速度も控えめに
-
-  // 既存スパイラルパーティクル (300個程度に削減)
-  for (int i = 0; i < 300; ++i) {
-    auto e = CreateEntity(ctx.world);
-    auto &t = ctx.world.Add<components::Transform>(e);
-    t.position = {distPos(rng), distHeight(rng), distPos(rng)};
-    float s = 0.02f + (i % 5) * 0.02f; // サイズも少し小さく
-    t.scale = {s, s, s};
-
-    auto &mr = ctx.world.Add<components::MeshRenderer>(e);
-    mr.mesh = sphereMesh;
-    mr.shader = basicShader;
-    mr.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 後で更新
-    mr.isVisible = true;
-
-    Particle p;
-    p.entity = e;
-    p.basePos = t.position;
-    p.phase = distPhase(rng);
-    p.speed = distSpeed(rng);
-    p.type = 0; // Normal
-    m_particles.push_back(p);
-  }
-
-  // ギャラクシー渦巻きパーティクル -> 削除（多すぎるため）
-  LOG_INFO("TitleScene", "Particles created (300 modest)");
-
-  // --- 6. デジタル・オーロラ (Digital Aurora) ---
-  int auroraSegments = 100;
-  for (int i = 0; i < auroraSegments; ++i) {
-    auto e = CreateEntity(ctx.world);
-    auto &t = ctx.world.Add<components::Transform>(e);
-    // 上空に配置
-    float x = ((float)i - auroraSegments / 2.0f) * 1.5f;
-    t.position = {x, 15.0f, 20.0f};
-    t.scale = {0.8f, 8.0f, 0.2f}; // 縦長の帯
-
-    auto &mr = ctx.world.Add<components::MeshRenderer>(e);
-    mr.mesh = cubeMesh;
-    mr.shader = basicShader;
-    mr.color = {0.0f, 1.0f, 0.8f, 0.3f}; // 半透明シアン
-    mr.isVisible = true;
-
-    AuroraSegment as;
-    as.entity = e;
-    as.phaseOffset = (float)i * 0.1f;
-    as.heightBase = 15.0f;
-    m_auroraSegments.push_back(as);
-  }
-
-  // --- 6. カメラ ---
+  // --- [4] カメラ設定 ---
   m_cameraEntity = CreateEntity(ctx.world);
   auto &camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
-  // 初期位置（後で上書き）
-  camTr.position = {0.0f, 3.0f, -10.0f};
+  camTr.position = {0.0f, 4.2f, -12.0f}; // やや引き
+  XMMATRIX view = XMMatrixLookAtLH(XMLoadFloat3(&camTr.position), XMVectorSet(0, 2.5f, 0, 0), XMVectorSet(0, 1, 0, 0));
+  XMStoreFloat4(&camTr.rotation, XMQuaternionRotationMatrix(XMMatrixInverse(nullptr, view)));
 
   auto &cam = ctx.world.Add<components::Camera>(m_cameraEntity);
-  cam.fov = XMConvertToRadians(50.0f);
-  cam.nearZ = 0.01f;
-  cam.farZ = 500.0f;
+  cam.fov = XMConvertToRadians(45.0f);
   cam.isMainCamera = true;
-  LOG_INFO("TitleScene", "Camera created");
 
-  // --- 7. UI ---
-  // ラグジュアリースタイル（TextStyle.hに定義済み）
-  auto titleStyle = graphics::TextStyle::LuxuryTitle();
-  auto subStyle = graphics::TextStyle::ModernBlack();
-  subStyle.fontSize = 26.0f;
-  subStyle.color = {0.8f, 0.8f, 0.9f, 1.0f};
-  subStyle.align = graphics::TextAlign::Center;
-  subStyle.hasShadow = true;
+  // ==========================================================================
+  // --- [5] UI Overlay ---
+  // ==========================================================================
 
-  auto btnStyle = graphics::TextStyle::LuxuryButton();
-
-  auto spawnUI = [&](const std::wstring &text, float yOffset,
-                     const graphics::TextStyle &style,
-                     bool interactive = false) {
+  // --- [5-0] 背景「W」透かし ---
+  {
     auto e = CreateEntity(ctx.world);
     auto &t = ctx.world.Add<components::UIText>(e);
-    t.text = text;
-    t.x = 0.0f;
-    t.y = yOffset;
-    t.style = style;
-    t.visible = true;
-    t.width = 1280.0f; // 画面幅全体を使って中央揃え
-    t.layer = 10;      // テキストは手前
+    t.text = L"W";
+    t.x = -150.0f; t.y = -200.0f;
+    t.style.fontFamily = "Times New Roman";
+    t.style.fontSize = 700.0f;
+    t.style.color = {1.0f, 1.0f, 1.0f, 0.05f}; // 非常に薄く
+    t.layer = 1;
+  }
 
-    UIElement elem;
-    elem.entity = e;
-    elem.baseX = 0.0f;
-    elem.baseY = yOffset;
-    elem.currentScale = 1.0f;
-    elem.targetScale = 1.0f;
-    elem.text = text;
-    elem.baseColor = style.color;
-    elem.isHovered = false;
-    elem.isClicked = false;
+  // --- [5-A] メインタイトルロゴ ---
+  {
+    // 上部装飾線とボールアイコン
+    auto eL = CreateEntity(ctx.world);
+    auto &tL = ctx.world.Add<components::UIText>(eL);
+    tL.text = L"────────────  ⚽  ────────────"; // 単色絵文字として描画される
+    tL.x = 0.0f; tL.y = 40.0f;
+    tL.style.fontSize = 18.0f;
+    tL.style.color = {0.9f, 0.8f, 0.3f, 1.0f};
+    tL.style.align = graphics::TextAlign::Center;
+    tL.style.hasShadow = true;
+    tL.style.shadowColor = {0, 0, 0, 0.6f};
+    tL.width = 1280.0f;
+    tL.layer = 50;
 
-    m_uiElements.push_back(elem);
-  };
+    auto e = CreateEntity(ctx.world);
+    auto &t = ctx.world.Add<components::UIText>(e);
+    t.text = L"WIKI GOLF";
+    t.x = 0.0f; t.y = 60.0f;
+    t.style.fontFamily = "Times New Roman";
+    t.style.fontSize = 120.0f;
+    t.style.color = {1.0f, 0.95f, 0.7f, 1.0f}; // ゴールド
+    t.style.useGradient = true;
+    t.style.bgGradientEnd = {0.8f, 0.7f, 0.2f, 1.0f}; // テキストカラーには効かないが予備
+    t.style.align = graphics::TextAlign::Center;
+    t.style.hasShadow = true;
+    t.style.shadowColor = {0, 0, 0, 0.8f};
+    t.style.shadowOffsetX = 4.0f;
+    t.style.shadowOffsetY = 4.0f;
+    t.style.hasOutline = true;
+    t.style.outlineColor = {0.3f, 0.2f, 0.05f, 0.9f}; // 金枠エッジ風
+    t.style.outlineWidth = 2.0f;
+    t.width = 1280.0f;
+    t.layer = 50;
 
-  spawnUI(L"WIKI GOLF", 160.0f, titleStyle);
-  spawnUI(L"- The Encyclopedia Course -", 270.0f, subStyle);
-  spawnUI(L"START GAME", 550.0f, btnStyle,
-          true); // 少し下に配置して空間を見せる
+    auto eS = CreateEntity(ctx.world);
+    auto &tS = ctx.world.Add<components::UIText>(eS);
+    tS.text = L"─ Wikipediaの記事リンクを辿って、目標ページへ到達せよ ─";
+    tS.x = 0.0f; tS.y = 195.0f;
+    tS.style.fontSize = 20.0f;
+    tS.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    tS.style.align = graphics::TextAlign::Center;
+    tS.style.hasShadow = true;
+    tS.style.shadowColor = {0, 0, 0, 0.8f};
+    tS.width = 1280.0f;
+    tS.layer = 50;
+  }
 
-  LOG_INFO("TitleScene", "OnEnter (Luxury) complete");
+  // --- [5-B] 左パネル: Wikipedia風カード ---
+  {
+    // 背景カード (白・角丸)
+    auto ep = CreateEntity(ctx.world);
+    auto &tp = ctx.world.Add<components::UIText>(ep);
+    tp.text = L""; 
+    tp.x = 40.0f; tp.y = 260.0f;
+    tp.width = 340.0f; tp.height = 410.0f; // 下パネル(y=680)と被らないように430->410へ短縮
+    tp.style.bgColor = {0.98f, 0.98f, 0.98f, 0.95f};
+    tp.style.cornerRadius = 16.0f;
+    tp.style.hasShadow = true;
+    tp.style.shadowColor = {0.0f, 0.0f, 0.0f, 0.4f};
+    tp.style.shadowOffsetX = 4.0f;
+    tp.style.shadowOffsetY = 4.0f;
+    tp.layer = 10;
+
+    // 「W」背景透かし (カード内)
+    auto ew = CreateEntity(ctx.world);
+    auto &tw = ctx.world.Add<components::UIText>(ew);
+    tw.text = L"W";
+    tw.x = 240.0f; tw.y = 260.0f;
+    tw.style.fontFamily = "Times New Roman";
+    tw.style.fontSize = 180.0f;
+    tw.style.color = {0.9f, 0.9f, 0.9f, 0.8f};
+    tw.layer = 11;
+
+    // 見出し「ゴルフ」
+    auto et = CreateEntity(ctx.world);
+    auto &tt = ctx.world.Add<components::UIText>(et);
+    tt.text = L"ゴルフ";
+    tt.x = 65.0f; tt.y = 280.0f;
+    tt.style.fontSize = 32.0f;
+    tt.style.color = {0.1f, 0.1f, 0.1f, 1.0f};
+    tt.style.fontFamily = "Times New Roman";
+    tt.layer = 12;
+
+    // 出典
+    auto ec = CreateEntity(ctx.world);
+    auto &tc = ctx.world.Add<components::UIText>(ec);
+    tc.text = L"出典: フリー百科事典『ウィキペディア（Wikipedia）』";
+    tc.x = 65.0f; tc.y = 325.0f;
+    tc.style.fontSize = 11.0f;
+    tc.style.color = {0.4f, 0.4f, 0.4f, 1.0f};
+    tc.layer = 12;
+
+    // サムネイル画像
+    auto ei = CreateEntity(ctx.world);
+    auto &ui = ctx.world.Add<components::UIImage>(ei);
+    ui.texturePath = "Golfer_swing.jpg"; 
+    ui.x = 65.0f; ui.y = 350.0f;
+    ui.width = 120.0f; ui.height = 80.0f; // 左半分に配置
+    ui.layer = 12;
+
+    // 記事説明文
+    auto ed = CreateEntity(ctx.world);
+    auto &td = ctx.world.Add<components::UIText>(ed);
+    td.text = L"ゴルフ（英: golf）とは、クラブを\n用いてボールを打ち、ホールに\n入れるまでの打数を競う球技\nである。";
+    td.x = 195.0f; td.y = 350.0f;
+    td.style.fontSize = 12.0f;
+    td.style.color = {0.2f, 0.2f, 0.2f, 1.0f};
+    td.layer = 12;
+
+    // ミッション情報 (Start / Goal / Par)
+    const wchar_t* missionLabels[] = { L"⚑   Start Page:", L"🎯   Goal Page:", L"🔗   Par:" };
+    const wchar_t* missionValues[] = { L"ゴルフ", L"Wikipedia", L"5 Links" };
+    for(int i=0; i<3; ++i) {
+        auto el = CreateEntity(ctx.world);
+        auto &tl = ctx.world.Add<components::UIText>(el);
+        tl.text = missionLabels[i];
+        tl.x = 65.0f; tl.y = 450.0f + i * 35.0f;
+        tl.style.fontSize = 16.0f;
+        tl.style.color = {0.3f, 0.3f, 0.3f, 1.0f};
+        tl.layer = 12;
+
+        auto ev = CreateEntity(ctx.world);
+        auto &tv = ctx.world.Add<components::UIText>(ev);
+        tv.text = missionValues[i];
+        tv.x = 220.0f; tv.y = 450.0f + i * 35.0f;
+        tv.style.fontSize = 18.0f;
+        tv.style.color = {0.06f, 0.24f, 0.58f, 1.0f}; // リンク青
+        tv.style.fontFamily = "Times New Roman";
+        tv.layer = 12;
+    }
+
+    // 関連項目見出し
+    auto rl = CreateEntity(ctx.world);
+    auto &trl = ctx.world.Add<components::UIText>(rl);
+    trl.text = L"関連項目";
+    trl.x = 65.0f; trl.y = 575.0f;
+    trl.style.fontSize = 14.0f;
+    trl.style.color = {0.2f, 0.2f, 0.2f, 1.0f};
+    trl.layer = 12;
+
+    // 関連項目タグ
+    const wchar_t* tags[] = { L"スポーツ", L"球技", L"レジャー", L"オリンピック" };
+    float tagX = 65.0f;
+    for (int i = 0; i < 4; ++i) {
+        auto etag = CreateEntity(ctx.world);
+        auto &ttag = ctx.world.Add<components::UIText>(etag);
+        ttag.text = tags[i];
+        ttag.x = tagX; ttag.y = 605.0f;
+        ttag.style.fontSize = 12.0f;
+        ttag.style.color = {0.06f, 0.24f, 0.58f, 1.0f};
+        ttag.style.bgColor = {0.95f, 0.95f, 0.98f, 1.0f};
+        ttag.style.borderColor = {0.7f, 0.8f, 0.9f, 1.0f};
+        ttag.style.borderWidth = 1.0f;
+        ttag.style.cornerRadius = 4.0f;
+        ttag.layer = 12;
+        // タグの幅を概算してXをずらす
+        tagX += wcslen(tags[i]) * 13.0f + 30.0f;
+    }
+  }
+
+  // --- [5-C] 右パネル: メインメニュー (UIButton共通実装) ---
+  {
+    // メニュー背景 (濃紺・半透明・金枠)
+    auto ep = CreateEntity(ctx.world);
+    auto &tp = ctx.world.Add<components::UIText>(ep);
+    tp.text = L"";
+    tp.x = 880.0f; tp.y = 260.0f;
+    tp.width = 360.0f; tp.height = 410.0f;
+    tp.style.bgColor = {0.04f, 0.10f, 0.18f, 0.85f};
+    tp.style.cornerRadius = 16.0f;
+    tp.style.borderWidth = 2.0f;
+    tp.style.borderColor = {0.8f, 0.7f, 0.3f, 1.0f};
+    tp.style.hasShadow = true;
+    tp.layer = 10;
+
+    // 各メニュー項目を UIButton コンポーネントで定義する
+    // UIButtonSystem が自動的にホバー/クリックを管理する
+    const struct { const wchar_t* label; const char* action; } menuItems[] = {
+        {L"▶  はじめから",   "new_game"},
+        {L"↺  デイリーチャレンジ", "daily"},
+        {L"⚑  コース選択",   "course"},
+        {L"⚙  オプション",     "option"},
+        {L"🚪  終了",         "exit"},
+    };
+
+    for (int i = 0; i < 5; ++i) {
+      auto eb = CreateEntity(ctx.world);
+      auto &btn = ctx.world.Add<components::UIButton>(eb);
+      btn.label = menuItems[i].label;
+      btn.action = menuItems[i].action;
+      btn.x = 890.0f;
+      btn.y = 272.0f + i * 60.0f;
+      btn.width = 340.0f;
+      btn.height = 48.0f;
+      btn.visible = true;
+      // 通常時: 透明
+      btn.normalColor  = {0.0f,  0.0f,  0.0f,  0.0f};
+      // ホバー時: ゴールド
+      btn.hoverColor   = {1.0f,  0.85f, 0.3f,  0.9f};
+      // プレス時: 濃い金色
+      btn.pressedColor = {0.8f,  0.6f,  0.1f,  1.0f};
+      btn.textStyle.fontSize = 26.0f;
+      btn.textStyle.color = {0.95f, 0.95f, 0.95f, 1.0f};
+      btn.textStyle.align = graphics::TextAlign::Left;
+
+      // セパレータ（最後以外）
+      if (i < 4) {
+        auto es = CreateEntity(ctx.world);
+        auto &ts = ctx.world.Add<components::UIText>(es);
+        ts.text = L"────────────────────────";
+        ts.x = 905.0f; ts.y = 272.0f + i * 60.0f + 44.0f;
+        ts.style.fontSize = 12.0f;
+        ts.style.color = {0.3f, 0.4f, 0.5f, 0.5f};
+        ts.layer = 11;
+      }
+
+      m_menuEntries.push_back({eb, 0, menuItems[i].label, btn.y, false});
+    }
+
+    // Go to Wikipedia リンク
+    auto eLink = CreateEntity(ctx.world);
+    auto &btnLink = ctx.world.Add<components::UIButton>(eLink);
+    btnLink.label  = L"Go to Wikipedia  🔗";
+    btnLink.action = "wikipedia";
+    btnLink.x = 890.0f;
+    btnLink.y = 615.0f;
+    btnLink.width  = 340.0f;
+    btnLink.height = 36.0f;
+    btnLink.visible = true;
+    btnLink.normalColor  = {0.0f, 0.0f, 0.0f, 0.0f};
+    btnLink.hoverColor   = {0.0f, 0.0f, 0.0f, 0.0f};
+    btnLink.pressedColor = {0.0f, 0.0f, 0.0f, 0.0f};
+    btnLink.textStyle.fontSize = 20.0f;
+    btnLink.textStyle.color = {0.4f, 0.6f, 0.9f, 1.0f};
+    btnLink.textStyle.align = graphics::TextAlign::Center;
+    m_menuEntries.push_back({eLink, 0, L"Go to Wikipedia", btnLink.y, false});
+  }
+
+  // --- [5-D] 下部ナビゲーション ---
+  {
+    // 半透明帯
+    auto eb = CreateEntity(ctx.world);
+    auto &tb = ctx.world.Add<components::UIText>(eb);
+    tb.text = L"";
+    tb.x = 0.0f; tb.y = 680.0f;
+    tb.width = 1280.0f; tb.height = 40.0f;
+    tb.style.bgColor = {0.0f, 0.0f, 0.0f, 0.5f};
+    tb.layer = 50;
+
+    // オンラインランキング
+    auto e1 = CreateEntity(ctx.world);
+    auto &t1 = ctx.world.Add<components::UIButton>(e1);
+    t1.label = L"🌐 オンラインランキング";
+    t1.action = "ranking";
+    t1.x = 450.0f; t1.y = 685.0f;
+    t1.width = 180.0f; t1.height = 30.0f;
+    t1.textStyle.fontSize = 16.0f;
+    t1.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
+    t1.textStyle.align = graphics::TextAlign::Center;
+    t1.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
+    t1.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
+    t1.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+
+    // 実績
+    auto e2 = CreateEntity(ctx.world);
+    auto &t2 = ctx.world.Add<components::UIButton>(e2);
+    t2.label = L"🏆 実績";
+    t2.action = "achievement";
+    t2.x = 650.0f; t2.y = 685.0f;
+    t2.width = 120.0f; t2.height = 30.0f;
+    t2.textStyle.fontSize = 16.0f;
+    t2.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
+    t2.textStyle.align = graphics::TextAlign::Center;
+    t2.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
+    t2.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
+    t2.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+
+    // コピーライト
+    auto ec = CreateEntity(ctx.world);
+    auto &tc = ctx.world.Add<components::UIText>(ec);
+    tc.text = L"©WikiGolf v1.0.0  |  CC BY-SA 4.0";
+    tc.x = 860.0f; tc.y = 690.0f;
+    tc.style.fontSize = 14.0f;
+    tc.style.color = {0.6f, 0.6f, 0.6f, 1.0f};
+    tc.style.align = graphics::TextAlign::Right;
+    tc.width = 400.0f;
+    tc.layer = 51;
+  }
+
+  // --- [5-E] ポップアップUI (初期状態は非表示) ---
+  m_popupTimer = 0.0f;
+  
+  m_popupBgEntity = CreateEntity(ctx.world);
+  auto &pbg = ctx.world.Add<components::UIText>(m_popupBgEntity);
+  pbg.text = L"";
+  pbg.x = 440.0f; pbg.y = 300.0f;
+  pbg.width = 400.0f; pbg.height = 120.0f;
+  pbg.style.bgColor = {0.15f, 0.2f, 0.3f, 0.0f}; // アルファ0
+  pbg.style.cornerRadius = 16.0f;
+  pbg.style.borderWidth = 2.0f;
+  pbg.style.borderColor = {0.9f, 0.85f, 0.3f, 0.0f};
+  pbg.style.hasShadow = true;
+  pbg.layer = 100;
+  pbg.visible = false;
+
+  m_popupTextEntity = CreateEntity(ctx.world);
+  auto &ptxt = ctx.world.Add<components::UIText>(m_popupTextEntity);
+  ptxt.text = L"Coming Soon...\n\n現在開発中です";
+  ptxt.x = 440.0f; ptxt.y = 330.0f;
+  ptxt.width = 400.0f;
+  ptxt.style.fontSize = 22.0f;
+  ptxt.style.color = {1.0f, 1.0f, 1.0f, 0.0f}; // アルファ0
+  ptxt.style.align = graphics::TextAlign::Center;
+  ptxt.layer = 101;
+  ptxt.visible = false;
+
+  CreateCourseSelectUI(ctx);
 }
 
 void TitleScene::OnUpdate(core::GameContext &ctx) {
   m_time += ctx.dt;
 
-  // --- 1. カメラワーク (ドラマチックな旋回) ---
-  float orbitSpeed = 0.15f;
-  float angle = m_time * orbitSpeed;
-  float radius = 5.5f + std::sin(m_time * 0.12f) * 1.5f;
-
-  float camX = std::sin(angle) * radius;
-  float camZ = std::cos(angle) * -radius;
-  float camY = 2.5f + std::sin(m_time * 0.2f) * 0.5f;
-
-  if (ctx.world.IsAlive(m_cameraEntity)) {
-    auto *tr = ctx.world.Get<components::Transform>(m_cameraEntity);
-    if (tr) {
-      tr->position = {camX, camY, camZ};
-
-      // LookAt: 地球儀のあたり(Y=4.0)を見る
-      XMVECTOR eye = XMLoadFloat3(&tr->position);
-      XMVECTOR focus = XMVectorSet(0.0f, 4.0f, 0.0f, 0.0f);
-      XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-
-      XMMATRIX view = XMMatrixLookAtLH(eye, focus, up);
-      XMMATRIX invView = XMMatrixInverse(nullptr, view);
-      XMVECTOR q = XMQuaternionRotationMatrix(invView);
-      XMStoreFloat4(&tr->rotation, q);
-    }
+  auto *skybox = ctx.world.Get<components::Skybox>(m_skyboxEntity);
+  if (skybox) {
+    skybox->time = m_time;
   }
 
-  // --- 2. 衛星クラブの公転 ---
-  for (size_t i = 0; i < m_clubs.size(); ++i) {
-    if (!ctx.world.IsAlive(m_clubs[i]))
-      continue;
-    auto *t = ctx.world.Get<components::Transform>(m_clubs[i]);
+  auto *globeTr = ctx.world.Get<components::Transform>(m_globeEntity);
+  if (globeTr) {
+    XMVECTOR gq = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(15.0f), m_time * 0.25f, 0.0f);
+    XMStoreFloat4(&globeTr->rotation, gq);
+  }
 
-    float baseAngle = (float)i * (DirectX::XM_2PI / 3.0f);
-    float rotSpeed = 0.5f; // 少しゆっくりに
-    float currentAngle = baseAngle + m_time * rotSpeed;
+  // UIButton の状態をポーリングしてアクションを処理
+  bool newGame = false;
+  bool exitGame = false;
+  bool prevHoveredAny = false;
 
-    float r = 2.5f + std::sin(m_time * 1.5f + (float)i) * 0.2f;
+  if (m_state == TitleState::CourseSelect) {
+    UpdateCourseSelect(ctx);
+  } else {
+    // --- MainMenu 状態の処理 ---
+    ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
+    if (!btn.visible) return;
 
-    t->position.x = std::cos(currentAngle) * r;
-    t->position.z = std::sin(currentAngle) * r;
-    t->position.y = 2.0f + std::cos(m_time * 1.0f + (float)i) * 0.3f;
+    bool isHovered = (btn.state == components::ButtonState::Hovered ||
+                     btn.state == components::ButtonState::Pressed);
 
-    // クラブの回転
-    XMVECTOR q = XMQuaternionRotationRollPitchYaw(
-        XMConvertToRadians(15.0f),
-        -currentAngle + XMConvertToRadians(90.0f), // 接線方向
-        XMConvertToRadians(45.0f + std::sin(m_time) * 5.0f));
-    XMStoreFloat4(&t->rotation, q);
+    // ホバー内入時にSE
+    if (isHovered && !prevHoveredAny) {
+      prevHoveredAny = true;
+    }
 
-    // 反射の同期
-    if (i < m_reflections.size()) {
-      // 元々 reflections=[ballReflection, clubRef1, clubRef2, clubRef3,
-      // DivineLight] だったが
-      // ballReflectionが削除されたので、クラブ反射のインデックスが変わる可能性がある
-      // しかし m_reflections への push 順序による。
-      // 1. BallRef (削除済み)
-      // 2. ClubRefs (ここ)
-      // なので、リストを正しく管理しないとズレる。
-      // 面倒なので m_reflections
-      // を使わず、クラブ生成時に親子関係っぽく管理するのがベストだが、
-      // ここでは単純に「リフレクション用エンティティ」を別途メンバ変数で持っていないため、
-      // m_reflections の中身を推測する必要がある。
-      // 今回の実装では、m_reflections には「Divine Light」も入っている。
+    // Go to Wikipedia リンクのテキスト色をホバーに応じて変化させる
+    // (ボタンの背景色は UIButtonRenderSystem が身持ちので、テキスト色のみ手動管理)
+    if (btn.action == "wikipedia") {
+      btn.textStyle.color = isHovered
+          ? DirectX::XMFLOAT4{0.2f, 0.5f, 1.0f, 1.0f}   // ホバー時: 明るい青
+          : DirectX::XMFLOAT4{0.4f, 0.6f, 0.9f, 1.0f};  // 通常時: 青
+    } else {
+      // ホバー時は黒文字、通常時は白文字
+      btn.textStyle.color = isHovered
+          ? DirectX::XMFLOAT4{0.05f, 0.05f, 0.05f, 1.0f}  // 黒
+          : DirectX::XMFLOAT4{0.95f, 0.95f, 0.95f, 1.0f}; // 白
+    }
 
-      // 実装簡易化:
-      // クラブのループ内で対応する反射エンティティを探すのは困難（インデックス依存）。
-      // むしろ反射エンティティも m_clubs と並列で管理すべきだった。
-      // ここでは「クラブの直後に反射を作った」わけではないので（Create時）、ループで回すのは危険。
-
-      // TitleScene.hを見ると m_reflections は vector<Entity>。
-      // OnEnterでの生成順序:
-      // 1. (削除) Ball Reflection
-      // 2. Club Reflection 1
-      // 3. Club Reflection 2
-      // 4. Club Reflection 3
-      // 5. Divine Light
-
-      // つまり、m_reflections[0] ~ [2]
-      // がクラブの反射になるはず（BallRefが消えたので）。
-
-      if (i < m_reflections.size()) {
-        // インデックス i がそのまま反射に対応すると仮定
-        auto *rt = ctx.world.Get<components::Transform>(m_reflections[i]);
-        if (rt) {
-          rt->position = t->position;
-          rt->position.y *= -1.0f;
-          // 回転も反転
-          XMVECTOR rq = XMQuaternionRotationRollPitchYaw(
-              -XMConvertToRadians(15.0f),
-              -currentAngle + XMConvertToRadians(90.0f),
-              -XMConvertToRadians(45.0f + std::sin(m_time) * 5.0f));
-          XMStoreFloat4(&rt->rotation, rq);
-        }
+    // クリック判定 (Pressed 状態の瞬間をトリガーとする)
+    if (btn.state == components::ButtonState::Pressed && ctx.input.GetMouseButtonDown(0)) {
+      if (btn.action == "new_game") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
+        newGame = true;
+      } else if (btn.action == "course") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+        m_state = TitleState::CourseSelect;
+        SetMainMenuVisible(ctx, false);
+        SetCourseSelectVisible(ctx, true);
+        m_focusIndex = 0;
+      } else if (btn.action == "daily" || btn.action == "option" || btn.action == "ranking" || btn.action == "achievement") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
+        m_popupTimer = 2.0f; // 2秒間表示
+      } else if (btn.action == "exit") {
+        exitGame = true;
+      } else if (btn.action == "wikipedia") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.3f);
+        ShellExecuteA(nullptr, "open", "https://ja.wikipedia.org/wiki/%E3%82%B4%E3%83%AB%E3%83%95",
+                      nullptr, nullptr, SW_SHOW);
       }
     }
-  }
+  });
+  } // else (MainMenu)
 
-  // ボールの反射同期 -> 削除済み
-
-  // --- 2.5. Wikipedia地球儀回転 ---
-  if (ctx.world.IsAlive(m_globeEntity)) {
-    auto *gt = ctx.world.Get<components::Transform>(m_globeEntity);
-    if (gt) {
-      // ゆっくり上下に浮遊 + Y軸回転
-      gt->position.y = 4.0f + std::sin(m_time * 0.5f) * 0.3f;
-
-      // 地球儀らしく傾けてY軸回転
-      XMVECTOR q = XMQuaternionRotationRollPitchYaw(
-          XMConvertToRadians(23.5f), // 地軸傾斜
-          m_time * 0.3f,             // Y軸回転
-          0.0f);
-      XMStoreFloat4(&gt->rotation, q);
-    }
-  }
-
-  // --- 3. インフィニティ・ハイパードライブ・リング回転 ---
-  int ringCounter = 0;
-  for (size_t i = 0; i < m_ringObjects.size(); ++i) {
-    if (!ctx.world.IsAlive(m_ringObjects[i]))
-      continue;
-    auto *t = ctx.world.Get<components::Transform>(m_ringObjects[i]);
-
-    // インデックスに応じた複雑な動き
-    float layer = (float)(i / 40); // 0, 1, 2
-    float idxInLayer = (float)(i % 40);
-
-    float baseAngle = idxInLayer * (DirectX::XM_2PI / 40.0f);
-
-    // 層ごとに回転速度を変える（逆回転も）
-    float rotSpeed =
-        0.05f * (1.0f + layer * 2.0f) * ((layer == 1) ? -1.0f : 1.0f);
-    float angle = baseAngle + m_time * rotSpeed;
-
-    // 半径の呼吸
-    float r = (12.0f + layer * 8.0f) +
-              std::sin(m_time * 2.0f + idxInLayer * 0.1f) * (0.5f + layer);
-
-    t->position.x = std::cos(angle) * r;
-    t->position.z = std::sin(angle) * r;
-
-    // 音楽波形のような高さ変動
-    float wave =
-        std::sin(angle * 4.0f + m_time * 3.0f) * std::cos(m_time + angle);
-    t->scale.y = (4.0f + layer * 2.0f) * (1.0f + wave * 0.5f);
-
-    // ワープ効果（Z軸方向へのストレッチと移動...は今回は止めて回転強調）
-
-    // 3軸回転
-    XMVECTOR q = XMQuaternionRotationRollPitchYaw(
-        m_time * (0.2f + layer * 0.1f), -angle, m_time * 0.1f + wave);
-    XMStoreFloat4(&t->rotation, q);
-  }
-
-  // --- 4. ギャラクシー・ボルテックス & スパイラル ---
-  for (auto &p : m_particles) {
-    if (ctx.world.IsAlive(p.entity)) {
-      auto *t = ctx.world.Get<components::Transform>(p.entity);
-      auto *mr = ctx.world.Get<components::MeshRenderer>(p.entity);
-      if (!t || !mr)
-        continue;
-
-      if (p.type == 0) {
-        // Normal: スパイラル上昇
-        float sway = std::sin(m_time * p.speed * 1.5f + p.phase) * 1.5f;
-        float rise = std::fmod(m_time * 1.2f + p.phase, 18.0f) - 3.0f;
-
-        t->position.x = p.basePos.x + sway * 0.5f; // 引力省略でCPU負荷軽減
-        t->position.z = p.basePos.z + std::cos(m_time * p.speed * 1.5f) * 0.5f;
-        t->position.y = rise;
-
-        float blink = 0.3f + 0.7f * std::sin(m_time * 5.0f + p.phase);
-        mr->color.w = 0.6f + blink * 0.3f; // Alpha明滅
-      } else if (p.type == 1) {
-        // Galaxy: 渦巻き回転
-        // p.basePos を中心からの相対ベクトルとして使用しない、動的に計算
-        // p.phase = 初期角度
-
-        // 半径減衰（吸い込み）
-        float rInfo = std::sqrt(p.basePos.x * p.basePos.x +
-                                p.basePos.z * p.basePos.z);        // 概算半径
-        float currentR = rInfo * (1.0f + 0.1f * std::sin(m_time)); // 呼吸
-
-        // 角度進行
-        float currentTheta = p.phase + m_time * 0.5f * p.speed;
-
-        t->position.x = currentR * std::cos(currentTheta);
-        t->position.z = currentR * std::sin(currentTheta);
-        // Y軸のうねり
-        t->position.y = p.basePos.y + std::sin(currentTheta * 2.0f) * 0.5f;
-
-        // 色変換 (Gold <-> Magenta)
-        float colorMix = std::sin(currentTheta + m_time); // -1 ~ 1
-        if (colorMix > 0) {
-          mr->color = {1.0f, 0.8f + colorMix * 0.2f, 0.2f, 0.8f};
-        } else {
-          mr->color = {1.0f, 0.0f, 0.5f - colorMix * 0.5f, 0.8f};
-        }
-      }
-    }
-  }
-
-  // --- 6. オーロラアニメーション ---
-  for (auto &as : m_auroraSegments) {
-    if (!ctx.world.IsAlive(as.entity))
-      continue;
-    auto *t = ctx.world.Get<components::Transform>(as.entity);
-
-    // パーリンノイズ風の波
-    float wave = std::sin(m_time * 0.5f + as.phaseOffset) +
-                 0.5f * std::sin(m_time * 1.2f + as.phaseOffset * 3.0f);
-
-    t->position.y = as.heightBase + wave * 2.0f;
-    t->position.z = 20.0f + std::cos(m_time * 0.3f + as.phaseOffset) * 5.0f;
-    t->scale.y = 8.0f + wave * 3.0f; // 伸縮
-
-    // 色変調
-    auto *mr = ctx.world.Get<components::MeshRenderer>(as.entity);
-    if (mr) {
-      mr->color.x = 0.0f;                                            // R
-      mr->color.y = 0.7f + 0.3f * std::sin(m_time + as.phaseOffset); // G
-      mr->color.z = 0.8f + 0.2f * std::cos(m_time * 0.8f);           // B
-    }
-  }
-
-  // --- 7. ストーム発生 (簡易版) ---
-  m_stormTimer += ctx.dt;
-  if (m_stormTimer > 0.1f) {
-    m_stormTimer = 0.0f;
-    // 負荷考慮し今回は省略、または既に十分豪華なためスキップ
-  }
-
-  // --- 5. UI ---
-  auto mousePos = ctx.input.GetMousePosition();
-  bool startClicked = false;
-
-  for (auto &elem : m_uiElements) {
-    auto *t = ctx.world.Get<components::UIText>(elem.entity);
-    if (!t)
-      continue;
-
-    if (elem.text == L"WIKI GOLF") {
-      // 鼓動
-      float pulse = 1.0f + std::sin(m_time * 1.2f) * 0.02f;
-      t->style.fontSize = 110.0f * pulse;
-
-      float shine = std::sin(m_time * 2.0f); // -1 to 1
-      // ゴールドの輝き移動
-      t->style.color = {1.0f, 0.9f + shine * 0.05f, 0.5f + shine * 0.2f, 1.0f};
-    }
-
-    if (elem.text == L"START GAME") {
-      float w = 400.0f;
-      float h = 70.0f;
-      float x = (1280.0f - w) / 2.0f;
-      float y = elem.baseY;
-
-      bool hover = (mousePos.x >= x && mousePos.x <= x + w && mousePos.y >= y &&
-                    mousePos.y <= y + h);
-
-      if (hover && !elem.isHovered) {
-        if (ctx.audio)
-          ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.4f);
-        elem.targetScale = 1.2f;
-        elem.isHovered = true;
-      } else if (!hover && elem.isHovered) {
-        elem.targetScale = 1.0f;
-        elem.isHovered = false;
-      }
-
-      if (hover && ctx.input.GetMouseButtonDown(0)) {
-        startClicked = true;
-        elem.targetScale = 0.9f;
-      }
-
-      elem.currentScale +=
-          (elem.targetScale - elem.currentScale) * (15.0f * ctx.dt);
-      t->style.fontSize = 42.0f * elem.currentScale;
-
-      if (elem.isHovered) {
-        t->style.color = {0.6f, 0.9f, 1.0f, 1.0f}; // 青白く輝く
-        t->style.outlineColor = {0.0f, 0.6f, 1.0f, 1.0f};
-        t->style.outlineWidth = 3.0f;
-        // 影も光る
-        t->style.shadowColor = {0.0f, 0.5f, 1.0f, 0.5f};
-      } else {
-        t->style.color = elem.baseColor;
-        t->style.outlineColor = {0.0f, 0.2f, 0.3f, 0.8f};
-        t->style.outlineWidth = 1.0f;
-        t->style.shadowColor = {0.0f, 0.0f, 0.0f, 0.5f};
-      }
-    }
-  }
-
-  if (ctx.input.GetKeyDown(VK_SPACE) || ctx.input.GetKeyDown(VK_RETURN)) {
-    startClicked = true;
-  }
-
-  if (startClicked) {
-    if (ctx.audio) {
-      ctx.audio->PlaySE(ctx, "se_shot_hard.mp3"); // 強力な決定音
-    }
-    if (ctx.sceneManager) {
-      auto loadingScene = std::make_unique<LoadingScene>(
-          []() { return std::make_unique<WikiGolfScene>(); });
-      ctx.sceneManager->ChangeScene(std::move(loadingScene));
-    }
-  }
-
-  if (ctx.input.GetKeyDown(VK_ESCAPE)) {
-    ctx.shouldClose = true;
-  }
-
-  // --- DEBUG: Sample Result Scene Trigger ---
-  if (ctx.input.GetKeyDown('Z')) {
-    ResultData dummy;
-    dummy.targetPage = "Universe";
-    dummy.shotCount = 3;
-    dummy.par = 5;
-    dummy.pathHistory = {"Physics", "Astronomy", "Cosmology", "Universe"};
-
-    // Use LoadingScene for smooth transition
-    auto loadingScene = std::make_unique<LoadingScene>(
-        [dummy]() { return std::make_unique<ResultScene>(dummy); });
+  if (newGame) {
+    auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));
+  }
+  if (exitGame) ctx.shouldClose = true;
+
+  // ポップアップの更新
+  if (m_popupTimer > 0.0f) {
+    m_popupTimer -= ctx.dt;
+    float alpha = std::min(m_popupTimer * 2.0f, 1.0f); // 残り0.5秒でフェードアウト
+    if (m_popupTimer > 1.5f) {
+      alpha = (2.0f - m_popupTimer) * 2.0f; // 最初の0.5秒でフェードイン
+    }
+    alpha = std::clamp(alpha, 0.0f, 1.0f);
+    
+    auto *pbg = ctx.world.Get<components::UIText>(m_popupBgEntity);
+    auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
+    if (pbg && ptxt) {
+      pbg->visible = true;
+      ptxt->visible = true;
+      pbg->style.bgColor.w = alpha * 0.95f;
+      pbg->style.borderColor.w = alpha;
+      ptxt->style.color.w = alpha;
+    }
+  } else {
+    auto *pbg = ctx.world.Get<components::UIText>(m_popupBgEntity);
+    auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
+    if (pbg && ptxt) {
+      pbg->visible = false;
+      ptxt->visible = false;
+    }
   }
 }
 
 void TitleScene::OnExit(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnExit");
+  DestroyAllEntities(ctx);
+  m_menuEntries.clear();
+}
 
-  // Clean up any persistent terrain objects (WikiGolf leftovers)
-  std::vector<ecs::Entity> toDestroy;
-  ctx.world.Query<game::components::TerrainObject>().Each(
-      [&](ecs::Entity e, game::components::TerrainObject &) {
-        toDestroy.push_back(e);
+void TitleScene::CreateCourseSelectUI(core::GameContext& ctx) {
+  // 背景半透明パネル
+  m_csBgEntity = CreateEntity(ctx.world);
+  auto& bg = ctx.world.Add<components::UIText>(m_csBgEntity);
+  bg.text = L""; bg.x = 240.0f; bg.y = 100.0f; bg.width = 800.0f; bg.height = 520.0f;
+  bg.style.bgColor = {0.05f, 0.1f, 0.15f, 0.95f}; bg.style.cornerRadius = 16.0f;
+  bg.style.borderWidth = 2.0f; bg.style.borderColor = {0.8f, 0.7f, 0.3f, 1.0f};
+  bg.layer = 200; bg.visible = false;
+
+  // タイトル
+  m_csTitleEntity = CreateEntity(ctx.world);
+  auto& title = ctx.world.Add<components::UIText>(m_csTitleEntity);
+  title.text = L"コース選択"; title.x = 240.0f; title.y = 120.0f; title.width = 800.0f;
+  title.style.fontSize = 32.0f; title.style.color = {1.0f, 0.95f, 0.7f, 1.0f};
+  title.style.align = graphics::TextAlign::Center;
+  title.layer = 201; title.visible = false;
+
+  // スタート入力枠
+  m_startInputBg = CreateEntity(ctx.world);
+  auto& stBg = ctx.world.Add<components::UIText>(m_startInputBg);
+  stBg.text = L"Start Page:"; stBg.x = 280.0f; stBg.y = 180.0f; stBg.width = 650.0f; stBg.height = 40.0f;
+  stBg.style.fontSize = 20.0f; stBg.style.color = {0.7f, 0.7f, 0.7f, 1.0f};
+  stBg.style.bgColor = {0.0f, 0.0f, 0.0f, 0.8f}; stBg.style.cornerRadius = 8.0f;
+  stBg.style.borderWidth = 1.0f; stBg.style.borderColor = {0.5f, 0.5f, 0.5f, 1.0f};
+  stBg.layer = 201; stBg.visible = false;
+
+  m_startInputText = CreateEntity(ctx.world);
+  auto& stTxt = ctx.world.Add<components::UIText>(m_startInputText);
+  stTxt.text = L""; stTxt.x = 420.0f; stTxt.y = 188.0f; stTxt.width = 500.0f;
+  stTxt.style.fontSize = 20.0f; stTxt.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  stTxt.layer = 202; stTxt.visible = false;
+
+  // スタート貼り付けボタン
+  m_startPasteBtn = CreateEntity(ctx.world);
+  auto& stPaste = ctx.world.Add<components::UIButton>(m_startPasteBtn);
+  stPaste.label = L"📋 貼付"; stPaste.action = "cs_paste_start";
+  stPaste.x = 940.0f; stPaste.y = 180.0f; stPaste.width = 80.0f; stPaste.height = 40.0f;
+  stPaste.textStyle.fontSize = 18.0f; stPaste.textStyle.align = graphics::TextAlign::Center;
+  stPaste.normalColor = {0.2f, 0.2f, 0.3f, 1.0f}; stPaste.hoverColor = {0.3f, 0.3f, 0.5f, 1.0f};
+  stPaste.pressedColor = {0.1f, 0.1f, 0.2f, 1.0f};
+  stPaste.visible = false;
+
+  // ゴール入力枠
+  m_goalInputBg = CreateEntity(ctx.world);
+  auto& glBg = ctx.world.Add<components::UIText>(m_goalInputBg);
+  glBg.text = L"Goal Page:"; glBg.x = 280.0f; glBg.y = 240.0f; glBg.width = 650.0f; glBg.height = 40.0f;
+  glBg.style.fontSize = 20.0f; glBg.style.color = {0.7f, 0.7f, 0.7f, 1.0f};
+  glBg.style.bgColor = {0.0f, 0.0f, 0.0f, 0.8f}; glBg.style.cornerRadius = 8.0f;
+  glBg.style.borderWidth = 1.0f; glBg.style.borderColor = {0.5f, 0.5f, 0.5f, 1.0f};
+  glBg.layer = 201; glBg.visible = false;
+
+  m_goalInputText = CreateEntity(ctx.world);
+  auto& glTxt = ctx.world.Add<components::UIText>(m_goalInputText);
+  glTxt.text = L""; glTxt.x = 420.0f; glTxt.y = 248.0f; glTxt.width = 500.0f;
+  glTxt.style.fontSize = 20.0f; glTxt.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  glTxt.layer = 202; glTxt.visible = false;
+
+  // ゴール貼り付けボタン
+  m_goalPasteBtn = CreateEntity(ctx.world);
+  auto& glPaste = ctx.world.Add<components::UIButton>(m_goalPasteBtn);
+  glPaste.label = L"📋 貼付"; glPaste.action = "cs_paste_goal";
+  glPaste.x = 940.0f; glPaste.y = 240.0f; glPaste.width = 80.0f; glPaste.height = 40.0f;
+  glPaste.textStyle.fontSize = 18.0f; glPaste.textStyle.align = graphics::TextAlign::Center;
+  glPaste.normalColor = {0.2f, 0.2f, 0.3f, 1.0f}; glPaste.hoverColor = {0.3f, 0.3f, 0.5f, 1.0f};
+  glPaste.pressedColor = {0.1f, 0.1f, 0.2f, 1.0f};
+  glPaste.visible = false;
+
+  // プレビュー領域
+  m_previewBg = CreateEntity(ctx.world);
+  auto& prBg = ctx.world.Add<components::UIText>(m_previewBg);
+  prBg.text = L""; prBg.x = 280.0f; prBg.y = 300.0f; prBg.width = 740.0f; prBg.height = 220.0f;
+  prBg.style.bgColor = {0.0f, 0.0f, 0.0f, 0.6f}; prBg.style.cornerRadius = 8.0f;
+  prBg.layer = 201; prBg.visible = false;
+
+  m_previewText = CreateEntity(ctx.world);
+  auto& prTxt = ctx.world.Add<components::UIText>(m_previewText);
+  prTxt.text = L"ここにプレビューが表示されます\n（未確認）"; prTxt.x = 300.0f; prTxt.y = 320.0f; prTxt.width = 700.0f;
+  prTxt.style.fontSize = 16.0f; prTxt.style.color = {0.8f, 0.8f, 0.8f, 1.0f};
+  prTxt.layer = 202; prTxt.visible = false;
+
+  // ボタン類
+  m_checkBtn = CreateEntity(ctx.world);
+  auto& chk = ctx.world.Add<components::UIButton>(m_checkBtn);
+  chk.label = L"疎通確認"; chk.action = "cs_check";
+  chk.x = 280.0f; chk.y = 510.0f; chk.width = 200.0f; chk.height = 50.0f;
+  chk.textStyle.fontSize = 24.0f; chk.textStyle.align = graphics::TextAlign::Center;
+  chk.normalColor = {0.1f, 0.3f, 0.6f, 1.0f}; chk.hoverColor = {0.2f, 0.5f, 0.9f, 1.0f}; chk.pressedColor = {0.1f, 0.2f, 0.5f, 1.0f};
+  chk.visible = false;
+
+  m_startBtn = CreateEntity(ctx.world);
+  auto& st = ctx.world.Add<components::UIButton>(m_startBtn);
+  st.label = L"スタート (確認未)"; st.action = "cs_start";
+  st.x = 540.0f; st.y = 510.0f; st.width = 200.0f; st.height = 50.0f;
+  st.textStyle.fontSize = 20.0f; st.textStyle.align = graphics::TextAlign::Center;
+  st.normalColor = {0.3f, 0.3f, 0.3f, 1.0f}; st.hoverColor = {0.3f, 0.3f, 0.3f, 1.0f}; st.pressedColor = {0.3f, 0.3f, 0.3f, 1.0f};
+  st.state = components::ButtonState::Disabled;
+  st.visible = false;
+
+  m_closeBtn = CreateEntity(ctx.world);
+  auto& cls = ctx.world.Add<components::UIButton>(m_closeBtn);
+  cls.label = L"閉じる"; cls.action = "cs_close";
+  cls.x = 800.0f; cls.y = 510.0f; cls.width = 200.0f; cls.height = 50.0f;
+  cls.textStyle.fontSize = 24.0f; cls.textStyle.align = graphics::TextAlign::Center;
+  cls.normalColor = {0.6f, 0.2f, 0.2f, 1.0f}; cls.hoverColor = {0.8f, 0.3f, 0.3f, 1.0f}; cls.pressedColor = {0.5f, 0.1f, 0.1f, 1.0f};
+  cls.visible = false;
+}
+
+void TitleScene::SetMainMenuVisible(core::GameContext& ctx, bool visible) {
+  ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
+    if (btn.action != "cs_check" && btn.action != "cs_start" && btn.action != "cs_close" && btn.action != "cs_paste_start" && btn.action != "cs_paste_goal") {
+      btn.visible = visible;
+    }
+  });
+}
+
+void TitleScene::SetCourseSelectVisible(core::GameContext& ctx, bool visible) {
+  if (auto* bg = ctx.world.Get<components::UIText>(m_csBgEntity)) bg->visible = visible;
+  if (auto* title = ctx.world.Get<components::UIText>(m_csTitleEntity)) title->visible = visible;
+  if (auto* stBg = ctx.world.Get<components::UIText>(m_startInputBg)) stBg->visible = visible;
+  if (auto* stTxt = ctx.world.Get<components::UIText>(m_startInputText)) stTxt->visible = visible;
+  if (auto* glBg = ctx.world.Get<components::UIText>(m_goalInputBg)) glBg->visible = visible;
+  if (auto* glTxt = ctx.world.Get<components::UIText>(m_goalInputText)) glTxt->visible = visible;
+  if (auto* prevBg = ctx.world.Get<components::UIText>(m_previewBg)) prevBg->visible = visible;
+  if (auto* prevTxt = ctx.world.Get<components::UIText>(m_previewText)) prevTxt->visible = visible;
+
+  ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
+    if (btn.action == "cs_check" || btn.action == "cs_start" || btn.action == "cs_close" || btn.action == "cs_paste_start" || btn.action == "cs_paste_goal") {
+      btn.visible = visible;
+    }
+  });
+}
+
+void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
+  // フォーカス切り替え（マウスクリック）
+  if (ctx.input.GetMouseButtonDown(0)) {
+    auto mousePos = ctx.input.GetMousePosition();
+    float mx = (float)mousePos.x;
+    float my = (float)mousePos.y;
+
+    if (mx >= 280 && mx <= 930 && my >= 180 && my <= 220) m_focusIndex = 1;
+    else if (mx >= 280 && mx <= 930 && my >= 240 && my <= 280) m_focusIndex = 2;
+    else {
+      // UIButton 以外の場所をクリックしたらフォーカス外す処理
+      bool onButton = false;
+      ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
+        if (btn.visible && mx >= btn.x && mx <= btn.x + btn.width && my >= btn.y && my <= btn.y + btn.height) {
+          onButton = true;
+        }
       });
-
-  for (auto e : toDestroy) {
-    if (ctx.world.IsAlive(e))
-      ctx.world.DestroyEntity(e);
+      if (!onButton) m_focusIndex = 0;
+    }
   }
 
-  // 全エンティティ破壊
-  DestroyAllEntities(ctx);
+  // 入力反映
+  if (m_focusIndex == 1 || m_focusIndex == 2) {
+    std::wstring& targetStr = (m_focusIndex == 1) ? m_startString : m_goalString;
+    const std::wstring& inChars = ctx.input.GetInputChars();
+    if (ctx.input.GetBackspacePressed() && !targetStr.empty()) {
+      targetStr.pop_back();
+      m_readyToStart = false; // 変更があったら再確認
+    }
+    if (!inChars.empty()) {
+      targetStr += inChars;
+      m_readyToStart = false;
+    }
 
-  m_uiElements.clear();
-  m_particles.clear();
-  m_auroraSegments.clear();
-  m_stormObjects.clear();
-  m_clubs.clear();
-  m_ringObjects.clear();
-  m_reflections.clear();
+    if (auto* bg1 = ctx.world.Get<components::UIText>(m_startInputBg)) bg1->style.borderColor = (m_focusIndex == 1) ? DirectX::XMFLOAT4{1,1,1,1} : DirectX::XMFLOAT4{0.5f,0.5f,0.5f,1};
+    if (auto* bg2 = ctx.world.Get<components::UIText>(m_goalInputBg)) bg2->style.borderColor = (m_focusIndex == 2) ? DirectX::XMFLOAT4{1,1,1,1} : DirectX::XMFLOAT4{0.5f,0.5f,0.5f,1};
+  }
+
+  // カーソル点滅表示
+  std::wstring cursor = ((int)(ctx.time * 2.0f) % 2 == 0) ? L"_" : L"";
+  if (auto* t1 = ctx.world.Get<components::UIText>(m_startInputText)) t1->text = m_startString + ((m_focusIndex == 1) ? cursor : L"");
+  if (auto* t2 = ctx.world.Get<components::UIText>(m_goalInputText)) t2->text = m_goalString + ((m_focusIndex == 2) ? cursor : L"");
+
+  // 非同期確認完了のチェック
+  if (m_checking && m_checkTask.valid() && m_checkTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+    m_checking = false;
+    std::string result = m_checkTask.get();
+    if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) {
+      if (!result.empty() && result != "ERROR" && result != "(Failed to fetch extract)") {
+        LOG_INFO("TitleScene", "Course check success.");
+        p->text = core::ToWString(result);
+        m_readyToStart = true;
+      } else {
+        LOG_ERROR("TitleScene", "Course check failed.");
+        p->text = L"ページが見つからないか、通信エラーが発生しました。";
+        m_readyToStart = false;
+      }
+    }
+    if (auto* stBtn = ctx.world.Get<components::UIButton>(m_startBtn)) {
+      if (m_readyToStart) {
+        stBtn->label = L"スタート！";
+        stBtn->state = components::ButtonState::Normal;
+        stBtn->normalColor = {0.2f, 0.7f, 0.2f, 1.0f};
+        stBtn->hoverColor = {0.3f, 0.9f, 0.3f, 1.0f};
+      } else {
+        stBtn->label = L"スタート (確認未)";
+        stBtn->state = components::ButtonState::Disabled;
+        stBtn->normalColor = {0.3f, 0.3f, 0.3f, 1.0f};
+      }
+    }
+  }
+
+  // ボタン処理
+  bool doClose = false;
+  bool doStart = false;
+  ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
+    if (!btn.visible || btn.state == components::ButtonState::Disabled) return;
+    if (btn.state == components::ButtonState::Pressed && ctx.input.GetMouseButtonDown(0)) {
+      if (btn.action == "cs_close") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
+        doClose = true;
+      } else if (btn.action == "cs_paste_start") {
+        std::wstring cb = ctx.input.GetClipboardText();
+        cb.erase(std::remove(cb.begin(), cb.end(), L'\r'), cb.end());
+        cb.erase(std::remove(cb.begin(), cb.end(), L'\n'), cb.end());
+        m_startString = cb;
+        m_focusIndex = 1;
+        m_readyToStart = false;
+      } else if (btn.action == "cs_paste_goal") {
+        std::wstring cb = ctx.input.GetClipboardText();
+        cb.erase(std::remove(cb.begin(), cb.end(), L'\r'), cb.end());
+        cb.erase(std::remove(cb.begin(), cb.end(), L'\n'), cb.end());
+        m_goalString = cb;
+        m_focusIndex = 2;
+        m_readyToStart = false;
+      } else if (btn.action == "cs_check") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+        if (!m_checking && !m_startString.empty() && !m_goalString.empty()) {
+          std::string startUtf8 = ExtractWikiTitle(core::ToString(m_startString));
+          std::string goalUtf8 = ExtractWikiTitle(core::ToString(m_goalString));
+
+          if (startUtf8 == goalUtf8) {
+            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"スタートとゴールに同じ記事は指定できません。";
+            m_readyToStart = false;
+          } else {
+            m_checking = true;
+            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"確認中...";
+            m_checkTask = std::async(std::launch::async, [startUtf8, goalUtf8]() {
+              auto trimW = [](const std::string& str, size_t maxLen) {
+                std::wstring w = core::ToWString(str);
+                if (w.length() <= maxLen) return core::ToString(w);
+                return core::ToString(w.substr(0, maxLen) + L"...");
+              };
+              game::systems::WikiClient wiki;
+              std::string extStart = wiki.FetchPageExtract(startUtf8, 100);
+              if (extStart.empty() || extStart == "ERROR" || extStart == "(Failed to fetch extract)") return std::string("ERROR");
+              std::string extGoal = wiki.FetchPageExtract(goalUtf8, 100);
+              if (extGoal.empty() || extGoal == "ERROR" || extGoal == "(Failed to fetch extract)") return std::string("ERROR");
+              return "【" + startUtf8 + "】\n" + trimW(extStart, 80) + "\n\n【" + goalUtf8 + "】\n" + trimW(extGoal, 80);
+            });
+          }
+        } else if (m_startString.empty() || m_goalString.empty()) {
+            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"スタートとゴールの両方を入力してください。";
+        }
+      } else if (btn.action == "cs_start" && m_readyToStart) {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
+        doStart = true;
+      }
+    }
+  });
+
+  if (doClose) {
+    SetCourseSelectVisible(ctx, false);
+    SetMainMenuVisible(ctx, true);
+    m_state = TitleState::MainMenu;
+    m_focusIndex = 0;
+  }
+  if (doStart) {
+    game::components::WikiGlobalData data;
+    data.startPage = ExtractWikiTitle(core::ToString(m_startString));
+    data.targetPage = ExtractWikiTitle(core::ToString(m_goalString));
+    data.targetPageId = -1;
+    data.isUserOverride = true;
+    ctx.world.SetGlobal(std::move(data));
+
+    LOG_INFO("TitleScene", "Starting game with Start: '{}', Goal: '{}'", ExtractWikiTitle(core::ToString(m_startString)), ExtractWikiTitle(core::ToString(m_goalString)));
+
+    auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(); });
+    ctx.sceneManager->ChangeScene(std::move(loadingScene));
+  }
 }
 
 } // namespace game::scenes

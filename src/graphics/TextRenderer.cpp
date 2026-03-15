@@ -375,66 +375,128 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
 
 void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
                               const TextStyle &style) {
-  if (!m_d2dContext || text.empty())
-    return;
+  if (!m_d2dContext) return;
+
+  // 背景描画 (bgColor.w > 0 の場合)
+  if (style.bgColor.w > 0.0f) {
+    D2D1_RECT_F bgRect = rect;
+
+    if (!text.empty()) {
+      IDWriteTextFormat *format =
+          m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
+      if (format) {
+        ComPtr<IDWriteTextLayout> layout;
+        float maxWidth = rect.right - rect.left;
+        float maxHeight = rect.bottom - rect.top;
+
+        HRESULT hr = m_dwriteFactory->CreateTextLayout(
+            text.c_str(), static_cast<UINT32>(text.length()), format, maxWidth,
+            maxHeight, &layout);
+
+        if (SUCCEEDED(hr)) {
+          DWRITE_TEXT_METRICS metrics;
+          layout->GetMetrics(&metrics);
+
+          float textW = metrics.width;
+          float textH = metrics.height;
+          float offsetX = 0.0f;
+          if (style.align == TextAlign::Center) {
+            offsetX = (maxWidth - textW) * 0.5f;
+          } else if (style.align == TextAlign::Right) {
+            offsetX = (maxWidth - textW);
+          }
+          bgRect.left += offsetX;
+          bgRect.right = bgRect.left + textW;
+
+          float padding = 8.0f;
+          bgRect.left -= padding;
+          bgRect.top -= padding * 0.5f;
+          bgRect.right += padding;
+          bgRect.bottom = bgRect.top + textH + padding;
+        }
+      }
+    }
+
+    // 描画
+    if (style.cornerRadius > 0.1f) {
+      D2D1_ROUNDED_RECT roundedRect = D2D1::RoundedRect(
+          bgRect, style.cornerRadius, style.cornerRadius);
+
+      if (style.useGradient) {
+        ComPtr<ID2D1GradientStopCollection> pGradientStops;
+        D2D1_GRADIENT_STOP gradientStops[2];
+        gradientStops[0].color = {style.bgColor.x, style.bgColor.y, style.bgColor.z, style.bgColor.w};
+        gradientStops[0].position = 0.0f;
+        gradientStops[1].color = {style.bgGradientEnd.x, style.bgGradientEnd.y, style.bgGradientEnd.z, style.bgGradientEnd.w};
+        gradientStops[1].position = 1.0f;
+
+        if (SUCCEEDED(m_d2dContext->CreateGradientStopCollection(
+                gradientStops, 2, &pGradientStops))) {
+          ComPtr<ID2D1LinearGradientBrush> pLinearGradientBrush;
+          if (SUCCEEDED(m_d2dContext->CreateLinearGradientBrush(
+                  D2D1::LinearGradientBrushProperties(
+                      D2D1::Point2F(bgRect.left, bgRect.top),
+                      D2D1::Point2F(bgRect.left, bgRect.bottom)),
+                  pGradientStops.Get(), &pLinearGradientBrush))) {
+            m_d2dContext->FillRoundedRectangle(roundedRect, pLinearGradientBrush.Get());
+          }
+        }
+      } else {
+        ID2D1SolidColorBrush *bgBrush = m_brushCache.GetBrush(style.bgColor);
+        if (bgBrush) {
+          m_d2dContext->FillRoundedRectangle(roundedRect, bgBrush);
+        }
+      }
+
+      if (style.borderWidth > 0.0f) {
+        ID2D1SolidColorBrush *borderBrush = m_brushCache.GetBrush(style.borderColor);
+        if (borderBrush) {
+          m_d2dContext->DrawRoundedRectangle(roundedRect, borderBrush, style.borderWidth);
+        }
+      }
+    } else {
+      if (style.useGradient) {
+          ComPtr<ID2D1GradientStopCollection> pGradientStops;
+          D2D1_GRADIENT_STOP gradientStops[2];
+          gradientStops[0].color = {style.bgColor.x, style.bgColor.y, style.bgColor.z, style.bgColor.w};
+          gradientStops[0].position = 0.0f;
+          gradientStops[1].color = {style.bgGradientEnd.x, style.bgGradientEnd.y, style.bgGradientEnd.z, style.bgGradientEnd.w};
+          gradientStops[1].position = 1.0f;
+
+          if (SUCCEEDED(m_d2dContext->CreateGradientStopCollection(
+                  gradientStops, 2, &pGradientStops))) {
+              ComPtr<ID2D1LinearGradientBrush> pLinearGradientBrush;
+              if (SUCCEEDED(m_d2dContext->CreateLinearGradientBrush(
+                      D2D1::LinearGradientBrushProperties(
+                          D2D1::Point2F(bgRect.left, bgRect.top),
+                          D2D1::Point2F(bgRect.left, bgRect.bottom)),
+                      pGradientStops.Get(), &pLinearGradientBrush))) {
+                  m_d2dContext->FillRectangle(bgRect, pLinearGradientBrush.Get());
+              }
+          }
+      } else {
+          ID2D1SolidColorBrush *bgBrush = m_brushCache.GetBrush(style.bgColor);
+          if (bgBrush) {
+              m_d2dContext->FillRectangle(bgRect, bgBrush);
+          }
+      }
+
+      if (style.borderWidth > 0.0f) {
+          ID2D1SolidColorBrush *borderBrush = m_brushCache.GetBrush(style.borderColor);
+          if (borderBrush) {
+              m_d2dContext->DrawRectangle(bgRect, borderBrush, style.borderWidth);
+          }
+      }
+    }
+  }
+
+  if (text.empty()) return;
 
   // TextFormat 取得
   IDWriteTextFormat *format =
       m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
   if (!format)
     return;
-
-  // 背景描画 (bgColor.w > 0 の場合)
-  if (style.bgColor.w > 0.0f) {
-    ComPtr<IDWriteTextLayout> layout;
-    float maxWidth = rect.right - rect.left;
-    float maxHeight = rect.bottom - rect.top;
-
-    // レイアウト作成
-    HRESULT hr = m_dwriteFactory->CreateTextLayout(
-        text.c_str(), static_cast<UINT32>(text.length()), format, maxWidth,
-        maxHeight, &layout);
-
-    if (SUCCEEDED(hr)) {
-      DWRITE_TEXT_METRICS metrics;
-      layout->GetMetrics(&metrics);
-
-      // 背景矩形計算
-      D2D1_RECT_F bgRect = rect;
-
-      // アラインメントに応じたXオフセット調整 (DrawTextWの挙動に合わせる)
-      // ※DrawTextWはrect内で整列するが、背景はテキスト領域だけにしたい場合は計算が必要
-      // ここでは簡易的にrect全体ではなく、テキストの外接矩形に近いものを計算する
-
-      // 幅・高さを実測値に
-      float textW = metrics.width; // + style.fontSize * 0.5f; // 余白
-      float textH = metrics.height;
-
-      // アラインメント調整
-      float offsetX = 0.0f;
-      if (style.align == TextAlign::Center) {
-        offsetX = (maxWidth - textW) * 0.5f;
-      } else if (style.align == TextAlign::Right) {
-        offsetX = (maxWidth - textW);
-      }
-
-      bgRect.left += offsetX;
-      bgRect.right = bgRect.left + textW;
-
-      // 少し余白を追加
-      float padding = 4.0f;
-      bgRect.left -= padding;
-      bgRect.top -= padding * 0.5f;
-      bgRect.right += padding;
-      bgRect.bottom = bgRect.top + textH + padding;
-
-      // 背景描画
-      ID2D1SolidColorBrush *bgBrush = m_brushCache.GetBrush(style.bgColor);
-      if (bgBrush) {
-        m_d2dContext->FillRectangle(bgRect, bgBrush);
-      }
-    }
-  }
 
   // 影の描画
   if (style.hasShadow) {
@@ -448,7 +510,7 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
       shadowRect.bottom += style.shadowOffsetY;
 
       m_d2dContext->DrawTextW(text.c_str(), static_cast<UINT32>(text.length()),
-                              format, shadowRect, shadowBrush);
+                              format, shadowRect, shadowBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
     }
   }
 
@@ -474,7 +536,7 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
 
         m_d2dContext->DrawTextW(text.c_str(),
                                 static_cast<UINT32>(text.length()), format,
-                                outlineRect, outlineBrush);
+                                outlineRect, outlineBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
       }
     }
   }
@@ -483,7 +545,7 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
   ID2D1SolidColorBrush *brush = m_brushCache.GetBrush(style.color);
   if (brush) {
     m_d2dContext->DrawTextW(text.c_str(), static_cast<UINT32>(text.length()),
-                            format, rect, brush);
+                            format, rect, brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
   }
 }
 

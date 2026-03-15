@@ -13,6 +13,8 @@ void Input::Initialize() {
   m_mouseButtonsUp.fill(false);
   m_mousePosition = {0, 0};
   m_scrollDelta = 0.0f;
+  m_inputChars.clear();
+  m_backspacePressed = false;
   m_cursorVisible = true;
   m_cursorLocked = false;
 }
@@ -30,6 +32,8 @@ void Input::Update() {
   m_mouseButtonsDown.fill(false);
   m_mouseButtonsUp.fill(false);
   m_scrollDelta = 0.0f;
+  m_inputChars.clear();
+  m_backspacePressed = false;
 }
 
 void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
@@ -50,6 +54,14 @@ void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     if (wParam < 256) {
       m_keys[wParam] = false;
       m_keysUp[wParam] = true; // 離された瞬間
+    }
+    break;
+
+  case WM_CHAR:
+    if (wParam == VK_BACK) {
+      m_backspacePressed = true;
+    } else if (wParam >= 32) { // 制御文字を除く
+      m_inputChars += static_cast<wchar_t>(wParam);
     }
     break;
 
@@ -203,6 +215,24 @@ void Input::SetMouseCursorLocked(bool locked) {
     ClipCursor(nullptr);
     ShowCursor(TRUE);
   }
+}
+
+std::wstring Input::GetClipboardText() const {
+  if (!OpenClipboard(nullptr)) {
+    return L"";
+  }
+
+  std::wstring result;
+  HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+  if (hData != nullptr) {
+    wchar_t* pszText = static_cast<wchar_t*>(GlobalLock(hData));
+    if (pszText != nullptr) {
+      result = pszText;
+      GlobalUnlock(hData);
+    }
+  }
+  CloseClipboard();
+  return result;
 }
 
 } // namespace core

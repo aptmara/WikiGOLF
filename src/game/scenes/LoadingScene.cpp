@@ -62,10 +62,22 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_exploded = false;
   m_loadProgress = std::make_shared<std::atomic<float>>(0.0f);
 
+  std::string overrideStartPage;
+  std::string overrideTargetPage;
+  int overrideTargetId = -1;
+  bool overrideIsUserOverride = false;
+  if (auto* globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>()) {
+    overrideStartPage = globalData->startPage;
+    overrideTargetPage = globalData->targetPage;
+    overrideTargetId = globalData->targetPageId;
+    overrideIsUserOverride = globalData->isUserOverride;
+    LOG_INFO("LoadingScene", "Found overridden global data: Start={}, Target={}", overrideStartPage, overrideTargetPage);
+  }
+
   // 非同期ロード開始
   m_isLoading = true;
   auto progressPtr = m_loadProgress;
-  m_loadTask = std::async(std::launch::async, [progressPtr]() {
+  m_loadTask = std::async(std::launch::async, [progressPtr, overrideStartPage, overrideTargetPage, overrideTargetId, overrideIsUserOverride]() {
     const auto setProgress = [progressPtr](float value) {
       if (progressPtr) {
         progressPtr->store(std::clamp(value, 0.0f, 1.0f),
@@ -75,6 +87,10 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
 
     setProgress(0.02f);
     auto data = std::make_unique<game::components::WikiGlobalData>();
+    data->startPage = overrideStartPage;
+    data->targetPage = overrideTargetPage;
+    data->targetPageId = overrideTargetId;
+    data->isUserOverride = overrideIsUserOverride;
 
     // WikiShortestPathの初期化（重い処理）
     data->pathSystem = std::make_unique<game::systems::WikiShortestPath>();
@@ -85,13 +101,15 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       // ログは別スレッドからは注意が必要だが、ここでは簡易的に
     }
 
-    // スタート・ゴール選定
+    // スタート選定
     game::systems::WikiClient wikiClient;
-    data->startPage = wikiClient.FetchRandomPageTitle();
+    if (data->startPage.empty()) {
+      data->startPage = wikiClient.FetchRandomPageTitle();
+    }
     setProgress(0.45f);
 
     // 人気記事からターゲット選定
-    if (dbLoaded && data->pathSystem->IsAvailable()) {
+    if (data->targetPage.empty() && dbLoaded && data->pathSystem->IsAvailable()) {
       auto result = data->pathSystem->FetchPopularPageTitle(100);
       data->targetPage = result.first;
       data->targetPageId = result.second;
@@ -110,14 +128,14 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       setProgress(0.8f);
     }
 
-    if (data->startPage == data->targetPage) {
+    if (overrideTargetPage.empty() && data->startPage == data->targetPage) {
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
       setProgress(0.82f);
     }
 
-    // 最短1記事（または同一）のターゲットは再抽選
-    if (dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
+    // 最短1記事（または同一）のターゲットは再抽選 (ユーザー指定がない場合のみ)
+    if (overrideTargetPage.empty() && dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
         !data->startPage.empty() && !data->targetPage.empty()) {
       const int maxRetry = 5;
       for (int attempt = 0; attempt < maxRetry; ++attempt) {
@@ -146,13 +164,6 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
         data->targetPage = newTarget.first;
         data->targetPageId = newTarget.second;
       }
-    }
-
-    // パー計算（ついでにやっておく）
-    if (dbLoaded && data->targetPageId != -1) {
-      // スタート位置のIDがわからないので正確には計算できないが、
-      // ここではロードの重さを吸収するのが目標なのでOK
-      // IdFromTitleなどはDBアクセスが必要
     }
 
     // 初回ページのデータを先行ロード（通信ラグ解消）
