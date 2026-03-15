@@ -2,6 +2,7 @@
 #include <DirectXMath.h>
 #include <Windows.h>
 #include <array>
+#include <string>
 
 namespace core {
 
@@ -50,6 +51,17 @@ public:
   /// @brief マウスカーソルのロック（ウィンドウ内に制限）
   void SetMouseCursorLocked(bool locked);
 
+  // --- テキスト入力・クリップボード ---
+
+  /// @brief このフレームで入力された文字（WM_CHARベース）を取得
+  const std::wstring& GetInputChars() const { return m_inputChars; }
+
+  /// @brief バックスペースが押されたか
+  bool GetBackspacePressed() const { return m_backspacePressed; }
+
+  /// @brief クリップボードから文字列を取得する
+  std::wstring GetClipboardText() const;
+
 private:
   std::array<bool, 256> m_keys;
   std::array<bool, 256> m_keysDown; ///< このフレームで押された
@@ -61,6 +73,10 @@ private:
 
   DirectX::XMINT2 m_mousePosition;
   float m_scrollDelta = 0.0f;
+
+  // テキスト入力バッファ
+  std::wstring m_inputChars;
+  bool m_backspacePressed = false;
 
   // カーソル状態管理
   bool m_cursorVisible = true;

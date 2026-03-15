@@ -26,7 +26,10 @@ struct SkyboxConstants {
   XMFLOAT4 tintColor;
   float brightness;
   float saturation;
-  float padding[2];
+  float time;
+  float padding;
+  XMFLOAT3 sunDirection;
+  float padding2;
 };
 
 /**
@@ -244,12 +247,14 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
   }
 
   // スカイボックスシェーダー取得
+  // シェーダーパスは build/Debug/ からの相対パスで Assets/shaders/ を指定する
+  // （CMakeのPOST_BUILDで shaders/ が Assets/shaders/ へコピーされるため）
   auto skyboxShaderHandle = ctx.resource.LoadShader(
-      "Skybox", L"shaders/SkyboxVS.hlsl", L"shaders/SkyboxPS.hlsl");
+      "Skybox", L"Assets/shaders/SkyboxVS.hlsl", L"Assets/shaders/SkyboxPS.hlsl");
   auto skyboxShader = ctx.resource.GetShader(skyboxShaderHandle);
   if (!skyboxShader) {
-    LOG_WARN("WikiGolf", "Skybox shader not loaded!");
-    return; // シェーダーが読み込まれていない
+    LOG_WARN("Skybox", "Skybox shader not loaded — SkyboxVS/PS.hlsl が見つからない");
+    return;
   }
   if (!skyboxShader->IsValid()) {
     LOG_WARN("Skybox", "Skybox shader is loaded but not valid!");
@@ -277,6 +282,8 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
       constants->tintColor = skybox.tintColor;
       constants->brightness = skybox.brightness;
       constants->saturation = skybox.saturation;
+      constants->time = skybox.time;
+      constants->sunDirection = skybox.sunDirection;
       context->Unmap(state->constantBuffer.Get(), 0);
     }
 

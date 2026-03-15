@@ -63,9 +63,17 @@ float4 main(PS_INPUT input) : SV_TARGET {
     // マテリアルカラーを乗算
     float4 baseColor = input.color * MaterialColor;
 
+    // UVスケール (MaterialFlags.z = customFlags.x) を適用。未設定時は 1.0f
+    float uvScale = max(MaterialFlags.z, 1.0f);
+    float2 uv = input.texCoord * uvScale;
+
+    // 頂点アルファはマテリアルIDとして使っているので、色のアルファからは取り除く
+    baseColor.a = MaterialColor.a;
+
     if (hasDiffuse > 0.5f) {
-        float4 texColor = diffuseTexture.Sample(texSampler, input.texCoord);
-        baseColor *= texColor;
+        float4 texColor = diffuseTexture.Sample(texSampler, uv);
+        baseColor.rgb *= texColor.rgb;
+        baseColor.a *= texColor.a;
     }
 
     // アルファテスト（地形用はほぼ不透明なので緩めのスレッショルド）
@@ -106,7 +114,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
             b = normalize(cross(n, t));
         }
 
-        float3 mapN = normalTexture.Sample(texSampler, input.texCoord).xyz;
+        float3 mapN = normalTexture.Sample(texSampler, uv).xyz;
         mapN = mapN * 2.0f - 1.0f;
         float3x3 TBN = float3x3(t, b, n);
         normal = normalize(mul(mapN, TBN));

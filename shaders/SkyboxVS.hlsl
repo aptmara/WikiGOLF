@@ -9,7 +9,10 @@ cbuffer SkyboxConstants : register(b0) {
     float4 TintColor;
     float Brightness;
     float Saturation;
-    float2 Padding;
+    float Time;
+    float Padding;
+    float3 SunDirection;
+    float Padding2;
 };
 
 struct VS_INPUT {

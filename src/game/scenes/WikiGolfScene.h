@@ -130,6 +130,12 @@ private:
   std::vector<Club> m_availableClubs;
   std::vector<ecs::Entity> m_clubUIEntities;
 
+  // クラブUI折りたたみ制御（提案4）
+  bool m_clubUIExpanded = false;     ///< 展開中フラグ
+  float m_clubExpandTimer = 0.0f;    ///< 自動折りたたみタイマー（秒）
+  static constexpr float kClubAutoCollapseTime = 3.5f; ///< 自動折りたたみ時間
+  std::vector<ecs::Entity> m_clubNameEntities; ///< クラブ名テキストUI
+
   void InitializeClubs(core::GameContext &ctx);
 
   // 軌道予測

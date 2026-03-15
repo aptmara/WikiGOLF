@@ -156,14 +156,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       ctx.dt = dt;
       ctx.time += dt;
 
+      // UI更新 (Logic)
+      uiButtonSystem(ctx);
+
       // シーン更新 (Game Logic + Physics)
       sceneManager.Update(ctx);
 
       // オーディオ更新
       audioSystem.Update(ctx);
-
-      // UI更新 (Logic)
-      uiButtonSystem(ctx);
 
       // 描画開始
       graphics.BeginFrame();
@@ -175,10 +175,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       game::systems::RenderSystem(ctx);
 
       // UI描画
+      uiRenderSystem(ctx);
       uiImageRenderSystem(ctx);
       uiBarGaugeRenderSystem(ctx); // 追加
       uiButtonRenderSystem(ctx);
-      uiRenderSystem(ctx);
 
       // シーン固有描画 (ScreenFadeなど最前面)
       sceneManager.Render(ctx);

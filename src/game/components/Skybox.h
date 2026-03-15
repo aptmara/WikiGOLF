@@ -31,6 +31,12 @@ struct Skybox {
 
   /// @brief ティント色（追加の色調整用）
   DirectX::XMFLOAT4 tintColor = {1.0f, 1.0f, 1.0f, 1.0f};
+
+  /// @brief アニメーション用時間（秒）
+  float time = 0.0f;
+
+  /// @brief 太陽の方向（正規化ベクトル）
+  DirectX::XMFLOAT3 sunDirection = {0.6f, 0.75f, 0.4f};
 };
 
 } // namespace game::components
