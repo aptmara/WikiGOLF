@@ -593,12 +593,57 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
   if (!state->canShoot)
     return;
 
-  // クラブ切り替え入力 (Q/Eキーのみ、ホイールはマップビューのズームに使用)
+  // クラブ切り替え入力 (Q/E): 展開 + 切り替え
+  auto ExpandClubUI = [&]() {
+    m_clubUIExpanded = true;
+    m_clubExpandTimer = kClubAutoCollapseTime;
+    // 全クラブアイコン・テキストを表示
+    for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
+      if (auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i]))
+        ui->visible = true;
+      if (i < m_clubNameEntities.size()) {
+        if (auto *nt = ctx.world.Get<UIText>(m_clubNameEntities[i]))
+          nt->visible = true;
+      }
+    }
+  };
+  auto CollapseClubUI = [&]() {
+    m_clubUIExpanded = false;
+    // 現在クラブのみ表示
+    for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
+      if (auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i]))
+        ui->visible = (i == (size_t)m_currentClubIndex);
+      if (i < m_clubNameEntities.size()) {
+        if (auto *nt = ctx.world.Get<UIText>(m_clubNameEntities[i]))
+          nt->visible = false;
+      }
+    }
+  };
+
   if (ctx.input.GetKeyUp('E')) {
-    SwitchClub(ctx, 1);
+    if (!m_clubUIExpanded) {
+      ExpandClubUI();
+    } else {
+      SwitchClub(ctx, 1);
+      m_clubExpandTimer = kClubAutoCollapseTime; // タイマーリセット
+    }
   } else if (ctx.input.GetKeyUp('Q')) {
-    SwitchClub(ctx, -1);
+    if (!m_clubUIExpanded) {
+      ExpandClubUI();
+    } else {
+      SwitchClub(ctx, -1);
+      m_clubExpandTimer = kClubAutoCollapseTime;
+    }
   }
+
+  // 自動折りたたみタイマー
+  if (m_clubUIExpanded) {
+    m_clubExpandTimer -= ctx.dt;
+    if (m_clubExpandTimer <= 0.0f) {
+      CollapseClubUI();
+    }
+  }
+
 
   auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
   auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
@@ -612,34 +657,52 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
     if (judgeUI)
       judgeUI->visible = false;
 
+    // ショットパネルを非表示
+    if (auto *g = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity))
+      g->isVisible = false;
+    if (auto *p = ctx.world.Get<UIText>(state->shotPanelPowerLabelEntity))
+      p->visible = false;
+    if (auto *p = ctx.world.Get<UIText>(state->shotPanelPowerValueEntity))
+      p->visible = false;
+    if (auto *p = ctx.world.Get<UIText>(state->shotPanelAccuracyLabelEntity))
+      p->visible = false;
+    if (auto *p = ctx.world.Get<UIText>(state->shotPanelAccuracyValueEntity))
+      p->visible = false;
+    if (auto *p = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity))
+      p->visible = false;
+
     // === UI誤爆防止: カーソル表示中（Altモード）はショット開始しない ===
     bool isUIMode = ctx.input.GetKey(VK_MENU);
 
-    // 左クリックでパワーゲージ開始 (UIクリックでなく、かつUIモードでなければ)
+    // 左クリックでパワーゲージ開始
+    // 展開時のみクラブUIクリック受け付け
     bool uiClicked = false;
-    if (ctx.input.GetMouseButtonDown(0) && !isUIMode) {
+    if (ctx.input.GetMouseButtonDown(0) && !isUIMode && m_clubUIExpanded) {
       float mx = (float)ctx.input.GetMousePosition().x;
       float my = (float)ctx.input.GetMousePosition().y;
 
       for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
         auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i]);
-        if (ui) {
+        if (ui && ui->visible) {
           if (mx >= ui->x && mx <= ui->x + ui->width && my >= ui->y &&
               my <= ui->y + ui->height) {
 
-            // クラブ変更
+            m_currentClubIndex = (int)i;
             m_currentClub = m_availableClubs[i];
             uiClicked = true;
+            m_clubUIExpanded = false; // 選択後は閉じる
             LOG_INFO("WikiGolf", "Switched to club: {}", m_currentClub.name);
 
             // UI更新
             for (size_t j = 0; j < m_clubUIEntities.size(); ++j) {
               auto *uij = ctx.world.Get<UIImage>(m_clubUIEntities[j]);
-              if (j == i) {
-                uij->alpha = 1.0f;
-              } else {
-                uij->alpha = 0.5f;
+              if (uij) {
+                uij->alpha = (j == i) ? 1.0f : 0.5f;
               }
+            }
+            // クラブパネルのクラブ名更新
+            if (auto *cl = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity)) {
+              cl->text = L"CLUB: " + core::ToWString(m_currentClub.name);
             }
             break;
           }
@@ -647,23 +710,21 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       }
     }
 
-    if (!uiClicked && ctx.input.GetMouseButtonDown(0)) {
+    if (!uiClicked && ctx.input.GetMouseButtonDown(0) && !isUIMode) {
+      // ショットパネル表示開始
+      if (auto *p = ctx.world.Get<UIText>(state->shotPanelPowerLabelEntity))
+        p->visible = true;
+      if (auto *p = ctx.world.Get<UIText>(state->shotPanelPowerValueEntity))
+        p->visible = true;
+      if (auto *p = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity))
+        p->visible = true;
+
       shot->phase = ShotState::Phase::PowerCharging;
       shot->powerGaugePos = 0.0f;
       shot->powerGaugeDir = 1.0f;
       LOG_INFO("WikiGolf", "Power charging started");
       if (ctx.audio)
         ctx.audio->PlaySE(ctx, "se_charge.mp3");
-
-      if (ctx.audio)
-        ctx.audio->PlaySE(ctx, "se_charge.mp3");
-
-      // マーカー表示開始
-      auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
-      if (markerUI) {
-        markerUI->visible = true;
-        markerUI->x = 450.0f - 8.0f; // 初期位置
-      }
     }
     break;
   }
@@ -679,34 +740,41 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       shot->powerGaugeDir = 1.0f;
     }
 
-    // ゲージFill更新
-    auto *fillUI = ctx.world.Get<UIImage>(state->gaugeFillEntity);
-    if (fillUI) {
-      fillUI->width = 380.0f * shot->powerGaugePos;
-    }
+    // --- 提案5: ショットパネル POWER更新 ---
+    {
+      // パワーに応じてゲージ色をグラデーション:
+      //  0%   = #22C55E (緑、成功色)
+      //  50%  = #F59E0B (黄、注意色)
+      //  100% = #EF4444 (赤、最大)
+      float t_pow = shot->powerGaugePos;
+      DirectX::XMFLOAT4 gaugeColor;
+      if (t_pow < 0.5f) {
+        float u = t_pow * 2.0f; // 0->1
+        gaugeColor = {0.133f + u * (0.961f - 0.133f),
+                      0.773f + u * (0.624f - 0.773f),
+                      0.369f + u * (0.043f - 0.369f), 1.0f};
+      } else {
+        float u = (t_pow - 0.5f) * 2.0f; // 0->1
+        gaugeColor = {0.961f + u * (0.937f - 0.961f),
+                      0.624f + u * (0.267f - 0.624f),
+                      0.043f + u * (0.267f - 0.043f), 1.0f};
+      }
 
-    // マーカー位置更新
-    auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
-    if (markerUI) {
-      markerUI->x = 450.0f - 8.0f + (380.0f * shot->powerGaugePos);
-    }
+      auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
+      if (gauge) {
+        gauge->isVisible = true;
+        gauge->value = shot->powerGaugePos;
+        gauge->showMarker = false;
+        gauge->showImpactZones = false;
+        gauge->color = gaugeColor;
+      }
 
-    // UI更新
-    auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-    if (infoUI) {
-      int powerPct = (int)(shot->powerGaugePos * 100.0f);
-
-      // 予想飛距離計算（簡易版）
-      float power = shot->powerGaugePos * m_currentClub.maxPower;
-      float launchAngle = XMConvertToRadians(m_currentClub.launchAngle);
-      float v0 = power;
-      // 空気抵抗なしの理想飛距離 = v0^2 * sin(2θ) / g
-      float estimatedRange = (v0 * v0 * std::sin(2 * launchAngle)) / 9.8f;
-
-      wchar_t buf[128];
-      swprintf_s(buf, L"[パワー] %d%% / 飛距離: %.0fm", powerPct,
-                 estimatedRange);
-      infoUI->text = buf;
+      // POWER % テキスト
+      if (auto *pv = ctx.world.Get<UIText>(state->shotPanelPowerValueEntity)) {
+        wchar_t buf[16];
+        swprintf_s(buf, 16, L"%d%%", (int)(shot->powerGaugePos * 100.0f));
+        pv->text = buf;
+      }
     }
 
     // パワー矢印の更新
@@ -728,21 +796,7 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       arrowPos = XMVectorAdd(arrowPos, offset);
       XMStoreFloat3(&arrowT->position, arrowPos);
 
-      // ゲージ更新
-      auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
-      if (gauge) {
-        gauge->isVisible = true;
-        gauge->value = shot->powerGaugePos;
-        gauge->showMarker = false;
-        gauge->showImpactZones = false;
-        // 色: パワーが上がるほど赤く
-        float r = shot->powerGaugePos;
-        float g = 1.0f - shot->powerGaugePos * 0.5f;
-        float b = 0.2f;
-        gauge->color = {r, g, b, 1.0f};
-      }
-
-      UpdateTrajectory(ctx, shot->powerGaugePos); // 予測線更新
+      UpdateTrajectory(ctx, shot->powerGaugePos);
     }
 
     // クリックでパワー決定
@@ -752,14 +806,21 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       shot->impactGaugePos = 0.0f;
       shot->impactGaugeDir = 1.0f;
 
-      // ゲージモード切り替え
+      // ACCURACYパネル表示開始
+      if (auto *al = ctx.world.Get<UIText>(state->shotPanelAccuracyLabelEntity))
+        al->visible = true;
+      if (auto *av = ctx.world.Get<UIText>(state->shotPanelAccuracyValueEntity))
+        av->visible = true;
+
+      // ゲージモード切り替え（インパクトゾーン表示）
       auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
       if (gauge) {
         gauge->showImpactZones = true;
         gauge->showMarker = true;
         gauge->markerValue = 0.0f;
         gauge->value = shot->confirmedPower;
-        gauge->color = {0.8f, 0.8f, 0.8f, 0.8f};
+        // インパクト待ち中は固定パワー色で薄く
+        gauge->color = {0.569f, 0.639f, 0.729f, 0.7f}; // #91A3B8
       }
 
       if (ctx.audio)
@@ -768,16 +829,9 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
                shot->confirmedPower);
     }
 
-    // 右クリックでキャンセル（復元）
+    // 右クリックでキャンセル
     if (ctx.input.GetMouseButtonDown(1)) {
       shot->phase = ShotState::Phase::Idle;
-      auto *infoUI_c = ctx.world.Get<UIText>(state->infoEntity);
-      if (infoUI_c)
-        infoUI_c->text = L"[エイム] ドラッグで方向調整";
-
-      auto *markerUI = ctx.world.Get<UIImage>(state->gaugeMarkerEntity);
-      if (markerUI)
-        markerUI->visible = false;
 
       auto *arrowMR_c = ctx.world.Get<MeshRenderer>(m_arrowEntity);
       if (arrowMR_c)
@@ -801,30 +855,47 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       shot->impactGaugeDir = 1.0f;
     }
 
-    // UI更新（インパクト位置表示）
-    auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
-    if (infoUI) {
+    // --- 提案5: ACCURACYパネル更新 ---
+    {
       float offset = shot->impactGaugePos - 0.5f;
       std::wstring indicator;
-      if (std::abs(offset) <= 0.02f)
-        indicator = L"★ SPECIAL ★";
-      else if (std::abs(offset) <= 0.05f)
-        indicator = L"★ GREAT ★";
-      else if (std::abs(offset) <= 0.15f)
-        indicator = L"◎ NICE ◎";
-      else
-        indicator = L"○";
-      infoUI->text = L"[インパクト] " + indicator;
-    }
+      DirectX::XMFLOAT4 indicatorColor;
 
-    // ゲージ・マーカー更新
-    auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
-    if (gauge) {
-      gauge->showImpactZones = true;
-      gauge->showMarker = true;
-      gauge->markerValue = shot->impactGaugePos; // マーカー移動
+      if (std::abs(offset) <= 0.02f) {
+        indicator = L"★ PERFECT ★";
+        indicatorColor = {0.980f, 0.800f, 0.082f, 1.0f}; // 金
+      } else if (std::abs(offset) <= 0.05f) {
+        indicator = L"◎ GREAT";
+        indicatorColor = {0.133f, 0.773f, 0.369f, 1.0f}; // 緑
+      } else if (std::abs(offset) <= 0.15f) {
+        indicator = L"○ NICE";
+        indicatorColor = {0.961f, 0.624f, 0.043f, 1.0f}; // 黄
+      } else {
+        indicator = L"△ MISS";
+        indicatorColor = {0.937f, 0.267f, 0.267f, 1.0f}; // 赤
+      }
 
-      UpdateTrajectory(ctx, shot->confirmedPower);
+      if (auto *av = ctx.world.Get<UIText>(state->shotPanelAccuracyValueEntity)) {
+        av->text = indicator;
+        av->style.color = indicatorColor;
+      }
+
+      // ゲージ・マーカー更新
+      auto *gauge = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity);
+      if (gauge) {
+        gauge->showImpactZones = true;
+        gauge->showMarker = true;
+        gauge->markerValue = shot->impactGaugePos;
+        // マーカーゾーン近傍で緑に
+        if (std::abs(offset) <= 0.05f) {
+          gauge->markerColor = {0.133f, 0.773f, 0.369f, 1.0f}; // 緑
+        } else if (std::abs(offset) <= 0.15f) {
+          gauge->markerColor = {0.961f, 0.624f, 0.043f, 1.0f}; // 黄
+        } else {
+          gauge->markerColor = {1.0f, 1.0f, 1.0f, 1.0f}; // 白
+        }
+        UpdateTrajectory(ctx, shot->confirmedPower);
+      }
     }
 
     // クリックでインパクト確定→ショット実行
@@ -2832,37 +2903,59 @@ void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
   m_availableClubs.push_back({"Wedge", 35.0f, 26.0f, "icon_wedge.png", 2.5f});
   m_availableClubs.push_back({"Putter", 10.0f, 0.0f, "icon_putter.png", 1.00f});
 
-  // UI作成
+  m_currentClubIndex = 0;
+  m_currentClub = m_availableClubs[0];
+  m_clubUIExpanded = false;
+  m_clubExpandTimer = 0.0f;
+  m_clubNameEntities.clear();
+
+  // 左端に縦並び配置
+  // 折りたたみ時: 現在選択クラブ1個のみ visible
+  // 展開時: 全クラブ visible
+  constexpr float kClubX = 14.0f;
+  constexpr float kClubStartY = 120.0f;
+  constexpr float kClubSpacing = 88.0f;
+  constexpr float kClubSize = 72.0f;
+
   for (size_t i = 0; i < m_availableClubs.size(); ++i) {
+    // アイコン画像エンティティ
     auto e = CreateEntity(ctx.world);
-
-    // アイコン画像
     auto &img = ctx.world.Add<UIImage>(e);
-    // texturePathを設定
     img = UIImage::Create(m_availableClubs[i].iconTexture, 0, 0);
+    img.x = kClubX;
+    img.y = kClubStartY + i * kClubSpacing;
+    img.width = kClubSize;
+    img.height = kClubSize;
+    img.layer = 20;
 
-    // 画面右側、垂直に配置（左に移動）
-    float startY = 720.0f / 2.0f - (m_availableClubs.size() * 100.0f) / 2.0f;
-    img.x = 20.0f; // 左側に変更
-    img.y = startY + i * 100.0f;
-    img.width = 80.0f;
-    img.height = 80.0f;
-    img.layer = 20; // 手前に表示
-
-    // 選択状態枠（初期はDriver）
+    // 選択状態: 現在クラブは不透明、その他は半透明
     if (i == 0) {
-      img.alpha = 1.0f; // 選択中は不透明
-      // ※枠線はUIImageでサポートされていないため省略（必要なら別途矩形UIを追加）
-      m_currentClub = m_availableClubs[i];
+      img.alpha = 1.0f;
+      img.visible = true; // 初期表示は現在クラブのみ
     } else {
-      img.alpha = 0.5f; // 未選択は半透明
+      img.alpha = 0.5f;
+      img.visible = false; // 折りたたみ時は非表示
     }
 
     m_clubUIEntities.push_back(e);
+
+    // クラブ名テキスト（アイコン右横に表示）
+    auto nameE = CreateEntity(ctx.world);
+    auto &nameT = ctx.world.Add<UIText>(nameE);
+    nameT.text = core::ToWString(m_availableClubs[i].name);
+    nameT.x = kClubX + kClubSize + 6.0f;
+    nameT.y = kClubStartY + i * kClubSpacing + kClubSize * 0.3f;
+    nameT.width = 100.0f;
+    nameT.height = 24.0f;
+    nameT.style = graphics::TextStyle::ClubName();
+    nameT.style.fontSize = 14.0f;
+    nameT.style.align = graphics::TextAlign::Left;
+    nameT.visible = false; // 展開時のみ表示
+    nameT.layer = 21;
+    m_clubNameEntities.push_back(nameE);
   }
-  // クラブUI初期描画
-  // ...
 }
+
 
 void WikiGolfScene::InitializeUI(core::GameContext &ctx,
                                  game::components::GolfGameState &state) {
@@ -3803,47 +3896,49 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
   state->windSpeed = windSpeed;
   state->windDirection = windDir;
 
-  // 風UI更新
-  auto *waUI = ctx.world.Get<UIImage>(state->windArrowEntity);
-  if (waUI) {
-    float angle = std::atan2(windDir.y, windDir.x) * 180.0f / 3.14159f;
-    waUI->rotation = angle;
-  }
-
+  // --- 提案2: 風カード更新 ---
+  // 8方向矢印マッピング: 右→右上→上→左上→左→左下→下→右下
   int dir8 = (int)((windAngle + 3.14159f / 8.0f) / (3.14159f / 4.0f)) % 8;
-  const wchar_t *arrows[] = {L"→", L"↗", L"↑", L"↖", L"←", L"↙", L"↓", L"↘"};
-  std::wstring windArrowStr =
-      L"🌬️ " + std::to_wstring((int)(windSpeed * 10) / 10) + L"." +
-      std::to_wstring((int)(windSpeed * 10) % 10) + L"m/s " + arrows[dir8];
+  const wchar_t *arrowsCard[] = {L"→", L"↗", L"↑", L"↖", L"←", L"↙", L"↓", L"↘"};
 
-  auto *windUI = ctx.world.Get<UIText>(state->windEntity);
-  if (windUI) {
-    windUI->text = windArrowStr;
+  // 風速数値テキスト
+  if (auto *wv = ctx.world.Get<UIText>(state->windCardValueEntity)) {
+    wchar_t buf[32];
+    swprintf_s(buf, 32, L"%.1f m/s", windSpeed);
+    wv->text = buf;
+  }
+  // 方向矢印（スカイブルー）
+  if (auto *wu = ctx.world.Get<UIText>(state->windCardUnitEntity)) {
+    wu->text = arrowsCard[dir8];
   }
 
-  // 9. その他HUD更新
-  auto *headerUI = ctx.world.Get<UIText>(state->headerEntity);
-  if (headerUI) {
-    headerUI->text = L"📍 " + core::ToWString(pageName) + L" → 🎯 " +
-                     core::ToWString(state->targetPage);
+  // 9. ブラウザ風HUD更新
+  // 現在ページ名（URLバー風）
+  if (auto *cp = ctx.world.Get<UIText>(state->browserCurrentPageEntity)) {
+    cp->text = core::ToWString(pageName);
+  }
+  // 後方互換 headerEntity (同一エンティティのため不要だが安全のため)
+
+  // ターゲットページ名（金色 + 矢印）
+  if (auto *tp = ctx.world.Get<UIText>(state->browserTargetEntity)) {
+    tp->text = L"→  " + core::ToWString(state->targetPage);
   }
 
   state->currentPage = pageName;
   state->pathHistory.push_back(pageName);
 
-  auto *pathUI = ctx.world.Get<UIText>(state->pathEntity);
-  if (pathUI) {
-    std::wstring historyText = L"History: ";
-    // 最新の5件くらいを表示するか、全部表示するか。一旦全部。
-    // 長すぎるとあふれるので注意が必要だが、現状維持。
-    // Historyの構築ロジックが必要。
-    // state->pathHistoryを使って再構築
-    for (size_t i = 0; i < state->pathHistory.size(); ++i) {
-      if (i > 0)
-        historyText += L" > ";
-      historyText += core::ToWString(state->pathHistory[i]);
+  // 経路ブレッドクラム
+  if (auto *ph = ctx.world.Get<UIText>(state->browserHistoryEntity)) {
+    // 最大5件 (超過時は先頭省略)
+    const auto &hist = state->pathHistory;
+    int startIdx = (int)hist.size() > 5 ? (int)hist.size() - 5 : 0;
+    std::wstring histText = (startIdx > 0) ? L"... > " : L"";
+    for (int i = startIdx; i < (int)hist.size(); ++i) {
+      if (i > startIdx)
+        histText += L" > ";
+      histText += core::ToWString(hist[i]);
     }
-    pathUI->text = historyText;
+    ph->text = histText;
   }
 
   // Par計算
@@ -3860,31 +3955,33 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
     if (result.success)
       calculatedPar = result.degrees;
   }
-  m_calculatedPar = calculatedPar; // メンバ変数に保存（HUD更新用）
+  m_calculatedPar = calculatedPar;
 
-  // フォールバックとPar設定
   int par =
       (calculatedPar > 0) ? calculatedPar : (int)validLinks.size() / 2 + 2;
   state->par = par;
 
-  // 最短パスとHUD更新
-  // 最短パスとHUD更新
-  std::wstring suffix = L" (推定)";
+  // 打数/Par + 最短距離情報
+  std::wstring distInfo = L"";
   if (calculatedPar > 0) {
-    suffix = L" (残り最短 " + std::to_wstring(calculatedPar) + L" 記事)";
+    distInfo = L"  ·  残り最短 " + std::to_wstring(calculatedPar) + L" 記事";
     LOG_INFO("WikiGolf", "Path found! Degrees: {}", calculatedPar);
   } else {
     LOG_INFO("WikiGolf", "Path calc failed or fallback used.");
   }
 
-  // 表示更新
-  auto *shotUI = ctx.world.Get<UIText>(state->shotCountEntity);
-  if (shotUI) {
-    shotUI->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
-                   std::to_wstring(state->par) + suffix;
-    LOG_INFO("WikiGolf", "Updated HUD text: {}", core::ToString(shotUI->text));
+  if (auto *si = ctx.world.Get<UIText>(state->browserShotInfoEntity)) {
+    si->text = L"打数: " + std::to_wstring(state->shotCount) + L" / Par " +
+               std::to_wstring(state->par) + distInfo;
+    LOG_INFO("WikiGolf", "Updated HUD text: {}", core::ToString(si->text));
+  }
+
+  // クラブパネルのクラブ名更新
+  if (auto *cl = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity)) {
+    cl->text = L"CLUB: " + core::ToWString(m_currentClub.name);
   }
 }
+
 
 void WikiGolfScene::CreateHole(core::GameContext &ctx, float x, float z,
                                const std::string &linkTarget, bool isTargetHole,

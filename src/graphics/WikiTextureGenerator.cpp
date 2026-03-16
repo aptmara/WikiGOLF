@@ -213,14 +213,24 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
   // リンク解析（全体座標系）
   std::vector<bool> linkMatched(links.size(), false);
 
-  // ブラシ色定義
-  D2D1::ColorF colText(0.125f, 0.129f, 0.133f);
-  D2D1::ColorF colLink(0.0f, 0.3f, 0.8f, 1.0f);
-  D2D1::ColorF colTarget(0.8f, 0.0f, 0.3f, 1.0f);
-  D2D1::ColorF colBorder(0.635f, 0.663f, 0.694f);
-  D2D1::ColorF colLinkBack(0.8f, 0.9f, 1.0f, 0.7f);
-  D2D1::ColorF colTargetBack(1.0f, 0.82f, 0.95f, 0.8f);
-  D2D1::ColorF colTargetGlow(1.0f, 0.84f, 0.0f, 0.8f);
+  // ブラシ色定義 (提案6: Wikipediaブラウザ空間テーマ)
+  // 背景: 暗紺 (#1E293B相当)
+  D2D1::ColorF colBg(0.118f, 0.161f, 0.231f);
+  // 本文テキスト: 薄白 (#CBD5E1)
+  D2D1::ColorF colText(0.792f, 0.835f, 0.886f);
+  // リンク文字: スカイブルー (#38BDF8)
+  D2D1::ColorF colLink(0.220f, 0.745f, 0.973f, 1.0f);
+  // ターゲットリンク: 金 (#FACC15)
+  D2D1::ColorF colTarget(0.980f, 0.800f, 0.082f, 1.0f);
+  // 区切り線: 薄い青灰
+  D2D1::ColorF colBorder(0.220f, 0.310f, 0.430f);
+  // リンク背景: 薄い青 (半透明)
+  D2D1::ColorF colLinkBack(0.059f, 0.204f, 0.431f, 0.55f);
+  // ターゲットリンク背景: 薄い金
+  D2D1::ColorF colTargetBack(0.361f, 0.278f, 0.0f, 0.5f);
+  // ターゲット枠線の発光: 金
+  D2D1::ColorF colTargetGlow(0.980f, 0.800f, 0.082f, 0.9f);
+
 
   // リンク領域の検出
   for (size_t i = 0; i < links.size(); ++i) {
@@ -305,7 +315,8 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
     // ターゲット設定
     m_d2dContext->SetTarget(bmp.Get());
     m_d2dContext->BeginDraw();
-    m_d2dContext->Clear(D2D1::ColorF(0.98f, 0.98f, 0.98f, 1.0f));
+    // 背景: 暗紺 (#1E293B)
+    m_d2dContext->Clear(D2D1::ColorF(0.118f, 0.161f, 0.231f, 1.0f));
 
     // ブラシ初期化（初回のみ）
     if (!brushesInitialized) {
@@ -316,6 +327,7 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
       m_d2dContext->CreateSolidColorBrush(colLinkBack, &bBackLink);
       m_d2dContext->CreateSolidColorBrush(colTargetBack, &bBackTarget);
       m_d2dContext->CreateSolidColorBrush(colTargetGlow, &bGlow);
+      // colBgブラシは clear で代替のため不要
 
       // DrawingEffectの適用
       for (size_t i = 0; i < links.size(); ++i) {
