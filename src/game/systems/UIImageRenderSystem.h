@@ -54,7 +54,12 @@ public:
         m_renderer.RenderImage(ui->textureSRV, rect, ui->alpha, ui->rotation);
       } else {
         // ファイルテクスチャで描画
-        std::string path = "Assets/textures/" + ui->texturePath;
+        std::string path;
+        if (ui->texturePath.find("Assets/") == 0) {
+          path = ui->texturePath;
+        } else {
+          path = "Assets/textures/" + ui->texturePath;
+        }
         m_renderer.RenderImage(path, rect, ui->alpha, ui->rotation);
       }
     }
