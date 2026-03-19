@@ -13,10 +13,6 @@ file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
 # 実行可能なターゲットの作成
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
 
-# アセット（テクスチャ／モデル）コピー用のファイルリスト
-# テクスチャ・モデル・サウンドはすべて Assets/ 配下に統一されている
-file(GLOB TEXTURE_FILES "${CMAKE_SOURCE_DIR}/Assets/textures/*.png")
-
 # インクルードディレクトリの設定
 target_include_directories(DX_GAME PRIVATE 
     src 
@@ -57,20 +53,10 @@ endif()
 
 # Post-build: Copy Assets
 add_custom_command(TARGET DX_GAME POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
-    # Assets/textures 配下の PNG を一括コピー
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TEXTURE_FILES} $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
-    # Fonts は Assets/Fonts 配下から
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/Fonts $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
+    # Assets フォルダをそのままコピー
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:DX_GAME>/Assets
     # shaders はプロジェクトルートの shaders/ から
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
-    # models/sounds は Assets/ 配下から（修正前: ルートの仮ディレクトリを参照していた）
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/sounds $<TARGET_FILE_DIR:DX_GAME>/Assets/sounds
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/data
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow.sqlite $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow.sqlite
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll $<TARGET_FILE_DIR:DX_GAME>/assimp-vc143-mt.dll
     COMMENT "Deploying assets to output directory..."
 )

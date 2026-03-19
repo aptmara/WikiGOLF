@@ -222,8 +222,10 @@ struct GolfGameState {
   uint32_t resultTextEntity = 0;     ///< 結果テキスト
   uint32_t resultHintEntity = 0;     ///< 操作ヒント
   uint32_t retryButtonEntity = 0;    ///< おあいこボタン
-  uint32_t guideBgEntity = 0;        ///< ガイド背景（半透明帯）
-  uint32_t guideEntity = 0;          ///< ガイドUIエンティティ
+  uint32_t guideBgEntity = 0;        ///< （互換用、未使用）
+  uint32_t guideEntity = 0;          ///< （互換用、未使用）
+  uint32_t shotButtonEntity = 0;     ///< SHOTボタン（背景・当たり判定用）
+  uint32_t shotButtonTextEntity = 0; ///< SHOTテキスト
 
   std::vector<uint32_t> holes; ///< ホールエンティティリスト
 };
