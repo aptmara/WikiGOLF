@@ -152,36 +152,13 @@ enum class TerrainMaterial : uint8_t {
  */
 struct GolfGameState {
   // UI エンティティ (従来)
-  uint32_t headerEntity = 0;      ///< ヘッダーUI
-  uint32_t shotCountEntity = 0;   ///< 打数表示UI
-  uint32_t infoEntity = 0;        ///< 情報表示UI
-  uint32_t windEntity = 0;        ///< 風表示UI
-  uint32_t windArrowEntity = 0;   ///< 風矢印UI（画像）
-  uint32_t gaugeBarEntity = 0;    ///< パワーゲージバーUI（画像）
-  uint32_t gaugeFillEntity = 0;   ///< パワーゲージ中身UI（画像）
-  uint32_t gaugeMarkerEntity = 0; ///< ゲージマーカーUI
-  uint32_t pathEntity = 0;        ///< 経路表示UI
-  uint32_t judgeEntity = 0;       ///< 判定表示UI
   uint32_t ballEntity = 0;        ///< ボールエンティティ
 
   // === 提案1: ブラウザ風HUD ===
-  uint32_t browserCurrentPageEntity = 0; ///< 現在ページ名（URLバー風）
-  uint32_t browserTargetEntity = 0;      ///< ターゲットページ名（金色）
-  uint32_t browserShotInfoEntity = 0;    ///< 打数/Par情報（サブテキスト）
-  uint32_t browserHistoryEntity = 0;     ///< 経路ブレッドクラム
-  uint32_t browserTabIconEntity = 0;     ///< タブアイコン(🌐)テキスト
 
   // === 提案2: 風カード ===
-  uint32_t windCardLabelEntity = 0; ///< "WIND" ラベル
-  uint32_t windCardValueEntity = 0; ///< 風速数値（大）
-  uint32_t windCardUnitEntity = 0;  ///< 方向矢印+単位
 
   // === 提案5: ショットパネル ===
-  uint32_t shotPanelPowerLabelEntity = 0;    ///< "POWER" ラベル
-  uint32_t shotPanelPowerValueEntity = 0;    ///< パワーパーセント値
-  uint32_t shotPanelAccuracyLabelEntity = 0; ///< "ACCURACY" ラベル
-  uint32_t shotPanelAccuracyValueEntity = 0; ///< 精度評価テキスト
-  uint32_t shotPanelClubLabelEntity = 0;     ///< クラブ名表示
 
   std::string currentPage; ///< 現在の記事
   std::string targetPage;  ///< 目的記事
