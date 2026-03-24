@@ -134,9 +134,14 @@ AudioHandle ResourceManager::LoadAudio(const std::string &path) {
     DWORD cbBuffer = 0;
     hr = pBuffer->Lock(&pAudioData, NULL, &cbBuffer);
     if (SUCCEEDED(hr)) {
-      size_t currentSize = clip.buffer.size();
-      clip.buffer.resize(currentSize + cbBuffer);
-      memcpy(clip.buffer.data() + currentSize, pAudioData, cbBuffer);
+      try {
+        size_t currentSize = clip.buffer.size();
+        if (currentSize == 0) {
+           clip.buffer.reserve(48 * 1024 * 1024);
+        }
+        clip.buffer.resize(currentSize + cbBuffer);
+        memcpy(clip.buffer.data() + currentSize, pAudioData, cbBuffer);
+      } catch (const std::bad_alloc& e) {}
       pBuffer->Unlock();
     }
   }

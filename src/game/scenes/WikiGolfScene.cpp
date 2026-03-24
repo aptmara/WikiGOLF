@@ -643,7 +643,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       
       // HUDへのパワーゲージ更新
       if (shot->phase == game::components::ShotState::Phase::PowerCharging || shot->phase == game::components::ShotState::Phase::ImpactTiming) {
-          m_hud->UpdatePowerGauge(ctx, currentPower, 0.0f, 1.0f);
+          m_hud->UpdatePowerGauge(ctx, currentPower, 0.0f, 0.0f, 1.0f);
       }
   }
 

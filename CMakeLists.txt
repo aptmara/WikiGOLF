@@ -55,6 +55,7 @@ endif()
 add_custom_command(TARGET DX_GAME POST_BUILD
     # Assets フォルダをそのままコピー
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:DX_GAME>/Assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/resources/textures $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
     # shaders はプロジェクトルートの shaders/ から
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll $<TARGET_FILE_DIR:DX_GAME>/assimp-vc143-mt.dll
@@ -73,6 +74,11 @@ if(MSVC)
                                                      -DWIN32_LEAN_AND_MEAN)
     target_compile_options(SkyboxGen PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
+
+add_custom_command(TARGET SkyboxGen POST_BUILD
+    COMMAND SkyboxGen "${CMAKE_SOURCE_DIR}/Assets/textures/runtime_skybox"
+    COMMENT "Generating Skybox textures..."
+)
 
 # シンプルなユニットテスト（CupIn判定）
 add_executable(test_cupin_utils test_cupin_utils.cpp)
@@ -93,6 +99,16 @@ if(MSVC)
     target_compile_options(test_loading_scene_fade PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME loading_scene_fade COMMAND test_loading_scene_fade)
+
+# ローディングシーンの進捗合成テスト
+add_executable(test_loading_scene_progress test_loading_scene_progress.cpp)
+target_include_directories(test_loading_scene_progress PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_loading_scene_progress PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                   -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_loading_scene_progress PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME loading_scene_progress COMMAND test_loading_scene_progress)
 
 # 文字列トリミングテスト
 add_executable(test_string_utils_trim test_string_utils_trim.cpp

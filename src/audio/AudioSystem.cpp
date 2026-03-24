@@ -60,7 +60,8 @@ bool AudioSystem::Initialize() {
 #ifdef _DEBUG
   XAUDIO2_DEBUG_CONFIGURATION debug = {};
   debug.TraceMask = XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
-  debug.BreakMask = XAUDIO2_LOG_ERRORS;
+  /// @brief 山内陽: Debug実行時にXAudio2の診断ブレークでプロセスが終了しないようにする。
+  debug.BreakMask = 0;
   m_xaudio2->SetDebugConfiguration(&debug, 0);
 #endif
 
@@ -279,6 +280,11 @@ void AudioSystem::PlayBGM(core::GameContext &ctx, const std::string &name,
     LOG_WARN("Audio", "BGM not found: {} (searched as {})", name, path);
     return;
   }
+  if (clip->format.empty()) {
+    LOG_ERROR("Audio", "BGM format is empty for: {}", name);
+    return;
+  }
+  LOG_INFO("Audio", "BGM format size: {}", clip->format.size());
 
   HRESULT hr = m_xaudio2->CreateSourceVoice(
       &m_bgmVoice, reinterpret_cast<const WAVEFORMATEX *>(clip->format.data()),

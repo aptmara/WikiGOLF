@@ -347,6 +347,34 @@ bool SkyboxTextureGenerator::GenerateCubemapToFiles(
   return CreateCubemapTexture(device, faceData, kDefaultFaceSize, outSRV);
 }
 
+bool SkyboxTextureGenerator::GenerateCubemapFromThemeToFiles(
+    ID3D11Device *device, SkyboxTheme theme, const std::wstring &baseFilePath) {
+
+  XMFLOAT3 topColor, horizonColor, bottomColor;
+  GetThemeColors(theme, topColor, horizonColor, bottomColor);
+
+  std::vector<std::vector<uint8_t>> faceData;
+  GenerateFaceData(topColor, horizonColor, bottomColor, kDefaultFaceSize,
+                   faceData, theme);
+
+  std::filesystem::path basePath(baseFilePath);
+  if (!basePath.parent_path().empty()) {
+    std::error_code ec;
+    std::filesystem::create_directories(basePath.parent_path(), ec);
+  }
+
+  bool savedAll = true;
+  for (int i = 0; i < 6; ++i) {
+    std::filesystem::path facePath = basePath;
+    facePath += kFaceSuffixes[i];
+    if (!SaveFaceToFile(faceData[i], kDefaultFaceSize, facePath.wstring())) {
+      savedAll = false;
+    }
+  }
+
+  return savedAll;
+}
+
 bool SkyboxTextureGenerator::LoadCubemapFromFiles(
     ID3D11Device *device, const std::wstring &baseFilePath,
     ComPtr<ID3D11ShaderResourceView> &outSRV) {

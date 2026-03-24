@@ -51,7 +51,7 @@ public:
                 float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
                 const std::string& clubName);
     
-    void UpdatePowerGauge(core::GameContext& ctx, float power, float minPower, float maxPower);
+    void UpdatePowerGauge(core::GameContext& ctx, float fillValue, float markerValue, float minPower, float maxPower);
     void UpdateJudge(core::GameContext& ctx, const std::wstring& text, const DirectX::XMFLOAT4& color);
     
 private:

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file LoadingScene.cpp
  * @brief ローディング画面シーン（ゴルフボール物理演出）の実装
  */
@@ -182,7 +182,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   ctx.input.SetMouseCursorVisible(false);
 
   // ゴルフボールメッシュをロード
-  m_ballMeshHandle = ctx.resource.LoadMesh("Assets/models/golfball.fbx");
+  m_ballMeshHandle = ctx.resource.LoadMesh("Assets/models/golfball.glb");
 
   // カメラを作成
   m_cameraEntity = CreateEntity(ctx.world);

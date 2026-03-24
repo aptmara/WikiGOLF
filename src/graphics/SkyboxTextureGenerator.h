@@ -93,6 +93,16 @@ public:
       Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);
 
   /**
+   * @brief 指定テーマでテクスチャを生成しPNGとして保存する
+   * @param device DirectX11デバイス (nullptrでも可。その場合保存のみ)
+   * @param theme スカイボックステーマ
+   * @param baseFilePath 保存先のベースパス（_px.pngなどを付与して保存）
+   * @return 成功ならtrue
+   */
+  bool GenerateCubemapFromThemeToFiles(
+      ID3D11Device *device, SkyboxTheme theme, const std::wstring &baseFilePath);
+
+  /**
    * @brief 既存のPNGファイル群からキューブマップを構築
    * @param device DirectX11デバイス
    * @param baseFilePath ベースパス（_px.pngなどを付与して読み込む）

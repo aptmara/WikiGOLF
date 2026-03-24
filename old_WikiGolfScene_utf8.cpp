@@ -648,6 +648,24 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
   auto *camT = ctx.world.Get<Transform>(m_cameraEntity);
   auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
 
+  // --- ショットトリガーの判定 ---
+  auto IsShotTriggered = [&]() -> bool {
+    if (ctx.input.GetKeyDown(VK_SPACE)) {
+      return true;
+    }
+    if (ctx.input.GetMouseButtonDown(0)) {
+      auto *btn = ctx.world.Get<UIText>(state->shotButtonEntity);
+      if (btn && btn->visible) {
+        float mx = (float)ctx.input.GetMousePosition().x;
+        float my = (float)ctx.input.GetMousePosition().y;
+        if (mx >= btn->x && mx <= btn->x + btn->width && my >= btn->y && my <= btn->y + btn->height) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
   // === フェーズ別処理 ===
 
   switch (shot->phase) {
@@ -657,7 +675,8 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
     if (judgeUI)
       judgeUI->visible = false;
 
-    // ショットパネルを非表示
+    // ショットパネル・ボタンを非表示 (クリックで開始するまで隠す？ いや、SHOTボタンは常時か)
+    // 提案改: Idle時でもSHOTボタンは表示。ゲージは非表示。
     if (auto *g = ctx.world.Get<UIBarGauge>(state->gaugeBarEntity))
       g->isVisible = false;
     if (auto *p = ctx.world.Get<UIText>(state->shotPanelPowerLabelEntity))
@@ -671,13 +690,16 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
     if (auto *p = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity))
       p->visible = false;
 
-    // === UI誤爆防止: カーソル表示中（Altモード）はショット開始しない ===
-    bool isUIMode = ctx.input.GetKey(VK_MENU);
+    // エイム可能ならSHOTボタン表示
+    bool canAim = (!m_isMapView);
+    if (auto *b = ctx.world.Get<UIText>(state->shotButtonEntity))
+      b->visible = canAim;
+    if (auto *bi = ctx.world.Get<UIImage>(state->shotButtonTextEntity))
+      bi->visible = canAim;
 
-    // 左クリックでパワーゲージ開始
     // 展開時のみクラブUIクリック受け付け
     bool uiClicked = false;
-    if (ctx.input.GetMouseButtonDown(0) && !isUIMode && m_clubUIExpanded) {
+    if (ctx.input.GetMouseButtonDown(0) && m_clubUIExpanded) {
       float mx = (float)ctx.input.GetMousePosition().x;
       float my = (float)ctx.input.GetMousePosition().y;
 
@@ -700,24 +722,22 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
                 uij->alpha = (j == i) ? 1.0f : 0.5f;
               }
             }
-            // クラブパネルのクラブ名更新
-            if (auto *cl = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity)) {
-              cl->text = L"CLUB: " + core::ToWString(m_currentClub.name);
-            }
             break;
           }
         }
       }
     }
 
-    if (!uiClicked && ctx.input.GetMouseButtonDown(0) && !isUIMode) {
+    if (!uiClicked && canAim && IsShotTriggered()) {
       // ショットパネル表示開始
       if (auto *p = ctx.world.Get<UIText>(state->shotPanelPowerLabelEntity))
         p->visible = true;
       if (auto *p = ctx.world.Get<UIText>(state->shotPanelPowerValueEntity))
         p->visible = true;
-      if (auto *p = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity))
+      if (auto *p = ctx.world.Get<UIText>(state->shotPanelClubLabelEntity)) {
+        p->text = L"CLUB: " + core::ToWString(m_currentClub.name);
         p->visible = true;
+      }
 
       shot->phase = ShotState::Phase::PowerCharging;
       shot->powerGaugePos = 0.0f;
@@ -799,8 +819,8 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       UpdateTrajectory(ctx, shot->powerGaugePos);
     }
 
-    // クリックでパワー決定
-    if (ctx.input.GetMouseButtonDown(0)) {
+    // ボタン/Spaceキーでパワー決定
+    if (IsShotTriggered()) {
       shot->confirmedPower = shot->powerGaugePos;
       shot->phase = ShotState::Phase::ImpactTiming;
       shot->impactGaugePos = 0.0f;
@@ -898,8 +918,14 @@ void WikiGolfScene::ProcessShot(core::GameContext &ctx) {
       }
     }
 
-    // クリックでインパクト確定→ショット実行
-    if (ctx.input.GetMouseButtonDown(0)) {
+    // ボタン/Spaceキーでインパクト確定→ショット実行
+    if (IsShotTriggered()) {
+      // SHOTボタン非表示
+      if (auto *b = ctx.world.Get<UIText>(state->shotButtonEntity))
+        b->visible = false;
+      if (auto *bi = ctx.world.Get<UIImage>(state->shotButtonTextEntity))
+        bi->visible = false;
+
       shot->confirmedImpact = shot->impactGaugePos;
 
       // 判定計算
@@ -2026,53 +2052,34 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       }
     }
   } else {
-    // 通常ビュー: UIモード時はカーソル表示、エイムモード時はロック
-    auto *shotStateCheck = ctx.world.GetGlobal<ShotState>();
-    bool canAim =
-        shotStateCheck && shotStateCheck->phase == ShotState::Phase::Idle;
+    // 常にカーソルを表示し、ロックしない
+    ctx.input.SetMouseCursorVisible(true);
+    ctx.input.SetMouseCursorLocked(false);
 
-    if (isUIMode || !canAim) {
-      // UIモード または ショット不可時: カーソル表示
-      ctx.input.SetMouseCursorVisible(true);
-      ctx.input.SetMouseCursorLocked(false);
-    } else {
-      // エイムモード: カーソルロック、マウス移動でカメラ回転（TPSオービット）
-      ctx.input.SetMouseCursorVisible(false);
-      ctx.input.SetMouseCursorLocked(true);
+    // 中ボタンドラッグ (Mouse Button 2) で視点移動（TPSオービット）
+    if (ctx.input.GetMouseButton(2)) {
+      int deltaX = mouseX - m_prevMouseX;
+      int deltaY = mouseY - m_prevMouseY;
 
-      // ロック時は画面中央からの差分を取得
-      // （カーソルは毎フレーム中央に戻されるため）
-      int screenCenterX = 640; // TODO: 画面サイズから取得が望ましい
-      int screenCenterY = 360;
-      int deltaX = mouseX - screenCenterX;
-      int deltaY = mouseY - screenCenterY;
-
-      // === TPSオービットカメラ: マウス移動 → Yaw/Pitch更新 ===
       if (deltaX != 0 || deltaY != 0) {
-        // 精密エイム: Shift押下で感度を1/3に
         float sensitivity = 0.005f;
         if (ctx.input.GetKey(VK_SHIFT)) {
           sensitivity *= 0.33f; // 精密モード
         }
 
-        // 水平回転（Yaw）
         m_cameraYaw += deltaX * sensitivity;
-
-        // 垂直回転（Pitch）
         m_cameraPitch += deltaY * sensitivity;
-
-        // Pitch制限（上: -1.5rad, 下: 1.5rad ≒ 85度）
         m_cameraPitch = std::clamp(m_cameraPitch, -1.5f, 1.5f);
       }
+    }
 
-      // マウスホイールでズーム
-      float wheel = ctx.input.GetMouseScrollDelta();
-      if (wheel != 0.0f) {
-        m_cameraDistance -= wheel * 2.0f * kFieldScale; // ホイール感度
-        m_cameraDistance =
-            std::clamp(m_cameraDistance, 1.2f * kFieldScale,
-                       35.0f * kFieldScale); // 距離制限（よりズーム可）
-      }
+    // マウスホイールでズーム
+    float wheel = ctx.input.GetMouseScrollDelta();
+    if (wheel != 0.0f && !ctx.input.GetMouseButton(2)) {
+      m_cameraDistance -= wheel * 2.0f * kFieldScale; // ホイール感度
+      m_cameraDistance =
+          std::clamp(m_cameraDistance, 1.2f * kFieldScale,
+                     35.0f * kFieldScale); // 距離制限（よりズーム可）
     }
   }
 
@@ -2954,6 +2961,24 @@ void WikiGolfScene::InitializeClubs(core::GameContext &ctx) {
     nameT.layer = 21;
     m_clubNameEntities.push_back(nameE);
   }
+
+  // --- 操作アイコン (Q/E) ---
+  auto qIconE = CreateEntity(ctx.world);
+  auto &qImg = ctx.world.Add<UIImage>(qIconE);
+  qImg = UIImage::Create("Assets/ui/keyboard_q.png", kClubX + kClubSize / 2 - 20.0f, kClubStartY - 24.0f);
+  qImg.width = 18.0f;
+  qImg.height = 18.0f;
+  qImg.layer = 21;
+  qImg.visible = true; // 常時表示
+
+  auto eIconE = CreateEntity(ctx.world);
+  auto &eImg = ctx.world.Add<UIImage>(eIconE);
+  eImg = UIImage::Create("Assets/ui/keyboard_e.png", kClubX + kClubSize / 2 + 2.0f, kClubStartY - 24.0f);
+  eImg.width = 18.0f;
+  eImg.height = 18.0f;
+  eImg.layer = 21;
+  eImg.visible = true;
+
 }
 
 
@@ -3311,27 +3336,56 @@ void WikiGolfScene::InitializeUI(core::GameContext &ctx,
   state.judgeEntity = judgeE;
 
   // =========================================================
-  // ガイドUI (下部)
+  // SHOTボタンと操作アイコン (画面右下)
   // =========================================================
-  auto guideE = CreateEntity(ctx.world);
-  auto &gt = ctx.world.Add<UIText>(guideE);
-  gt.text = L"";
-  gt.x = 200.0f;
-  gt.y = 688.0f;
-  gt.width = 880.0f;
-  gt.style = graphics::TextStyle::Guide();
-  gt.style.fontSize = 20.0f;
-  gt.style.color = {0.792f, 0.835f, 0.886f, 0.9f};
-  gt.visible = true;
-  gt.layer = 100;
-  state.guideEntity = guideE;
-
-  // 後方互換: guideBgEntityは空
   {
+    // SHOTボタン背景
     auto e = CreateEntity(ctx.world);
-    auto &im = ctx.world.Add<UIImage>(e);
-    im.visible = false;
-    state.guideBgEntity = e;
+    auto &t = ctx.world.Add<UIText>(e);
+    t.text = L"SHOT";
+    t.x = kPanelX + kPanelW + 20.0f; // ゲージの右
+    t.y = kPanelY;
+    t.width = 140.0f;
+    t.height = 46.0f;
+    t.style = graphics::TextStyle::CardValue();
+    t.style.bgColor = {0.86f, 0.2f, 0.3f, 0.9f}; // 赤色ボタン
+    t.style.cornerRadius = 10.0f;
+    t.style.align = graphics::TextAlign::Center;
+    t.style.fontSize = 22.0f;
+    t.visible = false; // ショット時のみ表示
+    t.layer = 50;
+    state.shotButtonEntity = e;
+
+    // SHOT操作アイコン (Space)
+    auto spaceIconE = CreateEntity(ctx.world);
+    auto &si = ctx.world.Add<UIImage>(spaceIconE);
+    si = UIImage::Create("Assets/ui/keyboard_space.png", t.x + 30.0f, t.y + 50.0f);
+    si.width = 32.0f;
+    si.height = 18.0f;
+    si.layer = 51;
+    si.visible = false;
+    state.shotButtonTextEntity = spaceIconE; // 表示制御用にお借りする
+
+    // 視点操作アイコン (Mouse Middle) - ミニマップ下付近
+    auto mIconE = CreateEntity(ctx.world);
+    auto &mi = ctx.world.Add<UIImage>(mIconE);
+    mi = UIImage::Create("Assets/ui/mouse_scroll.png", 1040.0f, 320.0f); // 風カードの下
+    mi.width = 24.0f;
+    mi.height = 24.0f;
+    mi.layer = 100;
+    mi.visible = true;
+
+    auto mTextE = CreateEntity(ctx.world);
+    auto &mt = ctx.world.Add<UIText>(mTextE);
+    mt.text = L"視点移動 (Drag)";
+    mt.x = 1070.0f;
+    mt.y = 322.0f;
+    mt.width = 150.0f;
+    mt.height = 20.0f;
+    mt.style = graphics::TextStyle::Guide();
+    mt.style.fontSize = 14.0f;
+    mt.layer = 100;
+    mt.visible = true;
   }
 
   // =========================================================
@@ -3841,6 +3895,9 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
            m_wikiTexture->links.size(), validLinks.size(), fieldWidth,
            fieldDepth);
 
+  // 最短経路計算の重複を防ぐためのキャッシュ
+  std::unordered_map<std::string, int> pathCache;
+
   for (const auto &linkRegion : m_wikiTexture->links) {
     float texCenterX = linkRegion.x + linkRegion.width * 0.5f;
     float texCenterY = linkRegion.y + linkRegion.height * 0.5f;
@@ -3866,10 +3923,15 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
     int hops = -1;
     if (m_shortestPath && m_shortestPath->IsAvailable() &&
         state->targetPageId != -1) {
-      auto result = m_shortestPath->FindShortestPath(linkRegion.targetPage,
-                                                     state->targetPageId, 6);
-      if (result.success) {
-        hops = result.degrees;
+      if (pathCache.find(linkRegion.targetPage) != pathCache.end()) {
+        hops = pathCache[linkRegion.targetPage];
+      } else {
+        auto result = m_shortestPath->FindShortestPath(linkRegion.targetPage,
+                                                       state->targetPageId, 6);
+        if (result.success) {
+          hops = result.degrees;
+        }
+        pathCache[linkRegion.targetPage] = hops;
       }
     }
 
@@ -3912,16 +3974,16 @@ void WikiGolfScene::LoadPage(core::GameContext &ctx,
     wu->text = arrowsCard[dir8];
   }
 
-  // 9. ブラウザ風HUD更新
+  // ブラウザ風HUD更新 (提案1改: Current / Goal 表示)
   // 現在ページ名（URLバー風）
   if (auto *cp = ctx.world.Get<UIText>(state->browserCurrentPageEntity)) {
-    cp->text = core::ToWString(pageName);
+    cp->text = L"Current: " + core::ToWString(pageName);
   }
   // 後方互換 headerEntity (同一エンティティのため不要だが安全のため)
 
   // ターゲットページ名（金色 + 矢印）
   if (auto *tp = ctx.world.Get<UIText>(state->browserTargetEntity)) {
-    tp->text = L"→  " + core::ToWString(state->targetPage);
+    tp->text = L"Goal: " + core::ToWString(state->targetPage);
   }
 
   state->currentPage = pageName;

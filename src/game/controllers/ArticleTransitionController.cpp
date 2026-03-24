@@ -1,4 +1,4 @@
-#include "ArticleTransitionController.h"
+﻿#include "ArticleTransitionController.h"
 #include "../../ecs/World.h"
 #include "../../core/StringUtils.h"
 
@@ -104,7 +104,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     globeTr.position = {0.0f, 5000.0f, 0.0f};
     globeTr.scale = {0.1f, 0.1f, 0.1f}; // STLはサイズが大きい場合が多いので仮スケール
     auto& globeMr = ctx.world.Add<components::MeshRenderer>(m_globeEntity);
-    globeMr.mesh = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
+    globeMr.mesh = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.glb");
     globeMr.shader = shaderHandle;
     globeMr.color = {0.9f, 0.9f, 0.95f, 0.0f}; // 初期アルファ0
     globeMr.isVisible = true;

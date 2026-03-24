@@ -68,8 +68,8 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float4 finalColor = float4(baseColor.rgb * lighting, baseColor.a);
     
     // 4. フォグ (Distance Fog)
-    float fogStart = 20.0f;
-    float fogEnd = 120.0f; // 少し遠くまで見えるように
+    float fogStart = 50.0f;
+    float fogEnd = 500.0f; // 遠景の真っ白を防ぐため延長
     float fogFactor = saturate((dist - fogStart) / (fogEnd - fogStart));
     
     // フォグ色は空の色に合わせる (ここでは空色固定)

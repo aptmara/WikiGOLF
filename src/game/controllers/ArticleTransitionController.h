@@ -9,6 +9,7 @@
 #include <atomic>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace game::controllers {
@@ -35,6 +36,7 @@ private:
     void DestroyEntities(core::GameContext& ctx);
     void UpdateAnimation(core::GameContext& ctx, float dt);
     void UpdateUI(core::GameContext& ctx, float dt);
+    void ResetLoadState();
 
     bool m_isActive = false;
     float m_stateTimer = 0.0f;
@@ -43,6 +45,7 @@ private:
     enum class Phase {
         FadeIn,
         Loading,
+        Building,
         FadeOut
     };
     Phase m_phase = Phase::FadeIn;
@@ -52,6 +55,7 @@ private:
     // 非同期ロード関連
     std::future<scenes::PageDataAsyncResult> m_loadTask;
     std::shared_ptr<std::atomic<float>> m_loadProgress;
+    std::optional<scenes::PageDataAsyncResult> m_pendingPageData;
     scenes::WikiPageLoader* m_pageLoader = nullptr;
     std::string m_targetPage;
     ecs::Entity m_targetBall;
@@ -59,6 +63,11 @@ private:
     ecs::Entity m_targetSky;
     game::controllers::MinimapController* m_minimap;
     bool m_loadCompleted = false;
+    bool m_buildSucceeded = false;
+    bool m_buildFailed = false;
+    bool m_buildDelayStarted = false;
+    float m_buildDelayTimer = 0.0f;
+    float m_displayProgress = 0.0f;
 
     // アニメーション用変数
     float m_globeRotation = 0.0f;

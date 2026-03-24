@@ -29,6 +29,21 @@ inline float CombineLoadingProgress(float asyncProgress, float visualProgress) {
   return std::max(asyncProgress, visualProgress);
 }
 
+/// @brief ページ遷移ロードの段階別進捗を単調増加で合成する
+/// @details 山内陽 通信取得は70%、構築待機は95%、完了は100%として表示用進捗を安定させる。
+inline float CombineTransitionProgress(float fetchProgress,
+                                       float buildProgress,
+                                       bool buildComplete,
+                                       float currentProgress) {
+  fetchProgress = std::clamp(fetchProgress, 0.0f, 1.0f);
+  buildProgress = std::clamp(buildProgress, 0.0f, 1.0f);
+  currentProgress = std::clamp(currentProgress, 0.0f, 1.0f);
+
+  const float targetProgress =
+      buildComplete ? 1.0f : (fetchProgress * 0.70f + buildProgress * 0.25f);
+  return std::clamp(std::max(currentProgress, targetProgress), 0.0f, 1.0f);
+}
+
 /// @brief フェードオーバーレイ用のアルファ値を算出（未開始なら0）
 inline float FadeOverlayAlpha(float fadeAlpha, bool fadeStarted) {
   if (!fadeStarted) {

@@ -3,6 +3,7 @@
 #include "../components/UIText.h"
 #include "../components/UIImage.h"
 #include "../../core/StringUtils.h"
+#include <algorithm>
 namespace game {
 namespace controllers {
 
@@ -262,45 +263,34 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         m_ui.shotPanelClubLabelEntity = e;
     }
 
-    // Gauge background
+    // ---------------------------------------------------------
+    // Power Gauge (Using new UIBarGauge)
+    // ---------------------------------------------------------
     {
         auto e = ctx.world.CreateEntity();
-        auto& t = ctx.world.Add<game::components::UIText>(e);
-        t.text = L"";
-        t.x = kPanelX;
-        t.y = kPanelY + 22.0f;
-        t.width = kPanelW;
-        t.height = 24.0f;
-        t.style = graphics::TextStyle::ShotPanelLabel();
-        t.style.bgColor = {0.020f, 0.039f, 0.090f, 0.9f};
-        t.style.cornerRadius = 8.0f;
-        t.style.borderWidth = 1.5f;
-        t.style.borderColor = {0.220f, 0.380f, 0.600f, 0.6f};
-        t.visible = true;
-        t.layer = 49;
+        auto& gauge = ctx.world.Add<game::components::UIBarGauge>(e);
+        gauge.value = 0.0f;
+        gauge.maxValue = 1.0f;
+        gauge.color = {1.0f, 0.8f, 0.2f, 1.0f}; // フィル色
+        gauge.bgColor = {0.02f, 0.039f, 0.090f, 0.9f}; // 背景色
+        gauge.borderColor = {0.220f, 0.380f, 0.600f, 0.6f};
+        gauge.borderWidth = 1.5f;
+        gauge.x = kPanelX;
+        gauge.y = kPanelY + 22.0f;
+        gauge.width = kPanelW;
+        gauge.height = 24.0f;
+        gauge.isVisible = true;
+
+        gauge.showMarker = true;
+        gauge.markerValue = 0.0f;
+        gauge.markerColor = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        gauge.showImpactZones = true;
+        gauge.impactCenter = 0.5f;
+        gauge.impactWidthGreat = 0.05f;
+        gauge.impactWidthNice = 0.15f;
+
         m_ui.gaugeBarEntity = e;
-    }
-
-    {
-        auto e = ctx.world.CreateEntity();
-        auto& fill = ctx.world.Add<game::components::UIImage>(e);
-        fill = game::components::UIImage::Create("ui_gauge_fill.png", 450.0f, kPanelY + 22.0f);
-        fill.width = 380.0f;
-        fill.height = 24.0f;
-        fill.visible = true;
-        fill.layer = 51;
-        m_ui.gaugeFillEntity = e;
-    }
-
-    {
-        auto e = ctx.world.CreateEntity();
-        auto& marker = ctx.world.Add<game::components::UIImage>(e);
-        marker = game::components::UIImage::Create("ui_gauge_marker.png", 450.0f, kPanelY + 16.0f);
-        marker.width = 16.0f;
-        marker.height = 32.0f;
-        marker.visible = true;
-        marker.layer = 52;
-        m_ui.gaugeMarkerEntity = e;
     }
 
     // ---------------------------------------------------------
@@ -323,13 +313,28 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
     }
 }
 
-void WikiGolfHUD::Update(core::GameContext& ctx, float dt, const game::components::GolfGameState& state, 
-                         float currentPower, float confirmedPower, 
+void WikiGolfHUD::Update(core::GameContext& ctx, float dt, const game::components::GolfGameState& state,
+                         float currentPower, float confirmedPower,
                          float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
                          const std::string& clubName) {
     UpdateGuideUI(ctx, state);
     UpdateWindUI(ctx, windSpeed, windDir, cameraYaw);
-    
+
+    if (m_ui.browserCurrentPageEntity != UINT32_MAX && ctx.world.Has<game::components::UIText>(m_ui.browserCurrentPageEntity)) {
+        auto* pt = ctx.world.Get<game::components::UIText>(m_ui.browserCurrentPageEntity);
+        pt->text = core::ToWString(state.currentPage);
+    }
+
+    if (m_ui.browserTargetEntity != UINT32_MAX && ctx.world.Has<game::components::UIText>(m_ui.browserTargetEntity)) {
+        auto* tt = ctx.world.Get<game::components::UIText>(m_ui.browserTargetEntity);
+        tt->text = L"-> " + core::ToWString(state.targetPage);
+    }
+
+    if (m_ui.browserShotInfoEntity != UINT32_MAX && ctx.world.Has<game::components::UIText>(m_ui.browserShotInfoEntity)) {
+        auto* st = ctx.world.Get<game::components::UIText>(m_ui.browserShotInfoEntity);
+        st->text = L"Shots: " + std::to_wstring(state.shotCount) + L" / Par " + std::to_wstring(state.par);
+    }
+
     if (m_ui.shotPanelPowerValueEntity != UINT32_MAX && ctx.world.Has<game::components::UIText>(m_ui.shotPanelPowerValueEntity)) {
         auto* pt = ctx.world.Get<game::components::UIText>(m_ui.shotPanelPowerValueEntity);
         if (confirmedPower > 0.0f) {
@@ -340,25 +345,25 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt, const game::component
             pt->style.color = {1.0f, 1.0f, 1.0f, 1.0f};
         }
     }
-    
+
     if (m_ui.shotPanelClubLabelEntity != UINT32_MAX && ctx.world.Has<game::components::UIText>(m_ui.shotPanelClubLabelEntity)) {
         auto* ct = ctx.world.Get<game::components::UIText>(m_ui.shotPanelClubLabelEntity);
-        std::wstring wClubName(clubName.begin(), clubName.end());
-        ct->text = wClubName;
+        ct->text = core::ToWString(clubName);
     }
 }
 
-void WikiGolfHUD::UpdatePowerGauge(core::GameContext& ctx, float power, float minPower, float maxPower) {
-    if (m_ui.gaugeFillEntity != UINT32_MAX && ctx.world.Has<game::components::UIImage>(m_ui.gaugeFillEntity)) {
-        auto* fill = ctx.world.Get<game::components::UIImage>(m_ui.gaugeFillEntity);
-        float fillRatio = power / maxPower;
-        fill->width = 380.0f * fillRatio;
-    }
-    
-    if (m_ui.gaugeMarkerEntity != UINT32_MAX && ctx.world.Has<game::components::UIImage>(m_ui.gaugeMarkerEntity)) {
-        auto* marker = ctx.world.Get<game::components::UIImage>(m_ui.gaugeMarkerEntity);
-        float fillRatio = power / maxPower;
-        marker->x = (1280.0f / 2.0f - 200.0f) + 10.0f + (380.0f * fillRatio) - (marker->width / 2.0f);
+void WikiGolfHUD::UpdatePowerGauge(core::GameContext& ctx, float fillValue, float markerValue, float minPower, float maxPower) {
+    if (m_ui.gaugeBarEntity != UINT32_MAX && ctx.world.Has<game::components::UIBarGauge>(m_ui.gaugeBarEntity)) {
+        auto* gauge = ctx.world.Get<game::components::UIBarGauge>(m_ui.gaugeBarEntity);
+        float normalizedFillValue = 0.0f;
+        float normalizedMarkerValue = 0.0f;
+        if (maxPower > minPower && maxPower > 0.0f) {
+            normalizedFillValue = (fillValue - minPower) / (maxPower - minPower);
+            normalizedMarkerValue = (markerValue - minPower) / (maxPower - minPower);
+        }
+
+        gauge->value = std::clamp(normalizedFillValue, 0.0f, 1.0f);
+        gauge->markerValue = std::clamp(normalizedMarkerValue, 0.0f, 1.0f);
     }
 }
 
@@ -382,17 +387,17 @@ void WikiGolfHUD::UpdateWindUI(core::GameContext& ctx, float windSpeed, const Di
         swprintf(buf, 32, L"%.1f", windSpeed);
         t->text = buf;
     }
-    
+
     if (m_ui.windCardUnitEntity != UINT32_MAX && ctx.world.Has<game::components::UIText>(m_ui.windCardUnitEntity)) {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.windCardUnitEntity);
         DirectX::XMVECTOR wdir = DirectX::XMVectorSet(windDir.x, 0, windDir.y, 0);
         DirectX::XMVECTOR camForward = DirectX::XMVectorSet(sin(cameraYaw), 0, cos(cameraYaw), 0);
-        
+
         DirectX::XMFLOAT3 cross;
         DirectX::XMStoreFloat3(&cross, DirectX::XMVector3Cross(camForward, wdir));
         float dot = DirectX::XMVectorGetX(DirectX::XMVector3Dot(camForward, wdir));
         float angle = atan2(cross.y, dot);
-        
+
         std::wstring arrow = L"\u2191";
         if (angle > DirectX::XM_PI/8 && angle <= 3*DirectX::XM_PI/8) arrow = L"\u2197";
         else if (angle > 3*DirectX::XM_PI/8 && angle <= 5*DirectX::XM_PI/8) arrow = L"\u2192";
@@ -401,7 +406,7 @@ void WikiGolfHUD::UpdateWindUI(core::GameContext& ctx, float windSpeed, const Di
         else if (angle < -5*DirectX::XM_PI/8) arrow = L"\u2199";
         else if (angle < -3*DirectX::XM_PI/8) arrow = L"\u2190";
         else if (angle < -DirectX::XM_PI/8) arrow = L"\u2196";
-        
+
         t->text = arrow + L" m/s";
     }
 }

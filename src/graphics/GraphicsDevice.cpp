@@ -6,6 +6,7 @@
 #include "GraphicsDevice.h"
 #include "../core/Logger.h"
 #include <d3d11.h>
+#include <d3d11_4.h>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -150,8 +151,23 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
 
   m_featureLevel = featureLevel;
   LOG_INFO("GraphicsDevice", "Device created. Driver={}, FeatureLevel=0x{:04X}",
-           driverTypeToStr(m_driverType),
-           static_cast<uint32_t>(m_featureLevel));
+           m_driverType == D3D_DRIVER_TYPE_HARDWARE ? "HARDWARE" : "WARP",
+           static_cast<uint32_t>(featureLevel));
+
+  // Enable multithread protection for D3D11.
+  // The ID3D11Multithread interface is supported by the device context.
+  Microsoft::WRL::ComPtr<ID3D11Multithread> multithread;
+  if (SUCCEEDED(m_context.As(&multithread))) {
+    multithread->SetMultithreadProtected(TRUE);
+    LOG_INFO("GraphicsDevice", "Enabled D3D11Multithread Protection on context");
+  } else {
+    // Fallback to D3D10Multithread on device just in case (older Windows)
+    Microsoft::WRL::ComPtr<ID3D10Multithread> mt10;
+    if (SUCCEEDED(m_device.As(&mt10))) {
+      mt10->SetMultithreadProtected(TRUE);
+      LOG_INFO("GraphicsDevice", "Enabled D3D10Multithread Protection on device");
+    }
+  }
 
   if (m_device) {
     HRESULT reason = m_device->GetDeviceRemovedReason();

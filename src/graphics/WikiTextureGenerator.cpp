@@ -206,7 +206,7 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
   width = actualWidth;
 
   // 2. 分割計算
-  const uint32_t kMaxTileHeight = 8000; // 安全マージンをとって8000
+  const uint32_t kMaxTileHeight = 4096; // パフォーマンス改善のため細かく分割
   uint32_t remainingHeight = totalHeight;
   uint32_t currentOffsetY = 0;
 
