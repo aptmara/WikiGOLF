@@ -5,6 +5,8 @@
 #include "../../core/SceneManager.h"
 #include "../../core/StringUtils.h"
 #include "../../graphics/GraphicsDevice.h"
+#include "../../graphics/VideoPlayer.h"
+#include "../../graphics/TextRenderer.h"
 #include "../../graphics/SkyboxTextureGenerator.h"
 #include "../components/Camera.h"
 #include "../components/MeshRenderer.h"
@@ -82,7 +84,67 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
   ctx.input.SetMouseCursorVisible(true);
   ctx.input.SetMouseCursorLocked(false);
 
-  // BGM 再生
+
+  m_videoPlayer = std::make_unique<graphics::VideoPlayer>();
+  if (!m_videoPlayer->Initialize(ctx.graphics.GetDevice(), "Assets/videos/aptma_intro.mp4")) {
+      LOG_ERROR("TitleScene", "Failed to load intro video");
+      m_startupLoadTask = std::async(std::launch::async, [](){});
+  }
+
+  m_startupLoadTask = std::async(std::launch::async, [&ctx]() {
+      LOG_INFO("TitleScene", "Async load task started on thread!");
+      try {
+        HRESULT hrCom = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        LOG_INFO("TitleScene", "CoInitializeEx returned: {:08X}", static_cast<uint32_t>(hrCom));
+
+        LOG_INFO("TitleScene", "Step 1: LoadAudio");
+        if (ctx.audio) {
+            LOG_INFO("TitleScene", "Calling ctx.resource.LoadAudio bgm_title.mp3...");
+            ctx.resource.LoadAudio("Assets/sounds/bgm_title.mp3");
+            LOG_INFO("TitleScene", "LoadAudio bgm_title.mp3 finished successfully!");
+        }
+
+        LOG_INFO("TitleScene", "Step 2: LoadShader Basic");
+        ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
+        LOG_INFO("TitleScene", "Step 3: LoadShader Skybox");
+        ctx.resource.LoadShader("Skybox", L"Assets/shaders/SkyboxVS.hlsl", L"Assets/shaders/SkyboxPS.hlsl");
+
+        LOG_INFO("TitleScene", "Step 4: LoadMesh sphere");
+        ctx.resource.LoadMesh("builtin/sphere");
+
+        LOG_INFO("TitleScene", "Step 5: LoadMesh globe");
+        ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
+
+        LOG_INFO("TitleScene", "Step 6: LoadTextureSRV");
+        ctx.resource.LoadTextureSRV("Assets/textures/GRASS_BASE.png");
+
+        LOG_INFO("TitleScene", "Step 7: GenerateTerrain");
+        game::systems::TerrainConfig tconf;
+        tconf.worldWidth = 150.0f; tconf.worldDepth = 150.0f;
+        tconf.resolutionX = 64; tconf.resolutionZ = 64;
+        tconf.baseHeight = 0.0f; tconf.heightScale = 2.5f; tconf.biome = 0;
+        auto tdata = game::systems::TerrainGenerator::GenerateTerrain("TitleSeed", {}, tconf);
+
+        LOG_INFO("TitleScene", "Step 8: CreateDynamicMesh");
+        ctx.resource.CreateDynamicMesh("TitleTerrain", tdata.vertices, tdata.indices);
+
+        LOG_INFO("TitleScene", "Step 9: GenerateCubemap");
+        graphics::SkyboxTextureGenerator gen;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
+        gen.GenerateCubemapFromTheme(ctx.graphics.GetDevice(), graphics::SkyboxTheme::GolfCourseClear, cubemapSRV);
+
+        LOG_INFO("TitleScene", "Async load finished");
+        CoUninitialize();
+      } catch (const std::exception& e) {
+        LOG_ERROR("TitleScene", "Exception caught in async load task: {}", e.what());
+      } catch (...) {
+        LOG_ERROR("TitleScene", "Unknown exception caught in async load task!");
+      }
+  });
+}
+
+void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
+// BGM 再生
   if (ctx.audio) {
     ctx.audio->PlayBGM(ctx, "bgm_title.mp3", 0.5f);
   }
@@ -504,9 +566,34 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
   ptxt.visible = false;
 
   CreateCourseSelectUI(ctx);
+
 }
 
+
 void TitleScene::OnUpdate(core::GameContext &ctx) {
+  if (m_state == TitleState::IntroVideo) {
+    if (m_videoPlayer) {
+      m_videoPlayer->Update(ctx.graphics.GetContext(), ctx.dt);
+
+      // Check if finished (video ended and async task finished)
+      bool loadReady = m_startupLoadTask.valid() ? (m_startupLoadTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready) : true;
+      if (m_videoPlayer->IsFinished() && loadReady) {
+        m_state = TitleState::MainMenu;
+        m_videoPlayer->Stop();
+        m_videoPlayer.reset();
+        FinalizeStartupLoad(ctx);
+      }
+    } else {
+      // Fallback if video failed
+      bool loadReady = m_startupLoadTask.valid() ? (m_startupLoadTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready) : true;
+      if (loadReady) {
+        m_state = TitleState::MainMenu;
+        FinalizeStartupLoad(ctx);
+      }
+    }
+    return;
+  }
+
   m_time += ctx.dt;
 
   auto *skybox = ctx.world.Get<components::Skybox>(m_skyboxEntity);
@@ -610,6 +697,22 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       ptxt->visible = false;
     }
   }
+}
+
+void TitleScene::Render(core::GameContext &ctx) {
+  if (m_state != TitleState::IntroVideo || !m_videoPlayer || !ctx.textRenderer) {
+    return;
+  }
+
+  auto *srv = m_videoPlayer->GetSRV();
+  if (!srv) {
+    return;
+  }
+
+  ctx.textRenderer->BeginDraw();
+  D2D1_RECT_F rect = {0, 0, ctx.textRenderer->GetWidth(), ctx.textRenderer->GetHeight()};
+  ctx.textRenderer->RenderImage(srv, rect);
+  ctx.textRenderer->EndDraw();
 }
 
 void TitleScene::OnExit(core::GameContext &ctx) {

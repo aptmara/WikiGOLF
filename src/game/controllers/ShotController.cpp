@@ -164,9 +164,9 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
 
     if (ctx.audio) {
         if (power > 30.0f) {
-            ctx.audio->PlaySE(ctx, "se_shot_strong.mp3");
+            ctx.audio->PlaySE(ctx, "se_shot_hard.mp3");
         } else {
-            ctx.audio->PlaySE(ctx, "se_shot_normal.mp3");
+            ctx.audio->PlaySE(ctx, "se_shot_soft.mp3");
         }
     }
 

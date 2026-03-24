@@ -11,6 +11,8 @@
 #include <vector>
 #include <string>
 #include <future>
+#include <memory>
+#include "../../graphics/VideoPlayer.h"
 
 namespace game::scenes {
 
@@ -33,6 +35,7 @@ public:
 
   void OnEnter(core::GameContext &ctx) override;
   void OnUpdate(core::GameContext &ctx) override;
+  void Render(core::GameContext &ctx) override;
   void OnExit(core::GameContext &ctx) override;
 
 private:
@@ -68,8 +71,14 @@ private:
   float m_popupTimer = 0.0f;
 
   // --- 状態とコース選択UI ---
-  enum class TitleState { MainMenu, CourseSelect };
-  TitleState m_state = TitleState::MainMenu;
+  enum class TitleState { IntroVideo, MainMenu, CourseSelect };
+  TitleState m_state = TitleState::IntroVideo;
+
+  std::unique_ptr<graphics::VideoPlayer> m_videoPlayer;
+  std::future<void> m_startupLoadTask;
+  bool m_startupLoadCompleted = false;
+
+  void FinalizeStartupLoad(core::GameContext &ctx);
 
   ecs::Entity m_csBgEntity = 0;
   ecs::Entity m_csTitleEntity = 0;

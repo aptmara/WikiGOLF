@@ -24,7 +24,8 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
   // 1. D2D1.1 Factory 作成
   D2D1_FACTORY_OPTIONS options = {};
 #ifdef _DEBUG
-  options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
+  /// @brief 山内陽: Debug実行時にD2D診断レイヤーのブレークで起動が止まらないようにする。
+  options.debugLevel = D2D1_DEBUG_LEVEL_NONE;
 #endif
   hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, options,
                          m_d2dFactory.GetAddressOf());
@@ -346,13 +347,15 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
   // Bitmap プロパティ
   D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
       D2D1_BITMAP_OPTIONS_NONE,
-      D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED));
+      D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_IGNORE));
 
   ComPtr<ID2D1Bitmap1> bitmap;
   HRESULT hr =
       m_d2dContext->CreateBitmapFromDxgiSurface(surface.Get(), &props, &bitmap);
-  if (FAILED(hr))
+  if (FAILED(hr)) {
+    LOG_ERROR("TextRenderer", "CreateBitmapFromDxgiSurface failed in RenderImage: {:08X}", static_cast<uint32_t>(hr));
     return;
+  }
 
   // 回転変換
   if (rotation != 0.0f) {

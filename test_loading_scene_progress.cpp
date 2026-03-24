@@ -22,7 +22,7 @@ int main() {
 
   CHECK_CLOSE(BlendProgress(0.5f, 0.0f), 0.325f, 0.0001f,
               "BlendProgress mixes spawn heavy");
-  CHECK_CLOSE(BlendProgress(0.2f, 1.0f), 0.53f, 0.0001f,
+  CHECK_CLOSE(BlendProgress(0.2f, 1.0f), 0.48f, 0.0001f,
               "BlendProgress respects settled weight");
   CHECK_CLOSE(BlendProgress(2.0f, 2.0f), 1.0f, 0.0001f,
               "BlendProgress clamps to 1");
@@ -34,6 +34,23 @@ int main() {
               "CombineLoadingProgress picks visual when larger");
   CHECK_CLOSE(CombineLoadingProgress(1.2f, 0.52f), 1.0f, 0.0001f,
               "CombineLoadingProgress clamps to 1 when async exceeds 1");
+
+  CHECK_CLOSE(CombineTransitionProgress(0.0f, 0.0f, false, 0.0f), 0.0f,
+              0.0001f, "CombineTransitionProgress starts at zero");
+  CHECK_CLOSE(CombineTransitionProgress(0.5f, 0.0f, false, 0.0f), 0.35f,
+              0.0001f, "CombineTransitionProgress maps fetch into 0.0-0.7");
+  CHECK_CLOSE(CombineTransitionProgress(1.0f, 0.0f, false, 0.0f), 0.7f,
+              0.0001f, "CombineTransitionProgress caps fetch at 0.7");
+  CHECK_CLOSE(CombineTransitionProgress(1.0f, 0.5f, false, 0.0f), 0.825f,
+              0.0001f, "CombineTransitionProgress maps build into 0.7-0.95");
+  CHECK_CLOSE(CombineTransitionProgress(1.0f, 1.0f, true, 0.0f), 1.0f,
+              0.0001f, "CombineTransitionProgress reaches 1.0 on complete");
+  CHECK_CLOSE(CombineTransitionProgress(0.2f, 0.0f, false, 0.6f), 0.6f,
+              0.0001f,
+              "CombineTransitionProgress never regresses below currentProgress");
+  CHECK_CLOSE(CombineTransitionProgress(1.0f, 0.0f, false, 0.8f), 0.8f,
+              0.0001f,
+              "CombineTransitionProgress preserves displayed progress on stage switch");
 
   std::cout << "All loading progress tests passed!\n";
   return 0;

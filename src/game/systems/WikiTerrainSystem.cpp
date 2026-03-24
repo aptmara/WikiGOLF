@@ -23,6 +23,13 @@ namespace game::systems {
 using namespace DirectX;
 using namespace game::components;
 
+namespace {
+
+constexpr float kTerrainOverlayHeightOffset = 0.02f;
+constexpr float kTerrainOverlayAlpha = 0.34f;
+
+} // namespace
+
 void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   for (auto e : m_entities) {
     if (ctx.world.IsAlive(e)) {
@@ -337,11 +344,38 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
         ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                 L"Assets/shaders/BasicPS.hlsl");
     meshRenderer.color = terrainColor;
-    meshRenderer.textureSRV = tile.srv;
-    meshRenderer.hasTexture = true;
+    meshRenderer.textureSRV = nullptr;
+    meshRenderer.hasTexture = false;
 
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
+
+    std::vector<graphics::Vertex> overlayVertices = vertices;
+    for (auto &overlayVertex : overlayVertices) {
+      overlayVertex.position.y += kTerrainOverlayHeightOffset;
+      overlayVertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    }
+
+    resources::MeshHandle overlayHandle = ctx.resource.CreateDynamicMesh(
+        "TerrainTileOverlay_" + std::to_string(tile.offsetY), overlayVertices,
+        indices);
+
+    auto overlayEntity = ctx.world.CreateEntity();
+    Transform &overlayTransform = ctx.world.Add<Transform>(overlayEntity);
+    overlayTransform.position = {0.0f, 0.0f, 0.0f};
+
+    MeshRenderer &overlayRenderer = ctx.world.Add<MeshRenderer>(overlayEntity);
+    overlayRenderer.mesh = overlayHandle;
+    overlayRenderer.shader =
+        ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                L"Assets/shaders/BasicPS.hlsl");
+    overlayRenderer.color = {1.0f, 1.0f, 1.0f, kTerrainOverlayAlpha};
+    overlayRenderer.textureSRV = tile.srv;
+    overlayRenderer.hasTexture = true;
+    overlayRenderer.isTransparent = true;
+
+    m_entities.push_back(overlayEntity);
+    ctx.world.Add<TerrainObject>(overlayEntity);
   }
 }
 

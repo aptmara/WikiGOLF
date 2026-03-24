@@ -1,4 +1,4 @@
-#include "ClubController.h"
+﻿#include "ClubController.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
@@ -301,7 +301,7 @@ void ClubController::InitializeClubModel(core::GameContext &ctx) {
   tr.scale = {0.5f, 0.5f, 0.5f};
 
   auto &mr = ctx.world.Add<MeshRenderer>(m_clubModelEntity);
-  mr.mesh = ctx.resource.LoadMesh("Assets/models/golf_club.fbx");
+  mr.mesh = ctx.resource.LoadMesh("Assets/models/golf_club.glb");
   mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                       L"Assets/shaders/BasicPS.hlsl");
   mr.color = {0.9f, 0.9f, 0.9f, 1.0f};

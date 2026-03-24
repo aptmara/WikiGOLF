@@ -349,7 +349,7 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   auto basicShader = ctx.resource.LoadShader(
       "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
   auto globeMesh = ctx.resource.LoadMesh(
-      "Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
+      "Assets/models/Wikipedia_puzzle_globe_3D_render.glb");
   auto planeMesh = ctx.resource.LoadMesh("builtin/plane");
   auto ringMesh = ctx.resource.LoadMesh(
       "builtin/torus"); // Assuming torus exists or use cube loops

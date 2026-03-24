@@ -85,7 +85,7 @@ void RenderSystem(core::GameContext &ctx) {
   bool cameraFound = false;
   world.Query<components::Transform, components::Camera>().Each(
       [&](ecs::Entity, components::Transform &t, components::Camera &c) {
-        if (!cameraFound) {
+        if (c.isMainCamera || !cameraFound) {
           view = c.GetViewMatrix(t);
           proj = c.GetProjectionMatrix();
           camPos = {t.position.x, t.position.y, t.position.z, 1.0f};
