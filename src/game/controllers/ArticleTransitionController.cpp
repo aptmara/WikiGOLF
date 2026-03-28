@@ -1,4 +1,4 @@
-﻿#include "ArticleTransitionController.h"
+#include "ArticleTransitionController.h"
 #include "../../ecs/World.h"
 #include "../../core/StringUtils.h"
 
@@ -53,6 +53,7 @@ void ArticleTransitionController::Cleanup(core::GameContext& ctx) {
 }
 
 void ArticleTransitionController::StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap) {
+    LOG_DEBUG("Transition", "StartTransition called with targetPage: {}", targetPage);
     m_targetBall = ball;
     m_targetCam = cam;
     m_targetSky = sky;
@@ -69,7 +70,9 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
     m_tipTimer = 0.0f;
     m_tipIndex = 0;
 
+    LOG_DEBUG("Transition", "Calling SpawnEntities");
     SpawnEntities(ctx);
+    LOG_DEBUG("Transition", "SpawnEntities finished");
 
     if (m_pageLoader) {
         // 非同期ロード開始
@@ -84,8 +87,10 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
 }
 
 void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
+    LOG_DEBUG("Transition", "SpawnEntities: Step 1 (Shader)");
     auto shaderHandle = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
 
+    LOG_DEBUG("Transition", "SpawnEntities: Step 2 (Camera)");
     // 1. トランジション専用カメラ (遥か上空に配置して既存フィールドと干渉させない)
     m_cameraEntity = ctx.world.CreateEntity();
     auto& camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
@@ -98,28 +103,32 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     cam.farZ = 1000.0f;
     cam.isMainCamera = true; // メインカメラをジャックする
 
+    LOG_DEBUG("Transition", "SpawnEntities: Step 3 (Globe)");
     // 2. 地球儀
     m_globeEntity = ctx.world.CreateEntity();
     auto& globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
     globeTr.position = {0.0f, 5000.0f, 0.0f};
     globeTr.scale = {0.1f, 0.1f, 0.1f}; // STLはサイズが大きい場合が多いので仮スケール
     auto& globeMr = ctx.world.Add<components::MeshRenderer>(m_globeEntity);
-    globeMr.mesh = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.glb");
+    globeMr.mesh = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
     globeMr.shader = shaderHandle;
     globeMr.color = {0.9f, 0.9f, 0.95f, 0.0f}; // 初期アルファ0
     globeMr.isVisible = true;
 
+    LOG_DEBUG("Transition", "SpawnEntities: Step 4 (Cart)");
     // 3. ゴルフカート
     m_cartEntity = ctx.world.CreateEntity();
     auto& cartTr = ctx.world.Add<components::Transform>(m_cartEntity);
     cartTr.position = {10.0f, 5000.0f, 0.0f};
-    cartTr.scale = {1.0f, 1.0f, 1.0f}; // GLB仮スケール
+    cartTr.scale = {5.0f, 5.0f, 5.0f}; // Cube用のスケール
     auto& cartMr = ctx.world.Add<components::MeshRenderer>(m_cartEntity);
-    cartMr.mesh = ctx.resource.LoadMesh("Assets/models/GolfCart.glb");
+    // AssimpがGolfCart.glbの読み込み時にクラッシュするため、一時的にbuiltin/cubeを使用
+    cartMr.mesh = ctx.resource.LoadMesh("builtin/cube");
     cartMr.shader = shaderHandle;
     cartMr.color = {1.0f, 1.0f, 1.0f, 0.0f};
     cartMr.isVisible = true;
 
+    LOG_DEBUG("Transition", "SpawnEntities: Step 5 (Background)");
     // 4. 背景 (暗転用)
     m_bgEntity = ctx.world.CreateEntity();
     auto& bgTr = ctx.world.Add<components::Transform>(m_bgEntity);
@@ -131,6 +140,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     bgMr.color = {0.05f, 0.05f, 0.1f, 0.0f};
     bgMr.isVisible = true;
 
+    LOG_DEBUG("Transition", "SpawnEntities: Step 6 (Text UI)");
     // 5. UI テキスト
     m_textEntity = ctx.world.CreateEntity();
     auto& titleText = ctx.world.Add<components::UIText>(m_textEntity);

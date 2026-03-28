@@ -344,20 +344,8 @@ void WikiGolfScene::CreateField(core::GameContext &ctx) {
   ft.position = {0.0f, 0.0f, 0.0f};
   ft.scale = {20.0f * kFieldScale, 0.5f * kFieldScale, 30.0f * kFieldScale};
 
-  auto &fmr = ctx.world.Add<MeshRenderer>(m_floorEntity);
-  fmr.mesh = ctx.resource.LoadMesh("builtin/plane"); // 平面メッシュ
-  fmr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                       L"Assets/shaders/BasicPS.hlsl");
-  fmr.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白
-  LOG_DEBUG("WikiGolf", "Floor MeshRenderer: mesh={}, shader={}, visible={}",
-            fmr.mesh.index, fmr.shader.index, fmr.isVisible);
-
-  auto &frb = ctx.world.Add<RigidBody>(m_floorEntity);
-  frb.isStatic = true;
-
-  auto &fc = ctx.world.Add<Collider>(m_floorEntity);
-  fc.type = ColliderType::Box;
-  fc.size = {0.5f, 0.5f, 0.5f};
+  // 変更：ボールがめり込んで飛ばない問題、および地形下の白いプレーン表示の問題を解消するため、
+  // 床のMeshRenderer, RigidBody, Colliderの付与を削除
 }
 
 void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
@@ -525,6 +513,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
       m_clubController->UpdateAnimation(ctx, dt, m_ballEntity, shotDir);
   }
+  
+  // 物理更新
+  game::systems::PhysicsSystem(ctx, dt);
   
   // ボール静止・OB・地形判定ロジック
   if (shot->phase == game::components::ShotState::Phase::Executing) {

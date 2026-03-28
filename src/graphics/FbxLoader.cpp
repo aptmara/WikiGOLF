@@ -99,10 +99,11 @@ bool FbxLoader::Load(const std::string &path, std::vector<Vertex> &outVertices,
   // - UV座標のフリップ（DirectX用）
   // - 接線・従接線生成
   unsigned int flags = aiProcess_Triangulate | aiProcess_GenNormals |
-                       aiProcess_FlipUVs | aiProcess_CalcTangentSpace |
-                       aiProcess_JoinIdenticalVertices;
+                       aiProcess_FlipUVs;
 
+  LOG_DEBUG("FbxLoader", "Reading file with Assimp: {}", path);
   const aiScene *scene = importer.ReadFile(path, flags);
+  LOG_DEBUG("FbxLoader", "Assimp ReadFile finished");
 
   if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE ||
       !scene->mRootNode) {
@@ -113,9 +114,11 @@ bool FbxLoader::Load(const std::string &path, std::vector<Vertex> &outVertices,
   outVertices.clear();
   outIndices.clear();
 
+  LOG_DEBUG("FbxLoader", "Processing nodes...");
   // ルートノードから再帰的に処理
   ProcessNode(scene->mRootNode, scene, outVertices, outIndices);
 
+  LOG_DEBUG("FbxLoader", "Computing tangents...");
   ComputeTangents(outVertices, outIndices);
 
   LOG_INFO("FbxLoader", "ロード成功: {} (頂点: {}, インデックス: {})", path,

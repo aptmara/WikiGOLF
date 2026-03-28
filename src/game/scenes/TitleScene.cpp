@@ -131,7 +131,7 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
         LOG_INFO("TitleScene", "Step 9: GenerateCubemap");
         graphics::SkyboxTextureGenerator gen;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
-        gen.GenerateCubemapFromTheme(ctx.graphics.GetDevice(), graphics::SkyboxTheme::GolfCourseClear, cubemapSRV);
+        gen.GenerateCubemapFromTheme(ctx.graphics.GetDevice(), graphics::SkyboxTheme::Food, cubemapSRV);
 
         LOG_INFO("TitleScene", "Async load finished");
         CoUninitialize();
@@ -163,7 +163,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
     bool ok = gen.GenerateCubemapFromTheme(
         ctx.graphics.GetDevice(),
-        graphics::SkyboxTheme::GolfCourseClear,
+        graphics::SkyboxTheme::Food,
         cubemapSRV);
     if (ok) {
       skybox.cubemapSRV  = cubemapSRV;
