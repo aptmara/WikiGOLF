@@ -28,6 +28,38 @@ namespace {
 constexpr float kTerrainOverlayHeightOffset = 0.02f;
 constexpr float kTerrainOverlayAlpha = 0.34f;
 
+int DetermineBiomeFromCategories(const std::vector<std::string> &categories,
+                                 const std::string &pageTitle) {
+  for (const auto &cat : categories) {
+    if (cat.find("歴史") != std::string::npos ||
+        cat.find("戦争") != std::string::npos ||
+        cat.find("事件") != std::string::npos ||
+        cat.find("政治") != std::string::npos ||
+        cat.find("古代") != std::string::npos) {
+      return 1;
+    }
+    if (cat.find("科学") != std::string::npos ||
+        cat.find("技術") != std::string::npos ||
+        cat.find("数学") != std::string::npos ||
+        cat.find("物理") != std::string::npos ||
+        cat.find("コンピュータ") != std::string::npos ||
+        cat.find("宇宙") != std::string::npos) {
+      return 2;
+    }
+    if (cat.find("地理") != std::string::npos ||
+        cat.find("地形") != std::string::npos ||
+        cat.find("生物") != std::string::npos ||
+        cat.find("植物") != std::string::npos ||
+        cat.find("動物") != std::string::npos ||
+        cat.find("山") != std::string::npos) {
+      return 3;
+    }
+  }
+
+  std::hash<std::string> hasher;
+  return static_cast<int>(hasher(pageTitle) % 4);
+}
+
 } // namespace
 
 void WikiTerrainSystem::Clear(core::GameContext &ctx) {
@@ -43,13 +75,14 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
 void WikiTerrainSystem::BuildField(core::GameContext &ctx,
                                    const std::string &pageTitle,
                                    const graphics::WikiTextureResult &result,
-                                   float fieldWidth, float fieldDepth) {
+                                   float fieldWidth, float fieldDepth,
+                                   const std::vector<std::string> &pageCategories) {
   Clear(ctx);
 
   LOG_INFO("WikiTerrain", "Building field {}x{} with {} tiles", fieldWidth,
            fieldDepth, (int)result.tiles.size());
 
-  CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle);
+  CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle, pageCategories);
   CreateWalls(ctx, fieldWidth, fieldDepth);
   CreateDecorations(ctx, fieldWidth, fieldDepth, m_biome);
 }
@@ -57,7 +90,8 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
 void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
                                     const graphics::WikiTextureResult &result,
                                     float width, float depth,
-                                    const std::string &pageTitle) {
+                                    const std::string &pageTitle,
+                                    const std::vector<std::string> &pageCategories) {
   // 1. 地形解像度・設定の決定
   int resX = 64;
   int resZ = static_cast<int>(depth);
@@ -71,48 +105,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   config.heightScale = 1.5f;
 
   // バイオーム決定
-  WikiClient client;
-  auto categories = client.FetchPageCategories(pageTitle);
-  int biome = 0;
-  bool found = false;
-
-  for (const auto &cat : categories) {
-    if (cat.find("歴史") != std::string::npos ||
-        cat.find("戦争") != std::string::npos ||
-        cat.find("事件") != std::string::npos ||
-        cat.find("政治") != std::string::npos ||
-        cat.find("古代") != std::string::npos) {
-      biome = 1;
-      found = true;
-      break;
-    }
-    if (cat.find("科学") != std::string::npos ||
-        cat.find("技術") != std::string::npos ||
-        cat.find("数学") != std::string::npos ||
-        cat.find("物理") != std::string::npos ||
-        cat.find("コンピュータ") != std::string::npos ||
-        cat.find("宇宙") != std::string::npos) {
-      biome = 2;
-      found = true;
-      break;
-    }
-    if (cat.find("地理") != std::string::npos ||
-        cat.find("地形") != std::string::npos ||
-        cat.find("生物") != std::string::npos ||
-        cat.find("植物") != std::string::npos ||
-        cat.find("動物") != std::string::npos ||
-        cat.find("山") != std::string::npos) {
-      biome = 3;
-      found = true;
-      break;
-    }
-  }
-
-  if (!found) {
-    std::hash<std::string> hasher;
-    size_t h = hasher(pageTitle);
-    biome = h % 4;
-  }
+  int biome = DetermineBiomeFromCategories(pageCategories, pageTitle);
 
   // configにバイオーム設定を反映
   config.biome = biome;

@@ -70,6 +70,41 @@ struct WikiTextureResult {
   std::vector<HeadingRegion> headings;
 };
 
+struct WikiTextureGenerationState {
+  std::wstring title;
+  std::wstring articleText;
+  std::vector<std::pair<std::wstring, std::string>> links;
+  std::string targetPage;
+  uint32_t requestedWidth = 0;
+  uint32_t requestedHeight = 0;
+
+  uint32_t actualWidth = 0;
+  uint32_t totalHeight = 0;
+  uint32_t remainingHeight = 0;
+  uint32_t currentOffsetY = 0;
+  uint32_t totalTiles = 0;
+  float marginX = 40.0f;
+  float currentY = 140.0f;
+
+  DWRITE_TEXT_METRICS textMetrics = {};
+  ComPtr<IDWriteTextLayout> textLayout;
+  std::vector<bool> linkMatched;
+  bool brushesInitialized = false;
+  bool drawingEffectsApplied = false;
+
+  ComPtr<ID2D1SolidColorBrush> bText;
+  ComPtr<ID2D1SolidColorBrush> bLink;
+  ComPtr<ID2D1SolidColorBrush> bTarget;
+  ComPtr<ID2D1SolidColorBrush> bBorder;
+  ComPtr<ID2D1SolidColorBrush> bBackLink;
+  ComPtr<ID2D1SolidColorBrush> bBackTarget;
+  ComPtr<ID2D1SolidColorBrush> bGlow;
+
+  WikiTextureResult result;
+  bool started = false;
+  bool completed = false;
+};
+
 /**
  * @brief Wikipedia記事テクスチャ生成器
  */
@@ -101,6 +136,16 @@ public:
       const std::wstring &title, const std::wstring &articleText,
       const std::vector<std::pair<std::wstring, std::string>> &links,
       const std::string &targetPage, uint32_t width, uint32_t height);
+
+  /// @brief インクリメンタル生成の開始
+  bool BeginGenerateTexture(
+      WikiTextureGenerationState &state, const std::wstring &title,
+      const std::wstring &articleText,
+      const std::vector<std::pair<std::wstring, std::string>> &links,
+      const std::string &targetPage, uint32_t width, uint32_t height);
+
+  /// @brief 次のタイルを生成。完了時は true を返す
+  bool GenerateNextTile(WikiTextureGenerationState &state);
 
 private:
   /// @brief D2Dオフスクリーンターゲット作成

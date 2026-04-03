@@ -47,6 +47,7 @@ struct PageDataAsyncResult {
     std::string pageName;
     std::string articleText;
     std::vector<game::WikiLink> allLinks;
+    std::vector<std::string> pageCategories;
     bool hasData = false;
 };
 

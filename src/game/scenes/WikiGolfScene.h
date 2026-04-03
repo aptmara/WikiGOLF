@@ -53,6 +53,7 @@ public:
 
   void OnEnter(core::GameContext &ctx) override;
   void OnUpdate(core::GameContext &ctx) override;
+  void Render(core::GameContext &ctx) override;
   
   void OnExit(core::GameContext &ctx) override;
 

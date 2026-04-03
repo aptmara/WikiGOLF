@@ -321,6 +321,10 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   m_clubController = std::make_unique<game::controllers::ClubController>();
   m_clubController->Initialize(ctx);
+  if (auto *state = ctx.world.GetGlobal<GolfGameState>()) {
+      state->rollingFrictionScale =
+          m_clubController->GetCurrentClub().rollingFrictionScale;
+  }
 
   m_trajectoryPredictor = std::make_unique<game::controllers::TrajectoryPredictor>();
   m_trajectoryPredictor->Initialize(ctx, 30);
@@ -444,11 +448,12 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
 
 
 void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
+  const float dt = ctx.dt;
+  m_screenFade.Update(dt);
+
   auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
   auto *shot = ctx.world.GetGlobal<game::components::ShotState>();
   if (!state || !shot) return;
-
-  const float dt = ctx.dt;
 
   if (m_phase == ScenePhase::Transitioning && m_transitionController) {
       bool finished = m_transitionController->Update(ctx);
@@ -594,7 +599,11 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // 予測軌道アップデート
-  if (m_trajectoryPredictor && shot->phase == game::components::ShotState::Phase::Idle && state->canShoot && !isMapView) {
+  bool canShowTrajectory = m_trajectoryPredictor && state->canShoot && !isMapView;
+  if (canShowTrajectory &&
+      (shot->phase == game::components::ShotState::Phase::Idle ||
+       shot->phase == game::components::ShotState::Phase::PowerCharging ||
+       shot->phase == game::components::ShotState::Phase::ImpactTiming)) {
       game::controllers::TrajectoryPredictor::Params tParams;
       tParams.ballEntity = m_ballEntity;
       tParams.arrowEntity = m_arrowEntity;
@@ -603,7 +612,18 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       tParams.launchAngle = m_clubController ? m_clubController->GetCurrentClub().launchAngle : 30.0f;
       tParams.isMapView = false;
       tParams.terrainSystem = m_terrainSystem.get();
-      tParams.powerRatio = 0.0f;
+
+      float powerRatio = 0.0f;
+      if (shot->phase == game::components::ShotState::Phase::PowerCharging) {
+          powerRatio = shot->powerGaugePos;
+      } else if (shot->phase == game::components::ShotState::Phase::ImpactTiming) {
+          powerRatio =
+              (shot->confirmedPower > 0.0f) ? shot->confirmedPower : shot->powerGaugePos;
+      } else if (shot->confirmedPower > 0.0f) {
+          powerRatio = shot->confirmedPower;
+      }
+
+      tParams.powerRatio = std::clamp(powerRatio, 0.0f, 1.0f);
       m_trajectoryPredictor->Update(ctx, tParams);
   } else if (m_trajectoryPredictor) {
       m_trajectoryPredictor->Hide(ctx);
@@ -643,6 +663,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   CheckCupIn(ctx);
+}
+
+void WikiGolfScene::Render(core::GameContext &ctx) {
+  m_screenFade.Render(ctx);
 }
 
 void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {

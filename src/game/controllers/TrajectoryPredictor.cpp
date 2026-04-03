@@ -206,11 +206,13 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
           vel = XMVectorZero();
           acc = XMVectorZero();
         } else if (currentSpeed > 0.0001f) {
-          float drop = frictionAccel * subDt;
-          if (currentSpeed <= drop) {
+          // 指数関数的な速度減衰（PhysicsSystemと同期）
+          float k = frictionAccel;
+          float speedRatio = std::exp(-k * subDt);
+          vel = XMVectorScale(vel, speedRatio);
+
+          if (safeLength(vel) < 0.02f) {
             vel = XMVectorZero();
-          } else {
-            vel = XMVectorScale(vel, (currentSpeed - drop) / currentSpeed);
           }
         }
 

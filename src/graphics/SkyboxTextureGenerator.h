@@ -15,9 +15,15 @@
 namespace graphics {
 
 /**
+ * @brief スカイボックスの各面に対応するファイル接尾辞
+ */
+extern const wchar_t *kSkyboxFaceSuffixes[6];
+
+/**
  * @brief スカイボックステーマ定義
  */
 enum class SkyboxTheme {
+// ... (omitting intermediate lines for brevity in instruction, will provide full replacement)
   Default,        // デフォルト青空
   HistoryAncient, // 歴史・古代
   Medieval,       // 中世・城
@@ -154,7 +160,7 @@ private:
                         const DirectX::XMFLOAT3 &horizonColor,
                         const DirectX::XMFLOAT3 &bottomColor, int faceSize,
                         std::vector<std::vector<uint8_t>> &outData,
-                        SkyboxTheme theme);
+                        SkyboxTheme theme, uint8_t faceMask = 0x3F);
 
   /**
    * @brief キューブマップテクスチャとSRVを作成

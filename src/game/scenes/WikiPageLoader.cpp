@@ -101,10 +101,12 @@ PageDataAsyncResult WikiPageLoader::FetchPageDataAsync(const std::string& pageNa
         res.allLinks    = std::move(m_preloadedLinks);
         res.articleText = std::move(m_preloadedExtract);
         m_hasPreloadedData = false;
+        res.pageCategories = wikiClient.FetchPageCategories(pageName);
     } else {
         LOG_INFO("WikiPageLoader", "Fetching live data async for: {}", pageName);
         res.allLinks    = wikiClient.FetchPageLinks(pageName, 0);
         res.articleText = wikiClient.FetchPageExtract(pageName, 5000);
+        res.pageCategories = wikiClient.FetchPageCategories(pageName);
     }
     res.hasData = true;
     return res;
@@ -158,6 +160,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     // ---- 2. 記事データ取得 (Fetch済) ----
     std::vector<game::WikiLink> allLinks = std::move(asyncData.allLinks);
     std::string articleText = std::move(asyncData.articleText);
+    std::vector<std::string> pageCategories = std::move(asyncData.pageCategories);
 
 
     // ---- 3. リンクのフィルタリング ----
@@ -317,7 +320,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     // ---- 8. 地形構築 ----
     if (m_terrainSystem) {
         m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture,
-                                    fieldWidth, fieldDepth);
+                                    fieldWidth, fieldDepth, pageCategories);
     }
 
     // ---- 9. ボール再配置 ----

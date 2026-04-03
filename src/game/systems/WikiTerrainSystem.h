@@ -36,9 +36,11 @@ public:
   /// @param textureResult テクスチャ生成結果（画像・見出し座標入り）
   /// @param fieldWidth フィールドのワールド幅
   /// @param fieldDepth フィールドのワールド奥行き
+  /// @param pageCategories 記事カテゴリ（省略時は内部で取得する）
   void BuildField(core::GameContext &ctx, const std::string &pageTitle,
                   const graphics::WikiTextureResult &textureResult,
-                  float fieldWidth, float fieldDepth);
+                  float fieldWidth, float fieldDepth,
+                  const std::vector<std::string> &pageCategories = {});
 
   /// @brief 現在のフィールドエンティティ群を取得
   const std::vector<ecs::Entity> &GetEntities() const { return m_entities; }
@@ -63,7 +65,8 @@ private:
   /// @brief 床作成
   void CreateFloor(core::GameContext &ctx,
                    const graphics::WikiTextureResult &result, float width,
-                   float depth, const std::string &pageTitle);
+                   float depth, const std::string &pageTitle,
+                   const std::vector<std::string> &pageCategories);
 
   /// @brief 壁作成
   void CreateWalls(core::GameContext &ctx, float width, float depth);
