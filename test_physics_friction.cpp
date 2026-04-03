@@ -22,20 +22,24 @@ int main() {
 
   const float frictionCoeff = 0.35f;
   const float dt = 0.008f; // 30FPSサブステップ相当
-  const float expectedDrop = frictionCoeff * 9.8f * dt;
+  const float gravity = 9.8f;
+  const float k = frictionCoeff * gravity;
 
-  // 1) 摩擦減速が重力係数込みで計算されることを確認
+  // 1) 摩擦減速が指数関数的に計算されることを確認
   {
     float startSpeed = 5.0f;
     float newSpeed = ApplyRollingFriction(startSpeed, frictionCoeff, dt);
-    CHECK_CLOSE(newSpeed, startSpeed - expectedDrop, 1e-5f,
-                "Rolling friction uses gravity-scaled deceleration");
+    float expectedSpeed = startSpeed * std::exp(-k * dt);
+    CHECK_CLOSE(newSpeed, expectedSpeed, 1e-5f,
+                "Rolling friction uses exponential decay");
   }
 
-  // 2) 減速量が速度を上回る場合は静止する
+  // 2) 速度が極低速しきい値を下回る場合は静止する
   {
-    float newSpeed = ApplyRollingFriction(0.01f, frictionCoeff, dt);
-    CHECK(std::fabs(newSpeed) < 1e-6f, "Speed drops to zero when friction exceeds velocity");
+    // しきい値を 0.02f としているので、それ以下になるような入力を与える
+    float startSpeed = 0.015f; 
+    float newSpeed = ApplyRollingFriction(startSpeed, frictionCoeff, dt);
+    CHECK(std::fabs(newSpeed) < 1e-6f, "Speed drops to zero when below threshold");
   }
 
   // 3) 摩擦係数ゼロなら速度は変化しない
@@ -45,10 +49,11 @@ int main() {
     CHECK_CLOSE(newSpeed, startSpeed, 1e-6f, "Zero friction keeps velocity unchanged");
   }
 
-  // 4) ドロップ計算ヘルパーの単体検証
+  // 4) ドロップ計算ヘルパーは従来の線形計算（静止摩擦判定などで利用）
   {
+    float expectedDrop = frictionCoeff * gravity * dt;
     float drop = ComputeRollingFrictionDrop(frictionCoeff, dt);
-    CHECK_CLOSE(drop, expectedDrop, 1e-6f, "Drop helper multiplies coefficient by gravity and dt");
+    CHECK_CLOSE(drop, expectedDrop, 1e-6f, "Drop helper maintains linear gravity-scaled value");
   }
 
   // 5) 静止摩擦が坂の微小な押し出しを打ち消す

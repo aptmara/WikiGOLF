@@ -14,11 +14,12 @@ using Microsoft::WRL::ComPtr;
 
 namespace graphics {
 
+const wchar_t *kSkyboxFaceSuffixes[6] = {L"_px.png", L"_nx.png", L"_py.png",
+                                         L"_ny.png", L"_pz.png", L"_nz.png"};
+
 namespace {
 
 constexpr int kDefaultFaceSize = 512;
-const wchar_t *kFaceSuffixes[6] = {L"_px.png", L"_nx.png", L"_py.png",
-                                   L"_ny.png", L"_pz.png", L"_nz.png"};
 
 struct ThemeParams {
   float starMult = 1.0f;
@@ -333,7 +334,7 @@ bool SkyboxTextureGenerator::GenerateCubemapToFiles(
   bool savedAll = true;
   for (int i = 0; i < 6; ++i) {
     std::filesystem::path facePath = basePath;
-    facePath += kFaceSuffixes[i];
+    facePath += kSkyboxFaceSuffixes[i];
     if (!SaveFaceToFile(faceData[i], kDefaultFaceSize, facePath.wstring())) {
       savedAll = false;
     }
@@ -350,14 +351,30 @@ bool SkyboxTextureGenerator::GenerateCubemapToFiles(
 bool SkyboxTextureGenerator::GenerateCubemapFromThemeToFiles(
     ID3D11Device *device, SkyboxTheme theme, const std::wstring &baseFilePath) {
 
+  std::filesystem::path basePath(baseFilePath);
+
+  // どの面が欠けているかチェック
+  uint8_t faceMask = 0;
+  for (int i = 0; i < 6; ++i) {
+    std::filesystem::path facePath = basePath;
+    facePath += kSkyboxFaceSuffixes[i];
+    if (!std::filesystem::exists(facePath)) {
+      faceMask |= (1 << i);
+    }
+  }
+
+  // すべて存在すればスキップ
+  if (faceMask == 0) {
+    return true;
+  }
+
   XMFLOAT3 topColor, horizonColor, bottomColor;
   GetThemeColors(theme, topColor, horizonColor, bottomColor);
 
   std::vector<std::vector<uint8_t>> faceData;
   GenerateFaceData(topColor, horizonColor, bottomColor, kDefaultFaceSize,
-                   faceData, theme);
+                   faceData, theme, faceMask);
 
-  std::filesystem::path basePath(baseFilePath);
   if (!basePath.parent_path().empty()) {
     std::error_code ec;
     std::filesystem::create_directories(basePath.parent_path(), ec);
@@ -365,8 +382,12 @@ bool SkyboxTextureGenerator::GenerateCubemapFromThemeToFiles(
 
   bool savedAll = true;
   for (int i = 0; i < 6; ++i) {
+    if (!(faceMask & (1 << i))) {
+      continue;
+    }
+
     std::filesystem::path facePath = basePath;
-    facePath += kFaceSuffixes[i];
+    facePath += kSkyboxFaceSuffixes[i];
     if (!SaveFaceToFile(faceData[i], kDefaultFaceSize, facePath.wstring())) {
       savedAll = false;
     }
@@ -382,7 +403,7 @@ bool SkyboxTextureGenerator::LoadCubemapFromFiles(
   std::vector<std::vector<uint8_t>> faceData(6);
   for (int i = 0; i < 6; ++i) {
     std::filesystem::path facePath(baseFilePath);
-    facePath += kFaceSuffixes[i];
+    facePath += kSkyboxFaceSuffixes[i];
     if (!std::filesystem::exists(facePath)) {
       return false;
     }
@@ -1153,7 +1174,8 @@ void SkyboxTextureGenerator::GetThemeColors(SkyboxTheme theme,
 void SkyboxTextureGenerator::GenerateFaceData(
     const XMFLOAT3 &topColor, const XMFLOAT3 &horizonColor,
     const XMFLOAT3 &bottomColor, int faceSize,
-    std::vector<std::vector<uint8_t>> &outData, SkyboxTheme theme) {
+    std::vector<std::vector<uint8_t>> &outData, SkyboxTheme theme,
+    uint8_t faceMask) {
 
   outData.resize(6); // 6面
 
@@ -1162,6 +1184,9 @@ void SkyboxTextureGenerator::GenerateFaceData(
   ThemeParams params = GetThemeParams(theme);
 
   for (int face = 0; face < 6; ++face) {
+    if (!(faceMask & (1 << face))) {
+      continue;
+    }
     outData[face].resize(faceSize * faceSize * 4); // RGBA
 
     for (int y = 0; y < faceSize; ++y) {

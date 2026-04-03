@@ -28,7 +28,7 @@ inline float ComputeRollingFrictionDrop(float frictionCoeff, float dtSeconds) {
   return coeff * gravity * dtSeconds;
 }
 
-/// @brief 転がり摩擦を適用した後の速度を返す
+/// @brief 指数関数的な減衰を適用した後の速度を返す
 /// @param speed 現在の速度量
 /// @param frictionCoeff 摩擦係数
 /// @param dtSeconds 経過時間 (秒)
@@ -39,12 +39,22 @@ inline float ApplyRollingFriction(float speed, float frictionCoeff,
     return 0.0f;
   }
 
-  float drop = ComputeRollingFrictionDrop(frictionCoeff, dtSeconds);
-  if (drop <= 0.0f) {
+  if (frictionCoeff <= 0.0f) {
     return speed;
   }
 
-  return (speed <= drop) ? 0.0f : (speed - drop);
+  // 指数関数的な減衰: v = v0 * exp(-k * t)
+  // 摩擦係数と重力をベースにした減衰係数
+  constexpr float gravity = 9.8f;
+  float k = frictionCoeff * gravity;
+  float newSpeed = speed * std::exp(-k * dtSeconds);
+
+  // 極低速時の停止しきい値
+  if (newSpeed < 0.02f) {
+    return 0.0f;
+  }
+
+  return newSpeed;
 }
 
 /// @brief 静止摩擦で速度を止められるか判定する

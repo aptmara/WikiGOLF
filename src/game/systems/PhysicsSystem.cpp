@@ -705,13 +705,17 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           vel = XMVectorZero();
           acc = XMVectorZero();
         } else if (currentSpeed > 0.0001f) {
-          // 動摩擦減衰: v_new = v - a * dt
-          // 本来は v > 0 で反対方向に働く
-          float drop = frictionAccel * subDt;
-          if (currentSpeed <= drop) {
+          // 指数関数的な速度減衰: v = v * exp(-k * dt)
+          // 摩擦加速度をベースにした減衰係数を計算
+          // 物理的には v_new = v * exp(-k * dt)
+          // ここでは frictionAccel を減衰係数として利用する
+          float k = frictionAccel;
+          float speedRatio = std::exp(-k * subDt);
+          vel = XMVectorScale(vel, speedRatio);
+
+          // 極低速時の停止判定
+          if (SafeLength(vel) < 0.02f) {
             vel = XMVectorZero();
-          } else {
-            vel = XMVectorScale(vel, (currentSpeed - drop) / currentSpeed);
           }
         }
 
