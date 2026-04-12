@@ -2,8 +2,11 @@
 #include "../../ecs/World.h"
 #include "../components/UIText.h"
 #include "../components/UIImage.h"
+#include "../components/WikiComponents.h"
 #include "../../core/StringUtils.h"
+#include "../utils/UIConstants.h"
 #include <algorithm>
+
 namespace game {
 namespace controllers {
 
@@ -11,27 +14,24 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
     // ---------------------------------------------------------
     // Browser-style HUD (top-left)
     // ---------------------------------------------------------
-    constexpr float kHudX = 14.0f;
-    constexpr float kHudY = 14.0f;
-
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"WEB";
-        t.x = kHudX;
-        t.y = kHudY + 2.0f;
-        t.width = 32.0f;
+        t.x = game::ui::kBrowserHudX;
+        t.y = game::ui::kBrowserHudY + 2.0f;
+        t.width = game::ui::kBrowserIconWidth;
         t.height = 30.0f;
         t.style = graphics::TextStyle::Guide();
-        t.style.fontSize = 16.0f;
-        t.style.color = {0.220f, 0.745f, 0.973f, 1.0f};
+        t.style.fontSize = game::ui::kBrowserFontSize;
+        t.style.color = game::ui::kColorAccent;
         t.style.align = graphics::TextAlign::Center;
-        t.style.bgColor = {0.059f, 0.090f, 0.165f, 0.88f};
+        t.style.bgColor = game::ui::kColorBgDark;
         t.style.cornerRadius = 10.0f;
         t.style.borderWidth = 1.0f;
-        t.style.borderColor = {0.220f, 0.380f, 0.600f, 0.4f};
+        t.style.borderColor = game::ui::kColorBorder;
         t.visible = true;
-        t.layer = 10;
+        t.layer = game::ui::kLayerBrowser;
         m_ui.browserTabIconEntity = e;
     }
 
@@ -39,15 +39,16 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"Loading...";
-        t.x = kHudX + 36.0f;
-        t.y = kHudY + 2.0f;
-        t.width = 500.0f;
+        t.x = game::ui::kBrowserHudX + game::ui::kBrowserIconWidth + 4.0f;
+        t.y = game::ui::kBrowserHudY + 2.0f;
+        t.width = game::ui::kBrowserUrlWidth;
         t.height = 30.0f;
         t.style = graphics::TextStyle::BrowserURL();
+        t.style.fontSize = game::ui::kBrowserFontSize;
         t.style.bgColor = {0.0f, 0.0f, 0.0f, 0.0f};
         t.style.borderWidth = 0.0f;
         t.visible = true;
-        t.layer = 11;
+        t.layer = game::ui::kLayerBrowser + 1;
         m_ui.browserCurrentPageEntity = e;
         m_ui.headerEntity = e;
     }
@@ -56,14 +57,14 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"-> Target page...";
-        t.x = kHudX + 36.0f;
-        t.y = kHudY + 32.0f;
+        t.x = game::ui::kBrowserHudX + game::ui::kBrowserIconWidth + 4.0f;
+        t.y = game::ui::kBrowserHudY + game::ui::kBrowserLineSpacing + 6.0f;
         t.width = 600.0f;
         t.height = 28.0f;
         t.style = graphics::TextStyle::GoalHighlight();
-        t.style.fontSize = 18.0f;
+        t.style.fontSize = game::ui::kBrowserGoalFontSize;
         t.visible = true;
-        t.layer = 11;
+        t.layer = game::ui::kLayerBrowser + 1;
         m_ui.browserTargetEntity = e;
     }
 
@@ -71,13 +72,14 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"Shots: 0 / Par ?";
-        t.x = kHudX + 36.0f;
-        t.y = kHudY + 58.0f;
+        t.x = game::ui::kBrowserHudX + game::ui::kBrowserIconWidth + 4.0f;
+        t.y = game::ui::kBrowserHudY + game::ui::kBrowserLineSpacing * 2.0f + 6.0f;
         t.width = 600.0f;
         t.height = 24.0f;
         t.style = graphics::TextStyle::BrowserSub();
+        t.style.fontSize = game::ui::kBrowserSubFontSize;
         t.visible = true;
-        t.layer = 11;
+        t.layer = game::ui::kLayerBrowser + 1;
         m_ui.browserShotInfoEntity = e;
         m_ui.shotCountEntity = e;
     }
@@ -86,15 +88,15 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"";
-        t.x = kHudX + 36.0f;
-        t.y = kHudY + 80.0f;
+        t.x = game::ui::kBrowserHudX + game::ui::kBrowserIconWidth + 4.0f;
+        t.y = game::ui::kBrowserHudY + game::ui::kBrowserLineSpacing * 3.0f + 2.0f;
         t.width = 700.0f;
         t.height = 22.0f;
         t.style = graphics::TextStyle::BrowserSub();
-        t.style.fontSize = 14.0f;
-        t.style.color = {0.569f, 0.639f, 0.729f, 0.9f};
+        t.style.fontSize = game::ui::kBrowserSubFontSize;
+        t.style.color = game::ui::kColorTextSub;
         t.visible = true;
-        t.layer = 11;
+        t.layer = game::ui::kLayerBrowser + 1;
         m_ui.browserHistoryEntity = e;
         m_ui.pathEntity = e;
     }
@@ -109,25 +111,22 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
     // ---------------------------------------------------------
     // Wind card (top-right)
     // ---------------------------------------------------------
-    constexpr float kWindCardX = 1040.0f;
-    constexpr float kWindCardY = 248.0f;
-    constexpr float kWindCardW = 220.0f;
-
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"WIND";
-        t.x = kWindCardX + 10.0f;
-        t.y = kWindCardY + 8.0f;
-        t.width = kWindCardW - 20.0f;
+        t.x = game::ui::kWindCardX + 10.0f;
+        t.y = game::ui::kWindCardY + 8.0f;
+        t.width = game::ui::kWindCardWidth - 20.0f;
         t.height = 20.0f;
         t.style = graphics::TextStyle::CardLabel();
-        t.style.bgColor = {0.059f, 0.090f, 0.165f, 0.88f};
+        t.style.fontSize = game::ui::kWindLabelFontSize;
+        t.style.bgColor = game::ui::kColorBgDark;
         t.style.cornerRadius = 10.0f;
         t.style.borderWidth = 1.0f;
-        t.style.borderColor = {0.220f, 0.380f, 0.600f, 0.4f};
+        t.style.borderColor = game::ui::kColorBorder;
         t.visible = true;
-        t.layer = 100;
+        t.layer = game::ui::kLayerWind;
         m_ui.windCardLabelEntity = e;
     }
 
@@ -135,13 +134,14 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"--";
-        t.x = kWindCardX + 10.0f;
-        t.y = kWindCardY + 30.0f;
+        t.x = game::ui::kWindCardX + 10.0f;
+        t.y = game::ui::kWindCardY + 30.0f;
         t.width = 120.0f;
         t.height = 38.0f;
         t.style = graphics::TextStyle::CardValue();
+        t.style.fontSize = game::ui::kWindValueFontSize;
         t.visible = true;
-        t.layer = 101;
+        t.layer = game::ui::kLayerWind + 1;
         m_ui.windCardValueEntity = e;
     }
 
@@ -149,16 +149,16 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"m/s";
-        t.x = kWindCardX + 130.0f;
-        t.y = kWindCardY + 30.0f;
+        t.x = game::ui::kWindCardX + 130.0f;
+        t.y = game::ui::kWindCardY + 30.0f;
         t.width = 80.0f;
         t.height = 38.0f;
         t.style = graphics::TextStyle::CardValue();
-        t.style.color = {0.220f, 0.745f, 0.973f, 1.0f};
-        t.style.fontSize = 32.0f;
+        t.style.color = game::ui::kColorAccent;
+        t.style.fontSize = game::ui::kWindValueFontSize;
         t.style.align = graphics::TextAlign::Center;
         t.visible = true;
-        t.layer = 101;
+        t.layer = game::ui::kLayerWind + 1;
         m_ui.windCardUnitEntity = e;
     }
 
@@ -182,25 +182,22 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
     // ---------------------------------------------------------
     // Shot panel (bottom-center)
     // ---------------------------------------------------------
-    constexpr float kPanelX = 300.0f;
-    constexpr float kPanelY = 622.0f;
-    constexpr float kPanelW = 680.0f;
-
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"POWER";
-        t.x = kPanelX;
-        t.y = kPanelY;
+        t.x = game::ui::kShotPanelX;
+        t.y = game::ui::kShotPanelY;
         t.width = 100.0f;
         t.height = 22.0f;
         t.style = graphics::TextStyle::ShotPanelLabel();
-        t.style.bgColor = {0.059f, 0.090f, 0.165f, 0.82f};
+        t.style.fontSize = game::ui::kShotLabelFontSize;
+        t.style.bgColor = game::ui::kColorBgPanel;
         t.style.cornerRadius = 12.0f;
         t.style.borderWidth = 1.0f;
-        t.style.borderColor = {0.220f, 0.380f, 0.600f, 0.4f};
+        t.style.borderColor = game::ui::kColorBorder;
         t.visible = true;
-        t.layer = 50;
+        t.layer = game::ui::kLayerShotPanel;
         m_ui.shotPanelPowerLabelEntity = e;
     }
 
@@ -208,13 +205,14 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"0%";
-        t.x = kPanelX + kPanelW - 70.0f;
-        t.y = kPanelY;
+        t.x = game::ui::kShotPanelX + game::ui::kShotPanelWidth - 70.0f;
+        t.y = game::ui::kShotPanelY;
         t.width = 65.0f;
         t.height = 22.0f;
         t.style = graphics::TextStyle::ShotPanelValue();
+        t.style.fontSize = game::ui::kShotValueFontSize;
         t.visible = true;
-        t.layer = 51;
+        t.layer = game::ui::kLayerShotPanel + 1;
         m_ui.shotPanelPowerValueEntity = e;
     }
 
@@ -222,13 +220,14 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"ACCURACY";
-        t.x = kPanelX;
-        t.y = kPanelY + 50.0f;
+        t.x = game::ui::kShotPanelX;
+        t.y = game::ui::kShotPanelY + 50.0f;
         t.width = 120.0f;
         t.height = 22.0f;
         t.style = graphics::TextStyle::ShotPanelLabel();
+        t.style.fontSize = game::ui::kShotLabelFontSize;
         t.visible = true;
-        t.layer = 50;
+        t.layer = game::ui::kLayerShotPanel;
         m_ui.shotPanelAccuracyLabelEntity = e;
     }
 
@@ -236,13 +235,14 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"---";
-        t.x = kPanelX + kPanelW - 160.0f;
-        t.y = kPanelY + 50.0f;
+        t.x = game::ui::kShotPanelX + game::ui::kShotPanelWidth - 160.0f;
+        t.y = game::ui::kShotPanelY + 50.0f;
         t.width = 155.0f;
         t.height = 22.0f;
         t.style = graphics::TextStyle::ShotPanelValue();
+        t.style.fontSize = game::ui::kShotValueFontSize;
         t.visible = true;
-        t.layer = 51;
+        t.layer = game::ui::kLayerShotPanel + 1;
         m_ui.shotPanelAccuracyValueEntity = e;
     }
 
@@ -250,16 +250,16 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"CLUB: Driver";
-        t.x = kPanelX;
-        t.y = kPanelY + 95.0f;
-        t.width = kPanelW;
+        t.x = game::ui::kShotPanelX;
+        t.y = game::ui::kShotPanelY + 95.0f;
+        t.width = game::ui::kShotPanelWidth;
         t.height = 22.0f;
         t.style = graphics::TextStyle::ClubName();
         t.style.align = graphics::TextAlign::Center;
-        t.style.fontSize = 14.0f;
-        t.style.color = {0.569f, 0.639f, 0.729f, 0.9f};
+        t.style.fontSize = game::ui::kBrowserSubFontSize;
+        t.style.color = game::ui::kColorTextSub;
         t.visible = true;
-        t.layer = 50;
+        t.layer = game::ui::kLayerShotPanel;
         m_ui.shotPanelClubLabelEntity = e;
     }
 
@@ -271,24 +271,24 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto& gauge = ctx.world.Add<game::components::UIBarGauge>(e);
         gauge.value = 0.0f;
         gauge.maxValue = 1.0f;
-        gauge.color = {1.0f, 0.8f, 0.2f, 1.0f}; // フィル色
-        gauge.bgColor = {0.02f, 0.039f, 0.090f, 0.9f}; // 背景色
-        gauge.borderColor = {0.220f, 0.380f, 0.600f, 0.6f};
-        gauge.borderWidth = 1.5f;
-        gauge.x = kPanelX;
-        gauge.y = kPanelY + 22.0f;
-        gauge.width = kPanelW;
-        gauge.height = 24.0f;
+        gauge.color = game::ui::kColorWarning; // フィル色
+        gauge.bgColor = game::ui::kColorBgDark; // 背景色
+        gauge.borderColor = game::ui::kColorBorder;
+        gauge.borderWidth = game::ui::kGaugeBorderWidth;
+        gauge.x = game::ui::kShotPanelX;
+        gauge.y = game::ui::kShotPanelY + 22.0f;
+        gauge.width = game::ui::kShotPanelWidth;
+        gauge.height = game::ui::kGaugeHeight;
         gauge.isVisible = true;
 
         gauge.showMarker = true;
         gauge.markerValue = 0.0f;
-        gauge.markerColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        gauge.markerColor = game::ui::kColorWhite;
 
         gauge.showImpactZones = true;
         gauge.impactCenter = 0.5f;
-        gauge.impactWidthGreat = 0.05f;
-        gauge.impactWidthNice = 0.15f;
+        gauge.impactWidthGreat = game::ui::kImpactWidthGreat;
+        gauge.impactWidthNice = game::ui::kImpactWidthNice;
 
         m_ui.gaugeBarEntity = e;
     }
@@ -300,15 +300,15 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text = L"";
-        t.x = 540.0f;
-        t.y = 280.0f;
+        t.x = game::ui::kJudgeTextX;
+        t.y = game::ui::kJudgeTextY;
         t.width = 200.0f;
         t.height = 80.0f;
         t.style = graphics::TextStyle::Guide();
-        t.style.fontSize = 28.0f;
+        t.style.fontSize = game::ui::kJudgeFontSize;
         t.style.align = graphics::TextAlign::Center;
         t.visible = true;
-        t.layer = 120;
+        t.layer = game::ui::kLayerJudge;
         m_ui.judgeEntity = e;
     }
 }
@@ -339,10 +339,10 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt, const game::component
         auto* pt = ctx.world.Get<game::components::UIText>(m_ui.shotPanelPowerValueEntity);
         if (confirmedPower > 0.0f) {
             pt->text = std::to_wstring((int)(confirmedPower * 100)) + L"%";
-            pt->style.color = {1.0f, 0.8f, 0.2f, 1.0f};
+            pt->style.color = game::ui::kColorWarning;
         } else {
             pt->text = std::to_wstring((int)(currentPower * 100)) + L"%";
-            pt->style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+            pt->style.color = game::ui::kColorWhite;
         }
     }
 

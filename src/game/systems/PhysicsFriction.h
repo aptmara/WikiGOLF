@@ -28,7 +28,7 @@ inline float ComputeRollingFrictionDrop(float frictionCoeff, float dtSeconds) {
   return coeff * gravity * dtSeconds;
 }
 
-/// @brief 指数関数的な減衰を適用した後の速度を返す
+/// @brief 転がり摩擦を適用した後の速度を返す
 /// @param speed 現在の速度量
 /// @param frictionCoeff 摩擦係数
 /// @param dtSeconds 経過時間 (秒)
@@ -39,22 +39,27 @@ inline float ApplyRollingFriction(float speed, float frictionCoeff,
     return 0.0f;
   }
 
-  if (frictionCoeff <= 0.0f) {
+  if (dtSeconds <= 0.0f || !std::isfinite(dtSeconds)) {
     return speed;
   }
 
-  // 指数関数的な減衰: v = v0 * exp(-k * t)
-  // 摩擦係数と重力をベースにした減衰係数
-  constexpr float gravity = 9.8f;
-  float k = frictionCoeff * gravity;
-  float newSpeed = speed * std::exp(-k * dtSeconds);
+  float coeff = std::max(frictionCoeff, 0.0f);
+  if (!std::isfinite(coeff) || coeff <= 0.0f) {
+    return speed;
+  }
 
-  // 極低速時の停止しきい値
-  if (newSpeed < 0.02f) {
+  // 転がり摩擦は指数減衰ではなく、加速度ベースで速度を削る。
+  // v = v0 - μgt
+  float drop = ComputeRollingFrictionDrop(coeff, dtSeconds);
+
+  // 速度を下回ったら停止。
+  // ここを少しだけ持たせることで、極低速で震え続けるのを防ぐ。
+  constexpr float stopEpsilon = 0.025f;
+  if (speed <= drop + stopEpsilon) {
     return 0.0f;
   }
 
-  return newSpeed;
+  return speed - drop;
 }
 
 /// @brief 静止摩擦で速度を止められるか判定する
@@ -94,17 +99,17 @@ inline bool CanStaticFrictionHold(float speed, float frictionCoeff,
  * ベース係数と速度に応じたブーストをまとめて管理する。
  */
 struct SurfaceFrictionSettings {
-  float baseRollingFriction = 0.22f;
-  float slowSpeedReference = 3.0f;        ///< この速度で通常摩擦に到達
-  float slowFrictionExponent = 0.65f;     ///< 低速域の粘りイージング
-  float slowFrictionMinMultiplier = 0.3f; ///< 低速時に残す摩擦割合
-  float highSpeedBoostStart = 18.0f;      ///< ここから高速ブースト開始
-  float highSpeedBoostScale = 0.6f;       ///< 高速時の追加ブースト最大値
-  float slopeFrictionFloor = 0.35f;       ///< 急斜面でも残る摩擦割合
-  float constantBrake = 0.25f;            ///< 速度に依存しない追加減速 [m/s^2]
-  float greenMultiplier = 0.45f;
+  float baseRollingFriction = 0.14f;
+  float slowSpeedReference = 4.0f;
+  float slowFrictionExponent = 0.8f;
+  float slowFrictionMinMultiplier = 0.2f;
+  float highSpeedBoostStart = 22.0f;
+  float highSpeedBoostScale = 0.25f;
+  float slopeFrictionFloor = 0.35f;
+  float constantBrake = 0.08f;
+  float greenMultiplier = 1.45f;
   float roughMultiplier = 2.5f;
-  float bunkerMultiplier = 6.0f;
+  float bunkerMultiplier = 4.0f;
 };
 
 inline SurfaceFrictionSettings DefaultSurfaceFrictionSettings() {
@@ -123,13 +128,13 @@ GetMaterialFrictionMultiplier(game::components::TerrainMaterial mat,
   case TerrainMaterial::Green:
     return settings.greenMultiplier;
   case TerrainMaterial::Ice:
-    return 0.08f; // 極低摩擦
+    return 0.08f;
   case TerrainMaterial::Water:
-    return 4.0f; // 高減速
+    return 8.0f;
   case TerrainMaterial::Stone:
-    return 0.6f; // 中程度
+    return 0.6f;
   case TerrainMaterial::Lava:
-    return 10.0f; // 非常に高い（事実上停止）
+    return 10.0f;
   default:
     return 1.0f;
   }

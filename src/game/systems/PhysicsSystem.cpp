@@ -519,24 +519,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
                 // マテリアルエフェクト
                 auto *juice = ctx.world.GetGlobal<
-                    GameJuiceSystem>(); // Globalから取得できる想定(or
-                                        // SystemContext)
-                // GameJuiceSystemはEntityではなくGlobalポインタとして管理されているか確認が必要。
-                // DX_GAMEのアーキテクチャではSystemはWorldにない場合が多いので、ctxから取得するか、
-                // もしくはWikiGolfSceneでSystemを保持している。
-                // ここではPhysicsSystemがGameContextを持っているので、そこからアクセスしたいが...
-                // GameContextにはsystemsはない。
-                // しかしWikiGolfSceneがJuiceSystemを持っているので、WorldのGlobalにはないかもしれない。
-                // だが、PhysicsSystemはSceneから呼ばれる。
-
-                // 簡易的にWorldのSingletonコンポーネントとしてJuiceSystemポインタを登録しておくのが良いが、
-                // 現状のコードを見るとWikiGolfSceneのメンバ。
-                // 仕方ないので、イベントキューか、Worldを経由する。
-                // 今回はWikiGolfSceneで「GameJuiceSystem*」をWorldのGlobalにセットすることにする。
-                // もしくは、WorldにJuiceSystemポインタをComponentとして持つEntityを作る。
-
-                // とりあえず Global<GameJuiceSystem> があると仮定して書く。
-                // ※後でWikiGolfScene::OnEnterで登録する※
+                    GameJuiceSystem>();
                 if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
                   juiceSys->TriggerMaterialEffect(
                       ctx, t.position, static_cast<TerrainMaterial>(mat),
@@ -555,13 +538,11 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
                 switch (static_cast<TerrainMaterial>(mat)) {
                 case TerrainMaterial::Bunker:
-                  seName = "se_Bunker"; // バンカーは鈍い音
-                  pitch = 0.8f;
+                  seName = "se_Bunker";
                   break;
                 case TerrainMaterial::Rough:
                   seName = "se_Rough";
-                  volume *= 0.8f; // ラフは吸われる
-                  pitch = 0.9f;
+                  volume *= 0.8f;
                   break;
                 case TerrainMaterial::Green:
                   seName = "se_Fairway";
@@ -752,7 +733,6 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       }
 
       // 停止判定（平坦時のみ）。
-      // 完全に止める閾値を 0.05 -> 0.01 に変更して粘りを出す
       float speedFinal = SafeLength(vel);
       float slopeFlatnessFinal = XMVectorGetY(groundNormal);
       if (speedFinal < 0.008f && isGrounded && slopeFlatnessFinal > 0.98f) {

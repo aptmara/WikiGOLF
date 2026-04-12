@@ -10,6 +10,14 @@
 
 namespace game::components {
 
+/// @brief 描画時のブレンドモード
+enum class BlendMode {
+    Opaque,     ///< 不透明
+    Alpha,      ///< 標準的なアルファブレンド (SrcAlpha, InvSrcAlpha)
+    Multiply,   ///< 乗算 (DestColor * SrcColor)
+    Add         ///< 加算 (DestColor + SrcColor)
+};
+
 struct MeshRenderer {
   resources::MeshHandle mesh;
   resources::ShaderHandle shader;
@@ -25,6 +33,7 @@ struct MeshRenderer {
   // 追加フラグ（シェーダー用）
   DirectX::XMFLOAT4 customFlags = {0, 0, 0, 0};
   bool isTransparent = false;
+  BlendMode blendMode = BlendMode::Opaque;
 };
 
 } // namespace game::components

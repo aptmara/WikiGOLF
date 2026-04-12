@@ -15,6 +15,7 @@
 #include "../components/WikiComponents.h"
 #include "TerrainGenerator.h"
 #include "WikiClient.h"
+#include "../../graphics/TangentGenerator.h"
 #include <algorithm> // for std::max
 #include <random>    // for std::mt19937, std::uniform_*_distribution
 
@@ -137,6 +138,33 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   // バイオームID保存
   m_biome = biome;
 
+  // 1.5 地形用テクスチャ配列のロード
+  std::vector<std::string> albedoPaths = {
+      "Assets/textures/terrain_materials/terrain_00_fairway_albedo.png",
+      "Assets/textures/terrain_materials/terrain_01_rough_albedo.png",
+      "Assets/textures/terrain_materials/terrain_02_bunker_albedo.png",
+      "Assets/textures/terrain_materials/terrain_03_green_albedo.png",
+      "Assets/textures/terrain_materials/terrain_04_ice_albedo.png",
+      "Assets/textures/terrain_materials/terrain_05_water_albedo.png",
+      "Assets/textures/terrain_materials/terrain_06_lava_albedo.png",
+      "Assets/textures/terrain_materials/terrain_07_stone_albedo.png"};
+  std::vector<std::string> normalPaths = {
+      "Assets/textures/terrain_materials/terrain_00_fairway_normal_dx.png",
+      "Assets/textures/terrain_materials/terrain_01_rough_normal_dx.png",
+      "Assets/textures/terrain_materials/terrain_02_bunker_normal_dx.png",
+      "Assets/textures/terrain_materials/terrain_03_green_normal_dx.png",
+      "Assets/textures/terrain_materials/terrain_04_ice_normal_dx.png",
+      "Assets/textures/terrain_materials/terrain_05_water_normal_dx.png",
+      "Assets/textures/terrain_materials/terrain_06_lava_normal_dx.png",
+      "Assets/textures/terrain_materials/terrain_07_stone_normal_dx.png"};
+
+  auto terrainAlbedoSRV =
+      ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray", albedoPaths);
+  auto terrainNormalSRV =
+      ctx.resource.LoadTextureArraySRV("TerrainNormalArray", normalPaths);
+  auto terrainShader = ctx.resource.LoadShader(
+      "Terrain", L"Assets/shaders/TerrainVS.hlsl", L"Assets/shaders/TerrainPS.hlsl");
+
   std::string seedText = pageTitle;
 
   // リンクのワールド座標を計算
@@ -235,7 +263,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
         // マテリアルマップから頂点カラー決定
         float gridU = worldX / width + 0.5f;
-        float gridV = 0.5f - worldZ / depth; // worldZは正手前が-なので反転
+        float gridV = 0.5f - worldZ / depth;
         int gx = (std::clamp)(static_cast<int>(gridU * (resX - 1) + 0.5f), 0,
                               resX - 1);
         int gz = (std::clamp)(static_cast<int>(gridV * (resZ - 1) + 0.5f), 0,
@@ -243,64 +271,25 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
         uint8_t mat = m_terrainData->materialMap[gz * resX + gx];
 
         XMFLOAT4 vcolor;
-        // マテリアル別に色味を少しバリエーション付ける
+        // アルファにはマテリアルID(0-7)を入れる。精度誤差を防ぐため中央値を狙う。
+        float matAlpha = (static_cast<float>(mat) + 0.5f) / 255.0f;
+
         switch (mat) {
-        case 0: { // Fairway
-          float shade = 0.9f + 0.1f * std::sin(worldX * 0.1f + worldZ * 0.08f);
-          vcolor = {0.18f * shade, 0.62f * shade, 0.24f * shade, 1.0f};
-          break;
-        }
-        case 1: { // Rough
-          float shade =
-              0.85f + 0.15f * std::cos(worldX * 0.12f + worldZ * 0.1f);
-          vcolor = {0.12f * shade, 0.32f * shade, 0.14f * shade, 1.0f};
-          break;
-        }
-        case 2: { // Bunker
-          float shade =
-              0.92f + 0.08f * std::sin(worldX * 0.05f + worldZ * 0.04f);
-          vcolor = {0.88f * shade, 0.80f * shade, 0.62f * shade, 1.0f};
-          break;
-        }
-        case 3: { // Green
-          float shade =
-              0.95f + 0.05f * std::cos(worldX * 0.15f + worldZ * 0.09f);
-          vcolor = {0.28f * shade, 0.82f * shade, 0.26f * shade, 1.0f};
-          break;
-        }
-        case 4: { // Ice
-          float shade =
-              0.95f + 0.05f * std::sin(worldX * 0.2f + worldZ * 0.15f);
-          vcolor = {0.70f * shade, 0.88f * shade, 0.98f * shade, 0.85f};
-          break;
-        }
-        case 5: { // Water
-          float shade =
-              0.90f + 0.10f * std::cos(worldX * 0.08f + worldZ * 0.06f);
-          vcolor = {0.20f * shade, 0.45f * shade, 0.85f * shade, 0.7f};
-          break;
-        }
-        case 6: { // Lava
-          float shade =
-              0.85f + 0.15f * std::sin(worldX * 0.15f + worldZ * 0.12f);
-          vcolor = {0.95f * shade, 0.35f * shade, 0.12f * shade, 0.95f};
-          break;
-        }
-        case 7: { // Stone
-          float shade =
-              0.88f + 0.12f * std::cos(worldX * 0.1f + worldZ * 0.08f);
-          vcolor = {0.50f * shade, 0.48f * shade, 0.52f * shade, 1.0f};
-          break;
-        }
-        default:
-          vcolor = {1.0f, 1.0f, 1.0f, 1.0f};
-          break;
+        case 0: vcolor = {0.35f, 0.55f, 0.25f, matAlpha}; break; // Fairway
+        case 1: vcolor = {0.25f, 0.45f, 0.20f, matAlpha}; break; // Rough
+        case 2: vcolor = {0.90f, 0.85f, 0.70f, matAlpha}; break; // Bunker
+        case 3: vcolor = {0.40f, 0.75f, 0.30f, matAlpha}; break; // Green
+        case 4: vcolor = {0.70f, 0.88f, 0.98f, matAlpha}; break; // Ice
+        case 5: vcolor = {0.20f, 0.45f, 0.85f, matAlpha}; break; // Water
+        case 6: vcolor = {0.95f, 0.35f, 0.12f, matAlpha}; break; // Lava
+        case 7: vcolor = {0.50f, 0.48f, 0.52f, matAlpha}; break; // Stone
+        default: vcolor = {1.0f, 1.0f, 1.0f, matAlpha}; break;
         }
 
         graphics::Vertex vert;
         vert.position = {worldX, h, worldZ};
         vert.normal = normal;
-        vert.texCoord = {u, vLocal};
+        vert.texCoord = {u * (width / 2.0f), vGlobal * (depth / 2.0f)}; // テクスチャリピート
         vert.color = vcolor;
 
         vertices.push_back(vert);
@@ -323,7 +312,9 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
       }
     }
 
-    // Explicit MeshHandle type
+    // 接線生成 (Normal Map用)
+    graphics::ComputeTangents(vertices, indices);
+
     resources::MeshHandle handle = ctx.resource.CreateDynamicMesh(
         "TerrainTile_" + std::to_string(tile.offsetY), vertices, indices);
 
@@ -333,20 +324,29 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
     MeshRenderer &meshRenderer = ctx.world.Add<MeshRenderer>(e);
     meshRenderer.mesh = handle;
-    meshRenderer.shader =
-        ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                L"Assets/shaders/BasicPS.hlsl");
-    meshRenderer.color = terrainColor;
-    meshRenderer.textureSRV = nullptr;
-    meshRenderer.hasTexture = false;
+    meshRenderer.shader = terrainShader;
+    meshRenderer.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    meshRenderer.textureSRV = terrainAlbedoSRV;
+    meshRenderer.hasTexture = true;
+    meshRenderer.normalMapSRV = terrainNormalSRV;
+    meshRenderer.hasNormalMap = true;
+    meshRenderer.isTransparent = false;
+    meshRenderer.customFlags = {1.0f, 1.0f, 2.0f, 0.0f}; // x:hasTex, y:hasNormal, z:uvScale
 
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
 
+    // --- オーバーレイ (Wikiページ画像) ---
     std::vector<graphics::Vertex> overlayVertices = vertices;
-    for (auto &overlayVertex : overlayVertices) {
-      overlayVertex.position.y += kTerrainOverlayHeightOffset;
-      overlayVertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    for (size_t i = 0; i < overlayVertices.size(); ++i) {
+      overlayVertices[i].position.y += kTerrainOverlayHeightOffset;
+      overlayVertices[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
+      
+      // オーバーレイのUVは元の 0..1 に戻す
+      float u = (float)(i % resX) / (resX - 1);
+      int zIdx = (int)(i / resX);
+      float vLocal = (float)zIdx / (tileResZ - 1);
+      overlayVertices[i].texCoord = {u, vLocal};
     }
 
     resources::MeshHandle overlayHandle = ctx.resource.CreateDynamicMesh(
@@ -362,10 +362,12 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     overlayRenderer.shader =
         ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                 L"Assets/shaders/BasicPS.hlsl");
-    overlayRenderer.color = {1.0f, 1.0f, 1.0f, kTerrainOverlayAlpha};
+    overlayRenderer.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 乗算描画時はアルファ1.0
     overlayRenderer.textureSRV = tile.srv;
     overlayRenderer.hasTexture = true;
     overlayRenderer.isTransparent = true;
+    overlayRenderer.blendMode = BlendMode::Multiply;
+    overlayRenderer.customFlags = {1.0f, 0.0f, 1.0f, 0.0f}; // readabilityMode=0 (乗算で対応)
 
     m_entities.push_back(overlayEntity);
     ctx.world.Add<TerrainObject>(overlayEntity);

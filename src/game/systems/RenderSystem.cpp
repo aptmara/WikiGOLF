@@ -28,7 +28,9 @@ struct VSConstants {
 struct RenderState {
   ComPtr<ID3D11Buffer> cBuffer;
   ComPtr<ID3D11SamplerState> sampler;
-  ComPtr<ID3D11BlendState> blendState;
+  ComPtr<ID3D11BlendState> alphaBlendState;
+  ComPtr<ID3D11BlendState> multiplyBlendState;
+  ComPtr<ID3D11BlendState> addBlendState;
 };
 
 void RenderSystem(core::GameContext &ctx) {
@@ -71,7 +73,17 @@ void RenderSystem(core::GameContext &ctx) {
     blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].RenderTargetWriteMask =
         D3D11_COLOR_WRITE_ENABLE_ALL;
-    device->CreateBlendState(&blendDesc, &newState.blendState);
+    device->CreateBlendState(&blendDesc, &newState.alphaBlendState);
+
+    // 乗算ブレンド
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
+    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
+    device->CreateBlendState(&blendDesc, &newState.multiplyBlendState);
+
+    // 加算ブレンド
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+    device->CreateBlendState(&blendDesc, &newState.addBlendState);
 
     world.SetGlobal(std::move(newState));
     state = world.GetGlobal<RenderState>();
@@ -107,61 +119,97 @@ void RenderSystem(core::GameContext &ctx) {
   // 3. レンダリングループ
   context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
   context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
-  context->OMSetBlendState(state->blendState.Get(), nullptr, 0xFFFFFFFF);
 
+  auto DrawRenderer = [&](ecs::Entity e, components::Transform &t,
+                          components::MeshRenderer &r) {
+    if (!r.isVisible)
+      return;
+
+    auto *mesh = ctx.resource.GetMesh(r.mesh);
+    auto *shader = ctx.resource.GetShader(r.shader);
+
+    if (mesh && shader) {
+      // ブレンドステート設定
+      if (r.blendMode == components::BlendMode::Alpha) {
+        context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
+                                 0xFFFFFFFF);
+      } else if (r.blendMode == components::BlendMode::Multiply) {
+        context->OMSetBlendState(state->multiplyBlendState.Get(), nullptr,
+                                 0xFFFFFFFF);
+      } else if (r.blendMode == components::BlendMode::Add) {
+        context->OMSetBlendState(state->addBlendState.Get(), nullptr,
+                                 0xFFFFFFFF);
+      } else if (r.isTransparent) {
+        // 後方互換性：isTransparent が true なら Alpha ブレンド
+        context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
+                                 0xFFFFFFFF);
+      } else {
+        context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+      }
+
+      shader->Bind(context);
+
+      // 定数バッファ更新
+      D3D11_MAPPED_SUBRESOURCE mapped;
+      if (SUCCEEDED(context->Map(state->cBuffer.Get(), 0,
+                                 D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        VSConstants *constants = static_cast<VSConstants *>(mapped.pData);
+        constants->world = XMMatrixTranspose(t.GetWorldMatrix());
+        constants->view = view;
+        constants->projection = proj;
+        constants->materialColor = r.color;
+        const bool hasDiffuse = r.hasTexture && r.textureSRV;
+        const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
+        constants->materialFlags = {hasDiffuse ? 1.0f : 0.0f,
+                                    hasNormal ? 1.0f : 0.0f, r.customFlags.x,
+                                    r.customFlags.y};
+        // 簡易ライティング用 (左上奥からの光)
+        constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f};
+        constants->cameraPos = camPos;
+        context->Unmap(state->cBuffer.Get(), 0);
+      }
+
+      // テクスチャバインド（あれば）
+      ID3D11ShaderResourceView *nullSRV = nullptr;
+      if (r.hasTexture && r.textureSRV) {
+        context->PSSetShaderResources(0, 1, r.textureSRV.GetAddressOf());
+      } else {
+        context->PSSetShaderResources(0, 1, &nullSRV);
+      }
+
+      if (r.hasNormalMap && r.normalMapSRV) {
+        context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
+      } else {
+        context->PSSetShaderResources(1, 1, &nullSRV);
+      }
+
+      context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
+      context->PSSetSamplers(1, 1, state->sampler.GetAddressOf());
+
+      mesh->Bind(context);
+      mesh->Draw(context);
+    }
+  };
+
+  // 不透明パス
   world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t,
           components::MeshRenderer &r) {
-        if (!r.isVisible)
-          return;
-
-        auto *mesh = ctx.resource.GetMesh(r.mesh);
-        auto *shader = ctx.resource.GetShader(r.shader);
-
-        if (mesh && shader) {
-          shader->Bind(context);
-
-          // 定数バッファ更新
-          D3D11_MAPPED_SUBRESOURCE mapped;
-          if (SUCCEEDED(context->Map(state->cBuffer.Get(), 0,
-                                     D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-            VSConstants *constants = static_cast<VSConstants *>(mapped.pData);
-            constants->world = XMMatrixTranspose(t.GetWorldMatrix());
-            constants->view = view;
-            constants->projection = proj;
-            constants->materialColor = r.color;
-            const bool hasDiffuse = r.hasTexture && r.textureSRV;
-            const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
-            constants->materialFlags = {hasDiffuse ? 1.0f : 0.0f,
-                                        hasNormal ? 1.0f : 0.0f,
-                                        r.customFlags.x, r.customFlags.y};
-            // 簡易ライティング用 (左上奥からの光)
-            constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f};
-            constants->cameraPos = camPos;
-            context->Unmap(state->cBuffer.Get(), 0);
-          }
-
-          // テクスチャバインド（あれば）
-          ID3D11ShaderResourceView *nullSRV = nullptr;
-          if (r.hasTexture && r.textureSRV) {
-            context->PSSetShaderResources(0, 1, r.textureSRV.GetAddressOf());
-          } else {
-            context->PSSetShaderResources(0, 1, &nullSRV);
-          }
-
-          if (r.hasNormalMap && r.normalMapSRV) {
-            context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
-          } else {
-            context->PSSetShaderResources(1, 1, &nullSRV);
-          }
-
-          context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
-          context->PSSetSamplers(1, 1, state->sampler.GetAddressOf());
-
-          mesh->Bind(context);
-          mesh->Draw(context);
+        if (!r.isTransparent) {
+          DrawRenderer(e, t, r);
         }
       });
+
+  // 半透明パス
+  world.Query<components::Transform, components::MeshRenderer>().Each(
+      [&](ecs::Entity e, components::Transform &t,
+          components::MeshRenderer &r) {
+        if (r.isTransparent) {
+          DrawRenderer(e, t, r);
+        }
+      });
+
+  context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
 }
 
 } // namespace game::systems

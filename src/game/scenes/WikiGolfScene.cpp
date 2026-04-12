@@ -649,12 +649,17 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // HUD 更新
   if (m_hud) {
-      float currentPower = (shot->phase == game::components::ShotState::Phase::PowerCharging) ? shot->powerGaugePos : 0.0f;
+      float currentPower = shot->powerGaugePos;
+      if (shot->phase == game::components::ShotState::Phase::ImpactTiming || shot->confirmedPower > 0.0f) {
+          currentPower = shot->confirmedPower;
+      }
+      float currentImpact = (shot->phase == game::components::ShotState::Phase::ImpactTiming) ? shot->impactGaugePos : 0.5f;
+
       m_hud->Update(ctx, dt, *state, currentPower, shot->confirmedPower, state->windSpeed, state->windDirection, m_cameraController ? m_cameraController->GetYaw() : 0.0f, m_clubController ? m_clubController->GetCurrentClub().name : "");
       
       // HUDへのパワーゲージ更新
       if (shot->phase == game::components::ShotState::Phase::PowerCharging || shot->phase == game::components::ShotState::Phase::ImpactTiming) {
-          m_hud->UpdatePowerGauge(ctx, currentPower, 0.0f, 0.0f, 1.0f);
+          m_hud->UpdatePowerGauge(ctx, currentPower, currentImpact, 0.0f, 1.0f);
       }
   }
 

@@ -8,6 +8,7 @@
 #include "../../core/Logger.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../ecs/World.h"
+#include "../utils/UIConstants.h"
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -29,7 +30,27 @@ void MinimapController::Initialize(Config cfg, core::GameContext &ctx) {
 }
 
 void MinimapController::InitializeUI(core::GameContext &ctx) {
-// Minimap UI creation code not found properly
+  if (!m_minimapRenderer) return;
+
+  m_minimapEntity = ctx.world.CreateEntity();
+  auto &ui = ctx.world.Add<UIImage>(m_minimapEntity);
+  ui.textureSRV = m_minimapRenderer->GetSRV();
+  ui.width = game::ui::kMinimapWidth;
+  ui.height = game::ui::kMinimapHeight;
+  ui.x = game::ui::kMinimapX;
+  ui.y = game::ui::kMinimapY;
+  ui.visible = true;
+  ui.layer = game::ui::kLayerMinimap;
+
+  m_minimapMarkerEntity = ctx.world.CreateEntity();
+  auto &marker = ctx.world.Add<UIText>(m_minimapMarkerEntity);
+  marker.text = L"◎";
+  marker.x = ui.x + ui.width * 0.5f - 10.0f;
+  marker.y = ui.y + ui.height * 0.5f - 10.0f;
+  marker.style = graphics::TextStyle::Guide();
+  marker.style.fontSize = game::ui::kMinimapMarkerSize;
+  marker.style.color = game::ui::kColorWarning;
+  marker.layer = game::ui::kLayerMarker;
 }
 
 void MinimapController::ClearHoleIcons(core::GameContext &ctx) {
@@ -47,13 +68,13 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z, co
     ui = UIImage::Create("ui_map_hole_target.png", 0.0f, 0.0f);
     ui.width = 48.0f;
     ui.height = 48.0f;
-    ui.layer = 152; // マーカーより下、マップより上
+    ui.layer = game::ui::kLayerMarker + 1; 
   } else {
     ui = UIImage::Create("ui_map_hole_normal.png", 0.0f, 0.0f);
     ui.width = 24.0f;
     ui.height = 24.0f;
     ui.alpha = 0.8f;
-    ui.layer = 151;
+    ui.layer = game::ui::kLayerMarker;
   }
   ui.visible = false;
   
@@ -109,7 +130,7 @@ void MinimapController::UpdateMapCamera(core::GameContext &ctx, float fieldWidth
   // 現在位置から滑らかに補間
   XMVECTOR currentPos = XMLoadFloat3(&camT->position);
   XMVECTOR newPos =
-      XMVectorLerp(currentPos, targetPos, 10.0f * ctx.dt); // 少し速く
+      XMVectorLerp(currentPos, targetPos, game::ui::kLerpSpeedCamera * ctx.dt); 
   XMStoreFloat3(&camT->position, newPos);
 
   // 斜め下を向く（ピッチ70度）
@@ -147,38 +168,13 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
 
     float dx = ballT->position.x - params.center.x;
     float dz = ballT->position.z - params.center.z;
-    float u = dx / clipWidth; // 実験的補正: 0.5f + ... を削除
-    float v = 0.5f - dz / clipWidth;
+    
+    // UV座標の計算 (0.0 - 1.0)
+    // 射影行列の clipWidth は中心から端までの距離に対応するため、0.5fを足して正規化
+    float u = 0.5f + (dx / clipWidth); 
+    float v = 0.5f - (dz / clipWidth);
 
-    // DEBUG: マップオフセット調査
-    static int logCounter = 0;
-    if (logCounter++ % 60 == 0) {
-      LOG_DEBUG("WikiGolfMap",
-                "Ball:({:.1f},{:.1f}) Center:({:.1f},{:.1f}) d:({:.1f},{:.1f}) "
-                "ClipW:{:.1f} UV:({:.2f},{:.2f})",
-                ballT->position.x, ballT->position.z, params.center.x,
-                params.center.z, dx, dz, clipWidth, u, v);
-    }
-
-    // uの範囲を調整（補正により0.0中心になるため、表示範囲外に出る可能性があるがとりあえずそのまま）
-    // マーカーがImage基準で 0..1
-    // に収まるようにするには、Imageの座標系も考慮必要だが ここでは u を 0..1
-    // にクランプする処理が下にある。 もし u がマイナスなら 0.02f
-    // に張り付く。これでは左端に張り付くだけ。
-    // ユーザーの言う「右にずれてる」が「中央にあるべきものが右端(1.0)にある」なら、
-    // 0.5引けば中央(0.5)に来る。
-
-    // しかし、もし u = dx/W なら、中央(dx=0)で u=0 になる。
-    // この場合、marker->x = ui->x + 0 = 左端。
-    // これでは「左にずれる」。
-    // ユーザーは「右にずれてる」と言った。マーカーが右にある。
-    // これを左（中央）に戻したい。
-    // u=1.0 -> u=0.5. (-0.5).
-    // u=0.5 -> u=0.0.
-
-    // とりあえず dx/clipWidth にしてみる。
-
-    u = std::clamp(u, 0.0f, 1.0f); // 範囲を 0..1 に変更してみる
+    u = std::clamp(u, 0.02f, 0.98f); 
     v = std::clamp(v, 0.02f, 0.98f);
     marker->x = ui->x + u * ui->width - 10.0f;
     marker->y = ui->y + v * ui->height - 10.0f;
@@ -188,11 +184,11 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   // === Phase 2: マーカーパルスアニメーション ===
   if (marker && ui && ui->visible) {
     m_markerPulseTimer += ctx.dt;
-    float pulse = 1.0f + 0.2f * std::sin(m_markerPulseTimer * 4.0f);
-    marker->style.fontSize = 22.0f * pulse;
+    float pulse = 1.0f + game::ui::kMarkerPulseScale * std::sin(m_markerPulseTimer * game::ui::kMarkerPulseSpeed);
+    marker->style.fontSize = game::ui::kMinimapMarkerSize * pulse;
 
     // 色もパルス
-    float alphaPulse = 0.8f + 0.2f * std::sin(m_markerPulseTimer * 4.0f);
+    float alphaPulse = 0.8f + 0.2f * std::sin(m_markerPulseTimer * game::ui::kMarkerPulseSpeed);
     marker->style.color.w = alphaPulse;
   }
 
@@ -269,7 +265,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   // === Phase 3: ヘルプパネルフェードイン/アウト ===
   static float helpFadeAlpha = 0.0f;
   float targetHelpAlpha = m_mapHelpVisible ? 1.0f : 0.0f;
-  float fadeSpeed = 5.0f; // 0.2秒で完了
+  float fadeSpeed = game::ui::kFadeSpeed; 
   helpFadeAlpha += (targetHelpAlpha - helpFadeAlpha) * fadeSpeed * ctx.dt;
 
   bool shouldShowHelp = helpFadeAlpha > 0.01f;
@@ -279,7 +275,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
 
   if (helpBg) {
     helpBg->visible = shouldShowHelp;
-    helpBg->alpha = helpFadeAlpha * 0.85f;
+    helpBg->alpha = helpFadeAlpha * game::ui::kMapHelpPanelAlpha;
   }
 
   if (helpTitle) {
@@ -309,7 +305,7 @@ void MinimapController::SyncMapCenterToBall(core::GameContext &ctx, float dt, fl
     return;
   }
 
-  float lerp = 1.0f - std::exp(-m_mapFollowLerp * dt);
+  float lerp = 1.0f - std::exp(-game::ui::kLerpSpeedMinimap * dt);
   m_mapCenter.x += (targetCenter.x - m_mapCenter.x) * lerp;
   m_mapCenter.y += (targetCenter.y - m_mapCenter.y) * lerp;
 }
@@ -336,14 +332,14 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
 
   if (ctx.input.GetKeyDown(VK_SPACE) || ctx.input.GetKeyDown('C')) {
     SyncMapCenterToBall(ctx, 0.0f, fieldWidth, fieldDepth, true);
-    m_targetMapZoom = std::clamp(fieldWidth / std::max(10.0f, fieldWidth * 0.25f), m_minMapZoom, m_maxMapZoom);
+    m_targetMapZoom = std::clamp(fieldWidth / std::max(10.0f, fieldWidth * 0.25f), game::ui::kMapMinZoom, game::ui::kMapMaxZoom);
   }
 
   if (ctx.input.GetKeyDown('F')) {
     SyncMapCenterToBall(ctx, 0.0f, fieldWidth, fieldDepth, true);
     float extent = std::max(fieldWidth, fieldDepth);
     m_targetMapZoom = extent / 220.0f * 0.9f;
-    m_targetMapZoom = std::clamp(m_targetMapZoom, m_minMapZoom, m_maxMapZoom);
+    m_targetMapZoom = std::clamp(m_targetMapZoom, game::ui::kMapMinZoom, game::ui::kMapMaxZoom);
   }
 
   if (ctx.input.GetKeyDown('0')) {
@@ -357,15 +353,15 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
   float wheel = ctx.input.GetMouseScrollDelta();
   if (wheel != 0.0f) {
     m_targetMapZoom *= std::pow(1.12f, wheel);
-    m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, m_minMapZoom, m_maxMapZoom);
+    m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, game::ui::kMapMinZoom, game::ui::kMapMaxZoom);
   }
   if (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD)) {
     m_targetMapZoom *= 1.12f;
-    m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, m_minMapZoom, m_maxMapZoom);
+    m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, game::ui::kMapMinZoom, game::ui::kMapMaxZoom);
   }
   if (ctx.input.GetKeyDown(VK_OEM_MINUS) || ctx.input.GetKeyDown(VK_SUBTRACT)) {
     m_targetMapZoom /= 1.12f;
-    m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, m_minMapZoom, m_maxMapZoom);
+    m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, game::ui::kMapMinZoom, game::ui::kMapMaxZoom);
   }
 
   float zoomLerp = 1.0f - std::exp(-10.0f * ctx.dt);
@@ -378,7 +374,7 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
     if (deltaX != 0 || deltaY != 0) {
       float extent = std::max(fieldWidth, fieldDepth);
       float viewSpan = extent / std::max(0.01f, m_mapZoom);
-      float panSpeed = viewSpan * 0.0015f; 
+      float panSpeed = viewSpan * game::ui::kMapPanSpeedFactor; 
       
       m_mapCenter.x -= deltaX * panSpeed;
       m_mapCenter.y += deltaY * panSpeed;

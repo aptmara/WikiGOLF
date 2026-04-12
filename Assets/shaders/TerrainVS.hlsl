@@ -3,9 +3,9 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View;
     matrix Projection;
     float4 Color;
-    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap (unused here)
-    float4 LightDir; // w is unused
-    float4 CameraPos; // w is unused
+    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap, z: uvScale
+    float4 LightDir;
+    float4 CameraPos;
 };
 
 struct VS_INPUT {
@@ -23,6 +23,8 @@ struct PS_INPUT {
     float3 Normal : NORMAL;
     float2 Tex : TEXCOORD0;
     float4 Color : COLOR0;
+    float3 Tangent : TANGENT;
+    float3 Bitangent : BINORMAL;
 };
 
 PS_INPUT main(VS_INPUT input) {
@@ -35,8 +37,11 @@ PS_INPUT main(VS_INPUT input) {
     output.Pos = mul(worldPos, View);
     output.Pos = mul(output.Pos, Projection);
     
-    // 法線の回転（スケーリングなしと仮定）
-    output.Normal = mul(input.Normal, (float3x3)World);
+    // 回転のみ適用（スケーリングなしを想定）
+    float3x3 world3x3 = (float3x3)World;
+    output.Normal = normalize(mul(input.Normal, world3x3));
+    output.Tangent = normalize(mul(input.Tangent, world3x3));
+    output.Bitangent = normalize(mul(input.Bitangent, world3x3));
     
     output.Tex = input.Tex;
     output.Color = input.Color * Color; // マテリアル色 * 頂点色
