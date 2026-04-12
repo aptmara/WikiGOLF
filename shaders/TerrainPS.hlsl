@@ -65,7 +65,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
     
     float3 lighting = ambient + lightColor * diff;
     
-    float4 finalColor = float4(baseColor.rgb * lighting, baseColor.a);
+    float4 finalColor = float4(baseColor.rgb * lighting, 1.0f);
     
     // 4. フォグ (Distance Fog)
     float fogStart = 50.0f;

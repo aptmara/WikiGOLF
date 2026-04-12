@@ -7,6 +7,7 @@
 #include "../components/Transform.h"
 #include "../systems/TimeOfDaySystem.h"
 #include "../utils/JudgeFeedback.h"
+#include "../utils/UIConstants.h"
 #include "WikiGolfHUD.h"
 #include <cmath>
 
@@ -83,15 +84,15 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             
             // 判定ロジック
             float diff = std::abs(shot->confirmedImpact - 0.5f);
-            if (diff < 0.02f) {
+            if (diff < game::ui::kThresholdSpecial) {
                 shot->judgement = game::components::ShotJudgement::Special;
-                if (hud) hud->UpdateJudge(ctx, L"SPECIAL", {1.0f, 0.8f, 0.2f, 1.0f});
-            } else if (diff < 0.05f) {
+                if (hud) hud->UpdateJudge(ctx, L"SPECIAL", game::ui::kColorSpecial);
+            } else if (diff < game::ui::kThresholdGreat) {
                 shot->judgement = game::components::ShotJudgement::Great;
-                if (hud) hud->UpdateJudge(ctx, L"Great", {0.8f, 0.2f, 0.2f, 1.0f});
-            } else if (diff < 0.15f) {
+                if (hud) hud->UpdateJudge(ctx, L"Great", game::ui::kColorError);
+            } else if (diff < game::ui::kThresholdNice) {
                 shot->judgement = game::components::ShotJudgement::Nice;
-                if (hud) hud->UpdateJudge(ctx, L"Nice", {0.2f, 0.8f, 0.2f, 1.0f});
+                if (hud) hud->UpdateJudge(ctx, L"Nice", game::ui::kColorAccent);
             } else {
                 shot->judgement = game::components::ShotJudgement::Miss;
                 if (hud) hud->UpdateJudge(ctx, L"Miss", {0.2f, 0.2f, 0.8f, 1.0f});

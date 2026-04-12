@@ -57,6 +57,11 @@ public:
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
   LoadTextureSRV(const std::string &path);
 
+  /// @brief 複数のテクスチャを1つのTexture2DArrayとしてロード
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
+  LoadTextureArraySRV(const std::string &name,
+                      const std::vector<std::string> &paths);
+
   /// @brief 全リソースを解放（シーン遷移用）
   void Clear();
 
