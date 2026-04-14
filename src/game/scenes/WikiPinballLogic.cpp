@@ -42,8 +42,8 @@ static void CreateWall(core::GameContext &ctx, float x, float y, float z,
 
   auto &mr = ctx.world.Add<MeshRenderer>(e);
   mr.mesh = ctx.resource.LoadMesh("cube");
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
   mr.color = color;
 
   auto &rb = ctx.world.Add<RigidBody>(e);
@@ -59,8 +59,8 @@ void WikiPinballScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("WikiPinball", "OnEnter");
   ctx.world.Reset();
 
-  ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                          L"shaders/BasicPS.hlsl");
+  ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                          L"Assets/shaders/BasicPS.hlsl");
 
   // Camera
   auto cam = ctx.world.CreateEntity();
@@ -236,8 +236,8 @@ void WikiPinballScene::SpawnBall(core::GameContext &ctx) {
 
   auto &mr = ctx.world.Add<MeshRenderer>(m_ballEntity);
   mr.mesh = ctx.resource.LoadMesh("sphere");
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
   mr.color = {1.0f, 0.0f, 0.0f, 1.0f};
 
   auto &rb = ctx.world.Add<RigidBody>(m_ballEntity);
@@ -260,8 +260,8 @@ void WikiPinballScene::CreateBoundaries(core::GameContext &ctx) {
 
   auto &mr = ctx.world.Add<MeshRenderer>(floor);
   mr.mesh = ctx.resource.LoadMesh("cube");
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
   mr.color = {0.0f, 0.3f, 0.0f, 1.0f};
 
   auto &c = ctx.world.Add<Collider>(floor);
@@ -286,8 +286,8 @@ void WikiPinballScene::CreateHeading(core::GameContext &ctx, float x, float z,
 
   auto &mr = ctx.world.Add<MeshRenderer>(e);
   mr.mesh = ctx.resource.LoadMesh("cube");
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
   mr.color = {0.0f, 0.0f, 1.0f, 1.0f};
 
   auto &h = ctx.world.Add<Heading>(e);
@@ -312,8 +312,8 @@ void WikiPinballScene::CreateFlippers(core::GameContext &ctx) {
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");
-    mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                        L"shaders/BasicPS.hlsl");
+    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                        L"Assets/shaders/BasicPS.hlsl");
     mr.color = {1.0f, 1.0f, 0.0f, 1.0f};
 
     auto &rb = ctx.world.Add<RigidBody>(e);
@@ -339,8 +339,8 @@ void WikiPinballScene::CreateFlippers(core::GameContext &ctx) {
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");
-    mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                        L"shaders/BasicPS.hlsl");
+    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                        L"Assets/shaders/BasicPS.hlsl");
     mr.color = {1.0f, 1.0f, 0.0f, 1.0f};
 
     auto &rb = ctx.world.Add<RigidBody>(e);
@@ -368,8 +368,8 @@ void WikiPinballScene::CreateLinkObstacle(core::GameContext &ctx, float x,
 
   auto &mr = ctx.world.Add<MeshRenderer>(e);
   mr.mesh = ctx.resource.LoadMesh("cube");
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
   // 青緑色でリンク障害物を表示
   mr.color = {0.0f, 0.6f, 0.8f, 1.0f};
 

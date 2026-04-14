@@ -29,6 +29,7 @@ void TrajectoryPredictor::Initialize(core::GameContext &ctx, size_t dotCount) {
     mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                         L"Assets/shaders/BasicPS.hlsl");
     mr.color = {1.0f, 1.0f, 0.0f, 0.9f};
+    mr.isTransparent = true;
     mr.isVisible = false;
 
     m_dots.push_back(e);
@@ -36,7 +37,7 @@ void TrajectoryPredictor::Initialize(core::GameContext &ctx, size_t dotCount) {
 }
 
 void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
-  if (params.powerRatio > 0.0f) {
+  if (params.arrowEntity != UINT32_MAX) {
     auto *arrowMR = ctx.world.Get<MeshRenderer>(params.arrowEntity);
     if (arrowMR) {
       arrowMR->isVisible = false;
@@ -58,7 +59,15 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     }
   }
 
-  float initialSpeed = params.maxPower * params.powerRatio;
+  // powerRatio == 0 の通常時は仮のパワー比率 (0.65) で軌道を描画する
+  // 通常時はドットを薄い黄色、ショット準備中は明るい黄色で区別する
+  const bool isIdlePreview = (params.powerRatio <= 0.0f);
+  const float effectivePowerRatio = isIdlePreview ? 0.65f : params.powerRatio;
+  const XMFLOAT4 dotColor = isIdlePreview
+      ? XMFLOAT4{1.0f, 1.0f, 0.0f, 0.35f}   // 通常時: 薄い黄色
+      : XMFLOAT4{1.0f, 0.95f, 0.0f, 0.90f}; // ショット時: 明るい黄色
+
+  float initialSpeed = params.maxPower * effectivePowerRatio;
   XMVECTOR dirXZ = XMLoadFloat3(&params.shotDirection);
   float rad = XMConvertToRadians(params.launchAngle);
   float vy = std::sin(rad) * initialSpeed;
@@ -131,6 +140,9 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     if (!mr || !t) {
       continue;
     }
+
+    // ドット色を設定
+    mr->color = dotColor;
 
     XMVECTOR currentPos = prevPos;
 
@@ -206,10 +218,17 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
           vel = XMVectorZero();
           acc = XMVectorZero();
         } else if (currentSpeed > 0.0001f) {
-          // 指数関数的な速度減衰（PhysicsSystemと同期）
+          // ハイブリッド減衰（PhysicsSystemと同期）
+          float t = std::clamp((currentSpeed - 1.0f) / 4.0f, 0.0f, 1.0f);
+
           float k = frictionAccel;
-          float speedRatio = std::exp(-k * subDt);
-          vel = XMVectorScale(vel, speedRatio);
+          float expRatio = std::exp(-k * subDt);
+
+          float linearDrop = frictionAccel * subDt;
+          float linearRatio = (currentSpeed > linearDrop) ? (currentSpeed - linearDrop) / currentSpeed : 0.0f;
+
+          float finalRatio = t * expRatio + (1.0f - t) * linearRatio;
+          vel = XMVectorScale(vel, finalRatio);
 
           if (safeLength(vel) < 0.02f) {
             vel = XMVectorZero();

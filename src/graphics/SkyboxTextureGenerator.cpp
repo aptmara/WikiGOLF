@@ -416,6 +416,20 @@ bool SkyboxTextureGenerator::LoadCubemapFromFiles(
   return CreateCubemapTexture(device, faceData, kDefaultFaceSize, outSRV);
 }
 
+bool SkyboxTextureGenerator::LoadCubemapFromSingleFile(
+    ID3D11Device *device, const std::wstring &filePath,
+    ComPtr<ID3D11ShaderResourceView> &outSRV) {
+
+  std::vector<uint8_t> data;
+  if (!LoadFaceFromFile(filePath, kDefaultFaceSize, data)) {
+    return false;
+  }
+
+  // すべての面に同じデータを設定
+  std::vector<std::vector<uint8_t>> faceData(6, data);
+  return CreateCubemapTexture(device, faceData, kDefaultFaceSize, outSRV);
+}
+
 // === プロシージャル生成ヘルパー関数 ===
 
 namespace {

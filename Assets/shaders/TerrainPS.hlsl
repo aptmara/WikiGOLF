@@ -47,6 +47,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
         
         float3 mapN = g_NormalArray.Sample(g_Sampler, uvw).xyz;
         mapN = mapN * 2.0f - 1.0f;
+        
+        // 法線の強さを強調 (XYを強調することで凹凸を際立たせる)
+        mapN.xy *= 1.5f; 
         N = normalize(mul(mapN, TBN));
     }
 

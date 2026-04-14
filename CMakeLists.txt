@@ -55,8 +55,6 @@ endif()
 add_custom_command(TARGET DX_GAME POST_BUILD
     # Assets フォルダをそのままコピー
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:DX_GAME>/Assets
-    # shaders はプロジェクトルートの shaders/ から
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll $<TARGET_FILE_DIR:DX_GAME>/assimp-vc143-mt.dll
     COMMENT "Deploying assets to output directory..."
 )
