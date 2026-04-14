@@ -257,6 +257,19 @@ struct ShotState {
 
   // スピン入力（将来用）
   DirectX::XMFLOAT2 spinInput = {0.0f, 0.0f};
+
+  /// @brief 状態のリセット
+  void Reset() {
+    phase = Phase::Idle;
+    powerGaugePos = 0.0f;
+    powerGaugeDir = 1.0f;
+    impactGaugePos = 0.0f;
+    impactGaugeDir = 1.0f;
+    confirmedPower = 0.0f;
+    confirmedImpact = 0.5f;
+    judgement = ShotJudgement::None;
+    resultDisplayTime = 0.0f;
+  }
 };
 
 /**

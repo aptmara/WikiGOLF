@@ -20,7 +20,7 @@ struct VSConstants {
   XMMATRIX projection;
   XMFLOAT4 materialColor;
   XMFLOAT4
-      materialFlags; // x: hasTexture, y: hasNormalMap, z: padding, w: padding
+      materialFlags; // x: hasTexture, y: hasNormalMap, z: customFlags.x, w: customFlags.y
   XMFLOAT4 lightDir;
   XMFLOAT4 cameraPos;
 };

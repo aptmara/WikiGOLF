@@ -400,6 +400,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 }
 
 MeshHandle ResourceManager::LoadMesh(const std::string &path) {
+  LOG_DEBUG("Resource", "LoadMesh: {}", path.c_str());
   // キャッシュヒット確認
   if (auto it = m_meshCache.find(path); it != m_meshCache.end()) {
     if (m_meshPool.Get(it->second)) { // ハンドル有効性確認

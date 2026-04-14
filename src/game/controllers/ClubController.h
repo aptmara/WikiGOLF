@@ -32,6 +32,8 @@ public:
     float launchAngle;
     std::string iconTexture;
     float rollingFrictionScale = 1.0f;
+    std::string shortName;   // e.g. "1W"
+    std::string categoryEN;  // e.g. "Driver"
   };
 
   struct InputParams {
@@ -52,6 +54,9 @@ public:
   int GetCurrentClubIndex() const;
   float GetRecommendedCameraDistance(float fieldScale) const;
   float GetRecommendedCameraHeight(float fieldScale) const;
+
+  /// @brief 全クラブ名リストを返す (WikiGolfHUD のクラブ選択リスト描画用)
+  const std::vector<Club>& GetAllClubs() const { return m_availableClubs; }
 
 private:
   enum class ClubAnimPhase {

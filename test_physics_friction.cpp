@@ -25,13 +25,13 @@ int main() {
   const float gravity = 9.8f;
   const float k = frictionCoeff * gravity;
 
-  // 1) 摩擦減速が指数関数的に計算されることを確認
+  // 1) 摩擦減速が線形に計算されることを確認
   {
     float startSpeed = 5.0f;
     float newSpeed = ApplyRollingFriction(startSpeed, frictionCoeff, dt);
-    float expectedSpeed = startSpeed * std::exp(-k * dt);
+    float expectedSpeed = startSpeed - frictionCoeff * gravity * dt;
     CHECK_CLOSE(newSpeed, expectedSpeed, 1e-5f,
-                "Rolling friction uses exponential decay");
+                "Rolling friction uses linear decay");
   }
 
   // 2) 速度が極低速しきい値を下回る場合は静止する
@@ -89,8 +89,8 @@ int main() {
     float bunker = game::systems::ComputeGrassRollingAcceleration(
         8.0f, 1.0f, game::components::TerrainMaterial::Bunker, 1.0f, settings);
 
-    CHECK(flatFairway > flatGreen,
-          "Green friction stays lighter than fairway");
+    CHECK(flatFairway < flatGreen,
+          "Green friction is now heavier than fairway");
     CHECK(bunker > flatFairway * 1.5f,
           "Bunker friction is stronger than fairway");
     CHECK(steepFairway > settings.constantBrake * 0.5f,

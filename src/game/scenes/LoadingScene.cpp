@@ -325,71 +325,79 @@ void LoadingScene::CreateBoundaries(core::GameContext &ctx) {
 }
 
 void LoadingScene::SpawnBall(core::GameContext &ctx) {
-  // ランダム生成器
   static std::mt19937 rng(std::random_device{}());
+
   const float renderRadius = BALL_RADIUS * BALL_MODEL_SCALE;
   const float spawnHalfX = ARENA_HALF_WIDTH - renderRadius - 0.5f;
   const float spawnHalfZ = ARENA_HALF_DEPTH - renderRadius - 0.2f;
+
   std::uniform_real_distribution<float> distX(-spawnHalfX, spawnHalfX);
   std::uniform_real_distribution<float> distZ(-spawnHalfZ, spawnHalfZ);
   std::uniform_real_distribution<float> distHeight(24.0f, 40.0f);
-  std::uniform_real_distribution<float> distVelX(-22.0f, 22.0f);
-  std::uniform_real_distribution<float> distVelZ(-14.0f, 14.0f);
-  std::uniform_real_distribution<float> spinDist(-4.0f, 4.0f);
+
+  // 積み上げ演出では横速度を弱める
+  std::uniform_real_distribution<float> distVelX(-6.0f, 6.0f);
+  std::uniform_real_distribution<float> distVelZ(-4.0f, 4.0f);
+  std::uniform_real_distribution<float> spinDist(-1.5f, 1.5f);
+
   std::uniform_real_distribution<float> angleDist(-DirectX::XM_PI,
                                                   DirectX::XM_PI);
 
   auto entity = CreateEntity(ctx.world);
 
-  // Transform
   auto &tr = ctx.world.Add<components::Transform>(entity);
   tr.position = {distX(rng), distHeight(rng), distZ(rng)};
+
   const float renderScale =
       BALL_RADIUS * 2.0f * BALL_MODEL_SCALE * MODEL_ASSET_SCALE_FACTOR;
   tr.scale = {renderScale, renderScale, renderScale};
-  // 軽いランダム回転を入れておく
+
   auto randomRotation = DirectX::XMQuaternionRotationRollPitchYaw(
-      angleDist(rng) * 0.25f, angleDist(rng) * 0.25f, angleDist(rng) * 0.25f);
+      angleDist(rng) * 0.25f,
+      angleDist(rng) * 0.25f,
+      angleDist(rng) * 0.25f);
   DirectX::XMStoreFloat4(&tr.rotation, randomRotation);
 
-  // MeshRenderer
   auto &mr = ctx.world.Add<components::MeshRenderer>(entity);
   mr.mesh = m_ballMeshHandle;
-  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+  mr.shader = ctx.resource.LoadShader("Basic",
+                                      L"Assets/shaders/BasicVS.hlsl",
                                       L"Assets/shaders/BasicPS.hlsl");
 
-  // 色の決定（5%の確率で上品なネオンカラー）
   std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);
   if (colorDist(rng) < 0.05f) {
-    // ネオンパレット (RGB) - 控えめな発光
     const float intensity = 1.8f;
     const std::array<DirectX::XMFLOAT3, 5> neonColors = {{
-        {0.1f * intensity, 0.6f * intensity, 1.0f * intensity}, // Sky Blue
-        {0.9f * intensity, 0.2f * intensity, 0.6f * intensity}, // Rose
-        {1.0f * intensity, 0.8f * intensity, 0.1f * intensity}, // Amber
-        {0.2f * intensity, 0.9f * intensity, 0.4f * intensity}, // Soft Emerald
-        {0.6f * intensity, 0.3f * intensity, 1.0f * intensity}  // Violet
+        {0.1f * intensity, 0.6f * intensity, 1.0f * intensity},
+        {0.9f * intensity, 0.2f * intensity, 0.6f * intensity},
+        {1.0f * intensity, 0.8f * intensity, 0.1f * intensity},
+        {0.2f * intensity, 0.9f * intensity, 0.4f * intensity},
+        {0.6f * intensity, 0.3f * intensity, 1.0f * intensity}
     }};
-    std::uniform_int_distribution<size_t> paletteDist(0, neonColors.size() - 1);
+
+    std::uniform_int_distribution<size_t> paletteDist(0,
+                                                      neonColors.size() - 1);
     DirectX::XMFLOAT3 c = neonColors[paletteDist(rng)];
     mr.color = {c.x, c.y, c.z, 1.0f};
   } else {
-    // ゴルフボールらしい白色
     mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
   }
+
   mr.isVisible = true;
   mr.normalMapSRV = ctx.resource.LoadTextureSRV("Assets/models/golfball_n.png");
   mr.hasNormalMap = static_cast<bool>(mr.normalMapSRV);
 
-  // ボール状態を記録
   BallState ball{};
   ball.entity = entity;
-  ball.velocity = {distVelX(rng), -16.0f, distVelZ(rng)};
-  ball.angularVelocity = {spinDist(rng) * 0.8f, spinDist(rng),
-                          spinDist(rng) * 0.6f};
+  ball.velocity = {distVelX(rng), -12.0f, distVelZ(rng)};
+  ball.angularVelocity = {
+      spinDist(rng) * 0.8f,
+      spinDist(rng),
+      spinDist(rng) * 0.6f
+  };
   ball.settled = false;
-  m_balls.push_back(ball);
 
+  m_balls.push_back(ball);
   m_spawnedCount++;
 }
 
@@ -399,152 +407,281 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
   const float wallX = ARENA_HALF_WIDTH - renderRadius;
   const float wallZ = ARENA_HALF_DEPTH - renderRadius;
 
-  // サブステップ数（貫通防止のため分割実行）
+  if (m_balls.empty()) {
+    m_movingCount = 0;
+    m_maxSpeed = 0.0f;
+    m_avgSpeed = 0.0f;
+    m_settledCount = 0;
+    return;
+  }
+
+  // dt が急に大きくなったときの暴発対策
+  dt = std::clamp(dt, 0.0f, 0.033f);
+
+  std::vector<bool> supported(m_balls.size(), false);
+
   const int subSteps = 8;
-  const float subDt = dt / subSteps;
+  const float subDt = dt / static_cast<float>(subSteps);
+
+  constexpr float pileRestitution = 0.08f;
+  constexpr float lowImpactBounceCut = 2.0f;
+  constexpr float positionCorrectionPercent = 0.75f;
+  constexpr float positionCorrectionSlop = 0.01f;
+  constexpr float supportNormalY = 0.45f;
+  constexpr float supportLinearDamping = 0.86f;
+  constexpr float supportAngularDamping = 0.90f;
 
   for (int step = 0; step < subSteps; ++step) {
-    for (auto &ball : m_balls) {
+    for (size_t i = 0; i < m_balls.size(); ++i) {
+      auto &ball = m_balls[i];
+
       if (!ctx.world.IsAlive(ball.entity) || ball.settled) {
         continue;
       }
 
       auto *tr = ctx.world.Get<components::Transform>(ball.entity);
-      if (!tr)
+      if (!tr) {
         continue;
+      }
 
-      // 重力を適用
       ball.velocity.y += GRAVITY * subDt;
 
-      // 空気抵抗
-      float subDrag = std::pow(AIR_DRAG, subDt * 60.0f);
+      const float subDrag = std::pow(AIR_DRAG, subDt * 60.0f);
       ball.velocity.x *= subDrag;
       ball.velocity.z *= subDrag;
 
-      // 位置を更新
       tr->position.x += ball.velocity.x * subDt;
       tr->position.y += ball.velocity.y * subDt;
       tr->position.z += ball.velocity.z * subDt;
 
-      // 回転を更新
       DirectX::XMVECTOR currentRot = DirectX::XMLoadFloat4(&tr->rotation);
-      DirectX::XMVECTOR deltaRot = DirectX::XMQuaternionRotationRollPitchYaw(
-          ball.angularVelocity.x * subDt, ball.angularVelocity.y * subDt,
-          ball.angularVelocity.z * subDt);
-      auto nextRot = DirectX::XMQuaternionNormalize(
+      DirectX::XMVECTOR deltaRot =
+          DirectX::XMQuaternionRotationRollPitchYaw(
+              ball.angularVelocity.x * subDt,
+              ball.angularVelocity.y * subDt,
+              ball.angularVelocity.z * subDt);
+
+      DirectX::XMVECTOR nextRot = DirectX::XMQuaternionNormalize(
           DirectX::XMQuaternionMultiply(deltaRot, currentRot));
       DirectX::XMStoreFloat4(&tr->rotation, nextRot);
-      float subAngDrag = std::pow(ANGULAR_DAMPING, subDt * 60.0f);
+
+      const float subAngDrag = std::pow(ANGULAR_DAMPING, subDt * 60.0f);
       ball.angularVelocity.x *= subAngDrag;
       ball.angularVelocity.y *= subAngDrag;
       ball.angularVelocity.z *= subAngDrag;
 
-      // 床との衝突
       if (tr->position.y < floorY) {
         tr->position.y = floorY;
+        supported[i] = true;
+
         if (ball.velocity.y < -0.5f) {
-          ball.velocity.y = -ball.velocity.y * RESTITUTION;
+          ball.velocity.y = -ball.velocity.y * pileRestitution;
         } else {
           ball.velocity.y = 0.0f;
         }
+
         const float subFriction = std::pow(FRICTION, subDt * 60.0f);
         ball.velocity.x *= subFriction;
         ball.velocity.z *= subFriction;
       }
 
-      // 壁との衝突
-      const float wallMinX = -wallX, wallMaxX = wallX;
-      const float wallMinZ = -wallZ, wallMaxZ = wallZ;
+      const float wallMinX = -wallX;
+      const float wallMaxX = wallX;
+      const float wallMinZ = -wallZ;
+      const float wallMaxZ = wallZ;
+
       if (tr->position.x < wallMinX) {
         tr->position.x = wallMinX;
-        ball.velocity.x = -ball.velocity.x * RESTITUTION;
+        ball.velocity.x = -ball.velocity.x * pileRestitution;
       } else if (tr->position.x > wallMaxX) {
         tr->position.x = wallMaxX;
-        ball.velocity.x = -ball.velocity.x * RESTITUTION;
+        ball.velocity.x = -ball.velocity.x * pileRestitution;
       }
+
       if (tr->position.z < wallMinZ) {
         tr->position.z = wallMinZ;
-        ball.velocity.z = -ball.velocity.z * RESTITUTION;
+        ball.velocity.z = -ball.velocity.z * pileRestitution;
       } else if (tr->position.z > wallMaxZ) {
         tr->position.z = wallMaxZ;
-        ball.velocity.z = -ball.velocity.z * RESTITUTION;
+        ball.velocity.z = -ball.velocity.z * pileRestitution;
       }
     }
   }
 
-  // ボール同士の衝突 (N^2だがサブステップ化で安定)
-  for (size_t i = 0; i < m_balls.size(); i++) {
+  // ボール同士の衝突
+  for (size_t i = 0; i < m_balls.size(); ++i) {
     auto &ball = m_balls[i];
-    if (!ctx.world.IsAlive(ball.entity))
+
+    if (!ctx.world.IsAlive(ball.entity)) {
       continue;
-    auto *tr = ctx.world.Get<components::Transform>(ball.entity);
-    if (!tr)
-      continue;
-
-    for (size_t j = i + 1; j < m_balls.size(); j++) {
-      auto &other = m_balls[j];
-      if (!ctx.world.IsAlive(other.entity) || (ball.settled && other.settled))
-        continue;
-
-      auto *otherTr = ctx.world.Get<components::Transform>(other.entity);
-      if (!otherTr)
-        continue;
-
-      float dx = otherTr->position.x - tr->position.x;
-      float dy = otherTr->position.y - tr->position.y;
-      float dz = otherTr->position.z - tr->position.z;
-      float distSq = dx * dx + dy * dy + dz * dz;
-      float minDist = renderRadius * 2.0f;
-
-      if (distSq < minDist * minDist && distSq > 0.0001f) {
-        float dist = std::sqrt(distSq);
-        float overlap = (minDist - dist);
-        float nx = dx / dist, ny = dy / dist, nz = dz / dist;
-
-        float p1 = ball.settled ? 0.0f : (other.settled ? 1.0f : 0.5f);
-        float p2 = 1.0f - p1;
-
-        tr->position.x -= nx * overlap * p1;
-        tr->position.y -= ny * overlap * p1;
-        tr->position.z -= nz * overlap * p1;
-        otherTr->position.x += nx * overlap * p2;
-        otherTr->position.y += ny * overlap * p2;
-        otherTr->position.z += nz * overlap * p2;
-
-        float rvx = other.velocity.x - ball.velocity.x;
-        float rvy = other.velocity.y - ball.velocity.y;
-        float rvz = other.velocity.z - ball.velocity.z;
-        float velAlongNormal = rvx * nx + rvy * ny + rvz * nz;
-
-        if (velAlongNormal < 0) {
-          float jVal = -(1 + RESTITUTION) * velAlongNormal * 0.5f;
-          float ix = nx * jVal, iy = ny * jVal, iz = nz * jVal;
-          if (!ball.settled) {
-            ball.velocity.x -= ix;
-            ball.velocity.y -= iy;
-            ball.velocity.z -= iz;
-          }
-          if (!other.settled) {
-            other.velocity.x += ix;
-            other.velocity.y += iy;
-            other.velocity.z += iz;
-          }
-          if (jVal > 0.5f) {
-            ball.settled = other.settled = false;
-          }
-        }
-      }
     }
 
-    float speedSq = ball.velocity.x * ball.velocity.x +
-                    ball.velocity.y * ball.velocity.y +
-                    ball.velocity.z * ball.velocity.z;
-    if (speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD * 0.5f &&
-        tr->position.y <= floorY + 0.1f) {
+    auto *tr = ctx.world.Get<components::Transform>(ball.entity);
+    if (!tr) {
+      continue;
+    }
+
+    for (size_t j = i + 1; j < m_balls.size(); ++j) {
+      auto &other = m_balls[j];
+
+      if (!ctx.world.IsAlive(other.entity)) {
+        continue;
+      }
+
+      auto *otherTr = ctx.world.Get<components::Transform>(other.entity);
+      if (!otherTr) {
+        continue;
+      }
+
+      const float dx = otherTr->position.x - tr->position.x;
+      const float dy = otherTr->position.y - tr->position.y;
+      const float dz = otherTr->position.z - tr->position.z;
+
+      const float distSq = dx * dx + dy * dy + dz * dz;
+      const float minDist = renderRadius * 2.0f;
+
+      if (distSq >= minDist * minDist || distSq <= 0.0001f) {
+        continue;
+      }
+
+      const float dist = std::sqrt(distSq);
+      const float overlap = minDist - dist;
+
+      const float nx = dx / dist;
+      const float ny = dy / dist;
+      const float nz = dz / dist;
+
+      // 上に乗っているボールを support 済みにする
+      if (ny > supportNormalY) {
+        supported[j] = true;
+      } else if (ny < -supportNormalY) {
+        supported[i] = true;
+      }
+
+      const bool ballStatic = ball.settled;
+      const bool otherStatic = other.settled;
+
+      // すでに静止済み同士なら何もしない
+      if (ballStatic && otherStatic) {
+        continue;
+      }
+
+      const float invMass1 = ballStatic ? 0.0f : 1.0f;
+      const float invMass2 = otherStatic ? 0.0f : 1.0f;
+      const float invMassSum = invMass1 + invMass2;
+
+      if (invMassSum <= 0.0f) {
+        continue;
+      }
+
+      // めり込み補正
+      const float correction =
+          std::max(overlap - positionCorrectionSlop, 0.0f) *
+          positionCorrectionPercent / invMassSum;
+
+      tr->position.x -= nx * correction * invMass1;
+      tr->position.y -= ny * correction * invMass1;
+      tr->position.z -= nz * correction * invMass1;
+
+      otherTr->position.x += nx * correction * invMass2;
+      otherTr->position.y += ny * correction * invMass2;
+      otherTr->position.z += nz * correction * invMass2;
+
+      const float rvx = other.velocity.x - ball.velocity.x;
+      const float rvy = other.velocity.y - ball.velocity.y;
+      const float rvz = other.velocity.z - ball.velocity.z;
+
+      const float velAlongNormal = rvx * nx + rvy * ny + rvz * nz;
+
+      // 離れている方向なら反発させない
+      if (velAlongNormal > 0.0f) {
+        continue;
+      }
+
+      const float impactSpeed = std::abs(velAlongNormal);
+
+      // 低速接触時は反発ゼロ
+      const float restitution =
+          impactSpeed < lowImpactBounceCut ? 0.0f : pileRestitution;
+
+      const float impulse =
+          -(1.0f + restitution) * velAlongNormal / invMassSum;
+
+      const float ix = nx * impulse;
+      const float iy = ny * impulse;
+      const float iz = nz * impulse;
+
+      if (!ballStatic) {
+        ball.velocity.x -= ix * invMass1;
+        ball.velocity.y -= iy * invMass1;
+        ball.velocity.z -= iz * invMass1;
+      }
+
+      if (!otherStatic) {
+        other.velocity.x += ix * invMass2;
+        other.velocity.y += iy * invMass2;
+        other.velocity.z += iz * invMass2;
+      }
+    }
+  }
+
+  // 支持されているボールは横揺れと回転を強めに減衰
+  for (size_t i = 0; i < m_balls.size(); ++i) {
+    auto &ball = m_balls[i];
+
+    if (!ctx.world.IsAlive(ball.entity) || ball.settled) {
+      continue;
+    }
+
+    if (!supported[i]) {
+      continue;
+    }
+
+    ball.velocity.x *= supportLinearDamping;
+    ball.velocity.z *= supportLinearDamping;
+
+    if (std::abs(ball.velocity.y) < 0.25f) {
+      ball.velocity.y = 0.0f;
+    }
+
+    ball.angularVelocity.x *= supportAngularDamping;
+    ball.angularVelocity.y *= supportAngularDamping;
+    ball.angularVelocity.z *= supportAngularDamping;
+  }
+
+  // 停止判定
+  for (size_t i = 0; i < m_balls.size(); ++i) {
+    auto &ball = m_balls[i];
+
+    if (!ctx.world.IsAlive(ball.entity)) {
+      continue;
+    }
+
+    auto *tr = ctx.world.Get<components::Transform>(ball.entity);
+    if (!tr) {
+      continue;
+    }
+
+    const float speedSq =
+        ball.velocity.x * ball.velocity.x +
+        ball.velocity.y * ball.velocity.y +
+        ball.velocity.z * ball.velocity.z;
+
+    const float angularSpeedSq =
+        ball.angularVelocity.x * ball.angularVelocity.x +
+        ball.angularVelocity.y * ball.angularVelocity.y +
+        ball.angularVelocity.z * ball.angularVelocity.z;
+
+    const bool onFloor = tr->position.y <= floorY + 0.1f;
+    const bool canSettle = supported[i] || onFloor;
+
+    if (canSettle &&
+        speedSq < SETTLE_THRESHOLD * SETTLE_THRESHOLD &&
+        angularSpeedSq < 0.25f) {
       ball.settled = true;
-      ball.velocity = {0, 0, 0};
-      ball.angularVelocity = {0, 0, 0};
-    } else {
+      ball.velocity = {0.0f, 0.0f, 0.0f};
+      ball.angularVelocity = {0.0f, 0.0f, 0.0f};
+    } else if (!ball.settled) {
       ball.settled = false;
     }
   }
@@ -552,34 +689,45 @@ void LoadingScene::UpdatePhysics(core::GameContext &ctx, float dt) {
   // ログ用メトリクス
   int settledCount = 0;
   int moving = 0;
-  float maxSpeed = 0.0f, speedAccum = 0.0f;
+  float maxSpeed = 0.0f;
+  float speedAccum = 0.0f;
   int speedCount = 0;
+
   m_hasMovingSample = false;
+
   for (const auto &ball : m_balls) {
-    if (!ctx.world.IsAlive(ball.entity))
+    if (!ctx.world.IsAlive(ball.entity)) {
       continue;
-    if (ball.settled)
+    }
+
+    if (ball.settled) {
       settledCount++;
-    else {
-      moving++;
-      float speed = std::sqrt(ball.velocity.x * ball.velocity.x +
-                              ball.velocity.y * ball.velocity.y +
-                              ball.velocity.z * ball.velocity.z);
-      maxSpeed = std::max(maxSpeed, speed);
-      speedAccum += speed;
-      speedCount++;
-      if (!m_hasMovingSample) {
-        if (auto *tr = ctx.world.Get<components::Transform>(ball.entity)) {
-          m_lastMovingPos = tr->position;
-          m_hasMovingSample = true;
-        }
+      continue;
+    }
+
+    moving++;
+
+    const float speed =
+        std::sqrt(ball.velocity.x * ball.velocity.x +
+                  ball.velocity.y * ball.velocity.y +
+                  ball.velocity.z * ball.velocity.z);
+
+    maxSpeed = std::max(maxSpeed, speed);
+    speedAccum += speed;
+    speedCount++;
+
+    if (!m_hasMovingSample) {
+      if (auto *tr = ctx.world.Get<components::Transform>(ball.entity)) {
+        m_lastMovingPos = tr->position;
+        m_hasMovingSample = true;
       }
     }
   }
+
   m_movingCount = moving;
   m_maxSpeed = maxSpeed;
   m_settledCount = settledCount;
-  m_avgSpeed = (speedCount > 0) ? speedAccum / speedCount : 0.0f;
+  m_avgSpeed = speedCount > 0 ? speedAccum / speedCount : 0.0f;
 }
 
 bool LoadingScene::AreAllBallsSettled() {

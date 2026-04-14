@@ -113,6 +113,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     globeMr.mesh = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
     globeMr.shader = shaderHandle;
     globeMr.color = {0.9f, 0.9f, 0.95f, 0.0f}; // 初期アルファ0
+    globeMr.isTransparent = true;
     globeMr.isVisible = true;
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 4 (Cart)");
@@ -126,6 +127,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     cartMr.mesh = ctx.resource.LoadMesh("builtin/cube");
     cartMr.shader = shaderHandle;
     cartMr.color = {1.0f, 1.0f, 1.0f, 0.0f};
+    cartMr.isTransparent = true;
     cartMr.isVisible = true;
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 5 (Background)");
@@ -138,6 +140,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     bgMr.mesh = ctx.resource.LoadMesh("builtin/cube");
     bgMr.shader = shaderHandle;
     bgMr.color = {0.05f, 0.05f, 0.1f, 0.0f};
+    bgMr.isTransparent = true;
     bgMr.isVisible = true;
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 6 (Text UI)");
@@ -214,22 +217,28 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                 auto status = m_loadTask.wait_for(std::chrono::milliseconds(0));
                 if (status == std::future_status::ready) {
                     m_loadCompleted = true;
-                    // 同期処理でシーンを構築する
+                    // 同期処理ではなく、インクリメンタル構築を開始する
                     auto asyncData = m_loadTask.get();
                     if (m_pageLoader) {
-                        LOG_INFO("Transition", "Async fetch complete. Building page sync...");
-                        // 注意: ここで球体やカートのエンティティIDが破壊されないよう、
-                        // WikiPageLoader 内で明示的に保持すべきエンティティ以外を消す必要がある
-                        // (現在は WikiHole や Flag のみ消すロジックなので衝突しないはず)
-                        
-                        // 元のカメラやボールのIDを取得する処理が必要だが、
-                        // 簡単のため、一時的に0（無視）として渡し、後で WikiGolfScene 側でケアするか、
-                        // WikiGolfScene が持つボールIDなどを Controller に渡す設計にするか
-                        // ※ここでは単純化のため、一旦 UINT32_MAX を渡す
-                        m_pageLoader->BuildPageSync(ctx, asyncData, m_targetBall, m_targetCam, m_targetSky, m_minimap);
+                        LOG_INFO("Transition", "Async fetch complete. Starting incremental build...");
+                        m_pageLoader->BeginBuildPage(ctx, std::move(asyncData), m_targetBall, m_targetCam, m_targetSky, m_minimap);
+                        m_phase = Phase::Building;
+                    } else {
+                        m_phase = Phase::FadeOut;
                     }
+                }
+            }
+            break;
+
+        case Phase::Building:
+            if (m_pageLoader) {
+                bool done = m_pageLoader->StepBuildPage(ctx);
+                if (done) {
+                    LOG_INFO("Transition", "Incremental build complete.");
                     m_phase = Phase::FadeOut;
                 }
+            } else {
+                m_phase = Phase::FadeOut;
             }
             break;
 
@@ -274,7 +283,20 @@ void ArticleTransitionController::UpdateAnimation(core::GameContext& ctx, float 
 }
 
 void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
-    float progress = m_loadCompleted ? 1.0f : std::clamp(m_stateTimer / 5.0f, 0.0f, 0.9f);
+    float progress = 0.0f;
+    if (m_phase == Phase::FadeIn) {
+        progress = 0.0f;
+    } else if (m_phase == Phase::Loading) {
+        // 通信待ちは最大 20% とする
+        progress = std::clamp(m_stateTimer / 5.0f, 0.0f, 0.2f);
+    } else if (m_phase == Phase::Building) {
+        // 構築進捗は 20% ~ 100%
+        float buildProgress = m_pageLoader ? m_pageLoader->GetBuildProgress() : 0.0f;
+        progress = 0.2f + 0.8f * buildProgress;
+    } else {
+        progress = 1.0f;
+    }
+
     int percent = static_cast<int>(progress * 100.0f);
 
     if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {

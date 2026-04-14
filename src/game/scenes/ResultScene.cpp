@@ -64,10 +64,13 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
   }
 
   // 1. Create 3D Environment (Globe, Floor, Rings)
+  LOG_INFO("ResultScene", "Creating Visual Environment...");
   CreateVisualEnvironment(ctx);
 
   // 2. Create Luxury UI
+  LOG_INFO("ResultScene", "Creating Luxury UI...");
   CreateLuxuryUI(ctx);
+  LOG_INFO("ResultScene", "OnEnter complete.");
 }
 
 void ResultScene::OnUpdate(core::GameContext &ctx) {
@@ -363,6 +366,7 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   floorMr.mesh = planeMesh;
   floorMr.shader = basicShader;
   floorMr.color = {0.1f, 0.1f, 0.2f, 0.9f}; // Deep Blue reflective floor
+  floorMr.isTransparent = true;
   floorMr.isVisible = true;
 
   // Victory Globe
@@ -393,6 +397,7 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
     mr.shader = basicShader;
     mr.color = (i == 1) ? XMFLOAT4(1.0f, 0.84f, 0.0f, 0.8f)
                         : XMFLOAT4(0.0f, 0.8f, 1.0f, 0.5f); // Gold & Cyan
+    mr.isTransparent = true;
     mr.isVisible = true;
 
     RingObject ro;
@@ -429,6 +434,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   auto addUI = [&](const std::wstring &text, float y,
                    const graphics::TextStyle &style, bool isBtn = false,
                    const std::string &btnId = "") {
+    LOG_DEBUG("ResultScene", "addUI: Adding {}", core::ToString(text));
     auto e = CreateEntity(ctx.world);
 
     if (isBtn) {
@@ -463,7 +469,10 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
     elem.currentScale = 1.0f;
     elem.targetScale = 1.0f;
     elem.text = text;
+    elem.isHovered = false;
+    elem.baseColor = {1, 1, 1, 1};
     m_uiElements.push_back(elem);
+    LOG_DEBUG("ResultScene", "addUI: Added {} successfully", core::ToString(text));
   };
 
   // 1. Title
@@ -515,10 +524,13 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   // Add to animation list
   UIElement bElem;
   bElem.entity = badgeE;
+  bElem.baseX = 0.0f;
   bElem.baseY = 220.0f;
   bElem.currentScale = 0.0f;
   bElem.targetScale = 1.0f;
   bElem.text = grade;
+  bElem.isHovered = false;
+  bElem.baseColor = gradeColor;
   m_uiElements.push_back(bElem);
 
   // 3. Target Hint
@@ -542,8 +554,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   }
 
   statStyle.align = graphics::TextAlign::Center;
-  std::wstring stats =
-      std::format(L"Shots: {}  |  Hops: {}", m_data.shotCount, hops);
+  std::wstring stats = L"Shots: " + std::to_wstring(m_data.shotCount) + L"  |  Hops: " + std::to_wstring(hops);
   addUI(stats, 340.0f, statStyle);
 
   auto routeStyle = statStyle;

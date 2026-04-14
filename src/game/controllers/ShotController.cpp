@@ -30,7 +30,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->powerGaugeDir = 1.0f;
             
             if (ctx.audio) {
-                ctx.audio->PlaySE(ctx, "se_charge.mp3");
+                ctx.audio->PlaySE(ctx, "se_shot_charge.mp3", 0.7f);
             }
         }
         break;
@@ -54,15 +54,20 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->impactGaugePos = 0.0f;
             shot->impactGaugeDir = 1.0f;
             
+            if (hud) {
+                hud->SetImpactZonesVisible(ctx, false);
+            }
+
             if (ctx.audio) {
-                ctx.audio->PlaySE(ctx, "se_shot_charge.mp3");
+                ctx.audio->PlaySE(ctx, "se_shot_charge.mp3", 0.5f);
             }
         }
         
         // 右クリックキャンセル
         if (ctx.input.GetMouseButtonDown(1)) {
-            shot->phase = game::components::ShotState::Phase::Idle;
-            shot->powerGaugePos = 0.0f;
+            shot->Reset();
+            if (hud) hud->ResetShotUI(ctx);
+            if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.6f);
         }
         break;
     }
@@ -81,21 +86,28 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
         // インパクト決定
         if (ctx.input.GetMouseButtonDown(0)) {
             shot->confirmedImpact = shot->impactGaugePos;
+            if (hud) hud->SetGaugeVisible(ctx, false);
             
             // 判定ロジック
             float diff = std::abs(shot->confirmedImpact - 0.5f);
             if (diff < game::ui::kThresholdSpecial) {
                 shot->judgement = game::components::ShotJudgement::Special;
-                if (hud) hud->UpdateJudge(ctx, L"SPECIAL", game::ui::kColorSpecial);
+                if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorSpecial);
             } else if (diff < game::ui::kThresholdGreat) {
                 shot->judgement = game::components::ShotJudgement::Great;
-                if (hud) hud->UpdateJudge(ctx, L"Great", game::ui::kColorError);
+                if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorError);
             } else if (diff < game::ui::kThresholdNice) {
                 shot->judgement = game::components::ShotJudgement::Nice;
-                if (hud) hud->UpdateJudge(ctx, L"Nice", game::ui::kColorAccent);
+                if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorAccent);
             } else {
                 shot->judgement = game::components::ShotJudgement::Miss;
-                if (hud) hud->UpdateJudge(ctx, L"Miss", {0.2f, 0.2f, 0.8f, 1.0f});
+                if (hud) hud->UpdateJudge(ctx, L"", {0.2f, 0.2f, 0.8f, 1.0f});
+            }
+
+            // 判定音の再生
+            auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
+            if (ctx.audio && !feedback.soundPath.empty()) {
+                ctx.audio->PlaySE(ctx, feedback.soundPath, feedback.soundVolume);
             }
             
             state->lastShotPosition = ctx.world.Get<game::components::Transform>(state->ballEntity)->position;
@@ -104,7 +116,9 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
         
         // キャンセル
         if (ctx.input.GetMouseButtonDown(1)) {
-            shot->phase = game::components::ShotState::Phase::Idle;
+            shot->Reset();
+            if (hud) hud->ResetShotUI(ctx);
+            if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.6f);
         }
         break;
     }
@@ -164,10 +178,12 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     shot->phase = game::components::ShotState::Phase::Executing;
 
     if (ctx.audio) {
-        if (power > 30.0f) {
-            ctx.audio->PlaySE(ctx, "se_shot_hard.mp3");
+        if (power > 40.0f) {
+            ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.9f);
+        } else if (power < 15.0f) {
+            ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.7f);
         } else {
-            ctx.audio->PlaySE(ctx, "se_shot_soft.mp3");
+            ctx.audio->PlaySE(ctx, "se_shot.mp3", 0.8f);
         }
     }
 
@@ -176,7 +192,7 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     }
 
     if (hud) {
-        hud->UpdateJudge(ctx, L"Shot!", {1.0f, 1.0f, 1.0f, 1.0f});
+        hud->SetGaugeVisible(ctx, false);
     }
 }
 

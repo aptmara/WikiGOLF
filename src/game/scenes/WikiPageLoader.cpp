@@ -426,6 +426,332 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     return result;
 }
 
+void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
+                                    PageDataAsyncResult asyncData,
+                                    ecs::Entity ballEntity,
+                                    ecs::Entity cameraEntity,
+                                    ecs::Entity skyboxEntity,
+                                    controllers::MinimapController* minimapController)
+{
+    m_buildStep = BuildStep::ClearOldHoles;
+    m_buildData = std::move(asyncData);
+    m_buildBall = ballEntity;
+    m_buildCamera = cameraEntity;
+    m_buildSkybox = skyboxEntity;
+    m_buildMinimap = minimapController;
+    m_buildProgress = 0.0f;
+    m_buildResult = PageLoadResult();
+}
+
+bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
+{
+    auto* state = ctx.world.GetGlobal<GolfGameState>();
+    if (!state) return true;
+
+    switch (m_buildStep) {
+    case BuildStep::ClearOldHoles:
+    {
+        std::vector<ecs::Entity> holesToDelete;
+        std::vector<ecs::Entity> relatedToDelete;
+        ctx.world.Query<GolfHole>().Each(
+            [&](ecs::Entity e, GolfHole& hole) {
+                holesToDelete.push_back(e);
+                if (hole.labelEntity  != 0) relatedToDelete.push_back(ecs::Entity(hole.labelEntity));
+                if (hole.pillarEntity != 0) relatedToDelete.push_back(ecs::Entity(hole.pillarEntity));
+            });
+        for (auto e : relatedToDelete) {
+            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
+        }
+        for (auto e : holesToDelete) {
+            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
+        }
+        std::vector<ecs::Entity> flagsToDelete;
+        ctx.world.Query<HoleFlag>().Each(
+            [&](ecs::Entity e, HoleFlag&) { flagsToDelete.push_back(e); });
+        for (auto e : flagsToDelete) {
+            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
+        }
+        state->holes.clear();
+        
+        m_buildStep = BuildStep::PrepareLinks;
+        m_buildProgress = 0.10f;
+        return false;
+    }
+
+    case BuildStep::PrepareLinks:
+    {
+        // リンクフィルタリング
+        auto isIgnored = [](const std::string& t) {
+            if (t.empty()) return true;
+            if (t.size() >= 3) {
+                std::string suffix = t.substr(t.size() - 3);
+                if (suffix == "年" || suffix == "月" || suffix == "日") return true;
+            }
+            if (std::all_of(t.begin(), t.end(),
+                            [](unsigned char c) { return std::isdigit(c); }))
+                return true;
+            return false;
+        };
+
+        const size_t kLinksPerChars = 5;
+        const size_t kCharsPerUnit  = 2000;
+        const size_t kMaxLinks      = 50;
+        size_t dynamicLimit = (m_buildData.articleText.length() / kCharsPerUnit + 1) * kLinksPerChars;
+        size_t linkLimit    = (dynamicLimit < kMaxLinks) ? dynamicLimit : kMaxLinks;
+
+        m_buildValidLinks.clear();
+        for (const auto& link : m_buildData.allLinks) {
+            if (isIgnored(link.title)) continue;
+            if (link.title == state->targetPage) continue;
+            if (m_buildData.articleText.find(link.title) != std::string::npos) {
+                m_buildValidLinks.push_back({link.title, core::ToWString(link.title)});
+            }
+            if (m_buildValidLinks.size() >= linkLimit) break;
+        }
+
+        if (!state->targetPage.empty() &&
+            m_buildData.articleText.find(state->targetPage) != std::string::npos) {
+            bool exists = std::any_of(m_buildValidLinks.begin(), m_buildValidLinks.end(),
+                [&](const auto& v) { return v.first == state->targetPage; });
+            if (!exists) {
+                m_buildValidLinks.push_back({state->targetPage,
+                                      core::ToWString(state->targetPage)});
+            }
+        }
+
+        if (m_buildValidLinks.size() < 3) {
+            for (const auto& link : m_buildData.allLinks) {
+                bool exists = std::any_of(m_buildValidLinks.begin(), m_buildValidLinks.end(),
+                    [&](const auto& v) { return v.first == link.title; });
+                if (!exists && !isIgnored(link.title)) {
+                    m_buildValidLinks.push_back({link.title, core::ToWString(link.title)});
+                    if (m_buildValidLinks.size() >= 5) break;
+                }
+            }
+        }
+
+        // フィールドサイズ計算
+        float articleLengthFactor = std::max(1.0f, (float)m_buildData.articleText.length() / 1500.0f);
+        m_buildFieldWidth = kMinFieldWidth * std::pow(articleLengthFactor, 0.45f);
+        m_buildFieldWidth = std::clamp(m_buildFieldWidth, kMinFieldWidth, kMinFieldWidth * 4.0f);
+        m_buildFieldDepth = kMinFieldDepth;
+
+        // テクスチャサイズ
+        const uint32_t kMaxTexWidth = 16384;
+        m_buildTexScale = 1.0f;
+        m_buildTexWidth  = static_cast<uint32_t>(m_buildFieldWidth  * 100.0f);
+        m_buildTexHeight = static_cast<uint32_t>(m_buildFieldDepth  * 100.0f);
+        if (m_buildTexWidth > kMaxTexWidth) {
+            m_buildTexScale   = (float)kMaxTexWidth / (float)m_buildTexWidth;
+            m_buildTexWidth   = kMaxTexWidth;
+            m_buildTexHeight  = (uint32_t)(m_buildTexHeight * m_buildTexScale);
+        }
+
+        m_buildLinkPairs.clear();
+        for (const auto& link : m_buildValidLinks) {
+            m_buildLinkPairs.push_back({link.second, link.first});
+        }
+
+        m_buildStep = BuildStep::BeginTexture;
+        m_buildProgress = 0.20f;
+        return false;
+    }
+
+    case BuildStep::BeginTexture:
+    {
+        if (m_textureGenerator) {
+            m_textureGenerator->BeginGenerateTexture(
+                m_textureState,
+                core::ToWString(m_buildData.pageName),
+                core::ToWString(m_buildData.articleText),
+                m_buildLinkPairs,
+                state->targetPage,
+                m_buildTexWidth,
+                m_buildTexHeight
+            );
+        }
+        m_buildStep = BuildStep::GenerateTextureTiles;
+        m_buildProgress = 0.25f;
+        return false;
+    }
+
+    case BuildStep::GenerateTextureTiles:
+    {
+        if (m_textureGenerator) {
+            bool textureDone = m_textureGenerator->GenerateNextTile(m_textureState);
+            
+            float textureProgress = 0.0f;
+            if (m_textureState.totalHeight > 0) {
+                textureProgress = (float)m_textureState.currentOffsetY / (float)m_textureState.totalHeight;
+            }
+            m_buildProgress = 0.25f + 0.35f * textureProgress;
+
+            if (textureDone) {
+                // 実際のピクセル数からフィールドサイズを逆算
+                float actualFieldDepth = (float)m_textureState.result.height / (100.0f * m_buildTexScale);
+                float actualFieldWidth = (float)m_textureState.result.width  / (100.0f * m_buildTexScale);
+
+                float scaleFix = 1.0f;
+                if (actualFieldWidth < kMinFieldWidth)
+                    scaleFix = std::max(scaleFix, kMinFieldWidth / actualFieldWidth);
+                if (actualFieldDepth < kMinFieldDepth)
+                    scaleFix = std::max(scaleFix, kMinFieldDepth / actualFieldDepth);
+
+                m_buildFieldWidth = std::min(actualFieldWidth * scaleFix, kMaxSafeWidth);
+                m_buildFieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
+
+                m_wikiTexture = std::make_unique<graphics::WikiTextureResult>(std::move(m_textureState.result));
+                
+                m_buildStep = BuildStep::ApplySkybox;
+                m_buildProgress = 0.60f;
+            }
+        } else {
+            m_buildStep = BuildStep::ApplySkybox;
+        }
+        return false;
+    }
+
+    case BuildStep::ApplySkybox:
+    {
+        auto* skyboxComp = ctx.world.Get<components::Skybox>(m_buildSkybox);
+        if (skyboxComp && m_skyboxGenerator) {
+            graphics::SkyboxTheme theme =
+                m_skyboxGenerator->DetermineTheme(m_buildData.pageName, m_buildData.articleText);
+            std::wstring themeName =
+                graphics::SkyboxTextureGenerator::GetThemeFileName(theme);
+            std::wstring skyboxBasePath =
+                L"Assets/textures/runtime_skybox/skybox_" + themeName;
+
+            if (!m_skyboxGenerator->LoadCubemapFromFiles(
+                    ctx.graphics.GetDevice(), skyboxBasePath,
+                    skyboxComp->cubemapSRV)) {
+                std::wstring defaultPath = L"Assets/textures/runtime_skybox/skybox_Default";
+                m_skyboxGenerator->LoadCubemapFromFiles(ctx.graphics.GetDevice(), defaultPath, skyboxComp->cubemapSRV);
+            }
+            skyboxComp->isVisible = true;
+        }
+        
+        m_fieldWidth = m_buildFieldWidth;
+        m_fieldDepth = m_buildFieldDepth;
+        state->fieldWidth = m_buildFieldWidth;
+        state->fieldDepth = m_buildFieldDepth;
+
+        auto* cam = ctx.world.Get<components::Camera>(m_buildCamera);
+        if (cam) cam->farZ = std::max(1000.0f, m_buildFieldDepth * 2.5f);
+
+        m_buildStep = BuildStep::BuildTerrain;
+        m_buildProgress = 0.65f;
+        return false;
+    }
+
+    case BuildStep::BuildTerrain:
+    {
+        if (m_terrainSystem && m_wikiTexture) {
+            m_terrainSystem->BuildField(ctx, m_buildData.pageName, *m_wikiTexture,
+                                        m_buildFieldWidth, m_buildFieldDepth, m_buildData.pageCategories);
+        }
+        m_buildStep = BuildStep::RepositionBall;
+        m_buildProgress = 0.80f;
+        return false;
+    }
+
+    case BuildStep::RepositionBall:
+    {
+        auto* ballT  = ctx.world.Get<Transform>(m_buildBall);
+        auto* ballRB = ctx.world.Get<RigidBody>(m_buildBall);
+        if (ballT) {
+            ballT->position = {0.0f, 1.0f, -m_buildFieldDepth * 0.4f};
+            if (ballRB) ballRB->velocity = {0.0f, 0.0f, 0.0f};
+            if (m_buildMinimap)
+                m_buildMinimap->SyncMapCenterToBall(ctx, 0.0f, m_buildFieldWidth, m_buildFieldDepth, true);
+        }
+        
+        m_nextHoleIndex = 0;
+        m_buildStep = BuildStep::CreateHoles;
+        m_buildProgress = 0.85f;
+        return false;
+    }
+
+    case BuildStep::CreateHoles:
+    {
+        if (!m_wikiTexture) {
+            m_buildStep = BuildStep::SetupWind;
+            return false;
+        }
+
+        constexpr size_t kHolesPerFrame = 5;
+        const float texW = (float)m_wikiTexture->width;
+        const float texH = (float)m_wikiTexture->height;
+
+        for (size_t i = 0; i < kHolesPerFrame && m_nextHoleIndex < m_wikiTexture->links.size(); ++i, ++m_nextHoleIndex) {
+            const auto& linkRegion = m_wikiTexture->links[m_nextHoleIndex];
+            float cx = linkRegion.x + linkRegion.width  * 0.5f;
+            float cy = linkRegion.y + linkRegion.height * 0.5f;
+            float worldX = (cx / texW - 0.5f) * m_buildFieldWidth;
+            float worldZ = (0.5f - cy / texH) * m_buildFieldDepth;
+
+            int hops = -1;
+            if (m_shortestPath && m_shortestPath->IsAvailable() && state->targetPageId != -1) {
+                auto r = m_shortestPath->FindShortestPath(linkRegion.targetPage, state->targetPageId, 6);
+                if (r.success) hops = r.degrees;
+            }
+
+            CreateHole(ctx, worldX, worldZ, linkRegion.targetPage, linkRegion.isTarget, hops);
+        }
+
+        if (m_wikiTexture->links.empty() || m_nextHoleIndex >= m_wikiTexture->links.size()) {
+            m_buildStep = BuildStep::SetupWind;
+            m_buildProgress = 0.95f;
+        } else {
+            float holeProgress = (float)m_nextHoleIndex / (float)m_wikiTexture->links.size();
+            m_buildProgress = 0.85f + 0.10f * holeProgress;
+        }
+        return false;
+    }
+
+    case BuildStep::SetupWind:
+    {
+        float windSpeed = 0.0f;
+        if (m_buildData.articleText.length() > 2000)
+            windSpeed = 3.0f + (float)(rand() % 20) / 10.0f;
+        else if (m_buildData.articleText.length() > 500)
+            windSpeed = 1.0f + (float)(rand() % 20) / 10.0f;
+
+        float windAngle    = (float)(rand() % 360) * 3.14159f / 180.0f;
+        state->windSpeed   = windSpeed;
+        state->windDirection = {cosf(windAngle), sinf(windAngle)};
+
+        state->currentPage = m_buildData.pageName;
+        state->pathHistory.push_back(m_buildData.pageName);
+
+        // Par 計算
+        int calculatedPar = -1;
+        if (m_shortestPath) {
+            game::systems::ShortestPathResult r;
+            if (state->targetPageId != -1)
+                r = m_shortestPath->FindShortestPath(m_buildData.pageName, state->targetPageId, 20);
+            else
+                r = m_shortestPath->FindShortestPath(m_buildData.pageName, state->targetPage, 20);
+            if (r.success) calculatedPar = r.degrees;
+        }
+        state->par = (calculatedPar > 0) ? calculatedPar : (int)m_buildValidLinks.size() / 2 + 2;
+        m_buildResult.calculatedPar = calculatedPar;
+
+        m_buildStep = BuildStep::Finish;
+        m_buildProgress = 0.98f;
+        return false;
+    }
+
+    case BuildStep::Finish:
+        m_buildProgress = 1.0f;
+        m_buildStep = BuildStep::None;
+        return true;
+
+    default:
+        return true;
+    }
+}
+
 // ============================================================
 // CreateHole
 // ============================================================
@@ -520,6 +846,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
         pillarMr.color = isTargetHole
                              ? XMFLOAT4{1.0f, 0.3f, 0.3f, 0.4f}
                              : XMFLOAT4{1.0f, 0.85f, 0.2f, 0.3f};
+        pillarMr.isTransparent = true;
         h.pillarEntity = static_cast<uint32_t>(pillarE);
     }
 

@@ -68,7 +68,8 @@ private:
   void TransitionToPage(core::GameContext &ctx, const std::string &pageName);
 
   /// @brief カップイン判定（ボールがホール内で静止したか）
-  void CheckCupIn(core::GameContext &ctx);
+  /// @return 遷移が発生した場合はtrue
+  bool CheckCupIn(core::GameContext &ctx);
 
   ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;

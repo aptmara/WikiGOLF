@@ -331,7 +331,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     meshRenderer.normalMapSRV = terrainNormalSRV;
     meshRenderer.hasNormalMap = true;
     meshRenderer.isTransparent = false;
-    meshRenderer.customFlags = {1.0f, 1.0f, 2.0f, 0.0f}; // x:hasTex, y:hasNormal, z:uvScale
+    meshRenderer.customFlags = {2.0f, 0.0f, 0.0f, 0.0f}; // x:uvScale, y:unused
 
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
@@ -394,6 +394,7 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
     mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                         L"Assets/shaders/BasicPS.hlsl");
     mr.color = {0.0f, 0.8f, 1.0f, 0.2f};
+    mr.isTransparent = true;
 
     ctx.world.Add<Wall>(e);
 
@@ -617,6 +618,9 @@ void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
     mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                         L"Assets/shaders/BasicPS.hlsl");
     mr.color = deco.color;
+    if (deco.color.w < 1.0f) {
+      mr.isTransparent = true;
+    }
 
     // 当たり判定なし（ユーザー指示）
     // RigidBody、Colliderは追加しない

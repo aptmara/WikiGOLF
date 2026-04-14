@@ -1,4 +1,4 @@
-﻿#include "ClubController.h"
+#include "ClubController.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
@@ -31,48 +31,16 @@ ClubController::UpdateInput(core::GameContext &ctx, const InputParams &params) {
     return result;
   }
 
+  // Q/E キーでクラブを切り替える（HUD 側にリスト表示を移管したため Expand 不要）
   if (ctx.input.GetKeyUp('E')) {
-    if (!m_clubUIExpanded) {
-      ExpandClubUI(ctx);
-    } else {
-      result.clubChanged = SwitchClub(ctx, 1);
-      m_clubExpandTimer = kClubAutoCollapseTime;
-    }
+    result.clubChanged = SwitchClub(ctx, 1);
   } else if (ctx.input.GetKeyUp('Q')) {
-    if (!m_clubUIExpanded) {
-      ExpandClubUI(ctx);
-    } else {
-      result.clubChanged = SwitchClub(ctx, -1);
-      m_clubExpandTimer = kClubAutoCollapseTime;
-    }
+    result.clubChanged = SwitchClub(ctx, -1);
   }
 
-  if (m_clubUIExpanded) {
-    m_clubExpandTimer -= ctx.dt;
-    if (m_clubExpandTimer <= 0.0f) {
-      CollapseClubUI(ctx);
-    }
-  }
+  // 古い UIImage クリック選択は無効化 (HUD の常時リストに移管)
 
-  if (ctx.input.GetMouseButtonDown(0) && m_clubUIExpanded) {
-    float mx = static_cast<float>(ctx.input.GetMousePosition().x);
-    float my = static_cast<float>(ctx.input.GetMousePosition().y);
-
-    for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
-      auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i]);
-      if (!ui || !ui->visible) {
-        continue;
-      }
-
-      if (mx >= ui->x && mx <= ui->x + ui->width && my >= ui->y &&
-          my <= ui->y + ui->height) {
-        result.uiClicked = true;
-        result.clubChanged = SelectClubByIndex(ctx, i);
-        CollapseClubUI(ctx);
-        break;
-      }
-    }
-  }
+  // 古い UIImage クリック選択は無効化 (HUD の常時リストに移管)
 
   return result;
 }
@@ -221,12 +189,15 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   m_clubUIEntities.clear();
   m_clubNameEntities.clear();
 
-  m_availableClubs.push_back(
-      {"Driver", 65.0f, 12.0f, "icon_driver.png", 3.0f});
-  m_availableClubs.push_back({"Iron", 48.0f, 18.0f, "icon_iron.png", 1.30f});
-  m_availableClubs.push_back({"Wedge", 35.0f, 26.0f, "icon_wedge.png", 2.5f});
-  m_availableClubs.push_back(
-      {"Putter", 10.0f, 0.0f, "icon_putter.png", 1.00f});
+  m_availableClubs.push_back({"ドライバー", 65.0f, 12.0f, "Assets/textures/Club_01_1W_Driver.png", 3.0f, "1W", "Driver"});
+  m_availableClubs.push_back({"3W", 58.0f, 14.0f, "Assets/textures/Club_02_3W_Wood.png", 2.5f, "3W", "Wood"});
+  m_availableClubs.push_back({"5W", 52.0f, 16.0f, "Assets/textures/Club_03_5W_Wood.png", 2.0f, "5W", "Wood"});
+  m_availableClubs.push_back({"5I", 46.0f, 20.0f, "Assets/textures/Club_04_5I_Iron.png", 1.5f, "5I", "Iron"});
+  m_availableClubs.push_back({"7I", 40.0f, 24.0f, "Assets/textures/Club_05_7I_Iron.png", 1.2f, "7I", "Iron"});
+  m_availableClubs.push_back({"9I", 34.0f, 28.0f, "Assets/textures/Club_06_9I_Iron.png", 1.0f, "9I", "Iron"});
+  m_availableClubs.push_back({"PW", 28.0f, 32.0f, "Assets/textures/Club_07_PW_PitchingWedge.png", 1.5f, "PW", "Wedge"});
+  m_availableClubs.push_back({"SW", 22.0f, 38.0f, "Assets/textures/Club_08_SW_SandWedge.png", 2.5f, "SW", "Wedge"});
+  m_availableClubs.push_back({"パター", 10.0f, 0.0f, "Assets/textures/Club_09_PT_Putter.png", 1.0f, "PT", "Putter"});
 
   m_currentClubIndex = 0;
   m_currentClub = m_availableClubs[0];
@@ -238,59 +209,36 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   constexpr float kClubSpacing = 88.0f;
   constexpr float kClubSize = 72.0f;
 
+  // 古い UIImage/UIText エンティティはすべて非表示で残す
+  // (HUD 側の新クラブリストが描画を担当する)
   for (size_t i = 0; i < m_availableClubs.size(); ++i) {
     auto e = ctx.world.CreateEntity();
     auto &img = ctx.world.Add<UIImage>(e);
     img = UIImage::Create(m_availableClubs[i].iconTexture, 0, 0);
-    img.x = kClubX;
-    img.y = kClubStartY + static_cast<float>(i) * kClubSpacing;
-    img.width = kClubSize;
-    img.height = kClubSize;
+    img.visible = false; // HUD に移管したため非表示
     img.layer = 20;
-
-    if (i == 0) {
-      img.alpha = 1.0f;
-      img.visible = true;
-    } else {
-      img.alpha = 0.5f;
-      img.visible = false;
-    }
-
     m_clubUIEntities.push_back(e);
 
     auto nameE = ctx.world.CreateEntity();
     auto &nameT = ctx.world.Add<UIText>(nameE);
     nameT.text = core::ToWString(m_availableClubs[i].name);
-    nameT.x = kClubX + kClubSize + 6.0f;
-    nameT.y = kClubStartY + static_cast<float>(i) * kClubSpacing +
-              kClubSize * 0.3f;
-    nameT.width = 100.0f;
-    nameT.height = 24.0f;
-    nameT.style = graphics::TextStyle::ClubName();
-    nameT.style.fontSize = 14.0f;
-    nameT.style.align = graphics::TextAlign::Left;
-    nameT.visible = false;
+    nameT.visible = false; // HUD に移管したため非表示
     nameT.layer = 21;
     m_clubNameEntities.push_back(nameE);
   }
 
+  // Q/E キーアイコンも非表示 (操作ヘルプを HUD の ControlHint に移管)
+
+  // Q/E キーアイコン: 非表示で生成 (ControlHint バーに移管)
   auto qIconE = ctx.world.CreateEntity();
   auto &qImg = ctx.world.Add<UIImage>(qIconE);
-  qImg = UIImage::Create("Assets/ui/keyboard_q.png",
-                         kClubX + kClubSize / 2 - 20.0f, kClubStartY - 24.0f);
-  qImg.width = 18.0f;
-  qImg.height = 18.0f;
-  qImg.layer = 21;
-  qImg.visible = true;
+  qImg = UIImage::Create("Assets/ui/keyboard_q.png", 0, 0);
+  qImg.visible = false;
 
   auto eIconE = ctx.world.CreateEntity();
   auto &eImg = ctx.world.Add<UIImage>(eIconE);
-  eImg = UIImage::Create("Assets/ui/keyboard_e.png",
-                         kClubX + kClubSize / 2 + 2.0f, kClubStartY - 24.0f);
-  eImg.width = 18.0f;
-  eImg.height = 18.0f;
-  eImg.layer = 21;
-  eImg.visible = true;
+  eImg = UIImage::Create("Assets/ui/keyboard_e.png", 0, 0);
+  eImg.visible = false;
 }
 
 void ClubController::InitializeClubModel(core::GameContext &ctx) {

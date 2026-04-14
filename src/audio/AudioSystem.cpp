@@ -18,9 +18,7 @@ namespace game::systems {
 
 // ヘルパー：ファイルパス探索
 static std::string FindAudioPath(const std::string &filename) {
-  const char *searchPaths[] = {"Assets/sounds/",       "sounds/",
-                               "../sounds/",           "../../sounds/",
-                               "../../Assets/sounds/", "src/resources/sounds/"};
+  const char *searchPaths[] = {"Assets/sounds/"};
 
   for (const char *prefix : searchPaths) {
     std::string path = std::string(prefix) + filename;
@@ -37,7 +35,7 @@ static std::string FindAudioPath(const std::string &filename) {
         return pathMp3;
     }
   }
-  return "sounds/" + filename; // デフォルト
+  return "Assets/sounds/" + filename; // デフォルト
 }
 
 AudioSystem::~AudioSystem() { Shutdown(); }

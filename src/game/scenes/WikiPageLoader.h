@@ -107,6 +107,25 @@ public:
                                  game::controllers::MinimapController* minimapController);
 
     /**
+     * @brief インクリメンタルな構築を開始する
+     */
+    void BeginBuildPage(core::GameContext& ctx,
+                        PageDataAsyncResult asyncData,
+                        ecs::Entity ballEntity,
+                        ecs::Entity cameraEntity,
+                        ecs::Entity skyboxEntity,
+                        game::controllers::MinimapController* minimapController);
+
+    /**
+     * @brief 構築を 1 ステップ進める
+     * @return 完了したら true
+     */
+    bool StepBuildPage(core::GameContext& ctx);
+
+    /// @brief 構築の進捗 (0.0 - 1.0)
+    float GetBuildProgress() const { return m_buildProgress; }
+
+    /**
      * @brief 事前ロードデータをセットする（キャッシュとして使用）
      * @param links   事前取得済みリンク一覧
      * @param extract 事前取得済み記事テキスト
@@ -148,6 +167,43 @@ private:
     bool                          m_hasPreloadedData = false;
     std::vector<game::WikiLink>   m_preloadedLinks;
     std::string                   m_preloadedExtract;
+
+    // ---- 構築状態 (インクリメンタル) ----
+    enum class BuildStep {
+        None,
+        ClearOldHoles,
+        PrepareLinks,
+        BeginTexture,
+        GenerateTextureTiles,
+        ApplySkybox,
+        BuildTerrain,
+        RepositionBall,
+        CreateHoles,
+        SetupWind,
+        Finish
+    };
+
+    BuildStep m_buildStep = BuildStep::None;
+    PageDataAsyncResult m_buildData;
+    PageLoadResult m_buildResult;
+
+    ecs::Entity m_buildBall = UINT32_MAX;
+    ecs::Entity m_buildCamera = UINT32_MAX;
+    ecs::Entity m_buildSkybox = UINT32_MAX;
+    game::controllers::MinimapController* m_buildMinimap = nullptr;
+
+    std::vector<std::pair<std::string, std::wstring>> m_buildValidLinks;
+    std::vector<std::pair<std::wstring, std::string>> m_buildLinkPairs;
+
+    size_t m_nextHoleIndex = 0;
+    graphics::WikiTextureGenerationState m_textureState;
+
+    float m_buildFieldWidth = 80.0f;
+    float m_buildFieldDepth = 120.0f;
+    float m_buildTexScale = 1.0f;
+    float m_buildProgress = 0.0f;
+    uint32_t m_buildTexWidth = 0;
+    uint32_t m_buildTexHeight = 0;
 };
 
 } // namespace game::scenes

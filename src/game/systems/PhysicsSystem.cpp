@@ -686,13 +686,22 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           vel = XMVectorZero();
           acc = XMVectorZero();
         } else if (currentSpeed > 0.0001f) {
-          // 指数関数的な速度減衰: v = v * exp(-k * dt)
-          // 摩擦加速度をベースにした減衰係数を計算
-          // 物理的には v_new = v * exp(-k * dt)
-          // ここでは frictionAccel を減衰係数として利用する
+          // ハイブリッド減衰: 高速時は指数関数的(手触り重視)、低速時は線形(確実な停止)
+          // 1.0m/s 〜 5.0m/s の間で遷移
+          float t = std::clamp((currentSpeed - 1.0f) / 4.0f, 0.0f, 1.0f);
+
+          // 指数成分 (高速用): v_new = v * exp(-k*dt)
+          // 以前の挙動をベースに、速度に比例した強い減衰を与える
           float k = frictionAccel;
-          float speedRatio = std::exp(-k * subDt);
-          vel = XMVectorScale(vel, speedRatio);
+          float expRatio = std::exp(-k * subDt);
+
+          // 線形成分 (低速用): v_new = v - a*dt
+          float linearDrop = frictionAccel * subDt;
+          float linearRatio = (currentSpeed > linearDrop) ? (currentSpeed - linearDrop) / currentSpeed : 0.0f;
+
+          // ブレンド
+          float finalRatio = t * expRatio + (1.0f - t) * linearRatio;
+          vel = XMVectorScale(vel, finalRatio);
 
           // 極低速時の停止判定
           if (SafeLength(vel) < 0.02f) {

@@ -120,6 +120,17 @@ public:
       Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);
 
   /**
+   * @brief 単一のPNGファイルからすべての面に同じテクスチャを持つキューブマップを構築
+   * @param device DirectX11デバイス
+   * @param filePath ファイルパス
+   * @param outSRV 生成されたキューブマップSRV
+   * @return 成功ならtrue
+   */
+  bool LoadCubemapFromSingleFile(
+      ID3D11Device *device, const std::wstring &filePath,
+      Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);
+
+  /**
    * @brief ページ情報からテーマを判定
    * @param pageTitle ページタイトル
    * @param pageExtract ページ抜粋

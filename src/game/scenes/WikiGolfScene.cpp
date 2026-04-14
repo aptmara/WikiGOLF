@@ -111,6 +111,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   gamr.mesh = ctx.resource.LoadMesh("builtin/cube");
   gamr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
   gamr.color = {0.3f, 0.8f, 1.0f, 0.6f};
+  gamr.isTransparent = true;
   gamr.isVisible = false;
 
   auto &amr = ctx.world.Add<MeshRenderer>(m_arrowEntity);
@@ -148,6 +149,20 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_postProcess.ResetToDefaults();
 
   m_particleRenderSystem.Initialize(ctx.graphics.GetDevice());
+
+  // === 地形判定UI初期化 ===
+  if (m_terrainImageEntity == UINT32_MAX) {
+      m_terrainImageEntity = CreateEntity(ctx.world);
+      auto& ui = ctx.world.Add<game::components::UIImage>(m_terrainImageEntity);
+      ui.texturePath = "";
+      ui.x = 1280.0f * 0.5f;
+      ui.y = 720.0f * 0.5f;
+      ui.width = 0.0f;
+      ui.height = 0.0f;
+      ui.visible = false;
+      ui.layer = 130; // 判定テキストと同層
+      ui.alpha = 0.0f;
+  }
 
   std::string targetPage;
   int targetId = -1;
@@ -367,8 +382,8 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
 
   auto &mr = ctx.world.Add<MeshRenderer>(m_ballEntity);
   mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
-  mr.shader = ctx.resource.LoadShader("Basic", L"shaders/BasicVS.hlsl",
-                                      L"shaders/BasicPS.hlsl");
+  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/BasicPS.hlsl");
   mr.color = {1.0f, 0.6f, 0.2f, 1.0f}; // 少しオレンジで視認性アップ
 
   auto &rb = ctx.world.Add<RigidBody>(m_ballEntity);
@@ -404,7 +419,10 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   state->canShoot = true;
 
   if (shot) {
-    *shot = ShotState{};
+    shot->Reset();
+  }
+  if (m_hud) {
+    m_hud->ResetShotUI(ctx);
   }
 
   // ページ移動時間進行 (2時間)
@@ -510,6 +528,22 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           float clubAngle = m_clubController ? m_clubController->GetCurrentClub().launchAngle : 30.0f;
           DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
           m_shotController->ExecuteShot(ctx, m_ballEntity, shotDir, clubPower, clubAngle, &m_timeOfDay, m_hud.get());
+
+          // 打球判定の演出表示
+          auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
+          if (feedback.HasVisual() && m_terrainImageEntity != UINT32_MAX) {
+              auto* ui = ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
+              if (ui) {
+                  ui->texturePath = feedback.texturePath;
+                  ui->visible = true;
+                  ui->alpha = 0.0f;
+                  ui->width = 0.0f;
+                  ui->height = 0.0f;
+                  ui->x = 1280.0f * 0.5f;
+                  ui->y = 720.0f * 0.5f;
+                  m_terrainDisplayTimer = feedback.displaySeconds;
+              }
+          }
       }
   }
   
@@ -522,6 +556,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // 物理更新
   game::systems::PhysicsSystem(ctx, dt);
   
+  // カップイン判定を地形判定の前に行う（遷移時は以降の処理をスキップ）
+  if (CheckCupIn(ctx)) return;
+
   // ボール静止・OB・地形判定ロジック
   if (shot->phase == game::components::ShotState::Phase::Executing) {
       auto *rb = ctx.world.Get<game::components::RigidBody>(m_ballEntity);
@@ -532,8 +569,17 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (speed < 0.1f) {
               rb->velocity = {0, 0, 0};
               std::string terrainTex = "";
+              bool treatAsOB = false;
+
+              auto GetTerrainTex = [](const std::string& preferred, const std::string& fallback) {
+                  if (std::filesystem::exists("Assets/textures/" + preferred)) {
+                      return preferred;
+                  }
+                  return fallback;
+              };
+
               if (state->isOB) {
-                  terrainTex = "ui_judge_ob.png";
+                  terrainTex = GetTerrainTex("ui_terrain_ob.png", "ui_judge_miss.png");
                   LOG_INFO("WikiGolf", "OB! Returning to last shot position");
                   state->shotCount++;
                   auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
@@ -542,14 +588,50 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                       ballT->position.y += 0.5f;
                   }
                   state->isOB = false;
-                  if (ctx.audio) ctx.audio->PlaySE(ctx, "se_judge_ob.mp3", 0.8f);
+                  
+                  if (ctx.audio) {
+                      if (std::filesystem::exists("Assets/sounds/se_OB.wav")) {
+                          ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);
+                      } else {
+                          ctx.audio->PlaySE(ctx, "se_judge_ob.mp3", 0.8f);
+                      }
+                  }
               } else {
                   switch (state->currentMaterial) {
-                  case game::components::TerrainMaterial::Fairway: terrainTex = "ui_terrain_fairway.png"; break;
-                  case game::components::TerrainMaterial::Rough: terrainTex = "ui_terrain_rough.png"; break;
-                  case game::components::TerrainMaterial::Bunker: terrainTex = "ui_terrain_bunker.png"; break;
-                  case game::components::TerrainMaterial::Green: terrainTex = "ui_terrain_green.png"; break;
-                  default: break;
+                  case game::components::TerrainMaterial::Fairway:
+                      terrainTex = GetTerrainTex("ui_terrain_fairway.png", "ui_judge_nice.png");
+                      break;
+                  case game::components::TerrainMaterial::Rough:
+                      terrainTex = GetTerrainTex("ui_terrain_rough.png", "ui_judge_miss.png");
+                      break;
+                  case game::components::TerrainMaterial::Bunker:
+                      terrainTex = GetTerrainTex("ui_terrain_bunker.png", "ui_judge_miss.png");
+                      break;
+                  case game::components::TerrainMaterial::Green:
+                      terrainTex = GetTerrainTex("ui_terrain_green.png", "ui_judge_perfect.png");
+                      break;
+                  default: 
+                      // Ice, Water, Stone, Lava などはすべてOB扱い
+                      terrainTex = GetTerrainTex("ui_terrain_ob.png", "ui_judge_miss.png");
+                      treatAsOB = true;
+                      break;
+                  }
+
+                  if (treatAsOB) {
+                      LOG_INFO("WikiGolf", "Hazard! Treating as OB. Material: {}", (int)state->currentMaterial);
+                      state->shotCount++;
+                      auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
+                      if (ballT) {
+                          ballT->position = state->lastShotPosition;
+                          ballT->position.y += 0.5f;
+                      }
+                      if (ctx.audio) {
+                          if (std::filesystem::exists("Assets/sounds/se_OB.wav")) {
+                              ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);
+                          } else {
+                              ctx.audio->PlaySE(ctx, "se_judge_ob.mp3", 0.8f);
+                          }
+                      }
                   }
               }
 
@@ -558,18 +640,40 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   if (ui) {
                       ui->texturePath = terrainTex;
                       ui->visible = true;
-                      ui->alpha = 1.0f;
+                      ui->alpha = 0.0f; // Updateでフェードイン
                       ui->width = 0.0f;
                       ui->height = 0.0f;
                       ui->x = 1280.0f * 0.5f;
                       ui->y = 720.0f * 0.5f;
                       m_terrainDisplayTimer = 2.0f;
 
-                      if (ctx.audio && !state->isOB) {
-                          bool isGood = (state->currentMaterial == game::components::TerrainMaterial::Fairway ||
-                                         state->currentMaterial == game::components::TerrainMaterial::Green);
-                          if (isGood) ctx.audio->PlaySE(ctx, "judge_Good.mp3", 0.8f);
-                          else ctx.audio->PlaySE(ctx, "judge_Bad.wav", 0.8f);
+                      if (ctx.audio && !state->isOB && !treatAsOB) {
+                          std::string seName = "";
+                          switch (state->currentMaterial) {
+                          case game::components::TerrainMaterial::Fairway: 
+                              seName = std::filesystem::exists("Assets/sounds/se_Fairway.wav") ? "se_Fairway.wav" : "se_Fairway.mp3";
+                              break;
+                          case game::components::TerrainMaterial::Rough:
+                              seName = std::filesystem::exists("Assets/sounds/se_Rough.wav") ? "se_Rough.wav" : "se_Rough.mp3";
+                              break;
+                          case game::components::TerrainMaterial::Bunker:
+                              seName = std::filesystem::exists("Assets/sounds/se_Bunker_new.mp3") ? "se_Bunker_new.mp3" : "se_Bunker.mp3";
+                              break;
+                          case game::components::TerrainMaterial::Green:
+                              seName = std::filesystem::exists("Assets/sounds/se_Green.mp3") ? "se_Green.mp3" : 
+                                      (std::filesystem::exists("Assets/sounds/se_Fairway.wav") ? "se_Fairway.wav" : "se_Fairway.mp3");
+                              break;
+                          default: break;
+                          }
+
+                          if (!seName.empty() && std::filesystem::exists("Assets/sounds/" + seName)) {
+                              ctx.audio->PlaySE(ctx, seName, 0.8f);
+                          } else {
+                              // フォールバック: 新SEが見つからない場合のみ従来音を検討
+                              bool isGood = (state->currentMaterial == game::components::TerrainMaterial::Fairway ||
+                                             state->currentMaterial == game::components::TerrainMaterial::Green);
+                              if (!isGood) ctx.audio->PlaySE(ctx, "judge_Bad.wav", 0.8f);
+                          }
                       }
                   }
               }
@@ -594,31 +698,31 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // カメラフェード復帰
   if (shot->phase == game::components::ShotState::Phase::RestoringCamera && !m_screenFade.IsFading()) {
       if (m_cameraController) m_cameraController->RestoreAfterFade(ctx);
-      shot->phase = game::components::ShotState::Phase::Idle;
+      shot->Reset();
+      if (m_hud) m_hud->ResetShotUI(ctx);
       m_screenFade.FadeIn(0.4f, game::utils::FadeType::CircleWipe, {0, 0, 0});
   }
 
-  // 予測軌道アップデート
+  // 予測軌道アップデート (Idle 時も表示: クラブ切り替えやパワーレビューのため)
   bool canShowTrajectory = m_trajectoryPredictor && state->canShoot && !isMapView;
   if (canShowTrajectory &&
       (shot->phase == game::components::ShotState::Phase::Idle ||
        shot->phase == game::components::ShotState::Phase::PowerCharging ||
        shot->phase == game::components::ShotState::Phase::ImpactTiming)) {
       game::controllers::TrajectoryPredictor::Params tParams;
-      tParams.ballEntity = m_ballEntity;
-      tParams.arrowEntity = m_arrowEntity;
+      tParams.ballEntity    = m_ballEntity;
+      tParams.arrowEntity   = m_arrowEntity;
       tParams.shotDirection = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
-      tParams.maxPower = m_clubController ? m_clubController->GetCurrentClub().maxPower : 30.0f;
-      tParams.launchAngle = m_clubController ? m_clubController->GetCurrentClub().launchAngle : 30.0f;
-      tParams.isMapView = false;
+      tParams.maxPower      = m_clubController ? m_clubController->GetCurrentClub().maxPower : 30.0f;
+      tParams.launchAngle   = m_clubController ? m_clubController->GetCurrentClub().launchAngle : 30.0f;
+      tParams.isMapView     = false;
       tParams.terrainSystem = m_terrainSystem.get();
 
-      float powerRatio = 0.0f;
+      float powerRatio = 0.0f; // Idle 時は 0 (TrajectoryPredictor 内でデフォルト比率を使用)
       if (shot->phase == game::components::ShotState::Phase::PowerCharging) {
           powerRatio = shot->powerGaugePos;
       } else if (shot->phase == game::components::ShotState::Phase::ImpactTiming) {
-          powerRatio =
-              (shot->confirmedPower > 0.0f) ? shot->confirmedPower : shot->powerGaugePos;
+          powerRatio = (shot->confirmedPower > 0.0f) ? shot->confirmedPower : shot->powerGaugePos;
       } else if (shot->confirmedPower > 0.0f) {
           powerRatio = shot->confirmedPower;
       }
@@ -655,30 +759,101 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       }
       float currentImpact = (shot->phase == game::components::ShotState::Phase::ImpactTiming) ? shot->impactGaugePos : 0.5f;
 
-      m_hud->Update(ctx, dt, *state, currentPower, shot->confirmedPower, state->windSpeed, state->windDirection, m_cameraController ? m_cameraController->GetYaw() : 0.0f, m_clubController ? m_clubController->GetCurrentClub().name : "");
+      // クラブ情報リストを構築して渡す
+      std::vector<game::controllers::ClubUIData> clubDataList;
+      int clubIdx = 0;
+      if (m_clubController) {
+          const auto& clubs = m_clubController->GetAllClubs();
+          for (const auto& c : clubs) {
+              clubDataList.push_back({c.name, c.iconTexture, c.shortName, c.categoryEN});
+          }
+          clubIdx = m_clubController->GetCurrentClubIndex();
+      }
+
+      // ターゲット距離と高低差を計算
+      float distanceToTarget = 0.0f;
+      float heightDiff = 0.0f;
+      if (!state->holes.empty()) {
+          auto targetHoleEntity = state->holes[0];
+          auto* holeT = ctx.world.Get<game::components::Transform>(targetHoleEntity);
+          auto* ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
+          if (holeT && ballT) {
+              float dx = holeT->position.x - ballT->position.x;
+              float dz = holeT->position.z - ballT->position.z;
+              distanceToTarget = std::sqrt(dx * dx + dz * dz);
+              heightDiff = holeT->position.y - ballT->position.y;
+          }
+      }
+
+      m_hud->Update(ctx, dt, *state,
+                    currentPower, shot->confirmedPower,
+                    state->windSpeed, state->windDirection,
+                    m_cameraController ? m_cameraController->GetYaw() : 0.0f,
+                    clubDataList, clubIdx,
+                    distanceToTarget, heightDiff);
       
       // HUDへのパワーゲージ更新
-      if (shot->phase == game::components::ShotState::Phase::PowerCharging || shot->phase == game::components::ShotState::Phase::ImpactTiming) {
+      if (shot->phase == game::components::ShotState::Phase::PowerCharging ||
+          shot->phase == game::components::ShotState::Phase::ImpactTiming) {
           m_hud->UpdatePowerGauge(ctx, currentPower, currentImpact, 0.0f, 1.0f);
       }
+
+      // 通常時 <-> ショット時 UI 切り替え
+      const bool isShotPhase = (shot->phase != game::components::ShotState::Phase::Idle &&
+                                shot->phase != game::components::ShotState::Phase::ShowResult &&
+                                shot->phase != game::components::ShotState::Phase::RestoringCamera);
+      m_hud->SetShotPhaseUIVisible(ctx, isShotPhase);
   }
 
   if (m_gameJuice) {
       m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
 
-  CheckCupIn(ctx);
+  // === 地形判定UI更新 ===
+  if (m_terrainDisplayTimer > 0.0f) {
+      m_terrainDisplayTimer -= dt;
+      if (m_terrainImageEntity != UINT32_MAX) {
+          auto* ui = ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
+          if (ui) {
+              if (m_terrainDisplayTimer <= 0.0f) {
+                  ui->visible = false;
+              } else {
+                  // アニメーション: 2.0s -> 0.0s
+                  // 最初はズームイン、最後はフェードアウト
+                  float lifeTime = 2.0f - m_terrainDisplayTimer;
+                  if (lifeTime < 0.2f) {
+                      // ズームイン
+                      float t = lifeTime / 0.2f;
+                      ui->width = 512.0f * t;
+                      ui->height = 256.0f * t;
+                      ui->alpha = t;
+                  } else if (m_terrainDisplayTimer < 0.5f) {
+                      // フェードアウト
+                      ui->alpha = m_terrainDisplayTimer / 0.5f;
+                      ui->width = 512.0f;
+                      ui->height = 256.0f;
+                  } else {
+                      ui->alpha = 1.0f;
+                      ui->width = 512.0f;
+                      ui->height = 256.0f;
+                  }
+                  ui->x = (1280.0f - ui->width) * 0.5f;
+                  ui->y = (720.0f - ui->height) * 0.5f;
+              }
+          }
+      }
+  }
 }
 
 void WikiGolfScene::Render(core::GameContext &ctx) {
   m_screenFade.Render(ctx);
 }
 
-void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
+bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
   auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
   auto *t = ctx.world.Get<Transform>(m_ballEntity);
   if (!rb || !t)
-    return;
+    return false;
 
   float speedSq = rb->velocity.x * rb->velocity.x +
                   rb->velocity.y * rb->velocity.y +
@@ -687,7 +862,7 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
   // カップ判定
   auto *state = ctx.world.GetGlobal<GolfGameState>();
   if (!state)
-    return;
+    return false;
 
   for (auto holeEntity : state->holes) {
     auto *holeT = ctx.world.Get<Transform>(holeEntity);
@@ -701,6 +876,13 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
     if (readyForCupIn) {
       // カップイン！
       LOG_INFO("WikiGolf", "Cup In! Target: {}", hole->linkTarget);
+
+      // 遷移前に地形判定UIを非表示にする（次のコースに持ち越さない）
+      if (m_terrainImageEntity != UINT32_MAX) {
+          auto* ui = ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
+          if (ui) ui->visible = false;
+      }
+      m_terrainDisplayTimer = 0.0f;
 
       // カップイン時間進行 (1時間)
       m_timeOfDay.OnCupIn(1.0f);
@@ -734,9 +916,12 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       // 音楽と効果音
       if (ctx.audio) {
         ctx.audio->PlaySE(ctx, "se_cupin.mp3");
-        // ターゲット到達ならさらに派手な音
-        if (hole->isTarget) {
-          ctx.audio->PlaySE(ctx, "se_shot_hard.mp3"); // ボーナス音
+        
+        // ホールインワン判定（1打目でターゲット到達）
+        if (hole->isTarget && state->shotCount == 1) {
+            ctx.audio->PlaySE(ctx, "se_holeInOne.mp3", 1.0f);
+        } else if (hole->isTarget) {
+            ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.8f); // ターゲット到達音
         }
       }
 
@@ -763,7 +948,7 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         LOG_INFO("WikiGolf", "GAME CLEAR! Reached target page!");
 
         if (ctx.audio) {
-          ctx.audio->PlaySE(ctx, "se_goal", 1.0f);
+          ctx.audio->PlaySE(ctx, "se_goal.mp3", 1.0f);
         }
 
         // ResultSceneへ遷移
@@ -777,13 +962,14 @@ void WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         if (ctx.sceneManager) {
           ctx.sceneManager->ChangeScene(std::make_unique<ResultScene>(data));
         }
-        return;
+        return true;
       }
 
       TransitionToPage(ctx, hole->linkTarget);
-      return; // 1フレームに1回だけ遷移
+      return true; // 1フレームに1回だけ遷移
     }
   }
+  return false;
 }
 
 } // namespace game::scenes

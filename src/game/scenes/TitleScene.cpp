@@ -128,10 +128,10 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
         LOG_INFO("TitleScene", "Step 8: CreateDynamicMesh");
         ctx.resource.CreateDynamicMesh("TitleTerrain", tdata.vertices, tdata.indices);
 
-        LOG_INFO("TitleScene", "Step 9: GenerateCubemap");
+        LOG_INFO("TitleScene", "Step 9: LoadCubemapFromSingleFile");
         graphics::SkyboxTextureGenerator gen;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
-        gen.GenerateCubemapFromTheme(ctx.graphics.GetDevice(), graphics::SkyboxTheme::Food, cubemapSRV);
+        gen.LoadCubemapFromSingleFile(ctx.graphics.GetDevice(), L"Assets/textures/skybox_default_px_1767953230432.png", cubemapSRV);
 
         LOG_INFO("TitleScene", "Async load finished");
         CoUninitialize();
@@ -161,9 +161,9 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   {
     graphics::SkyboxTextureGenerator gen;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
-    bool ok = gen.GenerateCubemapFromTheme(
+    bool ok = gen.LoadCubemapFromSingleFile(
         ctx.graphics.GetDevice(),
-        graphics::SkyboxTheme::Food,
+        L"Assets/textures/skybox_default_px_1767953230432.png",
         cubemapSRV);
     if (ok) {
       skybox.cubemapSRV  = cubemapSRV;
