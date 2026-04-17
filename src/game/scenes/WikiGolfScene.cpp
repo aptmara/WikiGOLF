@@ -351,6 +351,13 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   
   if (m_transitionController) {
       m_phase = ScenePhase::Transitioning;
+      // ロード中は地球儀+カートのみ表示するためHUD/ミニマップを非表示
+      if (m_hud) m_hud->SetVisible(ctx, false);
+      if (m_minimapController) m_minimapController->SetVisible(ctx, false);
+      // ガイド矢印を非表示
+      if (ctx.world.IsAlive(m_guideArrowEntity)) {
+          if (auto* mr = ctx.world.Get<MeshRenderer>(m_guideArrowEntity)) mr->isVisible = false;
+      }
       m_transitionController->StartTransition(ctx, startPage, m_pageLoader.get(), m_ballEntity, m_cameraEntity, m_skyboxEntity, m_minimapController.get());
   }
   LOG_DEBUG("WikiGolf", "After LoadPage: Cam Alive={}",
@@ -440,6 +447,13 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
 
   if (m_transitionController && m_pageLoader) {
     m_phase = ScenePhase::Transitioning;
+    // ロード中は地球儀+カートのみ表示するためHUD/ミニマップを非表示
+    if (m_hud) m_hud->SetVisible(ctx, false);
+    if (m_minimapController) m_minimapController->SetVisible(ctx, false);
+    // ガイド矢印を非表示
+    if (ctx.world.IsAlive(m_guideArrowEntity)) {
+        if (auto* mr = ctx.world.Get<MeshRenderer>(m_guideArrowEntity)) mr->isVisible = false;
+    }
     m_transitionController->StartTransition(ctx, pageName, m_pageLoader.get(),
                                             m_ballEntity, m_cameraEntity,
                                             m_skyboxEntity,
@@ -477,6 +491,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       bool finished = m_transitionController->Update(ctx);
       if (finished) {
           m_phase = ScenePhase::Playing;
+          // ロード完了: HUD/ミニマップを再表示する
+          if (m_hud) m_hud->SetVisible(ctx, true);
+          if (m_minimapController) m_minimapController->SetVisible(ctx, true);
           if (m_cameraController) m_cameraController->Update(ctx);
       }
       return;

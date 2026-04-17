@@ -639,19 +639,41 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         auto* cam = ctx.world.Get<components::Camera>(m_buildCamera);
         if (cam) cam->farZ = std::max(1000.0f, m_buildFieldDepth * 2.5f);
 
-        m_buildStep = BuildStep::BuildTerrain;
+        m_buildStep = BuildStep::BeginTerrain;
         m_buildProgress = 0.65f;
         return false;
     }
 
-    case BuildStep::BuildTerrain:
+    case BuildStep::BeginTerrain:
     {
+        // WikiTerrainSystem::BeginBuildField() を呼び、非同期でTerrainGeneratorを起動する。
+        // この呼び出し自体は軽量（std::async起動のみ）。
         if (m_terrainSystem && m_wikiTexture) {
-            m_terrainSystem->BuildField(ctx, m_buildData.pageName, *m_wikiTexture,
-                                        m_buildFieldWidth, m_buildFieldDepth, m_buildData.pageCategories);
+            m_terrainSystem->BeginBuildField(
+                m_buildData.pageName,
+                *m_wikiTexture,
+                m_buildFieldWidth,
+                m_buildFieldDepth,
+                m_buildData.pageCategories);
+        }
+        m_buildStep = BuildStep::BuildTerrainStep;
+        m_buildProgress = 0.68f;
+        return false;
+    }
+
+    case BuildStep::BuildTerrainStep:
+    {
+        // インクリメンタルに1ステップ進める（毎フレーム）
+        if (m_terrainSystem) {
+            bool done = m_terrainSystem->StepBuildField(ctx);
+            float terrainProg = m_terrainSystem->GetBuildProgress();
+            m_buildProgress = 0.68f + 0.17f * terrainProg;
+            if (!done) {
+                return false; // 次フレームへ
+            }
         }
         m_buildStep = BuildStep::RepositionBall;
-        m_buildProgress = 0.80f;
+        m_buildProgress = 0.85f;
         return false;
     }
 

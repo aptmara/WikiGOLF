@@ -5,8 +5,13 @@
  */
 
 #include "../../graphics/WikiTextureGenerator.h"
-#include "../systems/TerrainGenerator.h" // TerrainDataのために追加
+#include "../../resources/ResourceManager.h"
+#include "../systems/TerrainGenerator.h"
+#include <d3d11.h>
+#include <wrl/client.h>
+#include <future>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace core {
@@ -30,17 +35,30 @@ public:
   WikiTerrainSystem() = default;
   ~WikiTerrainSystem() = default;
 
-  /// @brief フィールドを再構築する
-  /// @param ctx ゲームコンテキスト
-  /// @param pageTitle 記事タイトル（シードとして使用）
-  /// @param textureResult テクスチャ生成結果（画像・見出し座標入り）
-  /// @param fieldWidth フィールドのワールド幅
-  /// @param fieldDepth フィールドのワールド奥行き
-  /// @param pageCategories 記事カテゴリ（省略時は内部で取得する）
+  /// @brief フィールドを再構築する（同期版 / 後方互換用）
   void BuildField(core::GameContext &ctx, const std::string &pageTitle,
                   const graphics::WikiTextureResult &textureResult,
                   float fieldWidth, float fieldDepth,
                   const std::vector<std::string> &pageCategories = {});
+
+  // ------------------------------------------------------------------
+  // インクリメンタルビルド API
+  // TerrainGeneratorをstd::asyncで非同期化し、メッシュを1タイル/フレームで構築する。
+  // ------------------------------------------------------------------
+
+  /// @brief インクリメンタルビルドを開始する
+  /// @note テクスチャ結果はコピーして保持する（呼び出し元がムーブしても安全）
+  void BeginBuildField(const std::string &pageTitle,
+                       const graphics::WikiTextureResult &textureResult,
+                       float fieldWidth, float fieldDepth,
+                       const std::vector<std::string> &pageCategories);
+
+  /// @brief 構築を1ステップ進める（毎フレーム1回呼ぶ）
+  /// @return 完了したら true
+  bool StepBuildField(core::GameContext &ctx);
+
+  /// @brief 構築進捗 (0.0-1.0)
+  float GetBuildProgress() const { return m_buildProgress; }
 
   /// @brief 現在のフィールドエンティティ群を取得
   const std::vector<ecs::Entity> &GetEntities() const { return m_entities; }
@@ -59,33 +77,81 @@ public:
 
 private:
   std::vector<ecs::Entity> m_entities;
-  ecs::Entity m_floorEntity = 0xFFFFFFFF;     // 無効値
-  std::shared_ptr<TerrainData> m_terrainData; // 地形データ保持用
+  ecs::Entity m_floorEntity = 0xFFFFFFFF;
+  std::shared_ptr<TerrainData> m_terrainData;
 
-  /// @brief 床作成
+  /// @brief 床作成（同期版 / BuildFieldから呼ぶ）
   void CreateFloor(core::GameContext &ctx,
                    const graphics::WikiTextureResult &result, float width,
                    float depth, const std::string &pageTitle,
                    const std::vector<std::string> &pageCategories);
 
-  /// @brief 壁作成
   void CreateWalls(core::GameContext &ctx, float width, float depth);
-
-  /// @brief 画像障害物作成
   void CreateImageObstacles(core::GameContext &ctx,
                             const graphics::WikiTextureResult &result,
                             float fieldWidth, float fieldDepth);
-
-  /// @brief 見出し段差作成
   void CreateHeadingSteps(core::GameContext &ctx,
                           const graphics::WikiTextureResult &result,
                           float fieldWidth, float fieldDepth);
-
   /// @brief バイオーム別装飾オブジェクト作成
   void CreateDecorations(core::GameContext &ctx, float fieldWidth,
                          float fieldDepth, int biome);
 
   int m_biome = 0; ///< 現在のバイオーム
+
+  // ------------------------------------------------------------------
+  // インクリメンタルビルド用状態
+  // ------------------------------------------------------------------
+  enum class BuildPhase {
+    Idle,
+    TerrainGenAsync,   ///< TerrainGenerator 非同期待ち
+    CreatePhysics,     ///< 物理エンティティ作成
+    CreateTileMesh,    ///< ビジュアルメッシュ（1タイル/ステップ）
+    CreateTileOverlay, ///< オーバーレイ（1タイル/ステップ）
+    CreateWallsDeco,   ///< 壁+装飾（1ステップ）
+    Done
+  };
+
+  BuildPhase m_buildPhase   = BuildPhase::Idle;
+  float      m_buildProgress = 0.0f;
+
+  // BeginBuildFieldで保存した入力データ
+  std::string              m_buildPageTitle;
+  float                    m_buildFieldWidth      = 0.0f;
+  float                    m_buildFieldDepth      = 0.0f;
+  std::vector<std::string> m_buildPageCategories;
+
+  // テクスチャ結果コピー（BeginBuildFieldが呼ばれた時点のコピー）
+  std::vector<graphics::WikiTextureResult::Tile> m_buildTiles;
+  std::vector<graphics::LinkRegion>              m_buildLinks;
+  uint32_t m_buildTexWidth  = 0;
+  uint32_t m_buildTexHeight = 0;
+
+  // TerrainGenerator 非同期タスク
+  std::future<TerrainData> m_terrainFuture;
+
+  // タイルごとのインデックス
+  size_t m_buildTileIndex = 0;
+
+  // ビジュアルメッシュキャッシュ（CreateTileMeshとCreateTileOverlayで共用）
+  struct TileMeshCache {
+    std::vector<graphics::Vertex> vertices;
+    std::vector<uint32_t>         indices;
+    int     resX     = 0;
+    int     tileResZ = 0;
+    float   vStart   = 0.0f;
+    float   vEnd     = 0.0f;
+  };
+  std::vector<TileMeshCache> m_tileMeshCaches;
+
+  // シェーダー/テクスチャハンドルキャッシュ（BuildPhaseをまたいで保持）
+  resources::ShaderHandle   m_buildTerrainShader;
+  resources::ShaderHandle   m_buildBasicShader;
+  // ComPtrで保持：ResourceManagerが返す型と一致させる
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_buildAlbedoSRV;
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_buildNormalSRV;
+  int   m_buildResX    = 64;
+  int   m_buildResZ    = 64;
 };
 
 } // namespace game::systems

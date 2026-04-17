@@ -396,3 +396,47 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
 }
 
 } // namespace game::controllers
+
+// -----------------------------------------------------------------
+// MinimapController::SetVisible
+// 入力: visible=false → ロード中にミニマップ一切を非表示にする
+// 変更: UIImage/UIText の visible フラグを一括更新
+// 出力: なし（副作用: ECS コンポーネントの visible 変更）
+// -----------------------------------------------------------------
+namespace game::controllers {
+
+void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
+    auto setUIImg = [&](ecs::Entity e, bool v) {
+        if (e == UINT32_MAX) return;
+        if (auto* img = ctx.world.Get<components::UIImage>(e)) img->visible = v;
+    };
+    auto setUITxt = [&](ecs::Entity e, bool v) {
+        if (e == UINT32_MAX) return;
+        if (auto* t = ctx.world.Get<components::UIText>(e)) t->visible = v;
+    };
+
+    // ミニマップ本体とマーカー
+    setUIImg(m_minimapEntity,       visible);
+    setUITxt(m_minimapMarkerEntity, visible);
+    setUITxt(m_minimapHelpEntity,   visible);
+
+    // ズームインジケーター
+    setUIImg(m_mapZoomIndicatorBg,   false); // マップビュー時のみ表示のため常にfalse
+    setUITxt(m_mapZoomIndicatorText, false);
+
+    // 座標・距離テキスト（マップビュー時のみ）
+    setUITxt(m_mapCoordText,    false);
+    setUITxt(m_mapDistanceText, false);
+
+    // ヘルプパネル
+    setUIImg(m_mapHelpPanelBg, false);
+    setUITxt(m_mapHelpTitle,   false);
+    for (auto e : m_mapHelpLines) setUITxt(e, false);
+
+    // ホールアイコン
+    for (auto& icon : m_mapHoleIcons) {
+        setUIImg(icon.iconEntity, false);
+    }
+}
+
+} // namespace game::controllers

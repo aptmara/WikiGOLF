@@ -64,6 +64,17 @@ int DetermineBiomeFromCategories(const std::vector<std::string> &categories,
 } // namespace
 
 void WikiTerrainSystem::Clear(core::GameContext &ctx) {
+  // 非同期タスクが走っていれば待つ（デストラクタ前の安全確保）
+  if (m_terrainFuture.valid()) {
+    m_terrainFuture.get();
+  }
+  m_buildPhase   = BuildPhase::Idle;
+  m_buildProgress = 0.0f;
+  m_tileMeshCaches.clear();
+  m_buildTileIndex = 0;
+  m_buildTiles.clear();
+  m_buildLinks.clear();
+
   for (auto e : m_entities) {
     if (ctx.world.IsAlive(e)) {
       ctx.world.DestroyEntity(e);
@@ -71,6 +82,375 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   }
   m_entities.clear();
   m_floorEntity = 0xFFFFFFFF;
+}
+
+void WikiTerrainSystem::BeginBuildField(
+    const std::string              &pageTitle,
+    const graphics::WikiTextureResult &textureResult,
+    float fieldWidth, float fieldDepth,
+    const std::vector<std::string> &pageCategories)
+{
+  // 既存の非同期タスクが残っていれば回収
+  if (m_terrainFuture.valid()) {
+    m_terrainFuture.get();
+  }
+
+  m_buildPageTitle      = pageTitle;
+  m_buildFieldWidth     = fieldWidth;
+  m_buildFieldDepth     = fieldDepth;
+  m_buildPageCategories = pageCategories;
+  m_buildTexWidth       = textureResult.width;
+  m_buildTexHeight      = textureResult.height;
+  m_buildLinks          = textureResult.links;
+
+  // タイルコピー（Tile は ComPtr を持つので浅コピーで参照カウントが増える）
+  m_buildTiles = textureResult.tiles;
+  if (m_buildTiles.empty() && textureResult.texture) {
+    // 旧APIとの後方互換：単一テクスチャをタイルとして扱う
+    graphics::WikiTextureResult::Tile t;
+    t.texture  = textureResult.texture;
+    t.srv      = textureResult.srv;
+    t.width    = textureResult.width;
+    t.height   = textureResult.height;
+    t.offsetY  = 0.0f;
+    m_buildTiles.push_back(t);
+  }
+
+  m_buildTileIndex = 0;
+  m_tileMeshCaches.clear();
+  m_buildProgress  = 0.0f;
+
+  // 地形解像度を事前計算
+  m_buildResX = 64;
+  m_buildResZ = static_cast<int>(fieldDepth);
+  m_buildResZ = (std::max)(64, m_buildResZ);
+  m_buildResZ = (std::min)(m_buildResZ, 256); // タスク1で設けた上限と一致
+
+  // TerrainGenerator を別スレッドで開始（CPU演算のみ、ECS/GPU不使用）
+  const std::string seedText  = pageTitle;
+  const int   biome = DetermineBiomeFromCategories(pageCategories, pageTitle);
+  m_biome = biome;
+
+  TerrainConfig config;
+  config.worldWidth   = fieldWidth;
+  config.worldDepth   = fieldDepth;
+  config.resolutionX  = m_buildResX;
+  config.resolutionZ  = m_buildResZ;
+  config.heightScale  = 1.5f;
+  config.biome        = biome;
+  config.friction     = 0.5f;
+  config.restitution  = 0.3f;
+  switch (biome) {
+    case 1: config.heightScale = 2.5f; break;
+    case 2: config.heightScale = 1.0f; break;
+    case 3: config.heightScale = 3.0f; break;
+    default: break;
+  }
+
+  // ホール位置を計算してTerrainGeneratorに渡す
+  std::vector<DirectX::XMFLOAT2> holePositions;
+  float texW = (float)m_buildTexWidth;
+  float texH = (float)m_buildTexHeight;
+  if (texW > 0 && texH > 0) {
+    for (const auto &link : m_buildLinks) {
+      float cx = link.x + link.width  * 0.5f;
+      float cy = link.y + link.height * 0.5f;
+      holePositions.push_back({
+          (cx / texW - 0.5f) * fieldWidth,
+          (0.5f - cy / texH) * fieldDepth
+      });
+    }
+  }
+
+  // ラムダにコピーして非同期実行（thisへの参照を持たない）
+  m_terrainFuture = std::async(
+      std::launch::async,
+      [seedText, holePositions, config]() mutable {
+          return TerrainGenerator::GenerateTerrain(seedText, holePositions, config);
+      });
+
+  m_buildPhase = BuildPhase::TerrainGenAsync;
+  LOG_INFO("WikiTerrain", "BeginBuildField: async terrain gen started ({}x{})",
+           m_buildResX, m_buildResZ);
+}
+
+bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
+{
+  switch (m_buildPhase) {
+
+  // ------  非同期待ち ------
+  case BuildPhase::TerrainGenAsync: {
+    auto status = m_terrainFuture.wait_for(std::chrono::milliseconds(0));
+    if (status != std::future_status::ready) {
+      return false; // まだ完成していない
+    }
+    m_terrainData = std::make_shared<TerrainData>(m_terrainFuture.get());
+    LOG_INFO("WikiTerrain", "StepBuildField: terrain data ready");
+    m_buildPhase   = BuildPhase::CreatePhysics;
+    m_buildProgress = 0.10f;
+    return false;
+  }
+
+  // ------  物理エンティティ作成（1ステップ）------
+  case BuildPhase::CreatePhysics: {
+    using namespace game::components;
+
+    auto e = ctx.world.CreateEntity();
+    auto &transform = ctx.world.Add<Transform>(e);
+    transform.position = {0.0f, 0.0f, 0.0f};
+
+    auto &rb = ctx.world.Add<RigidBody>(e);
+    rb.isStatic      = true;
+    rb.restitution   = m_terrainData->config.restitution;
+    rb.rollingFriction = m_terrainData->config.friction;
+
+    auto &tc = ctx.world.Add<TerrainCollider>(e);
+    tc.data = m_terrainData;
+
+    m_floorEntity = e;
+    m_entities.push_back(e);
+    ctx.world.Add<TerrainObject>(e);
+
+    // シェーダー・テクスチャをキャッシュ（後のステップでも使う）
+    const std::vector<std::string> albedoPaths = {
+        "Assets/textures/terrain_materials/terrain_00_fairway_albedo.png",
+        "Assets/textures/terrain_materials/terrain_01_rough_albedo.png",
+        "Assets/textures/terrain_materials/terrain_02_bunker_albedo.png",
+        "Assets/textures/terrain_materials/terrain_03_green_albedo.png",
+        "Assets/textures/terrain_materials/terrain_04_ice_albedo.png",
+        "Assets/textures/terrain_materials/terrain_05_water_albedo.png",
+        "Assets/textures/terrain_materials/terrain_06_lava_albedo.png",
+        "Assets/textures/terrain_materials/terrain_07_stone_albedo.png"};
+    const std::vector<std::string> normalPaths = {
+        "Assets/textures/terrain_materials/terrain_00_fairway_normal_dx.png",
+        "Assets/textures/terrain_materials/terrain_01_rough_normal_dx.png",
+        "Assets/textures/terrain_materials/terrain_02_bunker_normal_dx.png",
+        "Assets/textures/terrain_materials/terrain_03_green_normal_dx.png",
+        "Assets/textures/terrain_materials/terrain_04_ice_normal_dx.png",
+        "Assets/textures/terrain_materials/terrain_05_water_normal_dx.png",
+        "Assets/textures/terrain_materials/terrain_06_lava_normal_dx.png",
+        "Assets/textures/terrain_materials/terrain_07_stone_normal_dx.png"};
+
+    m_buildAlbedoSRV   = ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray", albedoPaths);
+    m_buildNormalSRV   = ctx.resource.LoadTextureArraySRV("TerrainNormalArray",  normalPaths);
+    m_buildTerrainShader = ctx.resource.LoadShader(
+        "Terrain", L"Assets/shaders/TerrainVS.hlsl", L"Assets/shaders/TerrainPS.hlsl");
+    m_buildBasicShader   = ctx.resource.LoadShader(
+        "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
+
+    m_buildTileIndex = 0;
+    m_tileMeshCaches.clear();
+    m_buildPhase   = BuildPhase::CreateTileMesh;
+    m_buildProgress = 0.15f;
+    LOG_INFO("WikiTerrain", "StepBuildField: physics entity created");
+    return false;
+  }
+
+  // ------  ビジュアルメッシュ（1タイル/ステップ）------
+  case BuildPhase::CreateTileMesh: {
+    if (m_buildTileIndex >= m_buildTiles.size()) {
+      // 全タイル処理完了 → オーバーレイへ
+      m_buildTileIndex = 0;
+      m_buildPhase   = BuildPhase::CreateTileOverlay;
+      m_buildProgress = 0.60f;
+      return false;
+    }
+
+    const auto &tile = m_buildTiles[m_buildTileIndex];
+    if (!tile.srv) {
+      ++m_buildTileIndex;
+      return false;
+    }
+
+    const int   resX      = m_buildResX;
+    const int   totalResZ = m_buildResZ;
+    const float fieldW    = m_buildFieldWidth;
+    const float fieldD    = m_buildFieldDepth;
+    const float totalH    = (float)m_buildTexHeight;
+
+    float vStart = tile.offsetY / totalH;
+    float vEnd   = (tile.offsetY + (float)tile.height) / totalH;
+
+    int tileResZ = (std::max)(2, (int)(totalResZ * (tile.height / totalH)));
+
+    std::vector<graphics::Vertex> vertices;
+    std::vector<uint32_t>         indices;
+    vertices.reserve(resX * tileResZ);
+    indices.reserve((resX - 1) * (tileResZ - 1) * 6);
+
+    for (int z = 0; z < tileResZ; ++z) {
+      float vLocal  = (float)z / (tileResZ - 1);
+      float vGlobal = vStart + vLocal * (vEnd - vStart);
+      float worldZ  = fieldD * (0.5f - vGlobal);
+
+      for (int x = 0; x < resX; ++x) {
+        float u      = (float)x / (resX - 1);
+        float worldX = fieldW * (u - 0.5f);
+        float h      = GetHeight(worldX, worldZ);
+
+        float hL = GetHeight(worldX - 0.1f, worldZ);
+        float hR = GetHeight(worldX + 0.1f, worldZ);
+        float hD = GetHeight(worldX, worldZ - 0.1f);
+        float hU = GetHeight(worldX, worldZ + 0.1f);
+        DirectX::XMVECTOR n = DirectX::XMVectorSet(hL - hR, 0.2f, hD - hU, 0.0f);
+        n = DirectX::XMVector3Normalize(n);
+        DirectX::XMFLOAT3 normal;
+        DirectX::XMStoreFloat3(&normal, n);
+
+        float gridU = worldX / fieldW + 0.5f;
+        float gridV = 0.5f - worldZ / fieldD;
+        int gx = (std::clamp)(static_cast<int>(gridU * (resX - 1) + 0.5f), 0, resX - 1);
+        int gz = (std::clamp)(static_cast<int>(gridV * (totalResZ - 1) + 0.5f), 0, totalResZ - 1);
+        uint8_t mat = m_terrainData->materialMap[gz * resX + gx];
+
+        float matAlpha = (static_cast<float>(mat) + 0.5f) / 255.0f;
+        DirectX::XMFLOAT4 vcolor;
+        switch (mat) {
+          case 0:  vcolor = {0.35f, 0.55f, 0.25f, matAlpha}; break;
+          case 1:  vcolor = {0.25f, 0.45f, 0.20f, matAlpha}; break;
+          case 2:  vcolor = {0.90f, 0.85f, 0.70f, matAlpha}; break;
+          case 3:  vcolor = {0.40f, 0.75f, 0.30f, matAlpha}; break;
+          case 4:  vcolor = {0.70f, 0.88f, 0.98f, matAlpha}; break;
+          case 5:  vcolor = {0.20f, 0.45f, 0.85f, matAlpha}; break;
+          case 6:  vcolor = {0.95f, 0.35f, 0.12f, matAlpha}; break;
+          case 7:  vcolor = {0.50f, 0.48f, 0.52f, matAlpha}; break;
+          default: vcolor = {1.0f,  1.0f,  1.0f,  matAlpha}; break;
+        }
+
+        graphics::Vertex vert;
+        vert.position = {worldX, h, worldZ};
+        vert.normal   = normal;
+        vert.texCoord = {u * (fieldW / 2.0f), vGlobal * (fieldD / 2.0f)};
+        vert.color    = vcolor;
+        vertices.push_back(vert);
+      }
+    }
+
+    for (int z = 0; z < tileResZ - 1; ++z) {
+      for (int x = 0; x < resX - 1; ++x) {
+        uint32_t i0 = z * resX + x;
+        uint32_t i1 = z * resX + (x + 1);
+        uint32_t i2 = (z + 1) * resX + x;
+        uint32_t i3 = (z + 1) * resX + (x + 1);
+        indices.insert(indices.end(), {i0, i1, i2, i2, i1, i3});
+      }
+    }
+
+    graphics::ComputeTangents(vertices, indices);
+
+    auto handle = ctx.resource.CreateDynamicMesh(
+        "TerrainTile_" + std::to_string(tile.offsetY), vertices, indices);
+
+    auto e = ctx.world.CreateEntity();
+    auto &transform = ctx.world.Add<game::components::Transform>(e);
+    transform.position = {0.0f, 0.0f, 0.0f};
+
+    auto &mr     = ctx.world.Add<game::components::MeshRenderer>(e);
+    mr.mesh      = handle;
+    mr.shader    = m_buildTerrainShader;
+    mr.color     = {1.0f, 1.0f, 1.0f, 1.0f};
+    mr.textureSRV   = m_buildAlbedoSRV;
+    mr.hasTexture   = true;
+    mr.normalMapSRV = m_buildNormalSRV;
+    mr.hasNormalMap = true;
+    mr.isTransparent = false;
+    mr.customFlags   = {2.0f, 0.0f, 0.0f, 0.0f};
+
+    m_entities.push_back(e);
+    ctx.world.Add<game::components::TerrainObject>(e);
+
+    // Overlay用にキャッシュ保存
+    TileMeshCache cache;
+    cache.vertices = vertices;
+    cache.indices  = indices;
+    cache.resX     = resX;
+    cache.tileResZ = tileResZ;
+    cache.vStart   = vStart;
+    cache.vEnd     = vEnd;
+    m_tileMeshCaches.push_back(std::move(cache));
+
+    float tileProgress = (float)(m_buildTileIndex + 1) / (float)(std::max<size_t>(1, m_buildTiles.size()));
+    m_buildProgress = 0.15f + 0.45f * tileProgress;
+    ++m_buildTileIndex;
+    return false;
+  }
+
+  // ------  オーバーレイ（1タイル/ステップ）------
+  case BuildPhase::CreateTileOverlay: {
+    if (m_buildTileIndex >= m_buildTiles.size()) {
+      m_buildPhase   = BuildPhase::CreateWallsDeco;
+      m_buildProgress = 0.90f;
+      return false;
+    }
+    if (m_buildTileIndex >= m_tileMeshCaches.size()) {
+      ++m_buildTileIndex;
+      return false;
+    }
+
+    const auto &tile  = m_buildTiles[m_buildTileIndex];
+    const auto &cache = m_tileMeshCaches[m_buildTileIndex];
+
+    if (!tile.srv) {
+      ++m_buildTileIndex;
+      return false;
+    }
+
+    const int resX = cache.resX;
+    int tileResZ   = cache.tileResZ;
+    std::vector<graphics::Vertex> ov = cache.vertices;
+    for (size_t i = 0; i < ov.size(); ++i) {
+      ov[i].position.y += kTerrainOverlayHeightOffset;
+      ov[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
+      float u      = (float)(i % resX) / (resX - 1);
+      int   zIdx   = (int)(i / resX);
+      float vLocal = (float)zIdx / (tileResZ - 1);
+      ov[i].texCoord = {u, vLocal};
+    }
+
+    auto ovHandle = ctx.resource.CreateDynamicMesh(
+        "TerrainTileOverlay_" + std::to_string(tile.offsetY), ov, cache.indices);
+
+    auto ovE = ctx.world.CreateEntity();
+    auto &ovT = ctx.world.Add<game::components::Transform>(ovE);
+    ovT.position = {0.0f, 0.0f, 0.0f};
+
+    auto &ovMr     = ctx.world.Add<game::components::MeshRenderer>(ovE);
+    ovMr.mesh      = ovHandle;
+    ovMr.shader    = m_buildBasicShader;
+    ovMr.color     = {1.0f, 1.0f, 1.0f, 1.0f};
+    ovMr.textureSRV  = tile.srv;
+    ovMr.hasTexture  = true;
+    ovMr.isTransparent = true;
+    ovMr.blendMode   = game::components::BlendMode::Multiply;
+    ovMr.customFlags = {1.0f, 0.0f, 1.0f, 0.0f};
+
+    m_entities.push_back(ovE);
+    ctx.world.Add<game::components::TerrainObject>(ovE);
+
+    float ovProgress = (float)(m_buildTileIndex + 1) / (float)(std::max<size_t>(1, m_buildTiles.size()));
+    m_buildProgress = 0.60f + 0.30f * ovProgress;
+    ++m_buildTileIndex;
+    return false;
+  }
+
+  // ------  壁+装飾（1ステップ）------
+  case BuildPhase::CreateWallsDeco: {
+    CreateWalls(ctx, m_buildFieldWidth, m_buildFieldDepth);
+    CreateDecorations(ctx, m_buildFieldWidth, m_buildFieldDepth, m_biome);
+    m_buildPhase   = BuildPhase::Done;
+    m_buildProgress = 1.0f;
+    m_tileMeshCaches.clear(); // メモリ解放
+    LOG_INFO("WikiTerrain", "StepBuildField: complete (tiles={}, entities={})",
+             m_buildTiles.size(), m_entities.size());
+    return true;
+  }
+
+  case BuildPhase::Done:
+    return true;
+
+  default:
+    return true;
+  }
 }
 
 void WikiTerrainSystem::BuildField(core::GameContext &ctx,
@@ -95,8 +475,11 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
                                     const std::vector<std::string> &pageCategories) {
   // 1. 地形解像度・設定の決定
   int resX = 64;
+  // フィールドが広くなるほど頂点数がO(n²)で爆発するため上限を設ける。
+  // depth>256 の場合もメッシュ解像度は256で固定し、スケールで対応する。
   int resZ = static_cast<int>(depth);
   resZ = (std::max)(64, resZ);
+  resZ = (std::min)(resZ, 256); // 上限: 64×256=16384頂点で固定
 
   TerrainConfig config;
   config.worldWidth = width;

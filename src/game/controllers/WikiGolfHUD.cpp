@@ -1166,6 +1166,88 @@ void WikiGolfHUD::SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase) 
     setVis(m_ui.shotPanelAccuracyLabelEntity, shotPhase);
     setVis(m_ui.shotPanelAccuracyValueEntity, shotPhase);
     setVis(m_ui.shotPanelClubLabelEntity,     shotPhase);
+} // SetShotPhaseUIVisible
+
+// -----------------------------------------------------------------
+// HUD全体の表示/非表示切り替え（ロード中は非表示）
+// 入力: visible=false → 全UIエンティティを非表示
+// 変更: UIText の visible フラグを一括更新
+// 出力: なし（副作用: ECS UIText コンポーネントの visible 変更）
+// -----------------------------------------------------------------
+void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
+    // UIText 系エンティティの可視フラグを変更するヘルパー
+    auto setVis = [&](ecs::Entity e, bool v) {
+        if (e == UINT32_MAX) return;
+        if (auto* t = ctx.world.Get<components::UIText>(e)) t->visible = v;
+    };
+    auto setVisImg = [&](ecs::Entity e, bool v) {
+        if (e == UINT32_MAX) return;
+        if (auto* img = ctx.world.Get<components::UIImage>(e)) img->visible = v;
+    };
+
+    // ブラウザ風情報パネル
+    setVis(m_ui.browserBgEntity,          visible);
+    setVis(m_ui.browserTabIconEntity,     visible);
+    setVis(m_ui.browserCurrentPageEntity, visible);
+    setVis(m_ui.browserTargetEntity,      visible);
+    setVis(m_ui.browserShotInfoEntity,    visible);
+    setVis(m_ui.browserHistoryEntity,     visible);
+    setVis(m_ui.clubHeaderEntity,         visible);
+    setVis(m_ui.headerEntity,             visible);
+    setVis(m_ui.shotCountEntity,          visible);
+    setVis(m_ui.infoEntity,              visible);
+    setVis(m_ui.pathEntity,              visible);
+
+    // 風カード
+    setVis(m_ui.windEntity,           visible);
+    setVis(m_ui.windArrowEntity,      visible);
+    setVis(m_ui.windCardLabelEntity,  visible);
+    setVis(m_ui.windCardValueEntity,  visible);
+    setVis(m_ui.windCardUnitEntity,   visible);
+
+    // クラブ選択リスト
+    for (auto e : m_ui.clubBgEntities)      setVis(e, visible);
+    for (auto e : m_ui.clubIconEntities)    setVis(e, visible);
+    for (auto e : m_ui.clubNameEntities)    setVis(e, visible);
+    for (auto e : m_ui.clubSubNameEntities) setVis(e, visible);
+    for (auto e : m_ui.clubArrowEntities)   setVis(e, visible);
+
+    // ショットボタン
+    setVis(m_ui.shotButtonBgEntity,   visible);
+    setVis(m_ui.shotButtonTextEntity, visible);
+
+    // 操作ヘルプ
+    setVis(m_ui.controlHintEntity, visible);
+
+    // 距離・クラブ・ライパネル
+    setVis(m_ui.distPanelBgEntity,     visible);
+    setVis(m_ui.distLabelEntity,       visible);
+    setVis(m_ui.distValueEntity,       visible);
+    setVis(m_ui.heightLabelEntity,     visible);
+    setVis(m_ui.heightValueEntity,     visible);
+    setVis(m_ui.clubInfoPanelBgEntity, visible);
+    setVis(m_ui.clubInfoLabelEntity,   visible);
+    setVis(m_ui.clubInfoNameEntity,    visible);
+    setVis(m_ui.clubInfoIconEntity,    visible);
+    setVis(m_ui.clubInfoShortNameEntity, visible);
+    setVis(m_ui.liePanelBgEntity,     visible);
+    setVis(m_ui.lieLabelEntity,        visible);
+    setVis(m_ui.lieValueEntity,        visible);
+    setVis(m_ui.lieCondLabelEntity,    visible);
+    setVis(m_ui.lieCondValueEntity,    visible);
+
+    // ショット時ゲージ（非表示固定でも問題ないが念のため）
+    if (!visible) {
+        setVis(m_ui.gaugeBarEntity,    false);
+        setVis(m_ui.gaugeFillEntity,   false);
+        setVis(m_ui.gaugeMarkerEntity, false);
+        setVis(m_ui.judgeEntity,       false);
+        setVis(m_ui.shotPanelPowerLabelEntity,    false);
+        setVis(m_ui.shotPanelPowerValueEntity,    false);
+        setVis(m_ui.shotPanelAccuracyLabelEntity, false);
+        setVis(m_ui.shotPanelAccuracyValueEntity, false);
+        setVis(m_ui.shotPanelClubLabelEntity,     false);
+    }
 }
 
 } // namespace controllers
