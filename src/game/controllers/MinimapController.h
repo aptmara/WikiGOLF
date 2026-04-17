@@ -65,6 +65,9 @@ public:
   bool IsMapView() const { return m_isMapView; }
   void* GetMapSRV() const { return m_minimapRenderer ? m_minimapRenderer->GetSRV() : nullptr; }
 
+  /// @brief ミニマップUI全体の表示/非表示切り替え（ロード中は非表示にするため）
+  void SetVisible(core::GameContext& ctx, bool visible);
+
   // ------------------------------------------------------------------
   // Getter / Setter
   // ------------------------------------------------------------------

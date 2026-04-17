@@ -133,6 +133,10 @@ public:
     /// @brief 通常時 (Idle) <-> ショット時の UI 切り替え
     void SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase);
 
+    /// @brief HUD全体の表示/非表示を切り替える（ロード中は非表示にするため）
+    /// @param visible true=表示, false=非表示
+    void SetVisible(core::GameContext& ctx, bool visible);
+
 private:
     void InitializeCourseInfoPanel(core::GameContext& ctx);
     void InitializeWindCard(core::GameContext& ctx);

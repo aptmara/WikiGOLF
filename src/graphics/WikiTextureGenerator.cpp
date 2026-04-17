@@ -244,7 +244,9 @@ bool WikiTextureGenerator::BeginGenerateTexture(
 bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   if (!state.started || state.completed) return true;
 
-  const uint32_t kMaxTileHeight = 4096;
+  // 1タイルあたりのD2D描画時間を半減させるため、4096→2048に削減。
+  // タイル数は増えるが、インクリメンタルビルドで複数フレームに分散できる。
+  const uint32_t kMaxTileHeight = 2048;
   uint32_t tileH = std::min(state.remainingHeight, kMaxTileHeight);
   uint32_t width = state.actualWidth;
 

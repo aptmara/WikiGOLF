@@ -176,7 +176,8 @@ private:
         BeginTexture,
         GenerateTextureTiles,
         ApplySkybox,
-        BuildTerrain,
+        BeginTerrain,     ///< WikiTerrainSystem::BeginBuildField() を呼ぶ（1回）
+        BuildTerrainStep, ///< WikiTerrainSystem::StepBuildField() を毎フレーム呼ぶ
         RepositionBall,
         CreateHoles,
         SetupWind,
