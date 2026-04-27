@@ -131,7 +131,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
 
     LOG_INFO("WikiPageLoader", "Building page: {}", pageName);
 
-    // ---- 1. 古いホールを削除 ----
+    // 古いホール情報を削除します。
     {
         std::vector<ecs::Entity> holesToDelete;
         std::vector<ecs::Entity> relatedToDelete;
@@ -157,13 +157,13 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     }
     LOG_DEBUG("WikiPageLoader", "Holes cleared");
 
-    // ---- 2. 記事データ取得 (Fetch済) ----
+    // 記事の情報を取得します。
     std::vector<game::WikiLink> allLinks = std::move(asyncData.allLinks);
     std::string articleText = std::move(asyncData.articleText);
     std::vector<std::string> pageCategories = std::move(asyncData.pageCategories);
 
 
-    // ---- 3. リンクのフィルタリング ----
+    // 関連性の高いリンクのみを抽出します。
     // 年・月・日・数値のみを除外
     auto isIgnored = [](const std::string& t) {
         if (t.empty()) return true;
@@ -219,14 +219,14 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         }
     }
 
-    // ---- 4. フィールドサイズ計算 ----
+    // 記事本文の長さに応じてフィールドサイズを計算します。
     float articleLengthFactor =
         std::max(1.0f, (float)articleText.length() / 1500.0f);
     float fieldWidth = kMinFieldWidth * std::pow(articleLengthFactor, 0.45f);
     fieldWidth = std::clamp(fieldWidth, kMinFieldWidth, kMinFieldWidth * 4.0f);
     float fieldDepth = kMinFieldDepth;
 
-    // ---- 5. テクスチャ生成 ----
+    // 地形生成用のテクスチャ解像度を計算します。
     const uint32_t kMaxTexWidth = 16384;
     float texScale = 1.0f;
     uint32_t texWidth  = static_cast<uint32_t>(fieldWidth  * 100.0f);
@@ -265,7 +265,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     m_wikiTexture =
         std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
 
-    // ---- 6. スカイボックス適用 ----
+    // 記事のテーマに応じたスカイボックスを適用します。
     auto* skyboxComp = ctx.world.Get<components::Skybox>(skyboxEntity);
     if (skyboxComp && m_skyboxGenerator) {
         graphics::SkyboxTheme theme =
@@ -306,7 +306,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         }
     }
 
-    // ---- 7. GolfGameState へフィールドサイズ保存 ----
+    // 計算された最終フィールドサイズをゲーム状態に保存します。
     m_fieldWidth = fieldWidth;
     m_fieldDepth = fieldDepth;
     state->fieldWidth = fieldWidth;
@@ -317,13 +317,13 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     auto* cam = ctx.world.Get<components::Camera>(cameraEntity);
     if (cam) cam->farZ = std::max(1000.0f, fieldDepth * 2.5f);
 
-    // ---- 8. 地形構築 ----
+    // 地形の構築処理を行います。
     if (m_terrainSystem) {
         m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture,
                                     fieldWidth, fieldDepth, pageCategories);
     }
 
-    // ---- 9. ボール再配置 ----
+    // ボールをティーグラウンド位置に再配置します。
     auto* ballT  = ctx.world.Get<Transform>(ballEntity);
     auto* ballRB = ctx.world.Get<RigidBody>(ballEntity);
     if (ballT) {
@@ -336,7 +336,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
                 ctx, 0.0f, m_fieldWidth, m_fieldDepth, true);
     }
 
-    // ---- 10. ホール配置 ----
+    // 抽出されたリンク位置情報からカップホールを一括配置します。
     {
         std::vector<std::pair<float, float>> createdPositions;
         const float texW = (float)m_wikiTexture->width;
@@ -383,7 +383,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
                  createdPositions.size());
     }
 
-    // ---- 11. 風の設定 ----
+    // 風向および風速を決定します。
     {
         float windSpeed = 0.0f;
         if (articleText.length() > 2000)
@@ -396,11 +396,11 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         state->windDirection = {cosf(windAngle), sinf(windAngle)};
     }
 
-    // ---- 12. 現在ページ更新 ----
+    // 現在のページ履歴を保存します。
     state->currentPage = pageName;
     state->pathHistory.push_back(pageName);
 
-    // ---- 13. Par 計算 ----
+    // 規定打数となるParを算出します。
     {
         int calculatedPar = -1;
         if (m_shortestPath) {
@@ -426,6 +426,9 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     return result;
 }
 
+/**
+ * @brief インクリメンタルな構築を開始する
+ */
 void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
                                     PageDataAsyncResult asyncData,
                                     ecs::Entity ballEntity,
@@ -443,6 +446,9 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
     m_buildResult = PageLoadResult();
 }
 
+/**
+ * @brief 構築を 1 ステップ進める
+ */
 bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 {
     auto* state = ctx.world.GetGlobal<GolfGameState>();
@@ -646,8 +652,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::BeginTerrain:
     {
-        // WikiTerrainSystem::BeginBuildField() を呼び、非同期でTerrainGeneratorを起動する。
-        // この呼び出し自体は軽量（std::async起動のみ）。
+        // 地形生成システムを非同期で開始
         if (m_terrainSystem && m_wikiTexture) {
             m_terrainSystem->BeginBuildField(
                 m_buildData.pageName,
@@ -774,9 +779,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
     }
 }
 
-// ============================================================
-// CreateHole
-// ============================================================
+/**
+ * @brief ホールを生成する
+ */
 void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
                                 const std::string& linkTarget,
                                 bool isTargetHole, int hopsToTarget)
@@ -788,7 +793,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     float terrainH = 0.0f;
     if (m_terrainSystem) terrainH = m_terrainSystem->GetHeight(x, z);
 
-    // --- ホール本体 ---
+    // ホール本体を生成
     auto e  = ctx.world.CreateEntity();
     auto& t = ctx.world.Add<Transform>(e);
     t.position = {x, terrainH + 0.05f, z};
@@ -810,7 +815,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     h.isTarget   = isTargetHole;
     h.hopsToTarget = hopsToTarget;
 
-    // --- 旗モデル ---
+    // 旗モデルを生成
     auto flagE  = ctx.world.CreateEntity();
     auto& flagT = ctx.world.Add<Transform>(flagE);
     flagT.position = {x, terrainH + 0.15f, z};
@@ -832,7 +837,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     auto& flagTag = ctx.world.Add<HoleFlag>(flagE);
     flagTag.holeEntity = e;
 
-    // --- ラベル ---
+    // ラベルを生成
     auto labelE  = ctx.world.CreateEntity();
     auto& labelUI = ctx.world.Add<UIText>(labelE);
     labelUI.text  = isTargetHole ? L"🎯" : L"";
@@ -852,7 +857,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     label3D.visible   = true;
     h.labelEntity     = labelE;
 
-    // --- 光柱（ターゲット・1ホップのみ） ---
+    // ターゲットまたは1ホップの場合は光柱を生成
     if (isTargetHole || hopsToTarget == 1) {
         auto pillarE  = ctx.world.CreateEntity();
         auto& pillarT = ctx.world.Add<Transform>(pillarE);
@@ -878,9 +883,9 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
               x, z, linkTarget, isTargetHole, hopsToTarget);
 }
 
-// ============================================================
-// CreateLinksFromTexture（将来的な直接呼び出し用）
-// ============================================================
+/**
+ * @brief テクスチャのリンク領域からホールを一括配置する
+ */
 void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
 {
     if (!m_wikiTexture) return;

@@ -85,17 +85,17 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    // 1. ファイル出力
+    // ファイル出力処理
     if (m_initialized && m_fileStream.is_open()) {
         m_fileStream << fullMessage << std::endl;
         if (level == LogLevel::Error) m_fileStream.flush();
     }
 
-    // 2. Visual Studio デバッグ出力
+    // デバッグ出力処理
     std::string debugOutput = fullMessage + "\n";
     OutputDebugStringA(debugOutput.c_str());
 
-    // 3. 標準出力 (コンソール)
+    // 標準出力（コンソール）処理
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     if (hConsole != INVALID_HANDLE_VALUE) {
         SetConsoleTextAttribute(hConsole, color);

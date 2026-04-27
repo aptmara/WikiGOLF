@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file LoadingScene.cpp
  * @brief ローディング画面シーン（ゴルフボール物理演出）の実装
  */
@@ -928,9 +928,7 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
   UpdateCamera(ctx, dt);
   UpdateUI(ctx);
 
-  // 全ボール静止後のフェード処理
-  // 安全装置: 全てスポーンしてから一定時間経過したら強制的に次へ
-  // 修正: ロードが完了したら、ボールの状態に関わらず即座に次へ進む
+  // ロード完了時または一定時間経過後に次のシーンへの遷移フェードを開始
   bool triggerFade = false;
 
   // ロード完了チェック

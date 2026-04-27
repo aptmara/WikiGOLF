@@ -18,6 +18,9 @@ static float SmoothStep(float edge0, float edge1, float x) {
   return x * x * (3 - 2 * x);
 }
 
+/**
+ * @brief 地形データを生成します。
+ */
 TerrainData TerrainGenerator::GenerateTerrain(
     const std::string &articleText,
     const std::vector<DirectX::XMFLOAT2> &holePositions,
@@ -30,22 +33,25 @@ TerrainData TerrainGenerator::GenerateTerrain(
   data.heightMap.resize(totalVerts, 0.0f);
   data.materialMap.resize(totalVerts, 0); // 0: Fairway
 
-  // 1. 基本形状生成 (ノイズ + プラットフォーム)
+  // 基本形状の生成
   GenerateBaseHeightMap(data, articleText);
 
-  // 2. リンク位置に基づくプラットフォーム生成
+  // リンク位置に基づくプラットフォームの生成
   CreatePlatforms(data, holePositions);
 
-  // 3. スムージング処理
+  // スムージング処理
   ApplySmoothing(data, 3); // 3回スムージング
 
-  // 4. メッシュ生成
+  // メッシュの生成
   CalculateNormals(data);
   GenerateMesh(data, holePositions); // ホール位置を渡す
 
   return data;
 }
 
+/**
+ * @brief 基準ハイトマップを生成します。
+ */
 void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
                                              const std::string &text) {
   std::seed_seq seed(text.begin(), text.end());
@@ -244,6 +250,9 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
   }
 }
 
+/**
+ * @brief ホール周辺に平らなプラットフォームを作成します。
+ */
 void TerrainGenerator::CreatePlatforms(
     TerrainData &data, const std::vector<DirectX::XMFLOAT2> &holePositions) {
   int resX = data.config.resolutionX;
@@ -253,9 +262,7 @@ void TerrainGenerator::CreatePlatforms(
 
   // リンク位置に基づいてプラットフォームを作る
   for (const auto &pos : holePositions) {
-    // ワールド座標 -> グリッドUV -> インデックス
-    // px = (u - 0.5) * W  => u = px/W + 0.5
-    // pz = (0.5 - v) * D  => v = 0.5 - pz/D
+    // ワールド座標からグリッドUV、インデックスへの逆算変換式
 
     float u = pos.x / worldW + 0.5f;
     float v = 0.5f - pos.y / worldD; // pos.y is Z in world coords here (vector2
@@ -271,10 +278,10 @@ void TerrainGenerator::CreatePlatforms(
     float currentCenterH = GetHeight(data, cx, cz);
     float targetHeight = currentCenterH + 0.05f; // わずかに持ち上げて埋没を防ぐ
 
-    // Cup bowl depth
+    // カップ底部の深さ
     float bowlDepth = 0.2f;
 
-    // Bunker generation
+    // バンカーの生成処理
     std::mt19937 tempRng(cx + cz * resX);
     std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
     float bunkerAngle = dist01(tempRng) * 6.28f;
@@ -290,7 +297,7 @@ void TerrainGenerator::CreatePlatforms(
         float dist = std::sqrt(dx * dx + dz * dz);
         int idx = z * resX + x;
 
-        // Green area
+        // グリーンエリア
         if (dist < radius) {
           data.materialMap[idx] = 3; // Green
 
@@ -303,15 +310,15 @@ void TerrainGenerator::CreatePlatforms(
             SetHeight(data, x, z, targetHeight);
           }
         } else if (dist < radius * 1.5f) {
-          // Apron
+          // エプロンエリア
           data.materialMap[idx] = 0;
 
-          // Connect to rough
+          // ラフとのブレンド接続
           float t = SmoothStep(radius, radius * 1.5f, dist);
           float currentH = GetHeight(data, x, z);
           SetHeight(data, x, z, Lerp(targetHeight, currentH, t));
         } else {
-          // Generate bunkers
+          // バンカーの生成
           float angle = std::atan2(dz, dx);
           float angleDiff = angle - bunkerAngle;
           while (angleDiff > 3.14159f)
@@ -338,6 +345,9 @@ void TerrainGenerator::CreatePlatforms(
   }
 }
 
+/**
+ * @brief ハイトマップにスムージング処理を適用します。
+ */
 void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
   int resX = data.config.resolutionX;
   int resZ = data.config.resolutionZ;
@@ -367,6 +377,9 @@ void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
   }
 }
 
+/**
+ * @brief 地形の法線を計算します。
+ */
 void TerrainGenerator::CalculateNormals(TerrainData &data) {
   int resX = data.config.resolutionX;
   int resZ = data.config.resolutionZ;
@@ -377,17 +390,15 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
 
   for (int z = 0; z < resZ; ++z) {
     for (int x = 0; x < resX; ++x) {
-      // 隣接点を使って勾配を計算
-      // L R
-      // T B (Top/Bottom is Z axis)
+      // 勾配計算用の隣接セルインデックス指定
 
       float hL = (x > 0) ? GetHeight(data, x - 1, z) : GetHeight(data, x, z);
       float hR =
           (x < resX - 1) ? GetHeight(data, x + 1, z) : GetHeight(data, x, z);
       float hD = (z > 0) ? GetHeight(data, x, z - 1)
-                         : GetHeight(data, x, z); // Down (-Z)
+                         : GetHeight(data, x, z); // 下方向の隣接座標
       float hU = (z < resZ - 1) ? GetHeight(data, x, z + 1)
-                                : GetHeight(data, x, z); // Up (+Z)
+                                : GetHeight(data, x, z); // 上方向の隣接座標
 
       // 接線ベクトル
       XMVECTOR tangentX = XMVectorSet(2.0f * cellW, hR - hL, 0.0f, 0.0f);
@@ -402,6 +413,9 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
   }
 }
 
+/**
+ * @brief 地形メッシュを生成します。
+ */
 void TerrainGenerator::GenerateMesh(
     TerrainData &data, const std::vector<DirectX::XMFLOAT2> &holePositions) {
   int resX = data.config.resolutionX;
@@ -436,28 +450,28 @@ void TerrainGenerator::GenerateMesh(
       uint8_t mat = data.materialMap[idx];
 
       switch (mat) {
-      case 0: // Fairway
+      case 0: // フェアウェイ
         vert.color = {0.2f, 0.6f, 0.2f, 0.25f};
         break;
-      case 1: // Rough
+      case 1: // ラフ
         vert.color = {0.1f, 0.35f, 0.1f, 0.50f};
         break;
-      case 2: // Bunker
+      case 2: // バンカー
         vert.color = {0.85f, 0.75f, 0.55f, 0.75f};
         break;
-      case 3: // Green
+      case 3: // グリーン
         vert.color = {0.3f, 0.8f, 0.3f, 1.0f};
         break;
-      case 4: // Ice
+      case 4: // 氷原
         vert.color = {0.7f, 0.85f, 1.0f, 0.6f};
         break;
-      case 5: // Water
+      case 5: // 水
         vert.color = {0.2f, 0.4f, 0.8f, 0.5f};
         break;
-      case 6: // Lava
+      case 6: // 溶岩
         vert.color = {1.0f, 0.3f, 0.1f, 0.9f};
         break;
-      case 7: // Stone
+      case 7: // 岩石
         vert.color = {0.5f, 0.5f, 0.55f, 0.8f};
         break;
       default:
@@ -472,10 +486,7 @@ void TerrainGenerator::GenerateMesh(
   // インデックス生成 (Triangle List)
   for (int z = 0; z < resZ - 1; ++z) {
     for (int x = 0; x < resX - 1; ++x) {
-      // 0 --- 1
-      // |  /  |
-      // 2 --- 3
-      //
+      // 三角形インデックスの設定（0-1-2および2-1-3）
       // Tri 1: 0-1-2
       // Tri 2: 2-1-3
 
@@ -503,6 +514,9 @@ void TerrainGenerator::GenerateMesh(
   data.indices = std::move(indices);
 }
 
+/**
+ * @brief 指定した格子座標の地形高さを取得します。
+ */
 float TerrainGenerator::GetHeight(const TerrainData &data, int x, int z) {
   if (x < 0 || x >= data.config.resolutionX || z < 0 ||
       z >= data.config.resolutionZ)
@@ -510,6 +524,9 @@ float TerrainGenerator::GetHeight(const TerrainData &data, int x, int z) {
   return data.heightMap[z * data.config.resolutionX + x];
 }
 
+/**
+ * @brief 指定した格子座標의地形高さを設定します。
+ */
 void TerrainGenerator::SetHeight(TerrainData &data, int x, int z, float h) {
   if (x < 0 || x >= data.config.resolutionX || z < 0 ||
       z >= data.config.resolutionZ)

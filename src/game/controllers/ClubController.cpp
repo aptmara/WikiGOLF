@@ -209,8 +209,7 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   constexpr float kClubSpacing = 88.0f;
   constexpr float kClubSize = 72.0f;
 
-  // 古い UIImage/UIText エンティティはすべて非表示で残す
-  // (HUD 側の新クラブリストが描画を担当する)
+  // 古いUIエンティティは非表示のまま残し、描画はHUD側の新規リストに委譲
   for (size_t i = 0; i < m_availableClubs.size(); ++i) {
     auto e = ctx.world.CreateEntity();
     auto &img = ctx.world.Add<UIImage>(e);

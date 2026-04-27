@@ -1,16 +1,7 @@
 #pragma once
 /**
  * @file WikiGolfHUD.h
- * @brief HUD (Head-Up Display) Controller for WikiGolf
- *
- * 通常時画面で必要な以下のUI要素を管理する:
- *   - 現在地/目的地情報パネル (左上)
- *   - クラブ選択リスト (左側・常時表示)
- *   - 風情報カード (上中央)
- *   - ショットボタン (右下)
- *   - 操作ヘルプバー (左下)
- *   - 着地点マーカー (3D空間)
- * ショット時 (ShotPhase) にはゲージUIを追加表示する。
+ * @brief ゲーム画面のHUD表示要素を管理するクラス
  */
 
 #include "../../core/GameContext.h"
@@ -36,15 +27,15 @@ public:
     // UIエンティティ管理
     // -------------------------------------------------------
     struct UIEntities {
-        // === 左上: ブラウザ風コース情報 ===
+        // 左上: ブラウザ風コース情報
         ecs::Entity browserBgEntity         = UINT32_MAX; // 背景パネル
-        ecs::Entity browserTabIconEntity    = UINT32_MAX; // "WEB" バッジ
-        ecs::Entity browserCurrentPageEntity= UINT32_MAX; // "名川忍ゴルフコース"
-        ecs::Entity browserTargetEntity     = UINT32_MAX; // "-> ナタリー (ニュースサイト)"
-        ecs::Entity browserShotInfoEntity   = UINT32_MAX; // "Shots: 0 / Par 2"
-        ecs::Entity browserHistoryEntity    = UINT32_MAX;
+        ecs::Entity browserTabIconEntity    = UINT32_MAX; // バッジ
+        ecs::Entity browserCurrentPageEntity= UINT32_MAX; // 現在地表示
+        ecs::Entity browserTargetEntity     = UINT32_MAX; // 目的地表示
+        ecs::Entity browserShotInfoEntity   = UINT32_MAX; // スコア情報
+        ecs::Entity browserHistoryEntity    = UINT32_MAX; // 経路履歴
         
-        ecs::Entity clubHeaderEntity        = UINT32_MAX; // "CLUB" ヘッダー
+        ecs::Entity clubHeaderEntity        = UINT32_MAX; // ヘッダー
 
         // 互換用エイリアス
         ecs::Entity browserTabIconEntityAlias = UINT32_MAX;
@@ -53,51 +44,47 @@ public:
         ecs::Entity infoEntity              = UINT32_MAX;
         ecs::Entity pathEntity              = UINT32_MAX;
 
-        // === 上中央: 風情報カード ===
+        // 上中央: 風情報カード
         ecs::Entity windEntity              = UINT32_MAX;
         ecs::Entity windArrowEntity         = UINT32_MAX;
-        ecs::Entity windCardLabelEntity     = UINT32_MAX; // "WIND"
-        ecs::Entity windCardValueEntity     = UINT32_MAX; // "3.1"
-        ecs::Entity windCardUnitEntity      = UINT32_MAX; // "↗ m/s"
+        ecs::Entity windCardLabelEntity     = UINT32_MAX; // 風ラベル
+        ecs::Entity windCardValueEntity     = UINT32_MAX; // 風速値
+        ecs::Entity windCardUnitEntity      = UINT32_MAX; // 風向と単位
 
-        // === 左側: クラブ選択リスト ===
-        // クラブ行ごとに背景+テキストエンティティを持つ
-        std::vector<ecs::Entity> clubBgEntities;   // 背景 (UIText with bgColor)
-        std::vector<ecs::Entity> clubIconEntities; // アイコン
-        std::vector<ecs::Entity> clubNameEntities; // クラブ名テキスト
-        std::vector<ecs::Entity> clubSubNameEntities; // 英語種別テキスト (例: "1W Driver")
-        std::vector<ecs::Entity> clubArrowEntities;// 選択中の「▶」
+        // 左側: クラブ選択リスト
+        std::vector<ecs::Entity> clubBgEntities;   
+        std::vector<ecs::Entity> clubIconEntities; 
+        std::vector<ecs::Entity> clubNameEntities; 
+        std::vector<ecs::Entity> clubSubNameEntities; 
+        std::vector<ecs::Entity> clubArrowEntities;
 
-        // === 右下: ショットボタン ===
-        ecs::Entity shotButtonBgEntity      = UINT32_MAX; // ボタン背景
-        ecs::Entity shotButtonTextEntity    = UINT32_MAX; // "SHOT" テキスト
+        // 右下: ショットボタン
+        ecs::Entity shotButtonBgEntity      = UINT32_MAX; 
+        ecs::Entity shotButtonTextEntity    = UINT32_MAX; 
 
-        // === 左下: 操作ヘルプ ===
+        // 左下: 操作ヘルプ
         ecs::Entity controlHintEntity       = UINT32_MAX;
 
-        // === 下部中央: 情報パネル (⑧距離, ⑨クラブ, ⑪ライ) ===
-        // ⑧ 距離パネル
-        ecs::Entity distPanelBgEntity       = UINT32_MAX;
+        // 下部中央: 情報パネル
+        ecs::Entity distPanelBgEntity       = UINT32_MAX; 
         ecs::Entity distLabelEntity         = UINT32_MAX;
         ecs::Entity distValueEntity         = UINT32_MAX;
         ecs::Entity heightLabelEntity       = UINT32_MAX;
         ecs::Entity heightValueEntity       = UINT32_MAX;
         
-        // ⑨ 選択中クラブパネル
-        ecs::Entity clubInfoPanelBgEntity   = UINT32_MAX;
+        ecs::Entity clubInfoPanelBgEntity   = UINT32_MAX; // クラブパネル
         ecs::Entity clubInfoLabelEntity     = UINT32_MAX;
         ecs::Entity clubInfoNameEntity      = UINT32_MAX;
         ecs::Entity clubInfoIconEntity      = UINT32_MAX;
         ecs::Entity clubInfoShortNameEntity = UINT32_MAX;
         
-        // ⑪ ライ情報パネル
-        ecs::Entity liePanelBgEntity        = UINT32_MAX;
+        ecs::Entity liePanelBgEntity        = UINT32_MAX; // ライ情報パネル
         ecs::Entity lieLabelEntity          = UINT32_MAX;
         ecs::Entity lieValueEntity          = UINT32_MAX;
         ecs::Entity lieCondLabelEntity      = UINT32_MAX;
         ecs::Entity lieCondValueEntity      = UINT32_MAX;
 
-        // === ショット時のみ表示 ===
+        // ショット時のみ表示
         ecs::Entity shotPanelPowerLabelEntity   = UINT32_MAX;
         ecs::Entity shotPanelPowerValueEntity   = UINT32_MAX;
         ecs::Entity shotPanelAccuracyLabelEntity= UINT32_MAX;
@@ -109,6 +96,9 @@ public:
         ecs::Entity judgeEntity             = UINT32_MAX;
     };
 
+    /**
+     * @brief HUD用の初期化処理を行います。
+     */
     void Initialize(core::GameContext& ctx);
 
     /**
@@ -124,10 +114,29 @@ public:
                 int currentClubIndex,
                 float distanceToTarget, float heightDiff);
 
+    /**
+     * @brief パワーゲージの値を更新します。
+     */
     void UpdatePowerGauge(core::GameContext& ctx, float fillValue, float markerValue, float minPower, float maxPower);
+
+    /**
+     * @brief 打球判定結果を表示します。
+     */
     void UpdateJudge(core::GameContext& ctx, const std::wstring& text, const DirectX::XMFLOAT4& color);
+
+    /**
+     * @brief ショット関連のUI表示をリセットします。
+     */
     void ResetShotUI(core::GameContext& ctx);
+
+    /**
+     * @brief ゲージUIの表示・非表示を切り替えます。
+     */
     void SetGaugeVisible(core::GameContext& ctx, bool visible);
+
+    /**
+     * @brief インパクトゾーンの表示・非表示を切り替えます。
+     */
     void SetImpactZonesVisible(core::GameContext& ctx, bool visible);
 
     /// @brief 通常時 (Idle) <-> ショット時の UI 切り替え

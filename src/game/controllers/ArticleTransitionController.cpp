@@ -91,7 +91,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     auto shaderHandle = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 2 (Camera)");
-    // 1. トランジション専用カメラ (遥か上空に配置して既存フィールドと干渉させない)
+    // トランジション専用カメラ（既存フィールドと干渉しないよう遥か上空に配置）
     m_cameraEntity = ctx.world.CreateEntity();
     auto& camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
     camTr.position = {0.0f, 5000.0f, -30.0f}; 
@@ -104,7 +104,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     cam.isMainCamera = true; // メインカメラをジャックする
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 3 (Globe)");
-    // 2. 地球儀
+    // 地球儀エンティティの生成
     m_globeEntity = ctx.world.CreateEntity();
     auto& globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
     globeTr.position = {0.0f, 5000.0f, 0.0f};
@@ -117,7 +117,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     globeMr.isVisible = true;
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 4 (Cart)");
-    // 3. ゴルフカート
+    // ゴルフカートエンティティの生成
     m_cartEntity = ctx.world.CreateEntity();
     auto& cartTr = ctx.world.Add<components::Transform>(m_cartEntity);
     cartTr.position = {10.0f, 5000.0f, 0.0f};
@@ -131,7 +131,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     cartMr.isVisible = true;
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 5 (Background)");
-    // 4. 背景 (暗転用)
+    // 背景エンティティの生成（暗転用）
     m_bgEntity = ctx.world.CreateEntity();
     auto& bgTr = ctx.world.Add<components::Transform>(m_bgEntity);
     bgTr.position = {0.0f, 5000.0f, 50.0f};
@@ -144,7 +144,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     bgMr.isVisible = true;
 
     LOG_DEBUG("Transition", "SpawnEntities: Step 6 (Text UI)");
-    // 5. UI テキスト
+    // UIテキストエンティティの生成
     m_textEntity = ctx.world.CreateEntity();
     auto& titleText = ctx.world.Add<components::UIText>(m_textEntity);
     titleText.text = L"Traveling to " + core::ToWString(m_targetPage) + L"...";

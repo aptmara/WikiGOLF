@@ -189,7 +189,7 @@ bool LoadFaceFromFile(const std::wstring &path, int targetSize,
     return false;
   }
 
-  // Convert to 32bpp RGBA first
+  // はじめに32bpp RGBA形式に変換
   Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
   hr = factory->CreateFormatConverter(&converter);
   if (FAILED(hr)) {
@@ -203,7 +203,7 @@ bool LoadFaceFromFile(const std::wstring &path, int targetSize,
     return false;
   }
 
-  // Scale to target size if needed
+  // 必要に応じてターゲットサイズにスケーリング
   IWICBitmapSource *source = converter.Get();
   Microsoft::WRL::ComPtr<IWICBitmapScaler> scaler;
 
@@ -1201,7 +1201,7 @@ void SkyboxTextureGenerator::GenerateFaceData(
     if (!(faceMask & (1 << face))) {
       continue;
     }
-    outData[face].resize(faceSize * faceSize * 4); // RGBA
+    outData[face].resize(faceSize * faceSize * 4); // RGBA形式
 
     for (int y = 0; y < faceSize; ++y) {
       for (int x = 0; x < faceSize; ++x) {
@@ -1396,7 +1396,7 @@ void SkyboxTextureGenerator::GenerateFaceData(
         outData[face][idx + 0] = static_cast<uint8_t>(color.x * 255.0f);
         outData[face][idx + 1] = static_cast<uint8_t>(color.y * 255.0f);
         outData[face][idx + 2] = static_cast<uint8_t>(color.z * 255.0f);
-        outData[face][idx + 3] = 255; // Alpha
+        outData[face][idx + 3] = 255; // アルファ値
       }
     }
   }
@@ -1425,7 +1425,7 @@ bool SkyboxTextureGenerator::CreateCubemapTexture(
   D3D11_SUBRESOURCE_DATA initData[6];
   for (int i = 0; i < 6; ++i) {
     initData[i].pSysMem = faceData[i].data();
-    initData[i].SysMemPitch = faceSize * 4; // RGBA
+    initData[i].SysMemPitch = faceSize * 4; // RGBA形式
     initData[i].SysMemSlicePitch = 0;
   }
 

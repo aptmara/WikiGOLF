@@ -23,7 +23,7 @@ public:
     if (!m_renderer.IsValid())
       return;
 
-    // 1. 表示中の UIImage を収集
+    // 表示中のUI画像を収集
     std::vector<const components::UIImage *> images;
     ctx.world.Query<components::UIImage>().Each(
         [&](ecs::Entity e, const components::UIImage &ui) {
@@ -32,11 +32,11 @@ public:
           }
         });
 
-    // 2. レイヤーでソート（数値小さい = 背面描画）
+    // レイヤーごとにソート（背面から順に描画するため）
     std::sort(images.begin(), images.end(),
               [](const auto *a, const auto *b) { return a->layer < b->layer; });
 
-    // 3. 描画
+
     m_renderer.BeginDraw();
 
     for (const auto *ui : images) {

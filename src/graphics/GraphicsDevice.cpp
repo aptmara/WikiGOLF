@@ -154,14 +154,14 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
            m_driverType == D3D_DRIVER_TYPE_HARDWARE ? "HARDWARE" : "WARP",
            static_cast<uint32_t>(featureLevel));
 
-  // Enable multithread protection for D3D11.
-  // The ID3D11Multithread interface is supported by the device context.
+  // D3D11でのマルチスレッド保護を有効化
+  // デバイスコンテキストからマルチスレッド保護インターフェースを取得
   Microsoft::WRL::ComPtr<ID3D11Multithread> multithread;
   if (SUCCEEDED(m_context.As(&multithread))) {
     multithread->SetMultithreadProtected(TRUE);
     LOG_INFO("GraphicsDevice", "Enabled D3D11Multithread Protection on context");
   } else {
-    // Fallback to D3D10Multithread on device just in case (older Windows)
+    // 古いWindows向けにD3D10のマルチスレッド保護も試行
     Microsoft::WRL::ComPtr<ID3D10Multithread> mt10;
     if (SUCCEEDED(m_device.As(&mt10))) {
       mt10->SetMultithreadProtected(TRUE);
@@ -237,7 +237,7 @@ void GraphicsDevice::SetupViewport() {
 }
 
 void GraphicsDevice::SetupRenderState() {
-  // 1. Rasterizer State (カリングなし)
+  // ラスタライザーステートの設定
   D3D11_RASTERIZER_DESC rasterDesc = {};
   rasterDesc.AntialiasedLineEnable = FALSE;
   rasterDesc.CullMode = D3D11_CULL_BACK; // 背面カリング有効（裏面を描画しない）
@@ -254,7 +254,7 @@ void GraphicsDevice::SetupRenderState() {
   m_device->CreateRasterizerState(&rasterDesc, &m_rasterizerState);
   m_context->RSSetState(m_rasterizerState.Get());
 
-  // 2. Depth Stencil State (深度テスト有効/書き込み有効)
+  // 深度ステンシルステートの設定
   D3D11_DEPTH_STENCIL_DESC depthDesc = {};
   depthDesc.DepthEnable = TRUE;
   depthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;

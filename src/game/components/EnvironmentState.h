@@ -13,19 +13,19 @@ namespace game::components {
  * @brief ライティングムード - 環境光の雰囲気
  */
 enum class LightingMood {
-  // Natural
+  // 自然環境
   SunriseDawn,
   GoldenAfternoon,
   DramaticSunset,
   MoonlitNight,
   StarlitCosmos,
 
-  // Artificial
+  // 人工環境
   NeonCyberpunk,
   CandlelitAntique,
   StudioNeutral,
 
-  // Special
+  // 特殊環境
   UnderwaterCaustics,
   VolcanicGlow,
   AuroralDance,

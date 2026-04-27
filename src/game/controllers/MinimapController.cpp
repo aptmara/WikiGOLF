@@ -23,12 +23,18 @@ constexpr float kMinMapViewSpan = 5.0f;
 } // namespace
 
 
+/**
+ * @brief コントローラーを初期化します。
+ */
 void MinimapController::Initialize(Config cfg, core::GameContext &ctx) {
   m_cfg = cfg;
   m_minimapRenderer = std::make_unique<game::systems::MapSys>();
   m_minimapRenderer->Initialize(ctx.graphics.GetDevice(), 720, 720);
 }
 
+/**
+ * @brief ミニマップのUI表示用エンティティを生成します。
+ */
 void MinimapController::InitializeUI(core::GameContext &ctx) {
   if (!m_minimapRenderer) return;
 
@@ -53,6 +59,9 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   marker.layer = game::ui::kLayerMarker;
 }
 
+/**
+ * @brief ミニマップ上のすべてのホールアイコンを削除します。
+ */
 void MinimapController::ClearHoleIcons(core::GameContext &ctx) {
   for (auto &icon : m_mapHoleIcons) {
     ctx.world.DestroyEntity(icon.iconEntity);
@@ -60,6 +69,9 @@ void MinimapController::ClearHoleIcons(core::GameContext &ctx) {
   m_mapHoleIcons.clear();
 }
 
+/**
+ * @brief ミニマップ上にホールアイコンを追加します。
+ */
 void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z, const std::string& linkTarget, bool isTargetHole) {
   auto iconEntity = ctx.world.CreateEntity();
   auto &ui = ctx.world.Add<UIImage>(iconEntity);
@@ -81,6 +93,9 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z, co
   m_mapHoleIcons.push_back({iconEntity, {x, z}, isTargetHole});
 }
 
+/**
+ * @brief マップビュー（全体俯瞰表示）のトグルを切り替えます。
+ */
 void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skyboxEntity) {
   m_isMapView = !m_isMapView;
   
@@ -107,6 +122,9 @@ void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skybox
   }
 }
 
+/**
+ * @brief マップビュー有効時のカメラ位置を更新します。
+ */
 void MinimapController::UpdateMapCamera(core::GameContext &ctx, float fieldWidth, float fieldDepth) {
   if (!ctx.world.IsAlive(m_cfg.cameraEntity))
     return;
@@ -139,6 +157,9 @@ void MinimapController::UpdateMapCamera(core::GameContext &ctx, float fieldWidth
   XMStoreFloat4(&camT->rotation, q);
 }
 
+/**
+ * @brief ミニマップおよびインジケーターの表示を更新します。
+ */
 void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, float fieldDepth, const DirectX::XMFLOAT3& shotDirection) {
   if (!m_minimapRenderer)
     return;
@@ -181,7 +202,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     marker->visible = ui->visible;
   }
 
-  // === Phase 2: マーカーパルスアニメーション ===
+  // マーカーパルスアニメーション
   if (marker && ui && ui->visible) {
     m_markerPulseTimer += ctx.dt;
     float pulse = 1.0f + game::ui::kMarkerPulseScale * std::sin(m_markerPulseTimer * game::ui::kMarkerPulseSpeed);
@@ -192,7 +213,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     marker->style.color.w = alphaPulse;
   }
 
-  // === Phase 3: 座標・距離表示（マップビュー時のみ） ===
+  // 座標および距離表示
   if (m_isMapView && ui && ballT) {
     int mouseX = ctx.input.GetMousePosition().x;
     int mouseY = ctx.input.GetMousePosition().y;
@@ -244,7 +265,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
       distTxt->visible = false;
   }
 
-  // === Phase 2: ズームインジケーター（マップビュー時のみ） ===
+  // ズームインジケーター
   auto *zoomBg = ctx.world.Get<UIImage>(m_mapZoomIndicatorBg);
   auto *zoomTxt = ctx.world.Get<UIText>(m_mapZoomIndicatorText);
 
@@ -262,7 +283,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
       zoomTxt->visible = false;
   }
 
-  // === Phase 3: ヘルプパネルフェードイン/アウト ===
+  // ヘルプパネルのフェード処理
   static float helpFadeAlpha = 0.0f;
   float targetHelpAlpha = m_mapHelpVisible ? 1.0f : 0.0f;
   float fadeSpeed = game::ui::kFadeSpeed; 
@@ -291,6 +312,9 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   }
 }
 
+/**
+ * @brief マップの中心座標をボール位置に同期させます。
+ */
 void MinimapController::SyncMapCenterToBall(core::GameContext &ctx, float dt, float fieldWidth, float fieldDepth, bool forceSnap) {
   DirectX::XMFLOAT2 targetCenter{0.0f, 0.0f};
   if (auto *ballT = ctx.world.Get<Transform>(m_cfg.ballEntity)) {
@@ -310,6 +334,9 @@ void MinimapController::SyncMapCenterToBall(core::GameContext &ctx, float dt, fl
   m_mapCenter.y += (targetCenter.y - m_mapCenter.y) * lerp;
 }
 
+/**
+ * @brief ユーザー入力を処理しマップビュー操作に反映します。
+ */
 void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mouseY, float fieldWidth, float fieldDepth, ecs::Entity skyboxEntity) {
   if (ctx.input.GetKeyDown('M')) {
     ToggleMapView(ctx, skyboxEntity);
@@ -318,7 +345,7 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
 
   if (!m_isMapView) return;
 
-  // --- マップビュー操作処理 ---
+  // マップビューの操作処理
   if (ctx.input.GetKeyDown(VK_ESCAPE)) {
     m_isMapView = false;
     if (ctx.world.IsAlive(skyboxEntity)) {
@@ -397,14 +424,15 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
 
 } // namespace game::controllers
 
-// -----------------------------------------------------------------
-// MinimapController::SetVisible
-// 入力: visible=false → ロード中にミニマップ一切を非表示にする
-// 変更: UIImage/UIText の visible フラグを一括更新
-// 出力: なし（副作用: ECS コンポーネントの visible 変更）
-// -----------------------------------------------------------------
 namespace game::controllers {
 
+/**
+ * @brief ミニマップUI全体の表示状態を切り替えます。
+ * 
+ * 入力: 表示フラグ（visible）
+ * 変更: UIImageやUITextの表示フラグ
+ * 出力: なし（副作用としてコンポーネントの表示状態が変化）
+ */
 void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
     auto setUIImg = [&](ecs::Entity e, bool v) {
         if (e == UINT32_MAX) return;

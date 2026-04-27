@@ -1,11 +1,7 @@
 #pragma once
 /**
  * @file WikiPageLoader.h
- * @brief Wikipedia記事の取得・テクスチャ生成・地形構築・ホール配置を担うローダー
- *
- * 入力: 記事名、GameContext、WikiShortestPath（SDOW）
- * 出力: ECSエンティティ群（フィールド・ホール・スカイボックス）の更新、
- *       GolfGameState のフィールドサイズ・風・Par 設定
+ * @brief Wikipedia記事のロード・フィールド生成・ホール配置を行うクラス
  */
 
 #include "../../core/GameContext.h"
@@ -132,18 +128,28 @@ public:
      */
     void SetPreloadedData(std::vector<game::WikiLink> links, std::string extract);
 
-    /// @brief ホールを一個作成する（CreateLinksFromTexture/LoadPage 内部から呼ぶ）
+    /**
+     * @brief ホールを生成します。
+     */
     void CreateHole(core::GameContext& ctx, float x, float z,
                     const std::string& linkTarget, bool isTargetHole,
                     int hopsToTarget = -1);
 
-    /// @brief 最後に生成したテクスチャ結果を取得（外部参照用）
+    /**
+     * @brief 最後に生成したテクスチャ結果を取得します。
+     */
     const graphics::WikiTextureResult* GetWikiTexture() const {
         return m_wikiTexture.get();
     }
 
-    /// @brief フィールドサイズ取得
+    /**
+     * @brief フィールドの幅を取得します。
+     */
     float GetFieldWidth() const { return m_fieldWidth; }
+    
+    /**
+     * @brief フィールドの奥行きを取得します。
+     */
     float GetFieldDepth() const { return m_fieldDepth; }
 
 private:
@@ -168,7 +174,7 @@ private:
     std::vector<game::WikiLink>   m_preloadedLinks;
     std::string                   m_preloadedExtract;
 
-    // ---- 構築状態 (インクリメンタル) ----
+    // 構築状態
     enum class BuildStep {
         None,
         ClearOldHoles,
@@ -176,8 +182,8 @@ private:
         BeginTexture,
         GenerateTextureTiles,
         ApplySkybox,
-        BeginTerrain,     ///< WikiTerrainSystem::BeginBuildField() を呼ぶ（1回）
-        BuildTerrainStep, ///< WikiTerrainSystem::StepBuildField() を毎フレーム呼ぶ
+        BeginTerrain,     ///< 地形生成処理の開始
+        BuildTerrainStep, ///< 地形生成処理のインクリメンタル更新
         RepositionBall,
         CreateHoles,
         SetupWind,

@@ -34,6 +34,9 @@ ResultScene::ResultScene(const ResultData &data) : m_data(data) {}
 
 ResultScene::~ResultScene() = default;
 
+/**
+ * @brief シーン開始時の初期化処理を行います。
+ */
 void ResultScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("ResultScene", "OnEnter (Luxury) - Target: {}, Score: {}",
            m_data.targetPage, m_data.shotCount);
@@ -47,36 +50,35 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
   m_rings.clear();
   m_particles.clear();
 
-  // Mouse cursor setup
+  // マウスカーソルの設定を行います。
   ctx.input.SetMouseCursorVisible(true);
   ctx.input.SetMouseCursorLocked(false);
 
-  // Audio: Triumph BGM (Reuse Title BGM if dedicated result BGM is missing, or
-  // play functionality sound)
+  // BGMとファンファーレの再生を行います。
   if (ctx.audio) {
-    // Ideally "bgm_result.mp3", falling back to "bgm_title.mp3" for now or
-    // silence with fanfare SE
     ctx.audio->PlayBGM(ctx, "bgm_title.mp3", 0.4f);
-    // Play Fanfare SE immediately
     ctx.audio->PlaySE(
         ctx,
-        "se_holeInOne.mp3"); // Using hole-in-one SE as victory sound for now
+        "se_holeInOne.mp3");
   }
 
-  // 1. Create 3D Environment (Globe, Floor, Rings)
+  // 3Dビジュアル環境を生成します。
   LOG_INFO("ResultScene", "Creating Visual Environment...");
   CreateVisualEnvironment(ctx);
 
-  // 2. Create Luxury UI
+  // 豪華なUIを生成します。
   LOG_INFO("ResultScene", "Creating Luxury UI...");
   CreateLuxuryUI(ctx);
   LOG_INFO("ResultScene", "OnEnter complete.");
 }
 
+/**
+ * @brief 毎フレームの更新処理を行います。
+ */
 void ResultScene::OnUpdate(core::GameContext &ctx) {
   m_time += ctx.dt;
 
-  // --- Dynamic Camera Orbit ---
+  // カメラを地球儀の周囲で回転させます。
   if (ctx.world.IsAlive(m_cameraEntity)) {
     auto *camTr = ctx.world.Get<Transform>(m_cameraEntity);
     if (camTr) {
@@ -87,10 +89,10 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
 
       camTr->position = {
           std::sin(angle) * radius, height,
-          std::cos(angle) * -radius // Start from front (-Z)
+          std::cos(angle) * -radius
       };
 
-      // Look at the Globe (Center at 0, 2, 0 approx)
+      // 注視点の設定とカメラの姿勢更新を行います。
       XMVECTOR eye = XMLoadFloat3(&camTr->position);
       XMVECTOR focus = XMVectorSet(0.0f, 2.5f, 0.0f, 0.0f);
       XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -100,25 +102,23 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
     }
   }
 
-  // --- Update 3D Elements ---
+  // 3Dビジュアルの更新処理を行います。
   UpdateVisuals(ctx);
 
-  // --- UI Logic & Animation ---
+  // UIのインタラクションとアニメーション処理を行います。
   auto mousePos = ctx.input.GetMousePosition();
-  bool actionTriggered = false; // R or Button Click
 
   for (auto &elem : m_uiElements) {
     if (!ctx.world.IsAlive(elem.entity))
       continue;
 
-    // Check Hover (Custom Bounding Box Logic for Text/Buttons)
-    // Simplifying assumption: Standard button size or Text area
-    float w = 300.0f; // Default hit width
+    // UI要素の矩形範囲を設定します。
+    float w = 300.0f;
     float h = 60.0f;
-    float x = elem.baseX - w / 2.0f; // Centered X usually
+    float x = elem.baseX - w / 2.0f;
     float y = elem.baseY;
 
-    // Adjust for buttons specifically
+    // ボタンの場合はボタンサイズに合わせます。
     auto *btn = ctx.world.Get<UIButton>(elem.entity);
     if (btn) {
       w = btn->width;
@@ -130,12 +130,12 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
     bool hover = (mousePos.x >= x && mousePos.x <= x + w && mousePos.y >= y &&
                   mousePos.y <= y + h);
 
-    // Animation - Lerp Scale
+    // ホバー時にスケールを変更しSEを再生します。
     if (hover && !elem.isHovered) {
       elem.targetScale = 1.15f;
       elem.isHovered = true;
       if (ctx.audio)
-        ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.3f); // Hover sound
+        ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.3f);
     } else if (!hover && elem.isHovered) {
       elem.targetScale = 1.0f;
       elem.isHovered = false;
@@ -144,73 +144,27 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
     elem.currentScale +=
         (elem.targetScale - elem.currentScale) * (15.0f * ctx.dt);
 
-    // Apply Scale to Text/Button
+    // テキストサイズにスケールを適用します。
     auto *t = ctx.world.Get<UIText>(elem.entity);
     if (t) {
       t->style.fontSize =
           (elem.text == L"STAGE CLEAR" ? 90.0f : (btn ? 28.0f : 30.0f)) *
           elem.currentScale;
 
-      // Dynamic Color Pulse for Title
+      // タイトル文字列のカラーパルス演出を行います。
       if (elem.text == L"STAGE CLEAR") {
         float pulse = std::sin(m_time * 3.0f);
         t->style.color = {1.0f, 0.9f + pulse * 0.1f, 0.6f + pulse * 0.2f,
-                          1.0f}; // Gold pulse
+                          1.0f};
         t->style.shadowOffsetX = 2.0f + pulse;
         t->style.shadowOffsetY = 2.0f + pulse;
       }
     }
 
-    // Interaction
+    // ボタンのクリック操作を処理します。
     if (btn && hover && ctx.input.GetMouseButtonDown(0)) {
-      // Helper to clean up persistent terrain (WikiGolfScene leftovers)
-      auto cleanTerrain = [&]() {
-        // Find and destroy all entities with TerrainObject tag
-        // Since we can't iterate by component in this ECS efficiently without a
-        // system, we assume TerrainObject is a marker. Wait, ECS world might
-        // not have a helper for "GetEntitiesWith". We can iterate all entities
-        // if needed, but World doesn't expose strict iterator. However,
-        // WikiTerrainSystem puts them in m_entities, but we don't have access.
-        // Fallback: If we can't iterate, we rely on TitleScene destroying
-        // everything on Exit? No, User said "Loading is bad". If we can't
-        // easily find them, we might be stuck. LUCKILY:
-        // World::DestroyAllEntities destroys EVERYTHING. For "Play Again"
-        // (WikiGolf), we WANT to destroy everything (Result + Old Terrain). For
-        // "Title", we WANT to destroy everything (Result + Old Terrain) before
-        // entering Title? No, user said "Keep it until Title" -> Title Scene
-        // enters WITH Terrain. So ONLY for Play Again, we explicitly destroy
-        // everything.
-      };
-
-      // Handle Button Click Actions
+      // プレイし直すボタンの処理を行います。
       if (elem.text == L"Play Again (R)") {
-        // Explicitly clear previous terrain objects before restarting game
-        // Actually SceneManager::ChangeScene calls OnExit which calls
-        // Scene::DestroyAllEntities But that only destroys ResultScene
-        // entities. We need to destroy global leftovers. Let's use a manual
-        // loop if Clear doesn't exist, or just rely on World::Clear() if
-        // available. Looking at Scene.cpp, it calls ctx.world.DestroyEntity(e).
-        // Let's assume we can just do:
-        // ctx.world.Clear(); (If World has Clear)
-        // Or manual iterator. World usually has "entities_" vector but it's
-        // private. But wait! We DO have the manual components now. We can
-        // query! auto view = ctx.world.GetView<TerrainObject>(); (If supported)
-
-        // Simpler approach:
-        // Just destroy everything that is NOT global persistent (like
-        // Audio/Input?) Actually, World::Clear() usually wipes everything. If
-        // we wipe everything, we are safe for WikiGolfScene (it rebuilds).
-
-        // CHECK if World has Clear.
-        // Step 589 Scene.cpp calls DestroyEntity.
-        // Let's try to query TerrainObject if possible.
-        // If not, we can't do specific cleanup easily.
-
-        // But we added TerrainObject component!
-        // Does World support iterating components?
-        // ctx.world.Each<TerrainObject>([&](ecs::Entity e, TerrainObject&){
-        // ctx.world.DestroyEntity(e); });
-        // Collect entities to destroy to avoid iterator invalidation
         std::vector<ecs::Entity> toDestroy;
         ctx.world.Query<game::components::TerrainObject>().Each(
             [&](ecs::Entity e, game::components::TerrainObject &) {
@@ -224,36 +178,37 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
         ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
         return;
       }
+      // タイトルへ戻るボタンの処理を行います。
       if (elem.text == L"Title Screen") {
-        // Do NOT clear terrain (User wants it in Title)
-
-        // But TitleScene needs to clear it on ITS exit.
         ctx.sceneManager->ChangeScene(std::make_unique<TitleScene>());
         return;
       }
     }
   }
 
-  // Keyboard Shortcuts
+  // ショートカットキー入力を処理します。
   if (ctx.input.GetKeyDown('R')) {
     ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
     return;
   }
 }
 
+/**
+ * @brief 3Dオブジェクトのビジュアル更新を行います。
+ */
 void ResultScene::UpdateVisuals(core::GameContext &ctx) {
-  // 1. Globe Rotation
+  // 地球儀を自転させながら上下に揺らします。
   if (ctx.world.IsAlive(m_globeEntity)) {
     auto *t = ctx.world.Get<Transform>(m_globeEntity);
     if (t) {
-      t->position.y = 2.5f + std::sin(m_time * 0.8f) * 0.2f; // Bobbing
+      t->position.y = 2.5f + std::sin(m_time * 0.8f) * 0.2f;
       XMVECTOR q = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(23.5f),
                                                     m_time * 0.5f, 0.0f);
       XMStoreFloat4(&t->rotation, q);
     }
   }
 
-  // 2. Rings Animation
+  // 装飾リングの呼吸アニメーションと回転を更新します。
   for (size_t i = 0; i < m_rings.size(); ++i) {
     auto &ring = m_rings[i];
     if (!ctx.world.IsAlive(ring.entity))
@@ -264,46 +219,45 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
 
     float currentAngle = ring.phase + m_time * ring.rotationSpeed;
 
-    // Complex Rotation (Roll/Pitch/Yaw)
+    // リングの回転姿勢を設定します。
     XMVECTOR q = XMQuaternionRotationRollPitchYaw(
-        m_time * 0.2f * (i % 2 == 0 ? 1 : -1), // Slow wobble
+        m_time * 0.2f * (i % 2 == 0 ? 1 : -1),
         currentAngle, m_time * 0.1f);
     XMStoreFloat4(&t->rotation, q);
 
-    // Breathing Scale
+    // スケールの拡大縮小を行います。
     float scaleBase = 1.0f + 0.1f * std::sin(m_time + (float)i);
     t->scale = {scaleBase, 1.0f, scaleBase};
   }
 
-  // 3. Particles
+  // パーティクルのタイマー更新を行います。
   m_particleTimer += ctx.dt;
-  // Spawn new particles (Confetti from top, Data from bottom)
   if (m_particleTimer > 0.05f) {
     m_particleTimer = 0.0f;
 
-    // Spawn Confetti
+    // 紙吹雪を生成します。
     {
       auto e = CreateEntity(ctx.world);
       auto &t = ctx.world.Add<Transform>(e);
       float x = (static_cast<float>(rand() % 200) / 10.0f) - 10.0f;
       float z = (static_cast<float>(rand() % 200) / 10.0f) - 10.0f;
-      t.position = {x, 15.0f, z}; // Start high
+      t.position = {x, 15.0f, z};
       t.scale = {0.15f, 0.15f, 0.15f};
 
       auto &mr = ctx.world.Add<MeshRenderer>(e);
       mr.mesh = ctx.resource.LoadMesh("builtin/cube");
       mr.shader =
           ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                  L"Assets/shaders/BasicPS.hlsl");
+                                  L"Assets/shaders/TransitionPS.hlsl");
 
-      // Random Gold/Silver/Cyber colors
+      // ランダムな配色を設定します。
       int type = rand() % 3;
       if (type == 0)
-        mr.color = {1.0f, 0.8f, 0.2f, 1.0f}; // Gold
+        mr.color = {1.0f, 0.8f, 0.2f, 1.0f};
       else if (type == 1)
-        mr.color = {0.9f, 0.9f, 0.95f, 1.0f}; // Platinum
+        mr.color = {0.9f, 0.9f, 0.95f, 1.0f};
       else
-        mr.color = {0.0f, 0.8f, 1.0f, 1.0f}; // Cyan
+        mr.color = {0.0f, 0.8f, 1.0f, 1.0f};
       mr.isVisible = true;
 
       Particle p;
@@ -311,17 +265,16 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
       p.isConfetti = true;
       p.lifeTime = 0.0f;
       p.maxLife = 5.0f;
-      p.velocity = {0.0f, -2.0f - (float)(rand() % 10) / 10.0f, 0.0f}; // Fall
+      p.velocity = {0.0f, -2.0f - (float)(rand() % 10) / 10.0f, 0.0f};
       m_particles.push_back(p);
     }
   }
 
-  // Update Particles
+  // 各パーティクルを更新および寿命管理します。
   for (auto it = m_particles.begin(); it != m_particles.end();) {
     auto &p = *it;
     p.lifeTime += ctx.dt;
     if (p.lifeTime >= p.maxLife || !ctx.world.IsAlive(p.entity)) {
-      // Destroy particle entity
       ctx.world.DestroyEntity(p.entity);
       it = m_particles.erase(it);
       continue;
@@ -329,18 +282,15 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
 
     auto *t = ctx.world.Get<Transform>(p.entity);
     if (t) {
-      // Move
       t->position.x += p.velocity.x * ctx.dt;
       t->position.y += p.velocity.y * ctx.dt;
       t->position.z += p.velocity.z * ctx.dt;
 
-      // Rotate confetti
+      // 紙吹雪をひらひらと回転させます。
       if (p.isConfetti) {
         XMVECTOR q = XMQuaternionRotationRollPitchYaw(p.lifeTime * 2.0f,
                                                       p.lifeTime, 0.0f);
         XMStoreFloat4(&t->rotation, q);
-
-        // Sway
         t->position.x += std::sin(p.lifeTime * 3.0f) * 1.0f * ctx.dt;
       }
     }
@@ -348,6 +298,9 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
   }
 }
 
+/**
+ * @brief 3Dのビジュアル表示環境を生成します。
+ */
 void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   auto basicShader = ctx.resource.LoadShader(
       "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
@@ -355,9 +308,9 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
       "Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
   auto planeMesh = ctx.resource.LoadMesh("builtin/plane");
   auto ringMesh = ctx.resource.LoadMesh(
-      "builtin/torus"); // Assuming torus exists or use cube loops
+      "builtin/torus");
 
-  // Floor
+  // 地面のエンティティを生成します。
   m_floorEntity = CreateEntity(ctx.world);
   auto &floorTr = ctx.world.Add<Transform>(m_floorEntity);
   floorTr.position = {0.0f, -2.0f, 0.0f};
@@ -365,11 +318,11 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   auto &floorMr = ctx.world.Add<MeshRenderer>(m_floorEntity);
   floorMr.mesh = planeMesh;
   floorMr.shader = basicShader;
-  floorMr.color = {0.1f, 0.1f, 0.2f, 0.9f}; // Deep Blue reflective floor
+  floorMr.color = {0.1f, 0.1f, 0.2f, 0.9f};
   floorMr.isTransparent = true;
   floorMr.isVisible = true;
 
-  // Victory Globe
+  // 地球儀のエンティティを生成します。
   m_globeEntity = CreateEntity(ctx.world);
   auto &globeTr = ctx.world.Add<Transform>(m_globeEntity);
   globeTr.position = {0.0f, 2.5f, 0.0f};
@@ -377,26 +330,22 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   auto &globeMr = ctx.world.Add<MeshRenderer>(m_globeEntity);
   globeMr.mesh = globeMesh;
   globeMr.shader = basicShader;
-  globeMr.color = {1.0f, 1.0f, 1.0f, 1.0f}; // Pure White/Silver for victory
+  globeMr.color = {1.0f, 1.0f, 1.0f, 1.0f};
   globeMr.isVisible = true;
 
-  // Victory Rings (Concentrated around the globe)
+  // 3枚の装飾リングを生成します。
   for (int i = 0; i < 3; ++i) {
     auto e = CreateEntity(ctx.world);
     auto &t = ctx.world.Add<Transform>(e);
     t.position = globeTr.position;
     float r = 4.0f + i * 1.5f;
-    t.scale = {r, 0.1f, r}; // Initial scale
+    t.scale = {r, 0.1f, r};
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = ringMesh; // Or cube scaled to be a ring segment if torus fails
-    if (false) {        // ringMesh fallback check removed
-      // If manual ring construction needed
-      t.scale = {0.1f, 0.1f, 0.1f}; // Just floating cubes fallback
-    }
+    mr.mesh = ringMesh;
     mr.shader = basicShader;
     mr.color = (i == 1) ? XMFLOAT4(1.0f, 0.84f, 0.0f, 0.8f)
-                        : XMFLOAT4(0.0f, 0.8f, 1.0f, 0.5f); // Gold & Cyan
+                        : XMFLOAT4(0.0f, 0.8f, 1.0f, 0.5f);
     mr.isTransparent = true;
     mr.isVisible = true;
 
@@ -408,7 +357,7 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
     m_rings.push_back(ro);
   }
 
-  // Camera
+  // カメラを生成します。
   m_cameraEntity = CreateEntity(ctx.world);
   auto &cam = ctx.world.Add<Camera>(m_cameraEntity);
   cam.fov = XMConvertToRadians(60.0f);
@@ -417,20 +366,18 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   cam.isMainCamera = true;
   auto &camTr = ctx.world.Add<Transform>(m_cameraEntity);
   camTr.position = {0.0f, 4.0f, -15.0f};
-
-  // Background (Skybox)
-  // auto skyboxE = CreateEntity(ctx.world);
-  // ctx.world.Add<Skybox>(skyboxE);
-  // ... Assume default skybox or let it be black/starry
 }
 
+/**
+ * @brief 豪華な演出のUI表示要素を生成します。
+ */
 void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
-  // Styles
+  // スタイルパラメータを設定します。
   auto titleStyle = graphics::TextStyle::LuxuryTitle();
   auto statStyle = graphics::TextStyle::Status();
   auto btnStyle = graphics::TextStyle::LuxuryButton();
 
-  // Helper lambda
+  // UI追加用のローカルヘルパー関数です。
   auto addUI = [&](const std::wstring &text, float y,
                    const graphics::TextStyle &style, bool isBtn = false,
                    const std::string &btnId = "") {
@@ -441,7 +388,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
       auto &btn = ctx.world.Add<UIButton>(e);
       float btnW = 260.0f;
       float btnX = (text == L"Play Again (R)" ? 420.0f : 780.0f) -
-                   btnW / 2.0f; // Side by side
+                   btnW / 2.0f;
       if (btnId == "center")
         btnX = 640.0f - btnW / 2.0f;
 
@@ -455,7 +402,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
       auto &txt = ctx.world.Add<UIText>(e);
       txt.text = text;
       txt.style = style;
-      txt.x = 40.0f; // Center of 1280 screen with 1200 width
+      txt.x = 40.0f;
       txt.y = y;
       txt.width = 1200.0f;
       txt.visible = true;
@@ -464,7 +411,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
 
     UIElement elem;
     elem.entity = e;
-    elem.baseX = 0.0f; // Will be set dynamically by interactions
+    elem.baseX = 0.0f;
     elem.baseY = y;
     elem.currentScale = 1.0f;
     elem.targetScale = 1.0f;
@@ -475,10 +422,10 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
     LOG_DEBUG("ResultScene", "addUI: Added {} successfully", core::ToString(text));
   };
 
-  // 1. Title
+  // ステージクリアのメインタイトルを追加します。
   addUI(L"STAGE CLEAR", 120.0f, titleStyle);
 
-  // 2. Grade Calculation
+  // 打数に基づきクリア評価ランクを決定します。
   std::wstring grade = L"EXPLORER";
   DirectX::XMFLOAT4 gradeColor = {0.9f, 0.9f, 0.95f, 1.0f};
   int diff = m_data.shotCount - m_data.par;
@@ -489,7 +436,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
     } else if (diff <= -1) {
       grade = L"EAGLE";
       gradeColor = {1.0f, 0.8f, 0.8f, 1.0f};
-    } // Fixed from diff<=0 being Birdie
+    }
     else if (diff <= 0) {
       grade = L"BIRDIE";
       gradeColor = {0.7f, 1.0f, 0.7f, 1.0f};
@@ -505,7 +452,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
     }
   }
 
-  // Grade Badge Entity (handled manually to set specific color)
+  // 評価ランクのバッジUIを生成します。
   auto badgeE = CreateEntity(ctx.world);
   auto &badge = ctx.world.Add<UIText>(badgeE);
   badge.text = grade;
@@ -521,7 +468,7 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   badge.y = 220.0f;
   badge.visible = true;
   badge.layer = 11;
-  // Add to animation list
+
   UIElement bElem;
   bElem.entity = badgeE;
   bElem.baseX = 0.0f;
@@ -533,14 +480,14 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   bElem.baseColor = gradeColor;
   m_uiElements.push_back(bElem);
 
-  // 3. Target Hint
+  // 目的地ページ名を表示します。
   auto subStyle = graphics::TextStyle::ModernBlack();
   subStyle.color = {0.8f, 0.8f, 0.9f, 1.0f};
   subStyle.hasShadow = true;
   subStyle.align = graphics::TextAlign::Center;
   addUI(L"Target: " + core::ToWString(m_data.targetPage), 290.0f, subStyle);
 
-  // 4. Detailed Stats
+  // 移動経路履歴を文字列に合成します。
   std::wstring routeStr = L"Route: ";
   size_t hops = m_data.pathHistory.empty() ? 0 : m_data.pathHistory.size() - 1;
   size_t start =
@@ -553,22 +500,27 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
     routeStr += core::ToWString(m_data.pathHistory[i]);
   }
 
+  // スコア統計値テキストを追加します。
   statStyle.align = graphics::TextAlign::Center;
   std::wstring stats = L"Shots: " + std::to_wstring(m_data.shotCount) + L"  |  Hops: " + std::to_wstring(hops);
   addUI(stats, 340.0f, statStyle);
 
+  // 遷移経路文字列のテキストを追加します。
   auto routeStyle = statStyle;
   routeStyle.align = graphics::TextAlign::Center;
   routeStyle.fontSize = 22.0f;
   addUI(routeStr, 390.0f, routeStyle);
 
-  // 5. Buttons
+  // 操作ボタンを追加します。
   addUI(L"Play Again (R)", 550.0f, btnStyle, true, "retry");
   addUI(L"Title Screen", 550.0f, btnStyle, true, "title");
 }
 
+/**
+ * @brief シーン終了時のクリーンアップ処理を行います。
+ */
 void ResultScene::OnExit(core::GameContext &ctx) {
-  // Helper to destroy vector of entities
+  // エンティティリストの一括破棄用ラムダ関数です。
   auto destroyVec = [&](auto &vec) {
     for (const auto &item : vec) {
       if (ctx.world.IsAlive(item.entity))
@@ -577,7 +529,7 @@ void ResultScene::OnExit(core::GameContext &ctx) {
     vec.clear();
   };
 
-  // Destroy single entities
+  // 主要な3Dオブジェクトエンティティを破棄します。
   if (ctx.world.IsAlive(m_globeEntity))
     ctx.world.DestroyEntity(m_globeEntity);
   if (ctx.world.IsAlive(m_floorEntity))
@@ -585,29 +537,28 @@ void ResultScene::OnExit(core::GameContext &ctx) {
   if (ctx.world.IsAlive(m_cameraEntity))
     ctx.world.DestroyEntity(m_cameraEntity);
 
-  // Destroy collections
+  // UI表示要素およびリング、パーティクルエンティティを破棄します。
   destroyVec(m_uiElements);
 
-  // Rings
   for (const auto &ring : m_rings) {
     if (ctx.world.IsAlive(ring.entity))
       ctx.world.DestroyEntity(ring.entity);
   }
   m_rings.clear();
 
-  // Particles
   for (const auto &p : m_particles) {
     if (ctx.world.IsAlive(p.entity))
       ctx.world.DestroyEntity(p.entity);
   }
   m_particles.clear();
 
-  // DestroyAllEntities(ctx); // Function possibly missing or incomplete
   LOG_INFO("ResultScene", "OnExit: Cleanup complete");
 }
 
+/**
+ * @brief 描画処理を行います（実描画はECSシステムが担当）。
+ */
 void ResultScene::Render(core::GameContext &ctx) {
-  // ECS System renders everything
 }
 
 } // namespace game::scenes

@@ -11,37 +11,37 @@ using namespace game::components;
 
 namespace game::utils {
 
+// 念のための終了処理
 ScreenFade::~ScreenFade() {
-  // ShutdownはOnExitで呼ばれる想定だが念のため
 }
 
+/**
+ * @brief フェード用の初期化処理を行います。
+ */
 void ScreenFade::Initialize(core::GameContext &ctx) {
   static_assert((sizeof(FadeCB) % 16) == 0,
                 "FadeCB must be 16-byte aligned for constant buffers");
-  // フェード用エンティティ作成
+  
+  // フェード用のエンティティを作成します。
   m_fadeEntity = ctx.world.CreateEntity();
 
-  // Transform (位置はRender時にカメラ前に配置するので一旦原点)
+  // トランスフォームの設定を行います。
   auto &t = ctx.world.Add<Transform>(m_fadeEntity);
   t.position = {0, 0, 0};
 
+  // メッシュのロードを行います。
   auto &mr = ctx.world.Add<MeshRenderer>(m_fadeEntity);
-  mr.mesh = ctx.resource.LoadMesh("builtin/quad"); // 平面
+  mr.mesh = ctx.resource.LoadMesh("builtin/quad");
 
-  // シェーダーロード (カスタム)
+  // カスタムシェーダーのロードを行います。
   mr.shader =
       ctx.resource.LoadShader("TransitionFade", L"Assets/shaders/BasicVS.hlsl",
                               L"Assets/shaders/TransitionPS.hlsl");
 
-  mr.isVisible = false; // 手動描画するのでシステムによる描画はOFFにしたいが…
-  // MeshRenderSystemは isVisible=true のものだけ描画する。
-  // 手動描画するなら isVisible=false にしておいて、
-  // Render() 内で一時的に描画するか、
-  // あるいは単純に MeshRendererSystem の外でドローコールを呼ぶ。
-  // ここでは「MeshRendererコンポーネント」は「リソース(Mesh/Shader)のコンテナ」としてのみ使い、
-  // isVisible=false にしておく。
+  // 手動描画するため描画システムでの描画は無効化します。
+  mr.isVisible = false;
 
-  // 定数バッファ作成
+  // 定数バッファを生成します。
   D3D11_BUFFER_DESC desc = {};
   desc.ByteWidth = sizeof(FadeCB);
   desc.Usage = D3D11_USAGE_DYNAMIC;
@@ -54,7 +54,7 @@ void ScreenFade::Initialize(core::GameContext &ctx) {
     LOG_ERROR("ScreenFade", "Failed to create constant buffer");
   }
 
-  // ブレンドステート作成 (AlphaBlend)
+  // アルファブレンド用のステートを生成します。
   D3D11_BLEND_DESC blendDesc = {};
   blendDesc.RenderTarget[0].BlendEnable = TRUE;
   blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
@@ -72,9 +72,9 @@ void ScreenFade::Initialize(core::GameContext &ctx) {
     LOG_ERROR("ScreenFade", "Failed to create blend state");
   }
 
-  // 深度ステート作成 (ZTest OFF, ZWrite OFF)
+  // 深度テストおよび深度書き込み無効用のステートを生成します。
   D3D11_DEPTH_STENCIL_DESC dsDesc = {};
-  dsDesc.DepthEnable = FALSE; // Zテスト無効
+  dsDesc.DepthEnable = FALSE;
   dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
   dsDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;
 
@@ -84,11 +84,14 @@ void ScreenFade::Initialize(core::GameContext &ctx) {
     LOG_ERROR("ScreenFade", "Failed to create depth stencil state");
   }
 
-  // 初期状態
+  // フェードの初期状態を設定します。
   m_isFading = false;
   m_progress = 0.0f;
 }
 
+/**
+ * @brief フェード用の終了処理を行います。
+ */
 void ScreenFade::Shutdown(core::GameContext &ctx) {
   if (m_fadeEntity != UINT32_MAX && ctx.world.IsAlive(m_fadeEntity)) {
     ctx.world.DestroyEntity(m_fadeEntity);
@@ -99,10 +102,13 @@ void ScreenFade::Shutdown(core::GameContext &ctx) {
   m_depthState.Reset();
 }
 
+/**
+ * @brief フェードイン（画面が開く、見えるようになる）処理を開始します。
+ */
 void ScreenFade::FadeIn(float duration, FadeType type,
                         DirectX::XMFLOAT3 color) {
   m_isFading = true;
-  m_fadeIn = true; // 1->0
+  m_fadeIn = true;
   m_duration = duration;
   m_timer = 0.0f;
   m_currentType = type;
@@ -110,10 +116,13 @@ void ScreenFade::FadeIn(float duration, FadeType type,
   m_progress = 1.0f;
 }
 
+/**
+ * @brief フェードアウト（画面が閉じる、隠れる）処理を開始します。
+ */
 void ScreenFade::FadeOut(float duration, FadeType type,
                          DirectX::XMFLOAT3 color) {
   m_isFading = true;
-  m_fadeIn = false; // 0->1
+  m_fadeIn = false;
   m_duration = duration;
   m_timer = 0.0f;
   m_currentType = type;
@@ -121,8 +130,14 @@ void ScreenFade::FadeOut(float duration, FadeType type,
   m_progress = 0.0f;
 }
 
+/**
+ * @brief ワイプの中心を設定します。
+ */
 void ScreenFade::SetCenter(float u, float v) { m_center = {u, v}; }
 
+/**
+ * @brief 毎フレームのフェード更新処理を行います。
+ */
 void ScreenFade::Update(float dt) {
   if (m_isFading) {
     m_timer += dt;
@@ -138,22 +153,17 @@ void ScreenFade::Update(float dt) {
 
     if (rate >= 1.0f) {
       m_isFading = false;
-      // フェード完了
-      // FadeIn完了時(progress=0): 描画不要
-      // FadeOut完了時(progress=1): 描画維持が必要（真っ黒）
     }
   }
 }
 
+/**
+ * @brief 描画処理を行います。
+ */
 void ScreenFade::Render(core::GameContext &ctx) {
-  // 描画すべきか？
-  // FadeIn中でProgress < 1.0 (かつ >0)
-  // FadeOut中でProgress > 0.0
-  // FadeOut完了後 (完全隠蔽状態)
-  // FadeIn完了後 (完全表示) -> Progress=0 なら描画不要
-
+  // 描画の必要性を判定します。
   if (m_progress <= 0.001f && !m_isFading) {
-    return; // 完全透明かつ動作中でなければ描画スキップ
+    return;
   }
 
   if (!ctx.world.IsAlive(m_fadeEntity))
@@ -166,7 +176,7 @@ void ScreenFade::Render(core::GameContext &ctx) {
   auto device = ctx.graphics.GetDevice();
   auto context = ctx.graphics.GetContext();
 
-  // 定数バッファ更新
+  // 定数バッファを更新します。
   if (m_cbFade) {
     D3D11_MAPPED_SUBRESOURCE mapped;
     if (SUCCEEDED(context->Map(m_cbFade.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0,
@@ -174,42 +184,24 @@ void ScreenFade::Render(core::GameContext &ctx) {
       FadeCB *cb = static_cast<FadeCB *>(mapped.pData);
       cb->Color = {m_color.x, m_color.y, m_color.z, 1.0f};
 
-      // アスペクト比取得
+      // アスペクト比を取得します。
       D3D11_VIEWPORT vp;
       UINT num = 1;
       context->RSGetViewports(&num, &vp);
       float aspect = (vp.Height > 0) ? (vp.Width / vp.Height) : 1.777f;
 
       cb->Params1 = {m_progress, static_cast<float>(m_currentType), aspect,
-                     0.1f}; // Smoothness固定値
+                     0.1f};
       cb->Params2 = {m_center.x, m_center.y, 0.0f, 0.0f};
 
       context->Unmap(m_cbFade.Get(), 0);
     }
 
-    // PS定数バッファスロット0にセット
+    // ピクセルシェーザに定数バッファを適用します。
     context->PSSetConstantBuffers(0, 1, m_cbFade.GetAddressOf());
   }
 
-  // 全画面描画の準備
-  // Zテスト無効化 (最前面)
-  // ブレンディング有効化 (半透明)
-
-  // スクリーン座標系でのFullScreen Quad描画を行うのが理想だが、
-  // ここでは簡易的に「カメラの目の前に板を置く」方式ではなく、
-  // 頂点シェーダーに恒等変換行列を渡してスクリーン座標(-1~1)に直接描画させるトリックを使う。
-  // しかし BasicVS は World/View/Proj を要求する。
-  // ScreenFade専用のVSを作っていないので、BasicVSを使う前提で考えると、
-  // Identity行列をセットして、メッシュの座標を適切に設定する必要がある。
-  // builtin/quad は -0.5~0.5 のサイズ。
-
-  // 一番簡単なのは、VSで何もせず、入力座標をそのまま出力する「ScreenVS」を用意することだが、
-  // 今回は BasicVS を流用する。
-  // W, V, P 全て Identity にし、Meshのスケールを 2.0 (全画面) にすればOK。
-  // ただしZが0だとクリップされるかも？
-
-  // シェーダーリソース取得
-  // シェーダーリソース取得
+  // 全画面描画のための頂点・ピクセルシェーダーおよびメッシュを取得します。
   const auto *shader = ctx.resource.GetShader(mr->shader);
   const auto *mesh = ctx.resource.GetMesh(mr->mesh);
 
@@ -218,34 +210,15 @@ void ScreenFade::Render(core::GameContext &ctx) {
   if (!mesh || !mesh->IsValid())
     return;
 
-  // パイプライン設定
+  // シェーダーをバインドします。
   shader->Bind(context);
 
-  // 行列計算: 全て単位行列 + スケール2倍(Quadは1x1なので2x2に)
-  // Zは0だとニアクリップにかかる可能性があるので、Z=0.5 (0~1範囲内)
-  // にする設定が必要かも？ depth clip を切れば関係ない。
-
+  // 全画面描画のための行列を計算します。
   XMMATRIX world = XMMatrixScaling(2.0f, 2.0f, 1.0f);
   XMMATRIX view = XMMatrixIdentity();
   XMMATRIX proj = XMMatrixIdentity();
-  // ProjがIdentityなら、View空間座標がそのままClip空間座標になる。(-1~1)
 
-  // 定数バッファ (BasicVS用) 更新
-  // Context経由で更新する必要あり。
-  // ここでは MeshRenderSystem::RenderMesh のロジックを再実装する形になるが、
-  // BasicVS の CB構文に合わせて更新する必要がある。
-  // BasicVSのCBは register(b0) で、構造体は World, View, Proj, Color 等...
-  // しかし GameContext からは System内部のCBにアクセスできない。
-  //
-  // 結論: 新しくCBを作る or 既存の仕組みを使う。
-  // 時間がないので、World/View/Proj を受け取る VS をそのまま使うなら、
-  // メッシュレンダラーの標準描画パスに乗せるのが一番安全で楽だったかもしれない。
-  // 「isVisible =
-  // true」にして、カメラの子供にし、ZテストをOFFにするMaterialを使うなど。
-
-  // しかし、ここまで来たので「手動描画」で行く。
-  // BasicVS用の定数バッファを一時的に作成してバインドする。
-
+  // 頂点シェーダー用定数バッファを生成します。
   struct BasicCB {
     XMMATRIX World;
     XMMATRIX View;
@@ -287,20 +260,9 @@ void ScreenFade::Render(core::GameContext &ctx) {
 
   // 深度ステート（ZTest OFF, ZWrite OFF）
   context->OMSetDepthStencilState(m_depthState.Get(), 0);
-
-  // ラスタライザ（CullNone）念のため
-  // ctx.graphics.SetCullMode... (ないかも)
-
   mesh->Draw(context);
 
   // 復帰（深度有効、Z書き込み有効）
-
-  // 復帰（深度有効、Z書き込み有効）
-  // 元のステートに戻すのが行儀良いが、DX_GAMEの設計上、
-  // 次のフレームの開始時にリセットされるか、他のレンダラーが設定し直すことを期待する。
-  // RenderSystemはBeginFrameでクリアされるがStateは維持されるため、
-  // ここでデフォルトに戻すべきだが、デフォルトステートを持っていない。
-  // nullptr をセットするとデフォルトになる特性を利用する。
   context->OMSetBlendState(nullptr, blendFactor, 0xFFFFFFFF);
   context->OMSetDepthStencilState(nullptr, 0);
 }

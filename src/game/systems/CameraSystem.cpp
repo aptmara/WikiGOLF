@@ -22,7 +22,7 @@ void CameraSystem(core::GameContext &ctx) {
   auto &world = ctx.world;
   const float dt = ctx.dt;
 
-  // 1. ターゲット（ボール）を見つける
+  // ターゲット（ボール）の検索
   ecs::Entity targetEntity = ecs::NULL_ENTITY;
   world.Query<components::Transform, components::RigidBody>().Each(
       [&](ecs::Entity e, components::Transform &t, components::RigidBody &rb) {
@@ -36,7 +36,7 @@ void CameraSystem(core::GameContext &ctx) {
 
   auto *targetT = world.Get<components::Transform>(targetEntity);
 
-  // 2. マウス入力による回転
+  // マウス入力による回転処理
   float mouseSensitivity = 0.005f;
 
   // マウス位置の差分計算
@@ -80,7 +80,7 @@ void CameraSystem(core::GameContext &ctx) {
   if (input.GetKey(VK_DOWN))
     s_pitch += keyRotSpeed;
 
-  // 3. カメラ位置の計算
+  // カメラ位置の計算
   XMVECTOR targetPos = XMLoadFloat3(&targetT->position);
 
   // カメラの回転クォータニオン
@@ -95,7 +95,7 @@ void CameraSystem(core::GameContext &ctx) {
   // 少し上にあげる（注視点をボールの中心より少し上にする）
   camPos = XMVectorAdd(camPos, XMVectorSet(0, 1.0f, 0, 0));
 
-  // 4. カメラ更新
+  // カメラ更新処理
   world.Query<components::Transform, components::Camera>().Each(
       [&](ecs::Entity, components::Transform &t, components::Camera &c) {
         if (!c.isMainCamera)

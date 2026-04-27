@@ -20,7 +20,7 @@ struct VSConstants {
   XMMATRIX projection;
   XMFLOAT4 materialColor;
   XMFLOAT4
-      materialFlags; // x: hasTexture, y: hasNormalMap, z: customFlags.x, w: customFlags.y
+      materialFlags; // マテリアルフラグ。x:テクスチャ有無、y:法線マップ有無、z:カスタムフラグx、w:カスタムフラグy
   XMFLOAT4 lightDir;
   XMFLOAT4 cameraPos;
 };
@@ -38,7 +38,7 @@ void RenderSystem(core::GameContext &ctx) {
   auto *context = ctx.graphics.GetContext();
   auto &world = ctx.world;
 
-  // 1. 定数バッファ等の取得または作成（Global Dataを使用）
+  // 定数バッファ等の取得または作成（Global Dataを使用）
   auto *state = world.GetGlobal<RenderState>();
   if (!state) {
     RenderState newState;
@@ -89,7 +89,7 @@ void RenderSystem(core::GameContext &ctx) {
     state = world.GetGlobal<RenderState>();
   }
 
-  // 2. カメラ情報の取得
+  // カメラ情報の取得
   XMMATRIX view = XMMatrixIdentity();
   XMMATRIX proj = XMMatrixIdentity();
   XMFLOAT4 camPos = {0, 0, 0, 1};
@@ -116,7 +116,7 @@ void RenderSystem(core::GameContext &ctx) {
   view = XMMatrixTranspose(view);
   proj = XMMatrixTranspose(proj);
 
-  // 3. レンダリングループ
+  // レンダリングループ
   context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
   context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
 

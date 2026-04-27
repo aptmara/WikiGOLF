@@ -7,7 +7,7 @@
 #include "../core/Logger.h"
 #include "../core/ResourceHandle.h"
 #include <cassert>
-#include <deque> // Changed from queue to deque (queue uses deque by default but we need explicit deque)
+#include <deque> // queueの代わりに明示的にdequeを使用
 #include <functional>
 #include <iostream>
 #include <queue>

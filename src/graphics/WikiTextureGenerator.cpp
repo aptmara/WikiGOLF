@@ -23,7 +23,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
 
   HRESULT hr;
 
-  // 1. D2D1.1 Factory 作成
+  // D2D1.1ファクトリの生成
   D2D1_FACTORY_OPTIONS options = {};
 #ifdef _DEBUG
   options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
@@ -36,7 +36,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // 2. DirectWrite Factory 作成
+  // DirectWriteファクトリの生成
   hr = DWriteCreateFactory(
       DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
       reinterpret_cast<IUnknown **>(m_dwriteFactory.GetAddressOf()));
@@ -46,7 +46,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // 3. DXGI Device を取得
+  // DXGIデバイスの取得
   ComPtr<IDXGIDevice> dxgiDevice;
   hr = device->QueryInterface(IID_PPV_ARGS(&dxgiDevice));
   if (FAILED(hr)) {
@@ -55,7 +55,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // 4. D2D Device 作成
+  // D2Dデバイスの生成
   hr = m_d2dFactory->CreateDevice(dxgiDevice.Get(), &m_d2dDevice);
   if (FAILED(hr)) {
     LOG_ERROR("WikiTexGen", "Failed to create D2D Device (HRESULT: {:08X})",
@@ -63,7 +63,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // 5. D2D DeviceContext 作成
+  // D2Dデバイスコンテキストの生成
   hr = m_d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
                                         &m_d2dContext);
   if (FAILED(hr)) {
@@ -73,8 +73,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // 6. テキストフォーマット作成
-  // タイトル用（大きめ、セリフ体風） - 2倍サイズ
+  // タイトル描画用のテキストフォーマットの生成
   hr = m_dwriteFactory->CreateTextFormat(
       L"Georgia", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
       DWRITE_FONT_STRETCH_NORMAL, 128.0f, L"ja-JP", &m_titleFormat);
@@ -162,7 +161,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
   state.requestedWidth = width;
   state.requestedHeight = height;
 
-  // 1. テキストレイアウト作成
+  // テキストレイアウトの生成
   state.marginX = 40.0f;
   state.currentY = 140.0f;
   float maxWidth = static_cast<float>(width) - state.marginX * 2;
@@ -200,7 +199,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
   state.remainingHeight = state.totalHeight;
   state.currentOffsetY = 0;
 
-  // 2. リンク解析
+  // リンク位置の解析
   state.linkMatched.assign(links.size(), false);
   for (size_t i = 0; i < links.size(); ++i) {
     const auto &linkPair = links[i];
@@ -244,8 +243,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
 bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   if (!state.started || state.completed) return true;
 
-  // 1タイルあたりのD2D描画時間を半減させるため、4096→2048に削減。
-  // タイル数は増えるが、インクリメンタルビルドで複数フレームに分散できる。
+  // 描画負荷をフレーム分散するために最大タイル高さを半分に調整
   const uint32_t kMaxTileHeight = 2048;
   uint32_t tileH = std::min(state.remainingHeight, kMaxTileHeight);
   uint32_t width = state.actualWidth;
@@ -403,7 +401,7 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
   }
 
   while (!GenerateNextTile(state)) {
-    // Continue
+    // タイル生成ループを継続
   }
 
   return std::move(state.result);

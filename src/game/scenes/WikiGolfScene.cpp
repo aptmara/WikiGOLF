@@ -49,6 +49,9 @@ constexpr float kMinMapViewSpan = 5.0f; // マップビューでこれ以上縮�
 
 WikiGolfScene::~WikiGolfScene() = default;
 
+/**
+ * @brief シーンに侵入した際の初期化処理を行います。
+ */
 void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("WikiGolf", "OnEnter");
 
@@ -63,7 +66,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   ctx.input.SetMouseCursorVisible(true);
   ctx.input.SetMouseCursorLocked(false);
 
-  // === 残存エンティティの強制クリーンアップ ===
+  // 残存エンティティのクリーンアップ
   std::vector<ecs::Entity> strayEntities;
   ctx.world.Query<components::Transform>().Each(
       [&](ecs::Entity e, components::Transform &) {
@@ -79,16 +82,16 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_textureGenerator = std::make_unique<graphics::WikiTextureGenerator>();
   m_textureGenerator->Initialize(ctx.graphics.GetDevice());
 
-  // === Wiki Terrain システム初期化 ===
+  // 地形システムの初期化
   m_terrainSystem = std::make_unique<game::systems::WikiTerrainSystem>();
 
-  // === WikiPageLoader 初期化 ===
+  // ページローダーの初期化
   m_pageLoader = std::make_unique<WikiPageLoader>();
   
-  // === フィールド初期化 ===
+  // フィールドの初期化
   CreateField(ctx);
 
-  // === 各種エンティティ初期化 ===
+  // 各種エンティティの初期化
   m_cameraEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_cameraEntity);
   t.position = {0.0f, 15.0f * kFieldScale, -15.0f * kFieldScale};
@@ -124,7 +127,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_gameJuice->Initialize(ctx);
   ctx.world.SetGlobal(m_gameJuice.get());
 
-  // === Skybox システム初期化 ===
+  // スカイボックスシステムの初期化
   m_skyboxGenerator = std::make_unique<graphics::SkyboxTextureGenerator>();
 
   m_skyboxEntity = CreateEntity(ctx.world);
@@ -143,14 +146,14 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   }
 
 
-  // === Environment システム初期化 ===
+  // 環境効果システムの初期化
   m_timeOfDay.Initialize(8.0f); // 朝8時スタート
   m_postProcess.Initialize(ctx.graphics.GetDevice());
   m_postProcess.ResetToDefaults();
 
   m_particleRenderSystem.Initialize(ctx.graphics.GetDevice());
 
-  // === 地形判定UI初期化 ===
+  // 地形判定UIの初期化
   if (m_terrainImageEntity == UINT32_MAX) {
       m_terrainImageEntity = CreateEntity(ctx.world);
       auto& ui = ctx.world.Add<game::components::UIImage>(m_terrainImageEntity);
@@ -312,7 +315,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   
   m_pageLoader->SetSystems(m_textureGenerator.get(), m_terrainSystem.get(), m_skyboxGenerator.get(), m_shortestPath.get());
 
-  // === 各種コントローラの初期化 ===
+  // コントローラの初期化
   m_cameraController = std::make_unique<game::controllers::CameraController>();
   game::controllers::CameraController::Config camCfg;
   camCfg.cameraEntity = m_cameraEntity;
@@ -364,16 +367,21 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
             ctx.world.IsAlive(m_cameraEntity) ? "true" : "false");
 }
 
+/**
+ * @brief フィールド（床・壁）を作成します。
+ */
 void WikiGolfScene::CreateField(core::GameContext &ctx) {
   m_floorEntity = CreateEntity(ctx.world);
   auto &ft = ctx.world.Add<Transform>(m_floorEntity);
   ft.position = {0.0f, 0.0f, 0.0f};
   ft.scale = {20.0f * kFieldScale, 0.5f * kFieldScale, 30.0f * kFieldScale};
 
-  // 変更：ボールがめり込んで飛ばない問題、および地形下の白いプレーン表示の問題を解消するため、
-  // 床のMeshRenderer, RigidBody, Colliderの付与を削除
+  // 地形下の白いプレーン表示を防ぐため床のコンポーネント付与を廃止
 }
 
+/**
+ * @brief ボールをスポーンします。
+ */
 void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
   if (ctx.world.IsAlive(m_ballEntity)) {
     ctx.world.DestroyEntity(m_ballEntity);
@@ -398,8 +406,7 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
   rb.mass = 0.0459f;      // 規定質量 45.9g
   rb.restitution = 0.35f; // 反発係数 (現実の芝との衝突)
   rb.drag = 0.30f;        // 空気抵抗係数 (Cd値)
-  rb.rollingFriction =
-      0.25f; // 転がり抵抗 (0.5->0.25へ低減、空気抵抗でバランスを取る)
+  rb.rollingFriction = 0.25f; // 転がり抵抗を設定
   rb.velocity = {0, 0, 0};
 
   auto &c = ctx.world.Add<Collider>(m_ballEntity);
@@ -411,6 +418,9 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
     state->ballEntity = m_ballEntity;
 }
 
+/**
+ * @brief 指定したページへ遷移します。
+ */
 void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
                                      const std::string &pageName) {
   LOG_INFO("WikiGolf", "Transitioning to page: {}", pageName);
@@ -468,6 +478,9 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   }
 }
 
+/**
+ * @brief シーンを抜ける際の後処理を行います。
+ */
 void WikiGolfScene::OnExit(core::GameContext &ctx) {
   if (m_terrainSystem) {
     m_terrainSystem->Clear(ctx);
@@ -479,6 +492,9 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
 }
 
 
+/**
+ * @brief シーンの毎フレーム更新処理を行います。
+ */
 void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   const float dt = ctx.dt;
   m_screenFade.Update(dt);
@@ -826,7 +842,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
 
-  // === 地形判定UI更新 ===
+  // 地形判定UIの更新
   if (m_terrainDisplayTimer > 0.0f) {
       m_terrainDisplayTimer -= dt;
       if (m_terrainImageEntity != UINT32_MAX) {
@@ -835,8 +851,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
               if (m_terrainDisplayTimer <= 0.0f) {
                   ui->visible = false;
               } else {
-                  // アニメーション: 2.0s -> 0.0s
-                  // 最初はズームイン、最後はフェードアウト
+                  // 最初はズームイン、最後はフェードアウトするアニメーション
                   float lifeTime = 2.0f - m_terrainDisplayTimer;
                   if (lifeTime < 0.2f) {
                       // ズームイン
@@ -862,10 +877,17 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 }
 
+/**
+ * @brief シーンの描画処理を行います。
+ */
 void WikiGolfScene::Render(core::GameContext &ctx) {
   m_screenFade.Render(ctx);
 }
 
+/**
+ * @brief カップイン判定を行います。
+ * @return 遷移が発生した場合はtrue
+ */
 bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
   auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
   auto *t = ctx.world.Get<Transform>(m_ballEntity);
@@ -904,7 +926,7 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       // カップイン時間進行 (1時間)
       m_timeOfDay.OnCupIn(1.0f);
 
-      // === 超派手なホールイン演出 ===
+      // ホールインワン演出の実行
       if (m_gameJuice) {
         // 巨大カメラシェイク
         m_gameJuice->TriggerCameraShake(0.8f, 0.5f);
