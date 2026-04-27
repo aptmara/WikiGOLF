@@ -33,10 +33,10 @@ public:
     virtual size_t Size() const = 0;
     virtual void Clear() = 0;
     
-    // Type-erased access required for View optimization
+    // ビュー最適化のために必要な型消去アクセス関数
     virtual const std::vector<Entity>& Entities() const = 0;
 
-    // Debug / Statistics
+    // デバッグおよび統計情報用インターフェース
     virtual const char* GetTypeName() const = 0;
 };
 

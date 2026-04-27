@@ -22,7 +22,7 @@ public:
     void Initialize(core::GameContext& ctx);
     void Cleanup(core::GameContext& ctx);
 
-    /// @brief トランジションを開始する
+    /** @brief トランジションを開始する */
     void StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap);
 
     /// @brief トランジション中の更新。ロード完了とフェードアウトが終われば true を返す

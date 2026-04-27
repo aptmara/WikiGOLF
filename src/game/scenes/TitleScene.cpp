@@ -74,6 +74,9 @@ std::string ExtractWikiTitle(const std::string& input) {
 // ===========================================================================
 // OnEnter
 // ===========================================================================
+/**
+ * @brief シーンに侵入した際の初期化処理を行います。
+ */
 void TitleScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnEnter (WIKI GOLF High-End UI Style)");
 
@@ -143,19 +146,22 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
   });
 }
 
+/**
+ * @brief スタートアップロード完了後の初期化処理を行います。
+ */
 void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
 // BGM 再生
   if (ctx.audio) {
     ctx.audio->PlayBGM(ctx, "bgm_title.mp3", 0.5f);
   }
 
-  // --- リソースロード ---
+  // リソースのロード
   auto basicShader = ctx.resource.LoadShader(
       "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
   auto sphereMesh = ctx.resource.LoadMesh("builtin/sphere");
   auto globeMesh  = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
 
-  // --- [1] スカイボックス ---
+  // スカイボックスの生成
   m_skyboxEntity = CreateEntity(ctx.world);
   auto &skybox = ctx.world.Add<components::Skybox>(m_skyboxEntity);
   {
@@ -173,7 +179,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     }
   }
 
-  // --- [2] ゴルフコース地面 ---
+  // 地面の生成
   m_floorEntity = CreateEntity(ctx.world);
   auto &floorTr = ctx.world.Add<components::Transform>(m_floorEntity);
   floorTr.position = {0.0f, -0.5f, 0.0f};
@@ -196,7 +202,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   floorMr.hasTexture = true;
   floorMr.customFlags.x = 30.0f; // UV Scale
 
-  // --- [3] Wikipedia パズル地球儀 & ティー ---
+  // 地球儀とティー台の生成
   m_globeEntity = CreateEntity(ctx.world);
   auto &globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
   globeTr.position = {0.0f, 2.7f, 0.0f};
@@ -221,7 +227,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   teeLoMr.color = {0.9f, 0.9f, 0.9f, 1.0f};
   teeLoMr.isVisible = true;
 
-  // --- [4] カメラ設定 ---
+  // カメラの生成
   m_cameraEntity = CreateEntity(ctx.world);
   auto &camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
   camTr.position = {0.0f, 4.2f, -12.0f}; // やや引き
@@ -232,11 +238,9 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   cam.fov = XMConvertToRadians(45.0f);
   cam.isMainCamera = true;
 
-  // ==========================================================================
-  // --- [5] UI Overlay ---
-  // ==========================================================================
+  // UIレイヤーの生成
 
-  // --- [5-0] 背景「W」透かし ---
+  // 背景の透かし文字の生成
   {
     auto e = CreateEntity(ctx.world);
     auto &t = ctx.world.Add<components::UIText>(e);
@@ -248,7 +252,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     t.layer = 1;
   }
 
-  // --- [5-A] メインタイトルロゴ ---
+  // メインタイトルロゴの生成
   {
     // 上部装飾線とボールアイコン
     auto eL = CreateEntity(ctx.world);
@@ -296,7 +300,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     tS.layer = 50;
   }
 
-  // --- [5-B] 左パネル: Wikipedia風カード ---
+  // 左パネルの生成
   {
     // 背景カード (白・角丸)
     auto ep = CreateEntity(ctx.world);
@@ -409,7 +413,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     }
   }
 
-  // --- [5-C] 右パネル: メインメニュー (UIButton共通実装) ---
+  // 右パネルの生成
   {
     // メニュー背景 (濃紺・半透明・金枠)
     auto ep = CreateEntity(ctx.world);
@@ -424,8 +428,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     tp.style.hasShadow = true;
     tp.layer = 10;
 
-    // 各メニュー項目を UIButton コンポーネントで定義する
-    // UIButtonSystem が自動的にホバー/クリックを管理する
+    // 各メニュー項目を UIButton コンポーネントで定義
     const struct { const wchar_t* label; const char* action; } menuItems[] = {
         {L"▶  はじめから",   "new_game"},
         {L"↺  デイリーチャレンジ", "daily"},
@@ -487,7 +490,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     m_menuEntries.push_back({eLink, 0, L"Go to Wikipedia", btnLink.y, false});
   }
 
-  // --- [5-D] 下部ナビゲーション ---
+  // 下部ナビゲーションの生成
   {
     // 半透明帯
     auto eb = CreateEntity(ctx.world);
@@ -538,7 +541,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     tc.layer = 51;
   }
 
-  // --- [5-E] ポップアップUI (初期状態は非表示) ---
+  // ポップアップUIの生成
   m_popupTimer = 0.0f;
   
   m_popupBgEntity = CreateEntity(ctx.world);
@@ -570,12 +573,15 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
 }
 
 
+/**
+ * @brief シーンの毎フレーム更新処理を行います。
+ */
 void TitleScene::OnUpdate(core::GameContext &ctx) {
   if (m_state == TitleState::IntroVideo) {
     if (m_videoPlayer) {
       m_videoPlayer->Update(ctx.graphics.GetContext(), ctx.dt);
 
-      // Check if finished (video ended and async task finished)
+      // 動画再生とロードが完了したか確認
       bool loadReady = m_startupLoadTask.valid() ? (m_startupLoadTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready) : true;
       if (m_videoPlayer->IsFinished() && loadReady) {
         m_state = TitleState::MainMenu;
@@ -584,7 +590,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
         FinalizeStartupLoad(ctx);
       }
     } else {
-      // Fallback if video failed
+      // 動画再生に失敗した場合のフォールバック
       bool loadReady = m_startupLoadTask.valid() ? (m_startupLoadTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready) : true;
       if (loadReady) {
         m_state = TitleState::MainMenu;
@@ -615,7 +621,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
   if (m_state == TitleState::CourseSelect) {
     UpdateCourseSelect(ctx);
   } else {
-    // --- MainMenu 状態の処理 ---
+    // メインメニュー状態の更新
     ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
     if (!btn.visible) return;
 
@@ -627,8 +633,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       prevHoveredAny = true;
     }
 
-    // Go to Wikipedia リンクのテキスト色をホバーに応じて変化させる
-    // (ボタンの背景色は UIButtonRenderSystem が身持ちので、テキスト色のみ手動管理)
+    // ホバー状態に応じてリンクのテキスト色を変更
     if (btn.action == "wikipedia") {
       btn.textStyle.color = isHovered
           ? DirectX::XMFLOAT4{0.2f, 0.5f, 1.0f, 1.0f}   // ホバー時: 明るい青
@@ -699,6 +704,9 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
   }
 }
 
+/**
+ * @brief シーンの描画処理を行います。
+ */
 void TitleScene::Render(core::GameContext &ctx) {
   if (m_state != TitleState::IntroVideo || !m_videoPlayer || !ctx.textRenderer) {
     return;
@@ -715,12 +723,18 @@ void TitleScene::Render(core::GameContext &ctx) {
   ctx.textRenderer->EndDraw();
 }
 
+/**
+ * @brief シーンを抜ける際の後処理を行います。
+ */
 void TitleScene::OnExit(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnExit");
   DestroyAllEntities(ctx);
   m_menuEntries.clear();
 }
 
+/**
+ * @brief コース選択用UIを生成します。
+ */
 void TitleScene::CreateCourseSelectUI(core::GameContext& ctx) {
   // 背景半透明パネル
   m_csBgEntity = CreateEntity(ctx.world);
@@ -828,6 +842,9 @@ void TitleScene::CreateCourseSelectUI(core::GameContext& ctx) {
   cls.visible = false;
 }
 
+/**
+ * @brief メインメニューの表示状態を切り替えます。
+ */
 void TitleScene::SetMainMenuVisible(core::GameContext& ctx, bool visible) {
   ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
     if (btn.action != "cs_check" && btn.action != "cs_start" && btn.action != "cs_close" && btn.action != "cs_paste_start" && btn.action != "cs_paste_goal") {
@@ -836,6 +853,9 @@ void TitleScene::SetMainMenuVisible(core::GameContext& ctx, bool visible) {
   });
 }
 
+/**
+ * @brief コース選択UIの表示状態を切り替えます。
+ */
 void TitleScene::SetCourseSelectVisible(core::GameContext& ctx, bool visible) {
   if (auto* bg = ctx.world.Get<components::UIText>(m_csBgEntity)) bg->visible = visible;
   if (auto* title = ctx.world.Get<components::UIText>(m_csTitleEntity)) title->visible = visible;
@@ -853,6 +873,9 @@ void TitleScene::SetCourseSelectVisible(core::GameContext& ctx, bool visible) {
   });
 }
 
+/**
+ * @brief コース選択UIの毎フレーム更新処理を行います。
+ */
 void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
   // フォーカス切り替え（マウスクリック）
   if (ctx.input.GetMouseButtonDown(0)) {

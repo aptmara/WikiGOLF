@@ -49,7 +49,7 @@ private:
 
   struct Frame {
     Microsoft::WRL::ComPtr<IMFSample> sample;
-    LONGLONG timestamp; // 100-nanosecond units
+    LONGLONG timestamp; // 100ナノ秒単位のタイムスタンプ
   };
 
   std::queue<Frame> m_frameQueue;
@@ -58,7 +58,7 @@ private:
   std::atomic<bool> m_stopThread{false};
   std::atomic<bool> m_isFinished{false};
 
-  LONGLONG m_currentPlaybackTime = 0; // 100-nanosecond units
+  LONGLONG m_currentPlaybackTime = 0; // 100ナノ秒単位での現在の再生位置
   int m_width = 0;
   int m_height = 0;
   LONG m_stride = 0;

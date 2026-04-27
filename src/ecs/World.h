@@ -39,9 +39,7 @@ public:
         m_freeIndices = {};
     }
 
-    //==========================================================================
-    // Entity管理
-    //==========================================================================
+    // エンティティ管理
 
     /// @brief 新しいエンティティを生成
     /// @return 生成されたEntity ID
@@ -81,9 +79,7 @@ public:
         return m_generations[index] == GetEntityGeneration(entity);
     }
 
-    //==========================================================================
-    // Component管理
-    //==========================================================================
+    // コンポーネント管理
 
     /// @brief コンポーネントを追加（または上書き）
     /// @tparam T コンポーネント型
@@ -121,9 +117,7 @@ public:
         return pool && pool->Has(entity);
     }
 
-    //==========================================================================
-    // Global Data管理
-    //==========================================================================
+    // グローバルデータ管理
 
     template<typename T>
     void SetGlobal(T&& value) {
@@ -151,26 +145,20 @@ public:
         }
     }
 
-    //==========================================================================
-    // Query & View
-    //==========================================================================
+    // クエリとビュー
 
     template<typename... Ts>
     View<Ts...> Query() {
         return View<Ts...>(GetPool<Ts>()...);
     }
 
-    //==========================================================================
-    // 統計情報 (Health Check)
-    //==========================================================================
+    // 統計情報 (ヘルスチェック)
 
     void DumpStatistics() const {
         // アクティブなエンティティ数をカウント
         size_t activeCount = 0;
         size_t totalSlots = m_generations.size();
-        // freeIndicesにあるものは非アクティブ
-        // ただし queue なので size() で取れるが、本来は generations.size() - freeIndices.size() 
-        // m_freeIndices は std::queue なので size() がある
+        // 空きインデックスを参照してアクティブなエンティティの数を集計
         activeCount = totalSlots - m_freeIndices.size();
 
         LOG_INFO("WorldStats", "=== World Statistics ===");
@@ -214,10 +202,10 @@ private:
         return static_cast<const ComponentPool<T>*>(m_componentPools[id].get());
     }
 
-    // Data Storage
+    // 内部データストレージ
     std::vector<uint16_t> m_generations;
     std::queue<uint16_t> m_freeIndices;
-    std::vector<std::unique_ptr<IComponentPool>> m_componentPools; // Optimized: map -> vector
+    std::vector<std::unique_ptr<IComponentPool>> m_componentPools; // 配列構造によるコンポーネントプール
     std::unordered_map<ComponentTypeId, std::any> m_globals;
 };
 

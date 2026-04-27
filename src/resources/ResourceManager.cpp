@@ -23,24 +23,20 @@ namespace resources {
 
 ResourceManager::ResourceManager(graphics::GraphicsDevice &device)
     : m_device(device),
-      m_meshPool(graphics::Mesh{}) // Fallback dummy (Empty Mesh)
+      m_meshPool(graphics::Mesh{}) // ダミーフォールバック用
       ,
-      m_shaderPool(graphics::Shader{}) // Fallback dummy (Empty Shader)
+      m_shaderPool(graphics::Shader{}) // ダミーフォールバック用
       ,
-      m_audioPool(audio::AudioClip{}) // Fallback
+      m_audioPool(audio::AudioClip{}) // ダミーフォールバック用
 {}
 
 // ... Mesh/Shaderの実装 ...
 
-// ===========================================
-// Audio Implementation
-// ===========================================
+// 音声機能実装
 
 #include <wrl/client.h>
 
-// ===========================================
-// Audio Implementation (Media Foundation)
-// ===========================================
+// 音声機能実装 (Media Foundation)
 
 AudioHandle ResourceManager::LoadAudio(const std::string &path) {
   if (auto it = m_audioCache.find(path); it != m_audioCache.end()) {
@@ -178,7 +174,7 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
     return it->second;
   }
 
-  // WIC Factory (lazy init)
+  // 画像ファクトリの遅延初期化
   static Microsoft::WRL::ComPtr<IWICImagingFactory> s_factory;
   if (!s_factory) {
     HRESULT hr =
@@ -302,7 +298,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
   if (paths.empty())
     return {};
 
-  // WIC Factory (lazy init)
+  // 画像ファクトリの遅延初期化
   static Microsoft::WRL::ComPtr<IWICImagingFactory> s_factory;
   if (!s_factory) {
     CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
@@ -411,8 +407,7 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   graphics::Mesh mesh;
   bool success = false;
 
-  // プリミティブ生成 (Registry-like approach hardcoded for now, simpler than
-  // full registry)
+  // キャッシュに存在しない場合は標準的な各種プリミティブメッシュを生成
   if (path == "builtin/cube" || path == "cube") {
     mesh = graphics::MeshPrimitives::CreateCube(m_device.GetDevice());
     success = true;
@@ -500,9 +495,7 @@ MeshHandle ResourceManager::CreateDynamicMesh(
     const std::string &name, const std::vector<graphics::Vertex> &vertices,
     const std::vector<uint32_t> &indices) {
 
-  // 同名のキャッシュがあれば上書き（または再利用）だが、
-  // 動的生成なので内容が変わっている前提で新規作成または更新を行うのが安全。
-  // ここではシンプルに新規作成し、キャッシュマップを更新する。
+  // 重複キャッシュ時は最新データで動的メッシュを上書き作成
 
   graphics::Mesh mesh;
   if (!mesh.Create(m_device.GetDevice(), vertices, indices)) {
@@ -510,10 +503,7 @@ MeshHandle ResourceManager::CreateDynamicMesh(
     return {};
   }
 
-  // もし既存の同名キャッシュがあれば、古いリソースはプールに残るが、
-  // キャッシュマップの指す先は新しいものになる。
-  // 本格的なエンジンの場合は参照カウント等で管理すべきだが、
-  // ここではシーン遷移時の全削除(Clear)に依存する。
+  // キャッシュを新規データで置換し、古いデータの解放は一括クリーンアップに委ねる
 
   auto handle = m_meshPool.Add(std::move(mesh));
   m_meshCache[name] = handle;
@@ -530,8 +520,7 @@ ShaderHandle ResourceManager::LoadShader(const std::string &name,
     return it->second;
   }
 
-  // 標準的な入力レイアウトを使用
-  // 将来的には引数で指定可能にするか、シェーダーリフレクションを使用
+  // 将来の拡張性を考慮しつつ現在は標準的な入力レイアウトを使用してコンパイル
   auto inputLayout = graphics::Shader::GetDefaultInputLayout();
 
   // コンパイル（存在しなければ Assets/ パスをフォールバック）

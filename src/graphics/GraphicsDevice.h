@@ -75,7 +75,7 @@ private:
   ComPtr<ID3D11DepthStencilView> m_depthStencilView;
   ComPtr<ID3D11Texture2D> m_depthStencilBuffer;
 
-  // States
+  // レンダラーステート
   ComPtr<ID3D11RasterizerState> m_rasterizerState;
   ComPtr<ID3D11DepthStencilState> m_depthStencilState;
 

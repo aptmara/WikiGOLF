@@ -32,7 +32,7 @@ namespace game::scenes {
 using namespace DirectX;
 using namespace game::components;
 
-// Helper function to create a wall (static rigid body)
+// 静的剛体オブジェクトとして壁を生成
 static void CreateWall(core::GameContext &ctx, float x, float y, float z,
                        float w, float h, float d, XMFLOAT4 color) {
   auto e = ctx.world.CreateEntity();
@@ -62,7 +62,7 @@ void WikiPinballScene::OnEnter(core::GameContext &ctx) {
   ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                           L"Assets/shaders/BasicPS.hlsl");
 
-  // Camera
+  // カメラエンティティの生成
   auto cam = ctx.world.CreateEntity();
   auto &t = ctx.world.Add<Transform>(cam);
   t.position = {0.0f, 30.0f, -5.0f};
@@ -182,8 +182,7 @@ void WikiPinballScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // 物理演算とゲームロジックの更新
-  // Note:
-  // PhysicsSystemは物理挙動のみ、WikiGameSystemはスコアなどのルール処理を担当
+  // 物理挙動はPhysicsSystem、ルールやスコアはWikiGameSystemで処理
   game::systems::PhysicsSystem(ctx, ctx.dt);
   game::systems::WikiGameSystem(ctx);
 
@@ -198,7 +197,7 @@ void WikiPinballScene::OnUpdate(core::GameContext &ctx) {
     }
   }
 
-  // Ball Lost Check
+  // ボールの落下（ロスト）を判定
   if (ctx.world.IsAlive(m_ballEntity)) {
     auto *t = ctx.world.Get<Transform>(m_ballEntity);
     if (t && t->position.z < -15.0f) {
@@ -252,7 +251,7 @@ void WikiPinballScene::SpawnBall(core::GameContext &ctx) {
 }
 
 void WikiPinballScene::CreateBoundaries(core::GameContext &ctx) {
-  // Floor
+  // 床オブジェクトの生成
   auto floor = ctx.world.CreateEntity();
   auto &t = ctx.world.Add<Transform>(floor);
   t.position = {0.0f, -0.5f, 0.0f};
@@ -268,7 +267,7 @@ void WikiPinballScene::CreateBoundaries(core::GameContext &ctx) {
   c.type = ColliderType::Box;
   c.size = {0.5f, 0.5f, 0.5f};
 
-  // Walls
+  // 周囲の壁オブジェクトの生成
   CreateWall(ctx, -6.5f, 0.5f, 0.0f, 1.0f, 2.0f, 25.0f,
              {0.5f, 0.5f, 0.5f, 1.0f});
   CreateWall(ctx, 6.5f, 0.5f, 0.0f, 1.0f, 2.0f, 25.0f,
@@ -302,7 +301,7 @@ void WikiPinballScene::CreateHeading(core::GameContext &ctx, float x, float z,
 }
 
 void WikiPinballScene::CreateFlippers(core::GameContext &ctx) {
-  // Left Flipper
+  // 左フリッパーの生成
   {
     auto e = ctx.world.CreateEntity();
     auto &t = ctx.world.Add<Transform>(e);
@@ -317,8 +316,8 @@ void WikiPinballScene::CreateFlippers(core::GameContext &ctx) {
     mr.color = {1.0f, 1.0f, 0.0f, 1.0f};
 
     auto &rb = ctx.world.Add<RigidBody>(e);
-    rb.isStatic = true;    // プログラム制御のためStatic扱い
-    rb.restitution = 0.0f; // フリッパー自体の弾性は計算で制御したいが一旦0
+    rb.isStatic = true; // 制御の都合上静的剛体とし、衝突反発はプログラムで管理するため弾性を0に設定
+    rb.restitution = 0.0f;
 
     auto &c = ctx.world.Add<Collider>(e);
     c.type = ColliderType::Box;
@@ -330,7 +329,7 @@ void WikiPinballScene::CreateFlippers(core::GameContext &ctx) {
     f.turnSpeed = 15.0f;
   }
 
-  // Right Flipper
+  // 右フリッパーの生成
   {
     auto e = ctx.world.CreateEntity();
     auto &t = ctx.world.Add<Transform>(e);
@@ -376,7 +375,7 @@ void WikiPinballScene::CreateLinkObstacle(core::GameContext &ctx, float x,
   auto &h = ctx.world.Add<Heading>(e);
   h.fullText = linkTarget;
   h.linkTarget = linkTarget;
-  h.maxHealth = 1; // 1ヒットで破壊
+  h.maxHealth = 1; // 一回の衝突で破壊される設定
   h.currentHealth = 1;
 
   auto &rb = ctx.world.Add<RigidBody>(e);

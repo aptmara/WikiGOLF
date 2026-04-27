@@ -7,7 +7,7 @@
 #include "../components/WikiComponents.h"
 
 
-// TODO: Phase 2で共通ユーティリティへ移動推奨
+// TODO: フェーズ2で共通ユーティリティへ移動推奨
 static std::wstring LocalToWString(const std::string &str) {
   if (str.empty())
     return L"";
@@ -74,9 +74,7 @@ void WikiGameSystem(core::GameContext &ctx) {
           }
         }
 
-        // オブジェクト削除（物理・描画コンポーネントを削除して無効化）
-        // Note:
-        // Entity自体を削除するとループ内で無効アクセスになる可能性があるため、
+        // エンティティ自体を削除するとループ内で無効アクセスになる可能性があるため、
         // コンポーネント削除で対応するのが一般的だが、ここでは即座に削除しても
         // イベントリストがIDを保持しているだけなので安全（Entityが生きていれば）。
         // ただし次回フレーム以降のためにコンポーネントを外す。

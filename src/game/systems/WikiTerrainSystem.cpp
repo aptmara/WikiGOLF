@@ -16,8 +16,8 @@
 #include "TerrainGenerator.h"
 #include "WikiClient.h"
 #include "../../graphics/TangentGenerator.h"
-#include <algorithm> // for std::max
-#include <random>    // for std::mt19937, std::uniform_*_distribution
+#include <algorithm> // 最大値計算用
+#include <random>    // 乱数生成用
 
 namespace game::systems {
 
@@ -63,6 +63,9 @@ int DetermineBiomeFromCategories(const std::vector<std::string> &categories,
 
 } // namespace
 
+/**
+ * @brief 現在生成されている地形データを全削除します。
+ */
 void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   // 非同期タスクが走っていれば待つ（デストラクタ前の安全確保）
   if (m_terrainFuture.valid()) {
@@ -84,6 +87,9 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   m_floorEntity = 0xFFFFFFFF;
 }
 
+/**
+ * @brief インクリメンタルな地形構築を開始します。
+ */
 void WikiTerrainSystem::BeginBuildField(
     const std::string              &pageTitle,
     const graphics::WikiTextureResult &textureResult,
@@ -174,11 +180,15 @@ void WikiTerrainSystem::BeginBuildField(
            m_buildResX, m_buildResZ);
 }
 
+/**
+ * @brief 地形構築を1ステップ進めます。
+ * @return 完了したら true
+ */
 bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 {
   switch (m_buildPhase) {
 
-  // ------  非同期待ち ------
+  // 非同期待ち
   case BuildPhase::TerrainGenAsync: {
     auto status = m_terrainFuture.wait_for(std::chrono::milliseconds(0));
     if (status != std::future_status::ready) {
@@ -191,7 +201,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     return false;
   }
 
-  // ------  物理エンティティ作成（1ステップ）------
+  // 物理エンティティの作成
   case BuildPhase::CreatePhysics: {
     using namespace game::components;
 
@@ -246,7 +256,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     return false;
   }
 
-  // ------  ビジュアルメッシュ（1タイル/ステップ）------
+  // ビジュアルメッシュの生成
   case BuildPhase::CreateTileMesh: {
     if (m_buildTileIndex >= m_buildTiles.size()) {
       // 全タイル処理完了 → オーバーレイへ
@@ -375,7 +385,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     return false;
   }
 
-  // ------  オーバーレイ（1タイル/ステップ）------
+  // オーバーレイの生成
   case BuildPhase::CreateTileOverlay: {
     if (m_buildTileIndex >= m_buildTiles.size()) {
       m_buildPhase   = BuildPhase::CreateWallsDeco;
@@ -433,7 +443,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     return false;
   }
 
-  // ------  壁+装飾（1ステップ）------
+  // 壁と装飾の生成
   case BuildPhase::CreateWallsDeco: {
     CreateWalls(ctx, m_buildFieldWidth, m_buildFieldDepth);
     CreateDecorations(ctx, m_buildFieldWidth, m_buildFieldDepth, m_biome);
@@ -453,6 +463,9 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
   }
 }
 
+/**
+ * @brief フィールドを再構築します（同期版）。
+ */
 void WikiTerrainSystem::BuildField(core::GameContext &ctx,
                                    const std::string &pageTitle,
                                    const graphics::WikiTextureResult &result,
@@ -468,15 +481,17 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
   CreateDecorations(ctx, fieldWidth, fieldDepth, m_biome);
 }
 
+/**
+ * @brief 床オブジェクトを生成します。
+ */
 void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
                                     const graphics::WikiTextureResult &result,
                                     float width, float depth,
                                     const std::string &pageTitle,
                                     const std::vector<std::string> &pageCategories) {
-  // 1. 地形解像度・設定の決定
+  // 地形解像度と設定の決定
   int resX = 64;
-  // フィールドが広くなるほど頂点数がO(n²)で爆発するため上限を設ける。
-  // depth>256 の場合もメッシュ解像度は256で固定し、スケールで対応する。
+  // フィールド拡張による頂点数爆発を防ぐためメッシュ解像度の上限を256に制限
   int resZ = static_cast<int>(depth);
   resZ = (std::max)(64, resZ);
   resZ = (std::min)(resZ, 256); // 上限: 64×256=16384頂点で固定
@@ -521,7 +536,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   // バイオームID保存
   m_biome = biome;
 
-  // 1.5 地形用テクスチャ配列のロード
+  // 地形用テクスチャ配列のロード
   std::vector<std::string> albedoPaths = {
       "Assets/textures/terrain_materials/terrain_00_fairway_albedo.png",
       "Assets/textures/terrain_materials/terrain_01_rough_albedo.png",
@@ -563,11 +578,11 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     holePositions.push_back({worldX, worldZ});
   }
 
-  // 2. 地形データ生成（物理・基準用）
+  // 地形データの生成
   m_terrainData = std::make_shared<TerrainData>(
       TerrainGenerator::GenerateTerrain(seedText, holePositions, config));
 
-  // 3. 物理エンティティ作成（不可視）
+  // 物理エンティティの作成
   {
     auto e = ctx.world.CreateEntity();
     auto &transform = ctx.world.Add<Transform>(e);
@@ -586,14 +601,9 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     ctx.world.Add<TerrainObject>(e);
   }
 
-  // 4. タイルごとのビジュアルメッシュ生成とエンティティ作成
+  // 各タイルのメッシュとエンティティ生成
   std::vector<graphics::WikiTextureResult::Tile> tilesToProcess;
-  // NOTE: WikiTextureResult::Tile is inside namespace graphics?
-  // graphics namespace is used in WikiTextureGenerator.h.
-  // result is graphics::WikiTextureResult.
-  // Tile is nested struct.
-
-  // Check proper type name: graphics::WikiTextureResult::Tile
+  // グラフィックス名前空間で定義されたタイル型を使用してテクスチャ結果を取得
 
   if (result.tiles.empty()) {
     graphics::WikiTextureResult::Tile legacyTile;
@@ -658,14 +668,14 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
         float matAlpha = (static_cast<float>(mat) + 0.5f) / 255.0f;
 
         switch (mat) {
-        case 0: vcolor = {0.35f, 0.55f, 0.25f, matAlpha}; break; // Fairway
-        case 1: vcolor = {0.25f, 0.45f, 0.20f, matAlpha}; break; // Rough
-        case 2: vcolor = {0.90f, 0.85f, 0.70f, matAlpha}; break; // Bunker
-        case 3: vcolor = {0.40f, 0.75f, 0.30f, matAlpha}; break; // Green
-        case 4: vcolor = {0.70f, 0.88f, 0.98f, matAlpha}; break; // Ice
-        case 5: vcolor = {0.20f, 0.45f, 0.85f, matAlpha}; break; // Water
-        case 6: vcolor = {0.95f, 0.35f, 0.12f, matAlpha}; break; // Lava
-        case 7: vcolor = {0.50f, 0.48f, 0.52f, matAlpha}; break; // Stone
+        case 0: vcolor = {0.35f, 0.55f, 0.25f, matAlpha}; break; // フェアウェイ
+        case 1: vcolor = {0.25f, 0.45f, 0.20f, matAlpha}; break; // ラフ
+        case 2: vcolor = {0.90f, 0.85f, 0.70f, matAlpha}; break; // バンカー
+        case 3: vcolor = {0.40f, 0.75f, 0.30f, matAlpha}; break; // グリーン
+        case 4: vcolor = {0.70f, 0.88f, 0.98f, matAlpha}; break; // 氷
+        case 5: vcolor = {0.20f, 0.45f, 0.85f, matAlpha}; break; // 水
+        case 6: vcolor = {0.95f, 0.35f, 0.12f, matAlpha}; break; // 溶岩
+        case 7: vcolor = {0.50f, 0.48f, 0.52f, matAlpha}; break; // 石
         default: vcolor = {1.0f, 1.0f, 1.0f, matAlpha}; break;
         }
 
@@ -714,12 +724,12 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     meshRenderer.normalMapSRV = terrainNormalSRV;
     meshRenderer.hasNormalMap = true;
     meshRenderer.isTransparent = false;
-    meshRenderer.customFlags = {2.0f, 0.0f, 0.0f, 0.0f}; // x:uvScale, y:unused
+    meshRenderer.customFlags = {2.0f, 0.0f, 0.0f, 0.0f}; // x:UVスケール、y:未使用
 
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
 
-    // --- オーバーレイ (Wikiページ画像) ---
+    // オーバーレイの生成
     std::vector<graphics::Vertex> overlayVertices = vertices;
     for (size_t i = 0; i < overlayVertices.size(); ++i) {
       overlayVertices[i].position.y += kTerrainOverlayHeightOffset;
@@ -757,6 +767,9 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   }
 }
 
+/**
+ * @brief フィールド外周の壁オブジェクトを生成します。
+ */
 void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
                                     float depth) {
   float wallHeight = 100.0f;
@@ -826,6 +839,9 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
   }
 }
 
+/**
+ * @brief 記事内の画像領域に対応した障害物オブジェクトを生成します。
+ */
 void WikiTerrainSystem::CreateImageObstacles(
     core::GameContext &ctx, const graphics::WikiTextureResult &result,
     float fieldWidth, float fieldDepth) {
@@ -870,10 +886,16 @@ void WikiTerrainSystem::CreateImageObstacles(
   }
 }
 
+/**
+ * @brief 見出し情報に対応した段差オブジェクトを生成します。
+ */
 void WikiTerrainSystem::CreateHeadingSteps(
     core::GameContext &ctx, const graphics::WikiTextureResult &result,
     float fieldWidth, float fieldDepth) {}
 
+/**
+ * @brief 指定したワールド座標における地形の高さを取得します。
+ */
 float WikiTerrainSystem::GetHeight(float x, float z) const {
   if (!m_terrainData)
     return 0.0f;
@@ -895,7 +917,7 @@ float WikiTerrainSystem::GetHeight(float x, float z) const {
   int ix = static_cast<int>(fx);
   int iz = static_cast<int>(fz);
 
-  // Clamp indices for interpolation (safe up to res-2)
+  // 補間のためインデックスの範囲を制限
   ix = std::clamp(ix, 0, resX - 2);
   iz = std::clamp(iz, 0, resZ - 2);
 
@@ -907,13 +929,16 @@ float WikiTerrainSystem::GetHeight(float x, float z) const {
   float h01 = m_terrainData->heightMap[(iz + 1) * resX + ix];
   float h11 = m_terrainData->heightMap[(iz + 1) * resX + (ix + 1)];
 
-  // Bilinear interpolation
+  // バイリニア補間を実行
   float h0 = h00 * (1.0f - dx) + h10 * dx;
   float h1 = h01 * (1.0f - dx) + h11 * dx;
   
   return h0 * (1.0f - dz) + h1 * dz;
 }
 
+/**
+ * @brief バイオームに応じた装飾オブジェクトを生成します。
+ */
 void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
                                           float fieldWidth, float fieldDepth,
                                           int biome) {
@@ -1005,10 +1030,7 @@ void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
       mr.isTransparent = true;
     }
 
-    // 当たり判定なし（ユーザー指示）
-    // RigidBody、Colliderは追加しない
-
-    // RigidBody、Colliderは追加しない
+    // 当たり判定は追加しない
 
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);

@@ -43,7 +43,7 @@ public:
 private:
   ResultData m_data;
 
-  // UI Entities
+  // UIエンティティ
   ecs::Entity m_bgEntity = UINT32_MAX;
   ecs::Entity m_frameEntity = UINT32_MAX;
   ecs::Entity m_titleEntity = UINT32_MAX;
@@ -54,15 +54,15 @@ private:
   ecs::Entity m_retryBtnEntity = UINT32_MAX;
   ecs::Entity m_titleBtnEntity = UINT32_MAX;
 
-  // Internal helpers
+  // 内部ヘルパー関数
   void SetupUI(core::GameContext &ctx);
-  // --- 3D Visuals ---
+  // 3Dビジュアル関連
   ecs::Entity m_globeEntity =
-      0; ///< Rotating Wikipedia Globe (Victory Monument)
-  ecs::Entity m_floorEntity = 0;  ///< Reflective Golden Floor
-  ecs::Entity m_cameraEntity = 0; ///< Dynamic Orbit Camera
+      0; ///< 自転する地球儀エンティティ
+  ecs::Entity m_floorEntity = 0;  ///< 反射する床面エンティティ
+  ecs::Entity m_cameraEntity = 0; ///< 周回するカメラエンティティ
 
-  // --- Rings ---
+  // 装飾リング
   struct RingObject {
     ecs::Entity entity;
     float baseRadius;
@@ -71,35 +71,35 @@ private:
   };
   std::vector<RingObject> m_rings;
 
-  // --- Particles ---
+  // パーティクル関連
   struct Particle {
     ecs::Entity entity;
     DirectX::XMFLOAT3 velocity;
     float lifeTime;
     float maxLife;
-    bool isConfetti; // true: confetti, false: data updraft
+    bool isConfetti; // 紙吹雪かどうかのフラグ
   };
   std::vector<Particle> m_particles;
   float m_particleTimer = 0.0f;
 
-  // --- UI Elements (Luxury) ---
+  // 豪華なUI要素
   struct UIElement {
     ecs::Entity entity;
     float baseX, baseY;
     float currentScale;
     float targetScale;
     bool isHovered;
-    std::wstring text; // For identification
+    std::wstring text; // 識別用テキスト
     DirectX::XMFLOAT4 baseColor;
   };
   std::vector<UIElement> m_uiElements;
 
-  // --- Animation State ---
+  // アニメーション状態
   float m_time = 0.0f;
-  float m_scoreDisplayValue = 0.0f; // For count-up animation
+  float m_scoreDisplayValue = 0.0f; // カウントアップ用アニメーション変数
   bool m_isScoreCountFinished = false;
 
-  // Helper for UI creation
+  // UI生成ヘルパー関数
   void CreateLuxuryUI(core::GameContext &ctx);
   void CreateVisualEnvironment(core::GameContext &ctx);
   void UpdateVisuals(core::GameContext &ctx);

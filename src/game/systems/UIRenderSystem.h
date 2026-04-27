@@ -27,7 +27,7 @@ public:
     if (!m_renderer.IsValid())
       return;
 
-    // 1. 可視 UIText を収集
+    // 可視状態のUIテキストを収集
     std::vector<std::pair<ecs::Entity, const components::UIText *>> uiTexts;
     ctx.world.Query<components::UIText>().Each(
         [&](ecs::Entity e, const components::UIText &ui) {
@@ -36,12 +36,12 @@ public:
           }
         });
 
-    // 2. レイヤーでソート（小さい順 = 奥から描画）
+    // レイヤーごとにソート（背面から順に描画するため）
     std::sort(uiTexts.begin(), uiTexts.end(), [](const auto &a, const auto &b) {
       return a.second->layer < b.second->layer;
     });
 
-    // 3. 描画開始
+
     m_renderer.BeginDraw();
 
     for (const auto &[entity, ui] : uiTexts) {
@@ -54,7 +54,7 @@ public:
       m_renderer.RenderText(ui->text, rect, ui->style);
     }
 
-    // 4. 描画終了
+
     m_renderer.EndDraw();
   }
 

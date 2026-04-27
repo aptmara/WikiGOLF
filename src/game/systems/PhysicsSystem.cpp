@@ -7,7 +7,7 @@
  */
 
 #include "PhysicsSystem.h"
-#include "../../audio/AudioSystem.h" // For SE
+#include "../../audio/AudioSystem.h" // 効果音再生用
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../ecs/World.h"
@@ -15,7 +15,7 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
-#include "GameJuiceSystem.h" // For effects
+#include "GameJuiceSystem.h" // 演出効果用
 #include "PhysicsFriction.h"
 #include "TerrainGenerator.h"
 #include <algorithm>
@@ -90,7 +90,7 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
                            float &outDepth) {
   XMVECTOR sPos = XMLoadFloat3(&spherePos);
   XMVECTOR bPos = XMLoadFloat3(&boxPos);
-  // boxSize is full size, convert to half extents
+  // ボックスのサイズ情報から半サイズ（ハーフエクステント）を算出
   XMVECTOR bHalf = XMVectorScale(XMLoadFloat3(&boxSize), 0.5f);
   XMVECTOR bRot = XMLoadFloat4(&boxRot);
 
@@ -387,7 +387,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       XMVECTOR vel = XMLoadFloat3(&rb.velocity);
 
       // マテリアル判定（ループ冒頭で実施）
-      uint8_t mat = 0; // Fairway default
+      uint8_t mat = 0; // フェアウェイ（デフォルト値）
       if (terrainData) {
         float u = XMVectorGetX(pos) / terrainData->config.worldWidth + 0.5f;
         float v = 0.5f - XMVectorGetZ(pos) / terrainData->config.worldDepth;
@@ -503,17 +503,16 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             // 速度の法線成分を処理
             float vn = XMVectorGetX(XMVector3Dot(vel, terrainN));
             if (vn < 0.0f) {
-              // 反射
+              // 衝突による反射ベクトルを計算し、僅かなランダム挙動を加算
               float jitter = 1.0f + (((float)(rand() % 100) / 100.0f) - 0.5f) *
-                                        0.18f; // 軽い乱数で跳ね方を変える
+                                        0.18f;
               float bounce = std::max(0.0f, rb.restitution * 0.5f * jitter);
               vel = XMVectorSubtract(
                   vel, XMVectorScale(terrainN, vn * (1.0f + bounce)));
 
-              // バウンドエフェクト & SE
-              // VNは負の値（衝突速度）なので、大きさは abs(vn)
+              // 一定の速度以上で衝突した際にバウンド演出および効果音を再生
               float impactSpeed = std::abs(vn);
-              if (impactSpeed > 2.0f) { // ある程度以上の速度で
+              if (impactSpeed > 2.0f) {
                 float strength =
                     std::clamp((impactSpeed - 2.0f) / 10.0f, 0.0f, 1.0f);
 
@@ -631,13 +630,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
       // 接地時の摩擦と斜面処理
       if (isGrounded) {
-        // 法線成分を除去
+        // 接地時における斜面に沿った摩擦力と重力加速度の減衰処理
         float vn = XMVectorGetX(XMVector3Dot(vel, groundNormal));
         if (vn < 0.0f) {
           vel = XMVectorSubtract(vel, XMVectorScale(groundNormal, vn));
         }
 
-        // 斜面方向の重力（タンジェント成分）を計算
         XMVECTOR slopeAccel = XMVectorSubtract(
             gravity,
             XMVectorScale(groundNormal,
@@ -676,9 +674,6 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
         // 接線方向の重力成分に対する静止摩擦チェック
         float tangentialAcc = SafeLength(acc);
-        // 静止摩擦力 (最大) > 重力引張力 なら停止維持
-        // F_static_max = mu_static * N * g
-        // ここでは動摩擦係数をベースに少し色をつけて判定
         float staticLimit = frictionAccel * 1.2f;
 
         if (currentSpeed < 0.05f && tangentialAcc < staticLimit) {
@@ -686,20 +681,14 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           vel = XMVectorZero();
           acc = XMVectorZero();
         } else if (currentSpeed > 0.0001f) {
-          // ハイブリッド減衰: 高速時は指数関数的(手触り重視)、低速時は線形(確実な停止)
-          // 1.0m/s 〜 5.0m/s の間で遷移
+          // 高速域の指数減衰と低速域の線形減衰をブレンドして自然な手触りで停止させる
           float t = std::clamp((currentSpeed - 1.0f) / 4.0f, 0.0f, 1.0f);
 
-          // 指数成分 (高速用): v_new = v * exp(-k*dt)
-          // 以前の挙動をベースに、速度に比例した強い減衰を与える
           float k = frictionAccel;
           float expRatio = std::exp(-k * subDt);
 
-          // 線形成分 (低速用): v_new = v - a*dt
           float linearDrop = frictionAccel * subDt;
           float linearRatio = (currentSpeed > linearDrop) ? (currentSpeed - linearDrop) / currentSpeed : 0.0f;
-
-          // ブレンド
           float finalRatio = t * expRatio + (1.0f - t) * linearRatio;
           vel = XMVectorScale(vel, finalRatio);
 
@@ -717,8 +706,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // 空気抵抗 (常時適用): F = 0.5 * rho * v^2 * Cd * A
-      // 地上で転がっているときも多少の空気抵抗+転がり抵抗の速度比例項として機能させる
+      // 速度の二乗に比例する簡易的な空気抵抗をボールに対して常時適用
       speed = SafeLength(vel);
       if (speed > 0.001f) {
         float K = 0.000876f;

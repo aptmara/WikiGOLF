@@ -395,7 +395,7 @@ void WikiGolfHUD::InitializeShotButton(core::GameContext& ctx) {
         t.style.borderWidth  = 4.0f;
         t.style.borderColor  = {0.4f, 0.8f, 1.0f, 0.9f}; // Glow-like bright cyan border
         t.style.color        = {0.0f, 0.0f, 0.0f, 0.0f}; // 文字なし
-        t.style.hasShadow    = true; // Add shadow/glow effect
+        t.style.hasShadow    = true; // 影効果を有効化します
         t.style.shadowColor  = {0.0f, 0.5f, 1.0f, 0.6f};
         t.style.shadowOffsetX = 0.0f;
         t.style.shadowOffsetY = 8.0f;
@@ -444,17 +444,17 @@ void WikiGolfHUD::InitializeControlHint(core::GameContext& ctx) {
     t.style.fontSize = game::ui::kControlHintFont;
     t.style.color    = {0.9f, 0.95f, 1.0f, 1.0f}; // Brighter text for keycap
     
-    // キーキャップ風の背景
+    // ヘルプ表示用の背景を設定します
     t.style.useGradient = true;
-    t.style.bgColor     = {0.2f, 0.25f, 0.3f, 0.9f}; // Top: lighter grey
-    t.style.bgGradientEnd = {0.1f, 0.15f, 0.2f, 0.9f}; // Bottom: dark grey
+    t.style.bgColor     = {0.2f, 0.25f, 0.3f, 0.9f}; // 上部カラー
+    t.style.bgGradientEnd = {0.1f, 0.15f, 0.2f, 0.9f}; // 下部カラー
     t.style.borderWidth = 2.0f;
-    t.style.borderColor = {0.4f, 0.5f, 0.6f, 0.8f}; // Subtle glow border
+    t.style.borderColor = {0.4f, 0.5f, 0.6f, 0.8f}; // 境界カラー
     t.style.cornerRadius = 8.0f;
     t.style.hasShadow   = true;
     t.style.shadowColor = {0.0f, 0.0f, 0.0f, 0.8f};
     t.style.shadowOffsetX = 0.0f;
-    t.style.shadowOffsetY = 4.0f; // Drop shadow for depth
+    t.style.shadowOffsetY = 4.0f; // 影の縦オフセット
 
     t.visible = true;
     t.layer   = game::ui::kLayerControlHint;
@@ -803,7 +803,7 @@ void WikiGolfHUD::UpdateClubSelectList(core::GameContext& ctx,
                 m_ui.clubNameEntities.push_back(e);
             }
 
-            // クラブ種別 (英語, 例: "1W Driver")
+            // クラブ種別テキストの生成
             {
                 auto e = ctx.world.CreateEntity();
                 auto& t = ctx.world.Add<game::components::UIText>(e);
@@ -821,7 +821,7 @@ void WikiGolfHUD::UpdateClubSelectList(core::GameContext& ctx,
                 m_ui.clubSubNameEntities.push_back(e);
             }
 
-            // 右端の矢印 (▶)
+            // 右端の選択マークの生成
             {
                 auto e = ctx.world.CreateEntity();
                 auto& t = ctx.world.Add<game::components::UIText>(e);
@@ -940,7 +940,7 @@ void WikiGolfHUD::UpdateBottomInfoPanels(core::GameContext& ctx, float distanceT
         t.visible = true;
     };
 
-    // ⑧ 距離パネル生成
+    // 距離パネルの生成
     if (m_ui.distPanelBgEntity == UINT32_MAX) {
         createBg(m_ui.distPanelBgEntity, px1);
         createText(m_ui.distLabelEntity, px1 + 10, py + 10, 80, 20, 14.0f, {0.8f, 0.8f, 0.8f, 1.0f}, graphics::TextAlign::Left);
@@ -949,7 +949,7 @@ void WikiGolfHUD::UpdateBottomInfoPanels(core::GameContext& ctx, float distanceT
         createText(m_ui.heightValueEntity, px1 + 10, py + 60, pw - 20, 16, 12.0f, {0.5f, 0.8f, 1.0f, 1.0f}, graphics::TextAlign::Center);
     }
 
-    // ⑨ 選択中クラブパネル生成
+    // 選択中クラブパネルの生成
     if (m_ui.clubInfoPanelBgEntity == UINT32_MAX) {
         createBg(m_ui.clubInfoPanelBgEntity, px2);
         createText(m_ui.clubInfoLabelEntity, px2 + 10, py + 10, pw - 20, 20, 12.0f, {0.8f, 0.8f, 0.8f, 1.0f}, graphics::TextAlign::Center);
@@ -964,7 +964,7 @@ void WikiGolfHUD::UpdateBottomInfoPanels(core::GameContext& ctx, float distanceT
         img.layer = layer + 1; img.visible = true;
     }
 
-    // ⑪ ライパネル生成
+    // ライパネルの生成
     if (m_ui.liePanelBgEntity == UINT32_MAX) {
         createBg(m_ui.liePanelBgEntity, px3);
         createText(m_ui.lieLabelEntity, px3 + 10, py + 10, pw - 20, 20, 12.0f, {0.8f, 0.8f, 0.8f, 1.0f}, graphics::TextAlign::Left);

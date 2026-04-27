@@ -16,7 +16,14 @@ public:
   ScreenFade() = default;
   ~ScreenFade();
 
+  /**
+   * @brief フェード用の初期化処理を行います。
+   */
   void Initialize(core::GameContext &ctx);
+
+  /**
+   * @brief フェード用の終了処理を行います。
+   */
   void Shutdown(core::GameContext &ctx);
 
   /// @brief フェードイン（画面が開く、見えるようになる）
@@ -33,7 +40,14 @@ public:
   void FadeOut(float duration, FadeType type = FadeType::Fade,
                DirectX::XMFLOAT3 color = {0, 0, 0});
 
+  /**
+   * @brief 毎フレームのフェード更新処理を行います。
+   */
   void Update(float dt);
+
+  /**
+   * @brief 描画処理を行います。
+   */
   void Render(core::GameContext &ctx);
 
   /// @brief ワイプの中心を設定 (0.0~1.0)
@@ -46,8 +60,8 @@ private:
   ecs::Entity m_fadeEntity = UINT32_MAX;
 
   bool m_isFading = false;
-  bool m_fadeIn = true;    // true: 1->0, false: 0->1
-  float m_progress = 0.0f; // 0.0(全表示) -> 1.0(全隠蔽)
+  bool m_fadeIn = true;    // フェードイン状態のフラグ
+  float m_progress = 0.0f; // フェードの進捗率
   float m_duration = 1.0f;
   float m_timer = 0.0f;
 
@@ -62,23 +76,11 @@ private:
   // 定数バッファ用構造体
   struct FadeCB {
     DirectX::XMFLOAT4 Color;
-    DirectX::XMFLOAT4 Params1; // x:progress, y:type(as float), z:aspect, w:smoothness
-    DirectX::XMFLOAT4 Params2; // x:u, y:v, z:pad, w:pad
+    DirectX::XMFLOAT4 Params1; // フェードパラメータ1
+    DirectX::XMFLOAT4 Params2; // フェードパラメータ2
   };
 
-  // 専用定数バッファとシェーダーは、
-  // ここで直接管理せず、MeshRenderer+Materialシステムの仕組みに乗っかる方が楽だが、
-  // 今回は特殊なConstantBufferが必要なので、MeshRenderer経由で描画しつつ、
-  // Updateで CB を書き換える方式をとるか、
-  // あるいは ScreenFade 自体が描画ロジックを持つか。
-  // -> シンプルに MeshRenderer を使い、Update
-  // でマテリアル(定数バッファ)を更新する形は
-  //    今のECSだと少し手間（Shaderが標準のものしか使えない可能性がある）。
-  //    今回は「UIの上に描画」したいので、2D描画として実装するか、
-  //    あるいは最前面の3D Quadとして実装するか。
-  //    UIImageは標準で BasicShader を使うので、カスタムシェーダーを使いにくい。
-  //    よって、このクラス独自で MeshRenderer
-  //    を構成し、カスタムシェーダーをアサインする。
+
 };
 
 } // namespace game::utils

@@ -10,7 +10,7 @@
 namespace game::components {
 
 struct Camera {
-    float fov = DirectX::XM_PIDIV4; // 45 degrees
+    float fov = DirectX::XM_PIDIV4; // 45度
     float nearZ = 0.01f;
     float farZ = 1000.0f;
     float aspectRatio = 16.0f / 9.0f;
@@ -20,7 +20,7 @@ struct Camera {
         DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&transform.position);
         DirectX::XMVECTOR rot = DirectX::XMLoadFloat4(&transform.rotation);
         
-        // Forward vector from rotation
+        // 回転情報から前方方向ベクトルを算出
         DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(
             DirectX::XMVectorSet(0, 0, 1, 0), rot
         );

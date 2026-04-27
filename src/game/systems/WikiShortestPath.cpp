@@ -78,7 +78,7 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
 
     for (size_t i = 0; i < count; ++i) {
       sqlite3_bind_int(stmt, static_cast<int>(i + 1),
-                       pageIds[index + i]); // placeholders are 1-based
+                       pageIds[index + i]); // プレースホルダーのインデックスは1から開始
     }
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {

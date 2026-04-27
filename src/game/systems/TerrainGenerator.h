@@ -17,14 +17,14 @@ struct TerrainConfig {
   float friction = 0.5f;    // 地形の基本摩擦
   float restitution = 0.2f; // 地形の基本反発
 
-  // バイオーム設定 (0:草原, 1:砂漠, 2:氷原, 3:岩場)
+  // バイオーム設定（草原、砂漠、氷原、岩場）
   int biome = 0;
 };
 
 struct TerrainData {
   std::vector<float> heightMap;
   std::vector<uint8_t>
-      materialMap; // マテリアルID (0:Fairway, 1:Rough, 2:Bunker, 3:Green)
+      materialMap; // マテリアルID（Fairway, Rough, Bunker, Green）
   std::vector<DirectX::XMFLOAT3> normals; // 物理・描画用法線
 
   // 生のメッシュデータ (リソース生成用)
@@ -37,26 +37,52 @@ struct TerrainData {
 
 class TerrainGenerator {
 public:
-  // 記事データに基づいて地形データを生成
+  /**
+   * @brief 記事データに基づいて地形データを生成します。
+   */
   static TerrainData
   GenerateTerrain(const std::string &articleText,
                   const std::vector<DirectX::XMFLOAT2> &holePositions,
                   const TerrainConfig &config);
 
 private:
-  // ハイトマップ生成の各ステップ
+  /**
+   * @brief 基準ハイトマップを生成します。
+   */
   static void GenerateBaseHeightMap(TerrainData &data, const std::string &text);
+
+  /**
+   * @brief ホール周辺に平らなプラットフォームを作成します。
+   */
   static void
   CreatePlatforms(TerrainData &data,
                   const std::vector<DirectX::XMFLOAT2> &holePositions);
+
+  /**
+   * @brief ハイトマップにスムージング処理を適用します。
+   */
   static void ApplySmoothing(TerrainData &data, int iterations);
+
+  /**
+   * @brief 地形メッシュを生成します。
+   */
   static void
   GenerateMesh(TerrainData &data,
                const std::vector<DirectX::XMFLOAT2> &holePositions = {});
+
+  /**
+   * @brief 地形の法線を計算します。
+   */
   static void CalculateNormals(TerrainData &data);
 
-  // ユーティリティ
+  /**
+   * @brief 指定した格子座標の地形高さを取得します。
+   */
   static float GetHeight(const TerrainData &data, int x, int z);
+
+  /**
+   * @brief 指定した格子座標の地形高さを設定します。
+   */
   static void SetHeight(TerrainData &data, int x, int z, float h);
 };
 

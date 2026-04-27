@@ -50,6 +50,6 @@ void Mesh::Draw(ID3D11DeviceContext *context) const {
   context->DrawIndexed(m_indexCount, 0, 0);
 }
 
-// Primitives moved to MeshPrimitives.cpp
+// プリミティブ生成処理は MeshPrimitives.cpp に移動しました
 
 } // namespace graphics

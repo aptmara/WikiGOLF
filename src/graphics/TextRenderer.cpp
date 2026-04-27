@@ -21,7 +21,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
 
   HRESULT hr;
 
-  // 1. D2D1.1 Factory 作成
+  // D2D1.1ファクトリの生成
   D2D1_FACTORY_OPTIONS options = {};
 #ifdef _DEBUG
   /// @brief 山内陽: Debug実行時にD2D診断レイヤーのブレークで起動が止まらないようにする。
@@ -35,7 +35,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
     return false;
   }
 
-  // 2. DirectWrite Factory 作成
+  // DirectWriteファクトリの生成
   hr = DWriteCreateFactory(
       DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
       reinterpret_cast<IUnknown **>(m_dwriteFactory.GetAddressOf()));
@@ -56,7 +56,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
     return false;
   }
 
-  // 3. DXGI Device を取得
+  // DXGIデバイスの取得
   ComPtr<IDXGIDevice> dxgiDevice;
   hr = swapChain->GetDevice(IID_PPV_ARGS(&dxgiDevice));
   if (FAILED(hr)) {
@@ -65,7 +65,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
     return false;
   }
 
-  // 4. D2D Device 作成
+  // D2Dデバイスの生成
   ComPtr<ID2D1Device> d2dDevice;
   hr = m_d2dFactory->CreateDevice(dxgiDevice.Get(), &d2dDevice);
   if (FAILED(hr)) {
@@ -74,7 +74,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
     return false;
   }
 
-  // 5. D2D DeviceContext 作成
+  // D2Dデバイスコンテキストの生成
   hr = d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
                                       &m_d2dContext);
   if (FAILED(hr)) {
@@ -84,7 +84,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
     return false;
   }
 
-  // 6. バックバッファを Bitmap として取得・設定
+  // バックバッファをBitmapとして取得・設定
   hr = CreateTargetBitmap(swapChain);
   if (FAILED(hr)) {
     LOG_ERROR("TextRenderer",
@@ -93,11 +93,11 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
     return false;
   }
 
-  // 7. サブシステム初期化
+  // 各種サブシステムの初期化
   m_fontManager.Initialize(m_dwriteFactory.Get());
   m_brushCache.Initialize(m_d2dContext.Get());
 
-  // 8. アンチエイリアス設定
+  // アンチエイリアス設定
   m_d2dContext->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
 
   LOG_INFO("TextRenderer", "Initialized ({}x{}) using D2D1.1 API",
@@ -221,7 +221,7 @@ void TextRenderer::FillRect(const D2D1_RECT_F &rect,
 
 bool TextRenderer::LoadBitmapFromFile(const std::string &filePath) {
   if (m_bitmapCache.find(filePath) != m_bitmapCache.end()) {
-    return true; // Already loaded
+    return true; // すでにロード済み
   }
 
   if (!m_wicFactory || !m_d2dContext) {

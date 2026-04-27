@@ -39,7 +39,7 @@ struct ObjVertexIndexHash {
 };
 
 //==============================================================================
-// Modern Fast Obj Parser (C++17/20)
+// 高速なObj解析処理（C++17/20仕様）
 //==============================================================================
 
 class FastObjParser {
@@ -251,10 +251,10 @@ private:
 
       // /vt/vn パターン確認
       if (Peek(sv) == '/') {
-        m_cursor++; // skip first /
+        m_cursor++; // 最初のスラッシュをスキップ
         if (Peek(sv) == '/') {
           // v//vn
-          m_cursor++; // skip second /
+          m_cursor++; // 2番目のスラッシュをスキップ
           idx.vn = ParseInt(sv);
         } else {
           // v/vt...

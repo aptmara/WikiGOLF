@@ -33,7 +33,7 @@ using namespace DirectX;
 namespace game::controllers {
 
 // ============================================================
-// ローカルユーティリティ（翻訳単位内に閉じる）
+// ローカルユーティリティ
 // ============================================================
 namespace {
 
@@ -88,9 +88,7 @@ bool IntersectRayOBB(XMVECTOR rayOrigin, XMVECTOR rayDir, float maxDist,
 
 } // namespace
 
-// ============================================================
 // 公開インターフェース実装
-// ============================================================
 
 void CameraController::Initialize(Config cfg) {
   m_cfg = cfg;
@@ -193,7 +191,7 @@ void CameraController::Update(core::GameContext &ctx) {
 
     if (!m_isCameraChasing) {
       if (distFromStart < m_cameraChaseThreshold) {
-        // フェーズ1: 固定注視（カメラ位置固定・ボールを向く）
+        // 固定注視フェーズ（カメラ位置を固定しボールの方向を向く）
         camT->position = m_shotStartCamPos;
 
         XMVECTOR lookDir = XMVectorSubtract(ballPos, startCamPos);
@@ -222,7 +220,7 @@ void CameraController::Update(core::GameContext &ctx) {
       }
     }
 
-    // フェーズ2: 追尾モード（ボール進行方向にYaw追従）
+    // 追尾モードフェーズ（ボール進行方向にヨー回転を追従）
     if (m_isCameraChasing) {
       auto *ballRB = ctx.world.Get<RigidBody>(m_cfg.ballEntity);
       if (ballRB) {
@@ -243,7 +241,7 @@ void CameraController::Update(core::GameContext &ctx) {
     }
   }
 
-  // === TPSオービット基準計算 ===
+  // TPSオービットの基準位置を計算
   XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
   XMVECTOR camRotQ = XMQuaternionRotationRollPitchYaw(m_cameraPitch, m_cameraYaw, 0.0f);
   XMVECTOR offset  = XMVectorSet(0, 0, -m_cameraDistance, 0);
@@ -272,7 +270,7 @@ void CameraController::Update(core::GameContext &ctx) {
     XMStoreFloat4(&camT->rotation, camRotQ);
   }
 
-  // === ショット方向をカメラ前方から算出（Idle 時のみ更新） ===
+  // アイドル時のみカメラ前方からショット方向を算出
   if (!isExecuting) {
     XMVECTOR forward = XMVectorSet(0, 0, 1, 0);
     forward          = XMVector3Rotate(forward, camRotQ);
@@ -314,9 +312,7 @@ void CameraController::RestoreAfterFade(core::GameContext &ctx) {
   XMStoreFloat3(&m_shotStartCamPos, adjustedPos);
 }
 
-// ============================================================
 // 内部処理
-// ============================================================
 
 bool CameraController::CheckCameraCollision(core::GameContext &ctx,
                                              const XMVECTOR &targetPos,

@@ -18,7 +18,7 @@ public:
     if (!ctx.textRenderer)
       return;
 
-    // 3. 描画
+
     ctx.textRenderer->BeginDraw();
 
     ctx.world.Query<game::components::UIBarGauge>().Each(
@@ -26,12 +26,12 @@ public:
           if (!gauge.isVisible)
             return;
 
-          // 1. 背景
+          // 背景の描画
           D2D1_RECT_F bgRect = D2D1::RectF(
               gauge.x, gauge.y, gauge.x + gauge.width, gauge.y + gauge.height);
           ctx.textRenderer->FillRect(bgRect, gauge.bgColor);
 
-          // 2. インパクトゾーン (ゴルフ特化)
+          // ゴルフ用のインパクトゾーンを描画
           if (gauge.showImpactZones) {
             float centerX = gauge.x + gauge.width * gauge.impactCenter;
 
@@ -58,7 +58,7 @@ public:
             ctx.textRenderer->FillRect(specialRect, {1.0f, 1.0f, 1.0f, 0.9f});
           }
 
-          // 3. バー本体 (値)
+          // バー本体（ゲージ値）の描画
           float fillRatio = gauge.value / gauge.maxValue;
           if (fillRatio < 0.0f)
             fillRatio = 0.0f;
@@ -72,7 +72,7 @@ public:
             ctx.textRenderer->FillRect(fillRect, gauge.color);
           }
 
-          // 4. マーカー
+          // マーカーの描画
           if (gauge.showMarker) {
             float markerX =
                 gauge.x + gauge.width * (gauge.markerValue / gauge.maxValue);
@@ -93,7 +93,7 @@ public:
             ctx.textRenderer->FillRect(markerRect, gauge.markerColor);
           }
 
-          // 5. 枠線
+          // 枠線の描画
           if (gauge.borderWidth > 0.0f) {
             float b = gauge.borderWidth;
             // 上

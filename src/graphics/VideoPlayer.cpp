@@ -47,7 +47,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     mfInitialized = true;
   }
 
-  // Convert path to wide string
+  // パスをワイド文字列に変換
   int size_needed = MultiByteToWideChar(CP_UTF8, 0, &filePath[0], (int)filePath.size(), NULL, 0);
   std::wstring wpath(size_needed, 0);
   MultiByteToWideChar(CP_UTF8, 0, &filePath[0], (int)filePath.size(), &wpath[0], size_needed);
@@ -62,7 +62,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     return false;
   }
 
-  // Set output media type to RGB32
+  // 出力メディアタイプをRGB32に設定
   ComPtr<IMFMediaType> mediaType;
   MFCreateMediaType(&mediaType);
   mediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
@@ -74,7 +74,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     return false;
   }
 
-  // Get current media type to extract width, height, and stride
+  // 現在のメディアタイプから幅、高さ、ストライドを抽出
   ComPtr<IMFMediaType> currentType;
   hr = m_reader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &currentType);
   if (FAILED(hr)) {
@@ -91,7 +91,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
   hr = currentType->GetUINT32(MF_MT_DEFAULT_STRIDE, &tempStride);
   m_stride = (LONG)tempStride;
   if (FAILED(hr)) {
-    // Fallback if stride is not set (usually width * 4 for RGB32)
+    // ストライド未設定時のフォールバック処理（通常は幅 * 4）
     m_stride = m_width * 4;
   }
 
@@ -99,7 +99,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     return false;
   }
 
-  // Start decode thread
+  // デコードスレッドを開始
   m_decodeThread = std::thread(&VideoPlayer::DecodeThreadFunc, this);
   
   LOG_INFO("VideoPlayer", "Initialized streaming for video: {} ({}x{})", filePath, m_width, m_height);
@@ -137,13 +137,13 @@ bool VideoPlayer::CreateTexture(int width, int height) {
 void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
   if (!m_texture || !context) return;
 
-  // dt is in seconds. Convert to 100-nanosecond units (1s = 10,000,000 units)
+  // dtを100ナノ秒単位に変換（1秒 = 10,000,000単位）
   m_currentPlaybackTime += (LONGLONG)(dt * 10000000LL);
 
   ComPtr<IMFSample> latestSample;
   LONGLONG latestTimestamp = -1;
 
-  // Extract frames from queue that are due to be displayed
+  // 表示期限に達したフレームをキューから抽出
   {
     std::lock_guard<std::mutex> lock(m_mutex);
     while (!m_frameQueue.empty()) {
@@ -153,12 +153,12 @@ void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
         latestTimestamp = frame.timestamp;
         m_frameQueue.pop();
       } else {
-        break; // Next frame is in the future
+        break; // 次のフレームは未来の時刻
       }
     }
   }
 
-  // If we got a new frame to display, upload to D3D11 Texture
+  // 表示可能な新規フレームがあればD3D11テクスチャにアップロード
   if (latestSample) {
     ComPtr<IMFMediaBuffer> buffer;
     latestSample->ConvertToContiguousBuffer(&buffer);
@@ -169,8 +169,7 @@ void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
         return;
       }
 
-      // RGB32 can be top-down or bottom-up
-      // If stride is positive, it's top-down. If negative, it's bottom-up.
+      // ストライドの正負（正:上から下、負:下から上）に基づいてテクスチャを格納
       int stride = (int)m_stride;
       bool bottomUp = (stride < 0);
       if (bottomUp) stride = -stride;
@@ -185,7 +184,7 @@ void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
         memcpy(m_frameUploadBuffer.data() + y * m_width * 4, data + srcY * stride, m_width * 4);
       }
 
-      // Force alpha to 255 to ensure D2D/D3D blend doesn't make it transparent
+      // アルファ値を最大化して透過処理による非表示を防止
       uint32_t* pixels = reinterpret_cast<uint32_t*>(m_frameUploadBuffer.data());
       for (size_t i = 0; i < (size_t)m_width * m_height; ++i) {
         pixels[i] |= 0xFF000000;
@@ -206,7 +205,7 @@ void VideoPlayer::DecodeThreadFunc() {
     bool queueFull = false;
     {
       std::lock_guard<std::mutex> lock(m_mutex);
-      // Keep up to 5 frames in the queue
+      // キュー内の最大保持フレーム数を5に制限
       queueFull = (m_frameQueue.size() >= 5);
     }
 
