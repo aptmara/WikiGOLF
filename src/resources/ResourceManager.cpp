@@ -396,14 +396,17 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 }
 
 MeshHandle ResourceManager::LoadMesh(const std::string &path) {
-  LOG_DEBUG("Resource", "LoadMesh: {}", path.c_str());
+  LOG_DEBUG("Resource", "LoadMesh: START {}", path.c_str());
   // キャッシュヒット確認
   if (auto it = m_meshCache.find(path); it != m_meshCache.end()) {
+    LOG_DEBUG("Resource", "LoadMesh: Cache hit for {}", path.c_str());
     if (m_meshPool.Get(it->second)) { // ハンドル有効性確認
       return it->second;
     }
+    LOG_DEBUG("Resource", "LoadMesh: Cache handle invalid for {}", path.c_str());
   }
 
+  LOG_DEBUG("Resource", "LoadMesh: Creating new mesh for {}", path.c_str());
   graphics::Mesh mesh;
   bool success = false;
 
@@ -433,6 +436,7 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
     mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
     success = true;
   } else {
+    LOG_DEBUG("Resource", "LoadMesh: Loading from file {}", path.c_str());
     // ファイル拡張子を判定してローダーを選択
     std::vector<graphics::Vertex> vertices;
     std::vector<uint32_t> indices;

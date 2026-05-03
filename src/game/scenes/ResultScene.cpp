@@ -191,6 +191,7 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
     ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
     return;
   }
+  LOG_DEBUG("ResultScene", "OnUpdate: Finished successfully");
 }
 
 /**
@@ -237,6 +238,7 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
 
     // 紙吹雪を生成します。
     {
+      LOG_DEBUG("ResultScene", "UpdateVisuals: Creating confetti entity");
       auto e = CreateEntity(ctx.world);
       auto &t = ctx.world.Add<Transform>(e);
       float x = (static_cast<float>(rand() % 200) / 10.0f) - 10.0f;
@@ -244,11 +246,15 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
       t.position = {x, 15.0f, z};
       t.scale = {0.15f, 0.15f, 0.15f};
 
+      LOG_DEBUG("ResultScene", "UpdateVisuals: Adding MeshRenderer");
       auto &mr = ctx.world.Add<MeshRenderer>(e);
+      LOG_DEBUG("ResultScene", "UpdateVisuals: Loading cube mesh");
       mr.mesh = ctx.resource.LoadMesh("builtin/cube");
+      LOG_DEBUG("ResultScene", "UpdateVisuals: Loading confetti shader");
       mr.shader =
-          ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+          ctx.resource.LoadShader("Confetti", L"Assets/shaders/BasicVS.hlsl",
                                   L"Assets/shaders/TransitionPS.hlsl");
+      LOG_DEBUG("ResultScene", "UpdateVisuals: Confetti creation done");
 
       // ランダムな配色を設定します。
       int type = rand() % 3;
@@ -559,6 +565,8 @@ void ResultScene::OnExit(core::GameContext &ctx) {
  * @brief 描画処理を行います（実描画はECSシステムが担当）。
  */
 void ResultScene::Render(core::GameContext &ctx) {
+  LOG_DEBUG("ResultScene", "Render: START");
+  LOG_DEBUG("ResultScene", "Render: FINISHED");
 }
 
 } // namespace game::scenes

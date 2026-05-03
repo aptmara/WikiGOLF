@@ -205,6 +205,7 @@ bool InitializeSkyboxStates(ID3D11Device *device, SkyboxRenderState &state) {
 } // namespace
 
 void SkyboxRenderSystem(core::GameContext &ctx) {
+  LOG_DEBUG("SkyboxRender", "START");
   auto *device = ctx.graphics.GetDevice();
   auto *context = ctx.graphics.GetContext();
   auto &world = ctx.world;
@@ -212,6 +213,7 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
   // グローバルステート取得または初期化
   auto *state = world.GetGlobal<SkyboxRenderState>();
   if (!state) {
+    LOG_DEBUG("SkyboxRender", "Initializing global state");
     SkyboxRenderState newState;
     if (!InitializeSkyboxMesh(device, newState)) {
       return;
@@ -243,17 +245,16 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
       });
 
   if (!cameraFound) {
+    LOG_DEBUG("SkyboxRender", "No camera found");
     return; // カメラがなければ描画しない
   }
 
   // スカイボックスシェーダー取得
-  // シェーダーパスは build/Debug/ からの相対パスで Assets/shaders/ を指定する
-  // （CMakeのPOST_BUILDで shaders/ が Assets/shaders/ へコピーされるため）
   auto skyboxShaderHandle = ctx.resource.LoadShader(
       "Skybox", L"Assets/shaders/SkyboxVS.hlsl", L"Assets/shaders/SkyboxPS.hlsl");
   auto skyboxShader = ctx.resource.GetShader(skyboxShaderHandle);
   if (!skyboxShader) {
-    LOG_WARN("Skybox", "Skybox shader not loaded — SkyboxVS/PS.hlsl が見つからない");
+    LOG_WARN("Skybox", "Skybox shader not loaded");
     return;
   }
   if (!skyboxShader->IsValid()) {
@@ -272,6 +273,7 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
       return;
     }
 
+    LOG_DEBUG("SkyboxRender", "Drawing Skybox Entity {}", e);
     // 定数バッファ更新
     D3D11_MAPPED_SUBRESOURCE mapped;
     if (SUCCEEDED(context->Map(state->constantBuffer.Get(), 0,
@@ -314,10 +316,12 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
     // 描画
     context->DrawIndexed(state->indexCount, 0, 0);
 
-    // ステートリセット（他の描画への影響を防ぐ）
+    // ステートリセット
     context->OMSetDepthStencilState(nullptr, 0);
     context->RSSetState(nullptr);
+    LOG_DEBUG("SkyboxRender", "Draw call finished");
   });
+  LOG_DEBUG("SkyboxRender", "FINISHED");
 }
 
 } // namespace game::systems

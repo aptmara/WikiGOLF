@@ -129,6 +129,7 @@ void RenderSystem(core::GameContext &ctx) {
     auto *shader = ctx.resource.GetShader(r.shader);
 
     if (mesh && shader) {
+      LOG_DEBUG("RenderSystem", "Drawing Entity {} (Mesh: {}, Shader: {})", e, (void*)mesh, (void*)shader);
       // ブレンドステート設定
       if (r.blendMode == components::BlendMode::Alpha) {
         context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
@@ -140,7 +141,6 @@ void RenderSystem(core::GameContext &ctx) {
         context->OMSetBlendState(state->addBlendState.Get(), nullptr,
                                  0xFFFFFFFF);
       } else if (r.isTransparent) {
-        // 後方互換性：isTransparent が true なら Alpha ブレンド
         context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
                                  0xFFFFFFFF);
       } else {
@@ -163,13 +163,12 @@ void RenderSystem(core::GameContext &ctx) {
         constants->materialFlags = {hasDiffuse ? 1.0f : 0.0f,
                                     hasNormal ? 1.0f : 0.0f, r.customFlags.x,
                                     r.customFlags.y};
-        // 簡易ライティング用 (左上奥からの光)
         constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f};
         constants->cameraPos = camPos;
         context->Unmap(state->cBuffer.Get(), 0);
       }
 
-      // テクスチャバインド（あれば）
+      // テクスチャバインド
       ID3D11ShaderResourceView *nullSRV = nullptr;
       if (r.hasTexture && r.textureSRV) {
         context->PSSetShaderResources(0, 1, r.textureSRV.GetAddressOf());
@@ -177,17 +176,10 @@ void RenderSystem(core::GameContext &ctx) {
         context->PSSetShaderResources(0, 1, &nullSRV);
       }
 
-      if (r.hasNormalMap && r.normalMapSRV) {
-        context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
-      } else {
-        context->PSSetShaderResources(1, 1, &nullSRV);
-      }
-
       context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
-      context->PSSetSamplers(1, 1, state->sampler.GetAddressOf());
-
       mesh->Bind(context);
       mesh->Draw(context);
+      LOG_DEBUG("RenderSystem", "Draw call finished for Entity {}", e);
     }
   };
 
