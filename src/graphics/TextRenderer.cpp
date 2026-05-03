@@ -164,6 +164,7 @@ void TextRenderer::BeginDraw() {
 
 void TextRenderer::EndDraw() {
   if (m_d2dContext) {
+    LOG_DEBUG("TextRenderer", "EndDraw: Flashing D2D...");
     HRESULT hr = m_d2dContext->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET) {
       LOG_WARN("TextRenderer", "D2D RenderTarget lost, recreating...");
@@ -179,18 +180,6 @@ void TextRenderer::EndDraw() {
                     "Attempting full reset...",
                     static_cast<uint32_t>(hrRecreate));
 
-          // ターゲット再作成失敗ならフルリセット
-          // Shutdownでキャッシュなども消えるが、描画不可よりはマシ
-          // SwapChainポインタは一旦退避が必要（Shutdownで消えるなら）
-          // しかしShutdownはメンバ変数をResetするだけ。InitializeでSwapChainを再利用する。
-          // m_swapChainはComPtrなのでShutdownでResetされないように注意が必要だが
-          // Shutdownの実装を見ると m_d2dContext.Reset() 等であり、m_swapChain
-          // は触っていない（はず）
-          // ...確認すると Shutdown() 内には m_swapChain のリセット処理がない。
-          // TextRenderer.h を見ると m_swapChain はメンバ変数として追加したが
-          // Shutdown には入れていないはず。 なのでそのまま Shutdown ->
-          // Initialize できる。
-
           ComPtr<IDXGISwapChain> swapChain = m_swapChain; // 退避（念のため）
           Shutdown();
           if (Initialize(swapChain.Get())) {
@@ -205,6 +194,7 @@ void TextRenderer::EndDraw() {
       LOG_WARN("TextRenderer", "EndDraw failed with HRESULT: {:08X}",
                static_cast<uint32_t>(hr));
     }
+    LOG_DEBUG("TextRenderer", "EndDraw: Finished");
   }
 }
 

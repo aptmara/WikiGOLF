@@ -166,6 +166,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       audioSystem.Update(ctx);
 
       // 描画開始
+      LOG_DEBUG("Main", "Frame Begin");
       graphics.BeginFrame();
 
       // スカイボックス描画 (背景)
@@ -185,6 +186,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
       // 描画終了
       graphics.EndFrame();
+      LOG_DEBUG("Main", "Frame End");
 
       // 入力状態更新（次フレームのためにフラグクリア）
       // Logic処理の後、描画の後に行う

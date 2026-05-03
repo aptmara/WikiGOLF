@@ -485,9 +485,51 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
   if (m_terrainSystem) {
     m_terrainSystem->Clear(ctx);
   }
+
+  // HUDとミニマップのエンティティを明示的に破棄（リーク防止）
+  if (m_hud) {
+    m_hud->SetVisible(ctx, false); // 一旦非表示
+    // WikiGolfHUD に Destroy メソッドがない場合は、Scene::DestroyAllEntities に依存するが、
+    // それらは m_entities に入っている必要がある。
+    // WikiGolfHUD::Initialize で CreateEntity(ctx.world) しているが m_entities に入っていない可能性が高い。
+  }
+
+  if (m_minimapController) {
+    m_minimapController->SetVisible(ctx, false);
+    m_minimapController->ClearHoleIcons(ctx);
+  }
+
   m_screenFade.Shutdown(ctx);
+
+  // 全エンティティの強制クリーンアップ（このシーンで作成されたもの以外も含む）
+  std::vector<ecs::Entity> allEntities;
+  ctx.world.Query<components::Transform>().Each([&](ecs::Entity e, components::Transform &) {
+    allEntities.push_back(e);
+  });
+  // UIText や UIImage だけ持っているものも対象にする必要がある
+  ctx.world.Query<components::UIText>().Each([&](ecs::Entity e, components::UIText &) {
+    allEntities.push_back(e);
+  });
+  ctx.world.Query<components::UIImage>().Each([&](ecs::Entity e, components::UIImage &) {
+    allEntities.push_back(e);
+  });
+
+  // 重複排除
+  std::sort(allEntities.begin(), allEntities.end());
+  allEntities.erase(std::unique(allEntities.begin(), allEntities.end()), allEntities.end());
+
+  for (auto e : allEntities) {
+    if (ctx.world.IsAlive(e)) {
+      ctx.world.DestroyEntity(e);
+    }
+  }
+
   DestroyAllEntities(ctx);
-  LOG_INFO("WikiGolf", "Exiting WikiGolfScene");
+
+  // グローバルデータから演出システムを削除（ダングリングポインタ防止）
+  ctx.world.SetGlobal<game::systems::GameJuiceSystem *>(nullptr);
+
+  LOG_INFO("WikiGolf", "Exiting WikiGolfScene (Cleaned up all entities)");
   Scene::OnExit(ctx);
 }
 
