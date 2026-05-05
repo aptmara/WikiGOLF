@@ -50,6 +50,14 @@ public:
   void PlaySE(core::GameContext &ctx, const std::string &name,
               float volume = 1.0f, float pitch = 0.0f);
 
+  /// @brief 任意パスの音声をラベル付きで一回再生
+  void PlayOneShotFile(core::GameContext &ctx, const std::string &label,
+                       const std::string &path, float volume = 1.0f,
+                       float pitch = 0.0f);
+
+  /// @brief ラベル付き一回再生音声を停止
+  void StopOneShot(const std::string &label);
+
   /// @brief BGMを再生（ループ）
   /// @param name ファイル名
   void PlayBGM(core::GameContext &ctx, const std::string &name,
@@ -87,6 +95,9 @@ private:
 
   // ループSE（ラベル管理）
   std::map<std::string, std::unique_ptr<ActiveVoice>> m_loopingSEs;
+
+  // ラベル付き一回再生音声
+  std::map<std::string, std::unique_ptr<ActiveVoice>> m_oneShotVoices;
 
   // BGM用
   IXAudio2SourceVoice *m_bgmVoice = nullptr;

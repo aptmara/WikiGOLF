@@ -38,6 +38,15 @@ static std::string FindAudioPath(const std::string &filename) {
   return "Assets/sounds/" + filename; // デフォルト
 }
 
+static void StopAndDestroyVoice(IXAudio2SourceVoice *&voice) {
+  if (!voice) {
+    return;
+  }
+  voice->Stop();
+  voice->DestroyVoice();
+  voice = nullptr;
+}
+
 AudioSystem::~AudioSystem() { Shutdown(); }
 
 bool AudioSystem::Initialize() {
@@ -78,20 +87,19 @@ void AudioSystem::Shutdown() {
 
   // SE全停止
   for (auto &v : m_activeSEs) {
-    if (v->voice) {
-      v->voice->Stop();
-      v->voice->DestroyVoice();
-    }
+    StopAndDestroyVoice(v->voice);
   }
   m_activeSEs.clear();
 
   for (auto &pair : m_loopingSEs) {
-    if (pair.second->voice) {
-      pair.second->voice->Stop();
-      pair.second->voice->DestroyVoice();
-    }
+    StopAndDestroyVoice(pair.second->voice);
   }
   m_loopingSEs.clear();
+
+  for (auto &pair : m_oneShotVoices) {
+    StopAndDestroyVoice(pair.second->voice);
+  }
+  m_oneShotVoices.clear();
 
   if (m_masterVoice) {
     m_masterVoice->DestroyVoice();
@@ -106,10 +114,20 @@ void AudioSystem::Update(core::GameContext &ctx) {
   auto it = m_activeSEs.begin();
   while (it != m_activeSEs.end()) {
     if ((*it)->callback.isFinished) {
-      (*it)->voice->DestroyVoice();
+      StopAndDestroyVoice((*it)->voice);
       it = m_activeSEs.erase(it);
     } else {
       ++it;
+    }
+  }
+
+  auto oneShotIt = m_oneShotVoices.begin();
+  while (oneShotIt != m_oneShotVoices.end()) {
+    if (oneShotIt->second->callback.isFinished) {
+      StopAndDestroyVoice(oneShotIt->second->voice);
+      oneShotIt = m_oneShotVoices.erase(oneShotIt);
+    } else {
+      ++oneShotIt;
     }
   }
 }
@@ -161,8 +179,7 @@ void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
       }
     }
     if (count >= 3 && oldestIdx != size_t(-1)) {
-      m_activeSEs[oldestIdx]->voice->Stop();
-      m_activeSEs[oldestIdx]->voice->DestroyVoice();
+      StopAndDestroyVoice(m_activeSEs[oldestIdx]->voice);
       m_activeSEs.erase(m_activeSEs.begin() + oldestIdx);
     }
   }
@@ -170,8 +187,7 @@ void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
   // 同時再生数管理（全体のキュー方式：古いものから破棄）
   if (m_activeSEs.size() >= MAX_ACTIVE_SE) {
     auto &oldest = m_activeSEs.front();
-    oldest->voice->Stop();
-    oldest->voice->DestroyVoice();
+    StopAndDestroyVoice(oldest->voice);
     m_activeSEs.erase(m_activeSEs.begin());
   }
 
@@ -194,6 +210,75 @@ void AudioSystem::PlaySE(core::GameContext &ctx, const std::string &name,
   m_activeSEs.push_back(std::move(activeVoice));
 }
 
+void AudioSystem::PlayOneShotFile(core::GameContext &ctx,
+                                  const std::string &label,
+                                  const std::string &path, float volume,
+                                  float pitch) {
+  if (!m_xaudio2 || label.empty() || path.empty()) {
+    return;
+  }
+
+  StopOneShot(label);
+
+  auto handle = ctx.resource.LoadAudio(path);
+  auto *clip = ctx.resource.GetAudio(handle);
+  if (!clip || clip->buffer.empty()) {
+    LOG_WARN("Audio", "One-shot audio not found: {} ({})", label, path);
+    return;
+  }
+  if (clip->format.empty()) {
+    LOG_ERROR("Audio", "One-shot audio format is empty: {} ({})", label, path);
+    return;
+  }
+
+  auto activeVoice = std::make_unique<ActiveVoice>();
+  HRESULT hr = m_xaudio2->CreateSourceVoice(
+      &activeVoice->voice,
+      reinterpret_cast<const WAVEFORMATEX *>(clip->format.data()), 0,
+      XAUDIO2_DEFAULT_FREQ_RATIO, &activeVoice->callback);
+  if (FAILED(hr)) {
+    LOG_ERROR("Audio", "Failed to create one-shot voice: {} ({})", label, path);
+    return;
+  }
+
+  activeVoice->debugName = label;
+  activeVoice->currentFile = path;
+  activeVoice->voice->SetVolume(volume);
+  activeVoice->voice->SetFrequencyRatio(std::pow(2.0f, pitch));
+
+  XAUDIO2_BUFFER buffer = {};
+  buffer.pAudioData = clip->buffer.data();
+  buffer.AudioBytes = static_cast<UINT32>(clip->buffer.size());
+  buffer.Flags = XAUDIO2_END_OF_STREAM;
+
+  hr = activeVoice->voice->SubmitSourceBuffer(&buffer);
+  if (FAILED(hr)) {
+    StopAndDestroyVoice(activeVoice->voice);
+    LOG_ERROR("Audio", "Failed to submit one-shot audio buffer: {} ({})", label,
+              path);
+    return;
+  }
+
+  hr = activeVoice->voice->Start();
+  if (FAILED(hr)) {
+    StopAndDestroyVoice(activeVoice->voice);
+    LOG_ERROR("Audio", "Failed to start one-shot audio: {} ({})", label, path);
+    return;
+  }
+
+  m_oneShotVoices[label] = std::move(activeVoice);
+}
+
+void AudioSystem::StopOneShot(const std::string &label) {
+  auto it = m_oneShotVoices.find(label);
+  if (it == m_oneShotVoices.end()) {
+    return;
+  }
+
+  StopAndDestroyVoice(it->second->voice);
+  m_oneShotVoices.erase(it);
+}
+
 void AudioSystem::SetLoopingSE(core::GameContext &ctx, const std::string &label,
                                const std::string &name, float volume,
                                float pitch) {
@@ -205,8 +290,7 @@ void AudioSystem::SetLoopingSE(core::GameContext &ctx, const std::string &label,
 
   if (shouldStop) {
     if (it != m_loopingSEs.end()) {
-      it->second->voice->Stop();
-      it->second->voice->DestroyVoice();
+      StopAndDestroyVoice(it->second->voice);
       m_loopingSEs.erase(it);
     }
     return;
@@ -219,8 +303,7 @@ void AudioSystem::SetLoopingSE(core::GameContext &ctx, const std::string &label,
   }
 
   if (it != m_loopingSEs.end()) {
-    it->second->voice->Stop();
-    it->second->voice->DestroyVoice();
+    StopAndDestroyVoice(it->second->voice);
     m_loopingSEs.erase(it);
   }
 
@@ -252,7 +335,7 @@ void AudioSystem::SetLoopingSE(core::GameContext &ctx, const std::string &label,
 
   hr = activeVoice->voice->SubmitSourceBuffer(&buffer);
   if (FAILED(hr)) {
-    activeVoice->voice->DestroyVoice();
+    StopAndDestroyVoice(activeVoice->voice);
     return;
   }
 
