@@ -79,6 +79,13 @@ public:
         return m_generations[index] == GetEntityGeneration(entity);
     }
 
+    /// @brief アクティブなエンティティ数を取得する
+    /// @author 山内陽
+    /// @return 使用中スロット数に基づくアクティブエンティティ数
+    size_t GetEntityCount() const {
+        return m_generations.size() - m_freeIndices.size();
+    }
+
     // コンポーネント管理
 
     /// @brief コンポーネントを追加（または上書き）
