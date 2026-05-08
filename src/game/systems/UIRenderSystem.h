@@ -24,7 +24,6 @@ public:
 
   /// @brief システム実行（ECS パイプラインから呼び出される）
   void operator()(core::GameContext &ctx) {
-    LOG_DEBUG("UIRender", "START");
     if (!m_renderer.IsValid())
       return;
 
@@ -36,8 +35,6 @@ public:
             uiTexts.push_back({e, &ui});
           }
         });
-
-    LOG_DEBUG("UIRender", "Collected {} visible texts", uiTexts.size());
 
     // レイヤーごとにソート（背面から順に描画するため）
     std::sort(uiTexts.begin(), uiTexts.end(), [](const auto &a, const auto &b) {
@@ -53,14 +50,12 @@ public:
       float h = (ui->height > 0) ? ui->height : m_renderer.GetHeight() - ui->y;
       D2D1_RECT_F rect = D2D1::RectF(ui->x, ui->y, ui->x + w, ui->y + h);
 
-      LOG_DEBUG("UIRender", "Drawing Text for Entity {} (Layer: {})", entity, ui->layer);
       // テキスト描画
       m_renderer.RenderText(ui->text, rect, ui->style);
     }
 
 
     m_renderer.EndDraw();
-    LOG_DEBUG("UIRender", "FINISHED");
   }
 
 private:

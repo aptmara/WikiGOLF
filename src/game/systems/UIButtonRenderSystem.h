@@ -18,7 +18,6 @@ public:
       : m_renderer(renderer) {}
 
   void operator()(core::GameContext &ctx) {
-    LOG_DEBUG("UIButtonRender", "START");
     if (!m_renderer.IsValid())
       return;
 
@@ -29,7 +28,6 @@ public:
           if (!btn.visible)
             return;
 
-          LOG_DEBUG("UIButtonRender", "Drawing Button: {}", core::ToString(btn.label));
           D2D1_RECT_F rect =
               D2D1::RectF(btn.x, btn.y, btn.x + btn.width, btn.y + btn.height);
           DirectX::XMFLOAT4 bgColor = btn.GetCurrentColor();
@@ -51,7 +49,6 @@ public:
         });
 
     m_renderer.EndDraw();
-    LOG_DEBUG("UIButtonRender", "FINISHED");
   }
 
 private:
