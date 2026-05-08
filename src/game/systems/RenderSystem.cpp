@@ -129,7 +129,6 @@ void RenderSystem(core::GameContext &ctx) {
     auto *shader = ctx.resource.GetShader(r.shader);
 
     if (mesh && shader) {
-      LOG_DEBUG("RenderSystem", "Drawing Entity {} (Mesh: {}, Shader: {})", e, (void*)mesh, (void*)shader);
       // ブレンドステート設定
       if (r.blendMode == components::BlendMode::Alpha) {
         context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
@@ -179,7 +178,6 @@ void RenderSystem(core::GameContext &ctx) {
       context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
       mesh->Bind(context);
       mesh->Draw(context);
-      LOG_DEBUG("RenderSystem", "Draw call finished for Entity {}", e);
     }
   };
 

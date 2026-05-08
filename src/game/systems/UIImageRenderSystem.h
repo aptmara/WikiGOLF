@@ -20,7 +20,6 @@ public:
       : m_renderer(renderer) {}
 
   void operator()(core::GameContext &ctx) {
-    LOG_DEBUG("UIImageRender", "START");
     if (!m_renderer.IsValid())
       return;
 
@@ -32,8 +31,6 @@ public:
             images.push_back(&ui);
           }
         });
-
-    LOG_DEBUG("UIImageRender", "Collected {} visible images", images.size());
 
     // レイヤーごとにソート（背面から順に描画するため）
     std::sort(images.begin(), images.end(),
@@ -52,7 +49,6 @@ public:
       float h = (ui->height > 0) ? ui->height : 100.0f;
       D2D1_RECT_F rect = D2D1::RectF(ui->x, ui->y, ui->x + w, ui->y + h);
 
-      LOG_DEBUG("UIImageRender", "Drawing Image: {}", ui->texturePath);
       if (ui->textureSRV) {
         // 既存テクスチャで描画
         m_renderer.RenderImage(ui->textureSRV, rect, ui->alpha, ui->rotation);
@@ -69,7 +65,6 @@ public:
     }
 
     m_renderer.EndDraw();
-    LOG_DEBUG("UIImageRender", "FINISHED");
   }
 
 private:

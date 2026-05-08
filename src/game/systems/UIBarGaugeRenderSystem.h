@@ -15,7 +15,6 @@ namespace game::systems {
 class UIBarGaugeRenderSystem {
 public:
   void operator()(core::GameContext &ctx) {
-    LOG_DEBUG("UIBarGaugeRender", "START");
     if (!ctx.textRenderer)
       return;
 
@@ -27,7 +26,6 @@ public:
           if (!gauge.isVisible)
             return;
 
-          LOG_DEBUG("UIBarGaugeRender", "Drawing Gauge for Entity {}", entity);
           // 背景の描画
           D2D1_RECT_F bgRect = D2D1::RectF(
               gauge.x, gauge.y, gauge.x + gauge.width, gauge.y + gauge.height);
@@ -121,7 +119,6 @@ public:
         });
 
     ctx.textRenderer->EndDraw();
-    LOG_DEBUG("UIBarGaugeRender", "FINISHED");
   }
 };
 

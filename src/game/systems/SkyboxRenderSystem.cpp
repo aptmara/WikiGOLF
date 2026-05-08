@@ -205,7 +205,6 @@ bool InitializeSkyboxStates(ID3D11Device *device, SkyboxRenderState &state) {
 } // namespace
 
 void SkyboxRenderSystem(core::GameContext &ctx) {
-  LOG_DEBUG("SkyboxRender", "START");
   auto *device = ctx.graphics.GetDevice();
   auto *context = ctx.graphics.GetContext();
   auto &world = ctx.world;
@@ -213,7 +212,6 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
   // グローバルステート取得または初期化
   auto *state = world.GetGlobal<SkyboxRenderState>();
   if (!state) {
-    LOG_DEBUG("SkyboxRender", "Initializing global state");
     SkyboxRenderState newState;
     if (!InitializeSkyboxMesh(device, newState)) {
       return;
@@ -245,7 +243,6 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
       });
 
   if (!cameraFound) {
-    LOG_DEBUG("SkyboxRender", "No camera found");
     return; // カメラがなければ描画しない
   }
 
@@ -273,7 +270,6 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
       return;
     }
 
-    LOG_DEBUG("SkyboxRender", "Drawing Skybox Entity {}", e);
     // 定数バッファ更新
     D3D11_MAPPED_SUBRESOURCE mapped;
     if (SUCCEEDED(context->Map(state->constantBuffer.Get(), 0,
@@ -319,9 +315,7 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
     // ステートリセット
     context->OMSetDepthStencilState(nullptr, 0);
     context->RSSetState(nullptr);
-    LOG_DEBUG("SkyboxRender", "Draw call finished");
   });
-  LOG_DEBUG("SkyboxRender", "FINISHED");
 }
 
 } // namespace game::systems
