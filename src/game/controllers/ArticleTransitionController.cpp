@@ -53,7 +53,6 @@ void ArticleTransitionController::Cleanup(core::GameContext& ctx) {
 }
 
 void ArticleTransitionController::StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap) {
-    LOG_DEBUG("Transition", "StartTransition called with targetPage: {}", targetPage);
     m_targetBall = ball;
     m_targetCam = cam;
     m_targetSky = sky;
@@ -66,13 +65,10 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
     m_pageLoader = pageLoader;
     m_loadCompleted = false;
     m_globeRotation = 0.0f;
-    m_cartAngle = 0.0f;
     m_tipTimer = 0.0f;
     m_tipIndex = 0;
 
-    LOG_DEBUG("Transition", "Calling SpawnEntities");
     SpawnEntities(ctx);
-    LOG_DEBUG("Transition", "SpawnEntities finished");
 
     if (m_pageLoader) {
         // 非同期ロード開始
@@ -87,10 +83,10 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
 }
 
 void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
-    LOG_DEBUG("Transition", "SpawnEntities: Step 1 (Shader)");
     auto shaderHandle = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
 
-    LOG_DEBUG("Transition", "SpawnEntities: Step 2 (Camera)");
+    CaptureMainCamera(ctx);
+
     // トランジション専用カメラ（既存フィールドと干渉しないよう遥か上空に配置）
     m_cameraEntity = ctx.world.CreateEntity();
     auto& camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
@@ -103,12 +99,11 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     cam.farZ = 1000.0f;
     cam.isMainCamera = true; // メインカメラをジャックする
 
-    LOG_DEBUG("Transition", "SpawnEntities: Step 3 (Globe)");
     // 地球儀エンティティの生成
     m_globeEntity = ctx.world.CreateEntity();
     auto& globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
     globeTr.position = {0.0f, 5000.0f, 0.0f};
-    globeTr.scale = {0.1f, 0.1f, 0.1f}; // STLはサイズが大きい場合が多いので仮スケール
+    globeTr.scale = {2.0f, 2.0f, 2.0f};
     auto& globeMr = ctx.world.Add<components::MeshRenderer>(m_globeEntity);
     globeMr.mesh = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
     globeMr.shader = shaderHandle;
@@ -116,21 +111,6 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     globeMr.isTransparent = true;
     globeMr.isVisible = true;
 
-    LOG_DEBUG("Transition", "SpawnEntities: Step 4 (Cart)");
-    // ゴルフカートエンティティの生成
-    m_cartEntity = ctx.world.CreateEntity();
-    auto& cartTr = ctx.world.Add<components::Transform>(m_cartEntity);
-    cartTr.position = {10.0f, 5000.0f, 0.0f};
-    cartTr.scale = {5.0f, 5.0f, 5.0f}; // Cube用のスケール
-    auto& cartMr = ctx.world.Add<components::MeshRenderer>(m_cartEntity);
-    // AssimpがGolfCart.glbの読み込み時にクラッシュするため、一時的にbuiltin/cubeを使用
-    cartMr.mesh = ctx.resource.LoadMesh("builtin/cube");
-    cartMr.shader = shaderHandle;
-    cartMr.color = {1.0f, 1.0f, 1.0f, 0.0f};
-    cartMr.isTransparent = true;
-    cartMr.isVisible = true;
-
-    LOG_DEBUG("Transition", "SpawnEntities: Step 5 (Background)");
     // 背景エンティティの生成（暗転用）
     m_bgEntity = ctx.world.CreateEntity();
     auto& bgTr = ctx.world.Add<components::Transform>(m_bgEntity);
@@ -139,11 +119,10 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     auto& bgMr = ctx.world.Add<components::MeshRenderer>(m_bgEntity);
     bgMr.mesh = ctx.resource.LoadMesh("builtin/cube");
     bgMr.shader = shaderHandle;
-    bgMr.color = {0.05f, 0.05f, 0.1f, 0.0f};
-    bgMr.isTransparent = true;
+    bgMr.color = {0.08f, 0.14f, 0.28f, 1.0f};
+    bgMr.isTransparent = false;
     bgMr.isVisible = true;
 
-    LOG_DEBUG("Transition", "SpawnEntities: Step 6 (Text UI)");
     // UIテキストエンティティの生成
     m_textEntity = ctx.world.CreateEntity();
     auto& titleText = ctx.world.Add<components::UIText>(m_textEntity);
@@ -177,16 +156,42 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
 }
 
 void ArticleTransitionController::DestroyEntities(core::GameContext& ctx) {
+    RestoreMainCamera(ctx);
+
     if (ctx.world.IsAlive(m_globeEntity)) ctx.world.DestroyEntity(m_globeEntity);
-    if (ctx.world.IsAlive(m_cartEntity)) ctx.world.DestroyEntity(m_cartEntity);
     if (ctx.world.IsAlive(m_bgEntity)) ctx.world.DestroyEntity(m_bgEntity);
     if (ctx.world.IsAlive(m_cameraEntity)) ctx.world.DestroyEntity(m_cameraEntity);
     if (ctx.world.IsAlive(m_textEntity)) ctx.world.DestroyEntity(m_textEntity);
     if (ctx.world.IsAlive(m_progressTextEntity)) ctx.world.DestroyEntity(m_progressTextEntity);
     if (ctx.world.IsAlive(m_captionTextEntity)) ctx.world.DestroyEntity(m_captionTextEntity);
 
-    m_globeEntity = m_cartEntity = m_bgEntity = m_cameraEntity = UINT32_MAX;
+    m_globeEntity = m_bgEntity = m_cameraEntity = UINT32_MAX;
     m_textEntity = m_progressTextEntity = m_captionTextEntity = UINT32_MAX;
+}
+
+void ArticleTransitionController::CaptureMainCamera(core::GameContext& ctx) {
+    m_previousMainCameraEntity = UINT32_MAX;
+
+    ctx.world.Query<components::Camera>().Each(
+        [&](ecs::Entity entity, components::Camera& camera) {
+            if (camera.isMainCamera && m_previousMainCameraEntity == UINT32_MAX) {
+                m_previousMainCameraEntity = entity;
+            }
+            camera.isMainCamera = false;
+        });
+}
+
+void ArticleTransitionController::RestoreMainCamera(core::GameContext& ctx) {
+    if (m_previousMainCameraEntity == UINT32_MAX) {
+        return;
+    }
+
+    if (ctx.world.IsAlive(m_previousMainCameraEntity)) {
+        if (auto* camera = ctx.world.Get<components::Camera>(m_previousMainCameraEntity)) {
+            camera->isMainCamera = true;
+        }
+    }
+    m_previousMainCameraEntity = UINT32_MAX;
 }
 
 bool ArticleTransitionController::Update(core::GameContext& ctx) {
@@ -254,8 +259,6 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
 
     // アルファ適用
     if (auto* mr = ctx.world.Get<components::MeshRenderer>(m_globeEntity)) mr->color.w = m_fadeAlpha;
-    if (auto* mr = ctx.world.Get<components::MeshRenderer>(m_cartEntity)) mr->color.w = m_fadeAlpha;
-    if (auto* mr = ctx.world.Get<components::MeshRenderer>(m_bgEntity)) mr->color.w = m_fadeAlpha;
 
     return false;
 }
@@ -265,19 +268,6 @@ void ArticleTransitionController::UpdateAnimation(core::GameContext& ctx, float 
     m_globeRotation += dt * 0.5f;
     if (auto* tr = ctx.world.Get<components::Transform>(m_globeEntity)) {
         auto rot = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, m_globeRotation, 0.2f);
-        DirectX::XMStoreFloat4(&tr->rotation, rot);
-    }
-
-    // カートの公転 (半径15, Y軸回転)
-    m_cartAngle += dt * 1.5f;
-    float radius = 15.0f;
-    if (auto* tr = ctx.world.Get<components::Transform>(m_cartEntity)) {
-        tr->position.x = sinf(m_cartAngle) * radius;
-        tr->position.z = cosf(m_cartAngle) * radius;
-        tr->position.y = 5000.0f + sinf(m_cartAngle * 3.0f) * 1.5f; // 上下にバウンド
-
-        // カートが常に進行方向を向くように
-        auto rot = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, m_cartAngle + DirectX::XM_PIDIV2, 0.0f);
         DirectX::XMStoreFloat4(&tr->rotation, rot);
     }
 }
@@ -312,7 +302,7 @@ void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
     }
 
     const std::wstring tips[] = {
-        L"Cart is traversing the links...",
+        L"Traversing the knowledge links...",
         L"Checking knowledge base...",
         L"Generating terrain...",
         L"Almost there..."
