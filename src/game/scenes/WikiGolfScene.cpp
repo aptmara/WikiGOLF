@@ -354,7 +354,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   
   if (m_transitionController) {
       m_phase = ScenePhase::Transitioning;
-      // ロード中は地球儀+カートのみ表示するためHUD/ミニマップを非表示
+      // ロード中は地球儀のみ表示するためHUD/ミニマップを非表示
       if (m_hud) m_hud->SetVisible(ctx, false);
       if (m_minimapController) m_minimapController->SetVisible(ctx, false);
       // ガイド矢印を非表示
@@ -457,7 +457,7 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
 
   if (m_transitionController && m_pageLoader) {
     m_phase = ScenePhase::Transitioning;
-    // ロード中は地球儀+カートのみ表示するためHUD/ミニマップを非表示
+    // ロード中は地球儀のみ表示するためHUD/ミニマップを非表示
     if (m_hud) m_hud->SetVisible(ctx, false);
     if (m_minimapController) m_minimapController->SetVisible(ctx, false);
     // ガイド矢印を非表示

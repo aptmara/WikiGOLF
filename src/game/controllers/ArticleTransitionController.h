@@ -34,6 +34,10 @@ public:
 private:
     void SpawnEntities(core::GameContext& ctx);
     void DestroyEntities(core::GameContext& ctx);
+    /// @brief 遷移演出前のメインカメラ状態を退避する
+    void CaptureMainCamera(core::GameContext& ctx);
+    /// @brief 遷移演出後に元のメインカメラを復元する
+    void RestoreMainCamera(core::GameContext& ctx);
     void UpdateAnimation(core::GameContext& ctx, float dt);
     void UpdateUI(core::GameContext& ctx, float dt);
     void ResetLoadState();
@@ -71,13 +75,12 @@ private:
 
     // アニメーション用変数
     float m_globeRotation = 0.0f;
-    float m_cartAngle = 0.0f;
 
     // エンティティ
     ecs::Entity m_globeEntity = UINT32_MAX;
-    ecs::Entity m_cartEntity = UINT32_MAX;
     ecs::Entity m_bgEntity = UINT32_MAX;
     ecs::Entity m_cameraEntity = UINT32_MAX; // トランジション専用カメラ
+    ecs::Entity m_previousMainCameraEntity = UINT32_MAX;
     
     // UI エンティティ
     ecs::Entity m_textEntity = UINT32_MAX;
