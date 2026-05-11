@@ -39,6 +39,8 @@ public:
   void OnExit(core::GameContext &ctx) override;
 
 private:
+  static constexpr const char *kIntroAudioLabel = "title_intro_video_audio";
+
   // --- 3D エンティティ ---
   ecs::Entity m_cameraEntity  = 0; ///< カメラ
   ecs::Entity m_skyboxEntity  = 0; ///< スカイボックス
@@ -79,6 +81,7 @@ private:
   bool m_startupLoadCompleted = false;
 
   void FinalizeStartupLoad(core::GameContext &ctx);
+  void StopIntroAudio(core::GameContext &ctx);
 
   ecs::Entity m_csBgEntity = 0;
   ecs::Entity m_csTitleEntity = 0;
