@@ -35,6 +35,10 @@ namespace game::scenes {
 using namespace DirectX;
 
 namespace {
+constexpr float kIntroAudioVolume = 0.8f;
+}
+
+namespace {
 std::string UrlDecode(const std::string& src) {
   std::string ret;
   for (size_t i = 0; i < src.length(); i++) {
@@ -91,7 +95,10 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
   m_videoPlayer = std::make_unique<graphics::VideoPlayer>();
   if (!m_videoPlayer->Initialize(ctx.graphics.GetDevice(), "Assets/videos/aptma_intro.mp4")) {
       LOG_ERROR("TitleScene", "Failed to load intro video");
+      m_videoPlayer.reset();
       m_startupLoadTask = std::async(std::launch::async, [](){});
+  } else if (ctx.audio) {
+      ctx.audio->PlayOneShotFile(ctx, kIntroAudioLabel, "Assets/videos/aptma_intro.mp4", kIntroAudioVolume);
   }
 
   m_startupLoadTask = std::async(std::launch::async, [&ctx]() {
@@ -150,6 +157,8 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
  * @brief スタートアップロード完了後の初期化処理を行います。
  */
 void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
+  StopIntroAudio(ctx);
+
 // BGM 再生
   if (ctx.audio) {
     ctx.audio->PlayBGM(ctx, "bgm_title.mp3", 0.5f);
@@ -585,6 +594,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       bool loadReady = m_startupLoadTask.valid() ? (m_startupLoadTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready) : true;
       if (m_videoPlayer->IsFinished() && loadReady) {
         m_state = TitleState::MainMenu;
+        StopIntroAudio(ctx);
         m_videoPlayer->Stop();
         m_videoPlayer.reset();
         FinalizeStartupLoad(ctx);
@@ -594,6 +604,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       bool loadReady = m_startupLoadTask.valid() ? (m_startupLoadTask.wait_for(std::chrono::seconds(0)) == std::future_status::ready) : true;
       if (loadReady) {
         m_state = TitleState::MainMenu;
+        StopIntroAudio(ctx);
         FinalizeStartupLoad(ctx);
       }
     }
@@ -671,10 +682,14 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
   } // else (MainMenu)
 
   if (newGame) {
+    StopIntroAudio(ctx);
     auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));
   }
-  if (exitGame) ctx.shouldClose = true;
+  if (exitGame) {
+    StopIntroAudio(ctx);
+    ctx.shouldClose = true;
+  }
 
   // ポップアップの更新
   if (m_popupTimer > 0.0f) {
@@ -728,8 +743,19 @@ void TitleScene::Render(core::GameContext &ctx) {
  */
 void TitleScene::OnExit(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnExit");
+  StopIntroAudio(ctx);
+  if (m_videoPlayer) {
+    m_videoPlayer->Stop();
+    m_videoPlayer.reset();
+  }
   DestroyAllEntities(ctx);
   m_menuEntries.clear();
+}
+
+void TitleScene::StopIntroAudio(core::GameContext &ctx) {
+  if (ctx.audio) {
+    ctx.audio->StopOneShot(kIntroAudioLabel);
+  }
 }
 
 /**
@@ -1014,6 +1040,7 @@ void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
     m_focusIndex = 0;
   }
   if (doStart) {
+    StopIntroAudio(ctx);
     game::components::WikiGlobalData data;
     data.startPage = ExtractWikiTitle(core::ToString(m_startString));
     data.targetPage = ExtractWikiTitle(core::ToString(m_goalString));
