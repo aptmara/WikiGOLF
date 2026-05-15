@@ -153,6 +153,12 @@ public:
     float GetFieldDepth() const { return m_fieldDepth; }
 
 private:
+    /**
+     * @brief 生成済みのページ関連エンティティを破棄します。 山内陽
+     */
+    void ClearGeneratedPageObjects(core::GameContext& ctx,
+                                   game::controllers::MinimapController* minimapController);
+
     /// @brief テクスチャのリンク領域からホールを一括配置する
     void CreateLinksFromTexture(core::GameContext& ctx);
 

@@ -52,6 +52,65 @@ constexpr float kMaxSafeWidth   = 20000.0f;
 constexpr float kMinHoleDistance = 0.2f;
 } // namespace
 
+/**
+ * @brief 生成済みページオブジェクトを破棄します。 山内陽
+ */
+void WikiPageLoader::ClearGeneratedPageObjects(
+    core::GameContext&              ctx,
+    controllers::MinimapController* minimapController)
+{
+    GolfGameState* state = ctx.world.GetGlobal<GolfGameState>();
+
+    std::vector<ecs::Entity> holesToDelete;
+    std::vector<ecs::Entity> relatedToDelete;
+    ctx.world.Query<GolfHole>().Each(
+        [&](ecs::Entity e, GolfHole& hole) {
+            holesToDelete.push_back(e);
+
+            if (hole.labelEntity != 0 && hole.labelEntity != UINT32_MAX) {
+                relatedToDelete.push_back(ecs::Entity(hole.labelEntity));
+            }
+            if (hole.pillarEntity != 0 && hole.pillarEntity != UINT32_MAX) {
+                relatedToDelete.push_back(ecs::Entity(hole.pillarEntity));
+            }
+        });
+
+    for (auto e : relatedToDelete) {
+        if (ctx.world.IsAlive(e)) {
+            ctx.world.DestroyEntity(e);
+        }
+    }
+
+    for (auto e : holesToDelete) {
+        if (ctx.world.IsAlive(e)) {
+            ctx.world.DestroyEntity(e);
+        }
+    }
+
+    std::vector<ecs::Entity> flagsToDelete;
+    ctx.world.Query<HoleFlag>().Each(
+        [&](ecs::Entity e, HoleFlag&) { flagsToDelete.push_back(e); });
+    for (auto e : flagsToDelete) {
+        if (ctx.world.IsAlive(e)) {
+            ctx.world.DestroyEntity(e);
+        }
+    }
+
+    if (state) {
+        state->holes.clear();
+    }
+
+    if (minimapController) {
+        minimapController->ClearHoleIcons(ctx);
+    }
+
+    if (m_terrainSystem) {
+        m_terrainSystem->Clear(ctx);
+    }
+
+    LOG_DEBUG("WikiPageLoader", "Generated page objects cleared");
+}
+
 // ============================================================
 // 公開 API
 // ============================================================
@@ -122,6 +181,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
 {
     PageLoadResult result;
     const std::string& pageName = asyncData.pageName;
+    m_buildMinimap = minimapController;
 
     auto* state = ctx.world.GetGlobal<GolfGameState>();
     if (!state) {
@@ -131,31 +191,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
 
     LOG_INFO("WikiPageLoader", "Building page: {}", pageName);
 
-    // 古いホール情報を削除します。
-    {
-        std::vector<ecs::Entity> holesToDelete;
-        std::vector<ecs::Entity> relatedToDelete;
-        ctx.world.Query<GolfHole>().Each(
-            [&](ecs::Entity e, GolfHole& hole) {
-                holesToDelete.push_back(e);
-                if (hole.labelEntity  != 0) relatedToDelete.push_back(ecs::Entity(hole.labelEntity));
-                if (hole.pillarEntity != 0) relatedToDelete.push_back(ecs::Entity(hole.pillarEntity));
-            });
-        for (auto e : relatedToDelete) {
-            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
-        }
-        for (auto e : holesToDelete) {
-            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
-        }
-        std::vector<ecs::Entity> flagsToDelete;
-        ctx.world.Query<HoleFlag>().Each(
-            [&](ecs::Entity e, HoleFlag&) { flagsToDelete.push_back(e); });
-        for (auto e : flagsToDelete) {
-            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
-        }
-        state->holes.clear();
-    }
-    LOG_DEBUG("WikiPageLoader", "Holes cleared");
+    ClearGeneratedPageObjects(ctx, minimapController);
 
     // 記事の情報を取得します。
     std::vector<game::WikiLink> allLinks = std::move(asyncData.allLinks);
@@ -457,28 +493,8 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
     switch (m_buildStep) {
     case BuildStep::ClearOldHoles:
     {
-        std::vector<ecs::Entity> holesToDelete;
-        std::vector<ecs::Entity> relatedToDelete;
-        ctx.world.Query<GolfHole>().Each(
-            [&](ecs::Entity e, GolfHole& hole) {
-                holesToDelete.push_back(e);
-                if (hole.labelEntity  != 0) relatedToDelete.push_back(ecs::Entity(hole.labelEntity));
-                if (hole.pillarEntity != 0) relatedToDelete.push_back(ecs::Entity(hole.pillarEntity));
-            });
-        for (auto e : relatedToDelete) {
-            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
-        }
-        for (auto e : holesToDelete) {
-            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
-        }
-        std::vector<ecs::Entity> flagsToDelete;
-        ctx.world.Query<HoleFlag>().Each(
-            [&](ecs::Entity e, HoleFlag&) { flagsToDelete.push_back(e); });
-        for (auto e : flagsToDelete) {
-            if (ctx.world.IsAlive(e)) ctx.world.DestroyEntity(e);
-        }
-        state->holes.clear();
-        
+        ClearGeneratedPageObjects(ctx, m_buildMinimap);
+
         m_buildStep = BuildStep::PrepareLinks;
         m_buildProgress = 0.10f;
         return false;
@@ -878,6 +894,9 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     }
 
     state->holes.push_back(e);
+    if (m_buildMinimap) {
+        m_buildMinimap->AddHoleIcon(ctx, x, z, linkTarget, isTargetHole);
+    }
     LOG_DEBUG("WikiPageLoader",
               "Hole created at ({:.1f},{:.1f}) target='{}' isTarget={} hops={}",
               x, z, linkTarget, isTargetHole, hopsToTarget);
