@@ -97,6 +97,7 @@ private:
   float m_mapBoundaryHitTime = 0.0f;
   float m_markerPulseTimer = 0.0f;
   bool m_mapHelpVisible = false;
+  bool m_isVisible = true; ///< HUDの表示状態です。ロード中の更新再表示を防ぎます。山内陽
 
   int m_prevMouseX = 0;
   int m_prevMouseY = 0;
@@ -105,7 +106,11 @@ private:
   std::unique_ptr<game::systems::MapSys> m_minimapRenderer;
 
   ecs::Entity m_minimapEntity = UINT32_MAX;
-  ecs::Entity m_minimapMarkerEntity = UINT32_MAX;
+  ecs::Entity m_minimapMarkerEntity = UINT32_MAX;      ///< 自ボール用内側ドットマーカー（●）
+  ecs::Entity m_minimapBallIconEntity = UINT32_MAX;    ///< 自ボール用画像アイコンです。山内陽
+  ecs::Entity m_minimapPulseMarkerEntity = UINT32_MAX; ///< 自ボール用外側パルスサークル（○）
+  ecs::Entity m_minimapFlagMarkerEntity = UINT32_MAX;  ///< ターゲットピン用パルスマーカー（🚩）
+  std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）
   ecs::Entity m_minimapHelpEntity = UINT32_MAX;
 
   // マップビュー追加UI
@@ -116,6 +121,11 @@ private:
   ecs::Entity m_mapHelpPanelBg = UINT32_MAX;
   ecs::Entity m_mapHelpTitle = UINT32_MAX;
   std::vector<ecs::Entity> m_mapHelpLines;
+
+  float m_mapOpenHintTimer = 0.0f; ///< マップ開始時の操作ヒント表示タイマー
+  ecs::Entity m_mapOpenHintBg = UINT32_MAX; ///< 操作ヒント背景UI
+  ecs::Entity m_mapOpenHintText = UINT32_MAX; ///< 操作ヒントテキストUI
+
 
   struct MapHoleIcon {
     ecs::Entity iconEntity;
