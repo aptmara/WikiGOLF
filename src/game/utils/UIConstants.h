@@ -109,7 +109,7 @@ constexpr float kControlHintFont    = 14.0f;
 // =========================================================
 // ミニマップ (右上) - 1280x720固定
 // =========================================================
-constexpr float kMinimapX           = 1090.0f;
+constexpr float kMinimapX           = 1048.0f;
 constexpr float kMinimapY           = 20.0f;
 constexpr float kMinimapWidth       = 170.0f;
 constexpr float kMinimapHeight      = 170.0f;  // SRVは正方形(720x720)なので同一に
@@ -124,6 +124,10 @@ constexpr float kMapPanSpeedFactor  = 0.0020f;
 constexpr float kMapHelpPanelAlpha  = 0.88f;
 constexpr float kMarkerPulseSpeed   = 3.2f;
 constexpr float kMarkerPulseScale   = 0.16f;
+constexpr float kMapOpenHintDuration = 3.0f; ///< マップ開始時の操作ヒント表示秒数
+constexpr float kMapHelpPanelW       = 480.0f; ///< 操作ヘルプパネルの横幅
+constexpr float kMapHelpPanelH       = 220.0f; ///< 操作ヘルプパネルの縦幅
+
 
 // =========================================================
 // 判定テキスト & ロジック

@@ -264,6 +264,7 @@ void WikiGolfHUD::InitializeWindCard(core::GameContext& ctx) {
 // ミニマップ装飾 (背景、N矢印、スケール)
 // -------------------------------------------------------
 void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
+    m_ui.minimapDecorationEntities.clear();
     const float mx = game::ui::kMinimapX;
     const float my = game::ui::kMinimapY;
     const float mw = game::ui::kMinimapWidth;
@@ -284,6 +285,7 @@ void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
         t.style.cornerRadius = 8.0f;
         t.visible = true;
         t.layer = game::ui::kLayerMinimap - 1; // ミニマップの背後
+        m_ui.minimapDecorationEntities.push_back(e);
     }
 
     // N 矢印
@@ -301,6 +303,7 @@ void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
         t.style.align = graphics::TextAlign::Center;
         t.visible = true;
         t.layer = layer;
+        m_ui.minimapDecorationEntities.push_back(e);
     }
 
     // 目盛り線とテキスト
@@ -318,6 +321,7 @@ void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
         t.style.align = graphics::TextAlign::Left;
         t.visible = true;
         t.layer = layer;
+        m_ui.minimapDecorationEntities.push_back(e);
     };
     createScale(30.0f, L"150m");
     createScale(mh / 2.0f, L" 50m");
@@ -334,10 +338,11 @@ void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
         t.height = 20.0f;
         t.style = graphics::TextStyle::Guide();
         t.style.fontSize = 12.0f;
-        t.style.color = {0.3f, 0.6f, 1.0f, 1.0f}; // 青
+        t.style.color = {0.18f, 0.85f, 1.0f, 1.0f}; // 蛍光シアンに変更
         t.style.align = graphics::TextAlign::Left;
         t.visible = true;
         t.layer = layer;
+        m_ui.minimapDecorationEntities.push_back(e);
     }
 
     // 凡例 (ピン位置)
@@ -351,10 +356,11 @@ void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
         t.height = 20.0f;
         t.style = graphics::TextStyle::Guide();
         t.style.fontSize = 12.0f;
-        t.style.color = {1.0f, 0.3f, 0.3f, 1.0f}; // 赤
+        t.style.color = {1.0f, 0.2f, 0.2f, 1.0f}; // 鮮烈なレッドに変更
         t.style.align = graphics::TextAlign::Left;
         t.visible = true;
         t.layer = layer;
+        m_ui.minimapDecorationEntities.push_back(e);
     }
 }
 
@@ -1076,6 +1082,8 @@ void WikiGolfHUD::ResetShotUI(core::GameContext& ctx) {
         gauge->isVisible       = false;
         gauge->showImpactZones = true;
     }
+
+    SetShotPhaseUIVisible(ctx, false);
 }
 
 void WikiGolfHUD::SetGaugeVisible(core::GameContext& ctx, bool visible) {
@@ -1166,6 +1174,7 @@ void WikiGolfHUD::SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase) 
     setVis(m_ui.shotPanelAccuracyLabelEntity, shotPhase);
     setVis(m_ui.shotPanelAccuracyValueEntity, shotPhase);
     setVis(m_ui.shotPanelClubLabelEntity,     shotPhase);
+    SetGaugeVisible(ctx, shotPhase);
 } // SetShotPhaseUIVisible
 
 // -----------------------------------------------------------------
@@ -1184,6 +1193,10 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
         if (e == UINT32_MAX) return;
         if (auto* img = ctx.world.Get<components::UIImage>(e)) img->visible = v;
     };
+    auto setGaugeVis = [&](ecs::Entity e, bool v) {
+        if (e == UINT32_MAX) return;
+        if (auto* gauge = ctx.world.Get<components::UIBarGauge>(e)) gauge->isVisible = v;
+    };
 
     // ブラウザ風情報パネル
     setVis(m_ui.browserBgEntity,          visible);
@@ -1200,14 +1213,14 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
 
     // 風カード
     setVis(m_ui.windEntity,           visible);
-    setVis(m_ui.windArrowEntity,      visible);
+    setVisImg(m_ui.windArrowEntity,   visible);
     setVis(m_ui.windCardLabelEntity,  visible);
     setVis(m_ui.windCardValueEntity,  visible);
     setVis(m_ui.windCardUnitEntity,   visible);
 
     // クラブ選択リスト
     for (auto e : m_ui.clubBgEntities)      setVis(e, visible);
-    for (auto e : m_ui.clubIconEntities)    setVis(e, visible);
+    for (auto e : m_ui.clubIconEntities)    setVisImg(e, visible);
     for (auto e : m_ui.clubNameEntities)    setVis(e, visible);
     for (auto e : m_ui.clubSubNameEntities) setVis(e, visible);
     for (auto e : m_ui.clubArrowEntities)   setVis(e, visible);
@@ -1228,7 +1241,7 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
     setVis(m_ui.clubInfoPanelBgEntity, visible);
     setVis(m_ui.clubInfoLabelEntity,   visible);
     setVis(m_ui.clubInfoNameEntity,    visible);
-    setVis(m_ui.clubInfoIconEntity,    visible);
+    setVisImg(m_ui.clubInfoIconEntity, visible);
     setVis(m_ui.clubInfoShortNameEntity, visible);
     setVis(m_ui.liePanelBgEntity,     visible);
     setVis(m_ui.lieLabelEntity,        visible);
@@ -1236,9 +1249,10 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
     setVis(m_ui.lieCondLabelEntity,    visible);
     setVis(m_ui.lieCondValueEntity,    visible);
 
-    // ショット時ゲージ（非表示固定でも問題ないが念のため）
+    for (auto e : m_ui.minimapDecorationEntities) setVis(e, visible);
+
     if (!visible) {
-        setVis(m_ui.gaugeBarEntity,    false);
+        setGaugeVis(m_ui.gaugeBarEntity, false);
         setVis(m_ui.gaugeFillEntity,   false);
         setVis(m_ui.gaugeMarkerEntity, false);
         setVis(m_ui.judgeEntity,       false);

@@ -65,6 +65,10 @@ public:
         // 左下: 操作ヘルプ
         ecs::Entity controlHintEntity       = UINT32_MAX;
 
+        /// @brief MinimapController管理外のHUD側ミニマップ装飾です。
+        /// @author 山内陽
+        std::vector<ecs::Entity> minimapDecorationEntities;
+
         // 下部中央: 情報パネル
         ecs::Entity distPanelBgEntity       = UINT32_MAX; 
         ecs::Entity distLabelEntity         = UINT32_MAX;

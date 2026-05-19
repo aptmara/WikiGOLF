@@ -53,7 +53,7 @@ bool MapSys::Initialize(ID3D11Device *device, int width, int height) {
   m_vp = {0.0f, 0.0f, (float)width, (float)height, 0.0f, 1.0f};
 
   D3D11_BUFFER_DESC bd = {};
-  bd.ByteWidth = sizeof(XMMATRIX) * 3 + sizeof(XMFLOAT4);
+  bd.ByteWidth = sizeof(XMMATRIX) * 3 + sizeof(XMFLOAT4) * 2; // HLSL ConstantBuffer (224バイト) とアライメントサイズを完全一致させるため拡張
   bd.Usage = D3D11_USAGE_DYNAMIC;
   bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
   bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -79,7 +79,7 @@ void MapSys::BeginRender(ID3D11DeviceContext *ctx) {
   ctx->RSGetViewports(&n, &m_saveVP);
   ctx->OMSetRenderTargets(1, m_rtv.GetAddressOf(), m_dsv.Get());
   ctx->RSSetViewports(1, &m_vp);
-  float color[] = {0.1f, 0.1f, 0.15f, 0.8f};
+  float color[] = {0.035f, 0.040f, 0.060f, 1.0f};
   ctx->ClearRenderTargetView(m_rtv.Get(), color);
   ctx->ClearDepthStencilView(m_dsv.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 }
@@ -101,6 +101,7 @@ XMMATRIX MapSys::GetProjMatrix(float w, float d) {
 struct MapVSConst {
   XMMATRIX w, v, p;
   XMFLOAT4 c;
+  XMFLOAT4 flags; // HLSL側の MaterialFlags (x: hasDiffuse, y: hasNormalMap, z: uvScale, w: unused) に対応
 };
 
 void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
@@ -167,10 +168,14 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
           c->v = v;
           c->p = p;
           c->c = r.color;
+          c->flags.x = (r.hasTexture && r.textureSRV) ? 1.0f : 0.0f; // テクスチャサンプリングの要否をシェーダーへ伝える
+          c->flags.y = 0.0f; // ミニマップでは法線マップ計算を無効化
+          c->flags.z = 1.0f;
+          c->flags.w = 0.0f;
 
-          // ボールは見やすい色で強調
+          // 自ボールの位置を明確化するため、3Dレンダリング色を蛍光シアンに変更
           if (params.highlightBall && e == ballEntity) {
-            c->c = {1.0f, 0.4f, 0.1f, 1.0f};
+            c->c = {0.18f, 0.85f, 1.0f, 1.0f};
           }
           context->Unmap(m_cb.Get(), 0);
         }
