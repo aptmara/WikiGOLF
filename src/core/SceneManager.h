@@ -48,12 +48,12 @@ public:
 
   /// @brief フレーム描画
   void Render(GameContext &ctx) {
-    LOG_DEBUG("SceneManager", "Render START");
+    // LOG_DEBUG("SceneManager", "Render START");
     if (auto *scene = Current()) {
-      LOG_DEBUG("SceneManager", "Rendering scene: {}", scene->GetName());
+      // LOG_DEBUG("SceneManager", "Rendering scene: {}", scene->GetName());
       scene->Render(ctx);
     }
-    LOG_DEBUG("SceneManager", "Render FINISHED");
+    // LOG_DEBUG("SceneManager", "Render FINISHED");
   }
 
   /// @brief シーンスタックが空か

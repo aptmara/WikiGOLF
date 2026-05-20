@@ -164,7 +164,7 @@ void TextRenderer::BeginDraw() {
 
 void TextRenderer::EndDraw() {
   if (m_d2dContext) {
-    LOG_DEBUG("TextRenderer", "EndDraw: Flashing D2D...");
+    // LOG_DEBUG("TextRenderer", "EndDraw: Flashing D2D...");
     HRESULT hr = m_d2dContext->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET) {
       LOG_WARN("TextRenderer", "D2D RenderTarget lost, recreating...");
@@ -194,7 +194,7 @@ void TextRenderer::EndDraw() {
       LOG_WARN("TextRenderer", "EndDraw failed with HRESULT: {:08X}",
                static_cast<uint32_t>(hr));
     }
-    LOG_DEBUG("TextRenderer", "EndDraw: Finished");
+    // LOG_DEBUG("TextRenderer", "EndDraw: Finished");
   }
 }
 
