@@ -175,6 +175,13 @@ void RenderSystem(core::GameContext &ctx) {
         context->PSSetShaderResources(0, 1, &nullSRV);
       }
 
+      // 法線マップバインド
+      if (r.hasNormalMap && r.normalMapSRV) {
+        context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
+      } else {
+        context->PSSetShaderResources(1, 1, &nullSRV);
+      }
+
       context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
       mesh->Bind(context);
       mesh->Draw(context);
