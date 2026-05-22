@@ -388,7 +388,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
   // オーバーレイの生成
   case BuildPhase::CreateTileOverlay: {
     if (m_buildTileIndex >= m_buildTiles.size()) {
-      m_buildPhase   = BuildPhase::CreateWallsDeco;
+      m_buildPhase   = BuildPhase::CreateWalls;
       m_buildProgress = 0.90f;
       return false;
     }
@@ -443,9 +443,16 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     return false;
   }
 
-  // 壁と装飾の生成
-  case BuildPhase::CreateWallsDeco: {
+  // 壁の生成
+  case BuildPhase::CreateWalls: {
     CreateWalls(ctx, m_buildFieldWidth, m_buildFieldDepth);
+    m_buildPhase   = BuildPhase::CreateDecorations;
+    m_buildProgress = 0.94f;
+    return false;
+  }
+
+  // 装飾の生成
+  case BuildPhase::CreateDecorations: {
     CreateDecorations(ctx, m_buildFieldWidth, m_buildFieldDepth, m_biome);
     m_buildPhase   = BuildPhase::Done;
     m_buildProgress = 1.0f;

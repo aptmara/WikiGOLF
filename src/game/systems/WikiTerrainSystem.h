@@ -108,7 +108,8 @@ private:
     CreatePhysics,     ///< 物理エンティティ作成
     CreateTileMesh,    ///< ビジュアルメッシュ（1タイル/ステップ）
     CreateTileOverlay, ///< オーバーレイ（1タイル/ステップ）
-    CreateWallsDeco,   ///< 壁+装飾（1ステップ）
+    CreateWalls,       ///< 壁生成
+    CreateDecorations, ///< 装飾生成
     Done
   };
 
