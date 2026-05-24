@@ -11,6 +11,7 @@
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
+#include <chrono>
 #include <memory>
 #include <string>
 #include <utility>
@@ -118,6 +119,15 @@ public:
      */
     bool StepBuildPage(core::GameContext& ctx);
 
+    /**
+     * @brief 1フレーム内の時間予算内で構築を進めます。 山内陽
+     * @param ctx ゲームコンテキスト
+     * @param budget メインスレッド構築に使える最大時間
+     * @return 完了したら true
+     */
+    bool StepBuildPageWithinFrameBudget(core::GameContext& ctx,
+                                        std::chrono::milliseconds budget);
+
     /// @brief 構築の進捗 (0.0 - 1.0)
     float GetBuildProgress() const { return m_buildProgress; }
 
@@ -217,6 +227,8 @@ private:
     float m_buildProgress = 0.0f;
     uint32_t m_buildTexWidth = 0;
     uint32_t m_buildTexHeight = 0;
+    std::chrono::steady_clock::time_point m_buildDeadline =
+        std::chrono::steady_clock::time_point::max();
 };
 
 } // namespace game::scenes

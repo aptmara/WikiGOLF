@@ -485,6 +485,28 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
 /**
  * @brief 構築を 1 ステップ進める
  */
+bool WikiPageLoader::StepBuildPageWithinFrameBudget(
+    core::GameContext& ctx, std::chrono::milliseconds budget)
+{
+    m_buildDeadline = std::chrono::steady_clock::now() + budget;
+
+    bool done = false;
+    while (std::chrono::steady_clock::now() < m_buildDeadline) {
+        const float progressBefore = m_buildProgress;
+        done = StepBuildPage(ctx);
+        if (done) {
+            break;
+        }
+
+        if (m_buildProgress <= progressBefore + 0.0001f) {
+            break;
+        }
+    }
+
+    m_buildDeadline = std::chrono::steady_clock::time_point::max();
+    return done;
+}
+
 bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 {
     auto* state = ctx.world.GetGlobal<GolfGameState>();
@@ -722,11 +744,17 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             return false;
         }
 
-        constexpr size_t kHolesPerFrame = 5;
+        constexpr size_t kHolesPerFrame = 2;
         const float texW = (float)m_wikiTexture->width;
         const float texH = (float)m_wikiTexture->height;
 
-        for (size_t i = 0; i < kHolesPerFrame && m_nextHoleIndex < m_wikiTexture->links.size(); ++i, ++m_nextHoleIndex) {
+        for (size_t i = 0; i < kHolesPerFrame &&
+                           m_nextHoleIndex < m_wikiTexture->links.size();
+             ++i, ++m_nextHoleIndex) {
+            if (std::chrono::steady_clock::now() >= m_buildDeadline) {
+                break;
+            }
+
             const auto& linkRegion = m_wikiTexture->links[m_nextHoleIndex];
             float cx = linkRegion.x + linkRegion.width  * 0.5f;
             float cy = linkRegion.y + linkRegion.height * 0.5f;
