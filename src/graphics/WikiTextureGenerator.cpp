@@ -243,8 +243,8 @@ bool WikiTextureGenerator::BeginGenerateTexture(
 bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   if (!state.started || state.completed) return true;
 
-  // 描画負荷をフレーム分散するために最大タイル高さを半分に調整
-  const uint32_t kMaxTileHeight = 2048;
+  // 描画負荷をフレーム分散するため、ロード演出中は小さめのタイルで生成する。
+  const uint32_t kMaxTileHeight = 512;
   uint32_t tileH = std::min(state.remainingHeight, kMaxTileHeight);
   uint32_t width = state.actualWidth;
 
