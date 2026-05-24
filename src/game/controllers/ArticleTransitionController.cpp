@@ -237,7 +237,18 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
 
         case Phase::Building:
             if (m_pageLoader) {
-                bool done = m_pageLoader->StepBuildPage(ctx);
+                constexpr auto kBuildBudget = std::chrono::milliseconds(24);
+                const auto stepStart = std::chrono::steady_clock::now();
+                bool done =
+                    m_pageLoader->StepBuildPageWithinFrameBudget(ctx, kBuildBudget);
+                const auto stepElapsed =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - stepStart);
+                if (stepElapsed.count() > 33) {
+                    LOG_WARN("Transition",
+                             "Build step took {} ms at progress {:.2f}",
+                             stepElapsed.count(), m_pageLoader->GetBuildProgress());
+                }
                 if (done) {
                     LOG_INFO("Transition", "Incremental build complete.");
                     m_phase = Phase::FadeOut;
