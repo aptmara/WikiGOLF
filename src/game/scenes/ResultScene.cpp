@@ -57,9 +57,7 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
   // BGMとファンファーレの再生を行います。
   if (ctx.audio) {
     ctx.audio->PlayBGM(ctx, "bgm_title.mp3", 0.4f);
-    ctx.audio->PlaySE(
-        ctx,
-        "se_holeInOne.mp3");
+    ctx.audio->PlayOneShotFile(ctx, "ResultFanfare", "Assets/sounds/se_holeInOne.mp3");
   }
 
   // 3Dビジュアル環境を生成します。
@@ -526,6 +524,11 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
  * @brief シーン終了時のクリーンアップ処理を行います。
  */
 void ResultScene::OnExit(core::GameContext &ctx) {
+  if (ctx.audio) {
+    ctx.audio->StopBGM();
+    ctx.audio->StopOneShot("ResultFanfare");
+  }
+
   // エンティティリストの一括破棄用ラムダ関数です。
   auto destroyVec = [&](auto &vec) {
     for (const auto &item : vec) {
