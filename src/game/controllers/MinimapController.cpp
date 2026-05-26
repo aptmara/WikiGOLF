@@ -20,11 +20,43 @@ namespace game::controllers {
 
 namespace {
 constexpr float kMinMapViewSpan = 5.0f;
+constexpr float kLongArticleFieldWidth = 190.0f;
+constexpr float kHudMinimapWideArticleSpan = 120.0f;
+constexpr float kHudMinimapPadding = 1.10f;
+constexpr float kMapRenderScreenScale = 1.2f;
+constexpr float kScreenWidth = 1280.0f;
+constexpr float kScreenHeight = 720.0f;
 
 float ComputeMinimapWorldSpan(const game::systems::MapRenderParams& params) {
   float viewSpan = params.extent / std::max(0.01f, params.zoom);
   viewSpan = std::clamp(viewSpan, 5.0f, params.extent * 6.0f);
-  return std::max(viewSpan * params.orthoPadding, viewSpan * 0.5f) * 1.2f;
+  return std::max(viewSpan * params.orthoPadding, viewSpan * 0.5f) *
+         kMapRenderScreenScale;
+}
+
+float ComputeZoomForVisibleSpan(float extent, float desiredVisibleSpan,
+                                float orthoPadding) {
+  const float safeExtent = std::max(1.0f, extent);
+  const float padding = std::max(1.0f, orthoPadding) * kMapRenderScreenScale;
+  const float rawViewSpan = std::max(5.0f, desiredVisibleSpan / padding);
+  return safeExtent / rawViewSpan;
+}
+
+DirectX::XMFLOAT2 GetBallMapCenter(core::GameContext& ctx,
+                                   ecs::Entity ballEntity) {
+  if (auto* ballT = ctx.world.Get<Transform>(ballEntity)) {
+    return {ballT->position.x, ballT->position.z};
+  }
+  return {0.0f, 0.0f};
+}
+
+float ComputeBallCenteredFullSpan(const DirectX::XMFLOAT2& center,
+                                  float fieldWidth, float fieldDepth) {
+  const float halfW = std::max(1.0f, fieldWidth * 0.5f);
+  const float halfD = std::max(1.0f, fieldDepth * 0.5f);
+  const float spanX = (halfW + std::abs(center.x)) * 2.0f;
+  const float spanZ = (halfD + std::abs(center.y)) * 2.0f;
+  return std::max(spanX, spanZ) * kHudMinimapPadding;
 }
 
 bool ProjectToMinimap(float worldX, float worldZ,
@@ -36,6 +68,57 @@ bool ProjectToMinimap(float worldX, float worldZ,
   outU = 0.5f + (worldX - params.center.x) / span;
   outV = 0.5f - (worldZ - params.center.z) / span;
   return outU >= 0.0f && outU <= 1.0f && outV >= 0.0f && outV <= 1.0f;
+}
+
+game::systems::MapRenderParams BuildHudMinimapParams(core::GameContext& ctx,
+                                                     ecs::Entity ballEntity,
+                                                     float fieldWidth,
+                                                     float fieldDepth) {
+  game::systems::MapRenderParams params;
+  params.center = {0.0f, 0.0f, 0.0f};
+  params.extent = std::max(fieldWidth, fieldDepth);
+  params.zoom = 1.0f;
+  params.heightScale = 2.2f;
+  params.orthoPadding = 1.3f;
+  params.highlightBall = true;
+
+  const DirectX::XMFLOAT2 ballCenter = GetBallMapCenter(ctx, ballEntity);
+  params.center = {ballCenter.x, 0.0f, ballCenter.y};
+
+  const bool canFitWholeMap = fieldWidth <= kLongArticleFieldWidth;
+  const float desiredSpan = canFitWholeMap
+      ? ComputeBallCenteredFullSpan(ballCenter, fieldWidth, fieldDepth)
+      : kHudMinimapWideArticleSpan;
+  params.zoom = ComputeZoomForVisibleSpan(params.extent, desiredSpan,
+                                          params.orthoPadding);
+  return params;
+}
+
+game::systems::MapRenderParams BuildMapViewParams(const DirectX::XMFLOAT2& center,
+                                                  float zoom,
+                                                  float fieldWidth,
+                                                  float fieldDepth) {
+  game::systems::MapRenderParams params;
+  params.center = {center.x, 0.0f, center.y};
+  params.extent = std::max(fieldWidth, fieldDepth);
+  params.zoom = zoom;
+  params.heightScale = 1.8f;
+  params.orthoPadding = 1.3f;
+  params.highlightBall = true;
+  return params;
+}
+
+struct MarkerBounds {
+  float x = 0.0f;
+  float y = 0.0f;
+  float width = 0.0f;
+  float height = 0.0f;
+};
+
+MarkerBounds GetMapViewMarkerBounds() {
+  constexpr float margin = 24.0f;
+  return {margin, margin, kScreenWidth - margin * 2.0f,
+          kScreenHeight - margin * 2.0f};
 }
 } // namespace
 
@@ -95,6 +178,7 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   pulseMarker.style.fontSize = game::ui::kMinimapMarkerSize;
   pulseMarker.style.color = {0.18f, 0.85f, 1.0f, 0.8f}; // 半透明シアン
   pulseMarker.layer = game::ui::kLayerMarker;
+  pulseMarker.visible = false;
 
   // ターゲットピン用フォールバックマーカー
   m_minimapFlagMarkerEntity = ctx.world.CreateEntity();
@@ -383,80 +467,92 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     SetVisible(ctx, false);
     return;
   }
-  if (ui) ui->visible = true;
+  if (ui) ui->visible = !m_isMapView;
 
-  game::systems::MapRenderParams params;
-  params.center = {m_mapCenter.x, 0.0f, m_mapCenter.y};
-  params.extent = std::max(fieldWidth, fieldDepth);
-  params.zoom = m_mapZoom;
-  params.heightScale = m_isMapView ? 1.8f : 2.2f;
-  params.orthoPadding = 1.3f;
-  params.highlightBall = true;
+  game::systems::MapRenderParams params = m_isMapView
+      ? BuildMapViewParams(m_mapCenter, m_mapZoom, fieldWidth, fieldDepth)
+      : BuildHudMinimapParams(ctx, m_cfg.ballEntity, fieldWidth, fieldDepth);
   m_minimapRenderer->Render(ctx, params);
 
   const float clipWidth = ComputeMinimapWorldSpan(params);
+  const MarkerBounds mapBounds = m_isMapView
+      ? GetMapViewMarkerBounds()
+      : MarkerBounds{ui ? ui->x : game::ui::kMinimapX,
+                     ui ? ui->y : game::ui::kMinimapY,
+                     ui ? ui->width : game::ui::kMinimapWidth,
+                     ui ? ui->height : game::ui::kMinimapHeight};
+  const bool markerSurfaceVisible = m_isMapView || (ui && ui->visible);
 
   if (ui && marker && ballT) {
     float u = 0.5f;
     float v = 0.5f;
-    ProjectToMinimap(ballT->position.x, ballT->position.z, params, u, v);
-    u = std::clamp(u, 0.02f, 0.98f);
-    v = std::clamp(v, 0.02f, 0.98f);
+    const bool ballInView =
+        ProjectToMinimap(ballT->position.x, ballT->position.z, params, u, v);
+    if (!m_isMapView) {
+      u = std::clamp(u, 0.02f, 0.98f);
+      v = std::clamp(v, 0.02f, 0.98f);
+    }
 
     // 内側実心●の位置設定
-    marker->x = ui->x + u * ui->width - 10.0f;
-    marker->y = ui->y + v * ui->height - 10.0f;
+    marker->x = mapBounds.x + u * mapBounds.width - 10.0f;
+    marker->y = mapBounds.y + v * mapBounds.height - 10.0f;
     marker->visible = false;
 
     if (ballIcon) {
-      ballIcon->x = ui->x + u * ui->width - ballIcon->width * 0.5f;
-      ballIcon->y = ui->y + v * ui->height - ballIcon->height * 0.5f;
-      ballIcon->visible = ui->visible;
+      ballIcon->width = m_isMapView ? 34.0f : 24.0f;
+      ballIcon->height = m_isMapView ? 34.0f : 24.0f;
+      ballIcon->x = mapBounds.x + u * mapBounds.width - ballIcon->width * 0.5f;
+      ballIcon->y = mapBounds.y + v * mapBounds.height - ballIcon->height * 0.5f;
+      ballIcon->visible = markerSurfaceVisible && (!m_isMapView || ballInView);
     }
 
-    // 外側サークル○の位置設定
     if (auto *pulseMarker = ctx.world.Get<UIText>(m_minimapPulseMarkerEntity)) {
-      pulseMarker->x = marker->x;
-      pulseMarker->y = marker->y;
-      pulseMarker->visible = ui->visible;
+      pulseMarker->visible = false;
     }
   }
 
   m_markerPulseTimer += ctx.dt;
 
-  // 自ボールマーカーの2重サークルパルスアニメーション
-  if (ui && ui->visible) {
+  // 自ボールマーカーは画像アイコンで表示するため、旧テキストマーカーは非表示に固定する。
+  if (markerSurfaceVisible) {
     if (marker) {
       marker->style.fontSize = game::ui::kMinimapMarkerSize * 0.85f; // シャープに小さく表示
       marker->style.color = {0.18f, 0.85f, 1.0f, 1.0f}; // ソリッドシアン
     }
 
     if (auto *pulseMarker = ctx.world.Get<UIText>(m_minimapPulseMarkerEntity)) {
-      // 0.0から1.0の間を周回するパルス時間
-      float t = std::fmod(m_markerPulseTimer * 1.4f, 1.0f);
-      float pulseScale = 0.9f + t * 1.8f; // サイズが滑らかに1.0〜2.7倍へ膨張
-      float alpha = 1.0f - t; // 広がるにつれて透明化
-
-      pulseMarker->style.fontSize = game::ui::kMinimapMarkerSize * pulseScale;
-      pulseMarker->style.color = {0.18f, 0.85f, 1.0f, alpha * 0.95f}; // シアン波紋
+      pulseMarker->visible = false;
     }
   }
 
   // ホール（カップ）アイコンのミニマップ投影座標更新および🚩フラッグアニメーション
   for (auto &icon : m_mapHoleIcons) {
     if (auto *iconUI = ctx.world.Get<UIImage>(icon.iconEntity)) {
-      if (ui) {
+      if (m_isMapView) {
+        iconUI->visible = false;
+        if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {
+          if (auto *flagTxt = ctx.world.Get<UIText>(m_minimapFlagMarkerEntity)) {
+            flagTxt->visible = false;
+          }
+        }
+        continue;
+      }
+
+      if (markerSurfaceVisible) {
         float u = 0.0f;
         float v = 0.0f;
         if (ProjectToMinimap(icon.worldPos.x, icon.worldPos.y, params, u, v)) {
-          iconUI->x = ui->x + u * ui->width - iconUI->width * 0.5f;
-          iconUI->y = ui->y + v * ui->height - iconUI->height * 0.5f;
-          iconUI->visible = ui->visible;
+          iconUI->width = icon.isTarget ? (m_isMapView ? 44.0f : 34.0f)
+                                        : (m_isMapView ? 28.0f : 20.0f);
+          iconUI->height = iconUI->width;
+          iconUI->x = mapBounds.x + u * mapBounds.width - iconUI->width * 0.5f;
+          iconUI->y = mapBounds.y + v * mapBounds.height - iconUI->height * 0.5f;
+          iconUI->visible = markerSurfaceVisible;
 
           if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {
             if (auto *flagTxt = ctx.world.Get<UIText>(m_minimapFlagMarkerEntity)) {
-              flagTxt->x = ui->x + u * ui->width - 8.0f;
-              flagTxt->y = ui->y + v * ui->height - 12.0f;
+              flagTxt->x = mapBounds.x + u * mapBounds.width - 8.0f;
+              flagTxt->y = mapBounds.y + v * mapBounds.height - 12.0f;
               flagTxt->visible = false;
 
               float flagPulse = 1.0f + 0.16f * std::sin(m_markerPulseTimer * 2.8f);
@@ -479,7 +575,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   }
 
   // ショット方向案内用のガイドドットの投影座標更新
-  if (ui && ballT && m_isMapView == false) { // 通常のHUDミニマップ時のみガイドを描画
+  if (!m_isMapView && ui && ballT) { // 通常のHUDミニマップ時のみガイドを描画
     XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&shotDirection));
     float step = clipWidth * 0.075f; // ミニマップのズームスケールに応じたドット間隔
 
@@ -494,8 +590,8 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
         float v = 0.0f;
         if (ProjectToMinimap(dotPos.x, dotPos.z, params, u, v) &&
             u >= 0.02f && u <= 0.98f && v >= 0.02f && v <= 0.98f) {
-          dot->x = ui->x + u * ui->width - 5.0f;
-          dot->y = ui->y + v * ui->height - 5.0f;
+          dot->x = mapBounds.x + u * mapBounds.width - 5.0f;
+          dot->y = mapBounds.y + v * mapBounds.height - 5.0f;
           dot->visible = ui->visible;
         } else {
           dot->visible = false;
@@ -509,31 +605,32 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   }
 
   // 座標および距離表示
-  if (m_isMapView && ui && ballT) {
+  if (m_isMapView && ballT) {
     int mouseX = ctx.input.GetMousePosition().x;
     int mouseY = ctx.input.GetMousePosition().y;
 
     // マウスがマップ内かチェック
-    bool inMap = (mouseX >= ui->x && mouseX <= ui->x + ui->width &&
-                  mouseY >= ui->y && mouseY <= ui->y + ui->height);
+    bool inMap = (mouseX >= mapBounds.x &&
+                  mouseX <= mapBounds.x + mapBounds.width &&
+                  mouseY >= mapBounds.y &&
+                  mouseY <= mapBounds.y + mapBounds.height);
 
     auto *coordTxt = ctx.world.Get<UIText>(m_mapCoordText);
     auto *distTxt = ctx.world.Get<UIText>(m_mapDistanceText);
 
     if (inMap && coordTxt && distTxt) {
-      float u = (mouseX - ui->x) / ui->width;
-      float v = (mouseY - ui->y) / ui->height;
+      float u = (mouseX - mapBounds.x) / mapBounds.width;
+      float v = (mouseY - mapBounds.y) / mapBounds.height;
 
       // UV→ワールド座標
-      float clipWidth = params.extent / std::max(0.01f, params.zoom);
-      clipWidth = std::clamp(clipWidth, 5.0f, params.extent * 6.0f);
+      float clipWidth = ComputeMinimapWorldSpan(params);
 
       float worldX = params.center.x + (u - 0.5f) * clipWidth;
       float worldZ = params.center.z - (v - 0.5f) * clipWidth;
 
       // 座標表示（ミニマップ内固定位置）
-      coordTxt->x = ui->x + 10.0f;
-      coordTxt->y = ui->y + ui->height - 35.0f;
+      coordTxt->x = mapBounds.x + 10.0f;
+      coordTxt->y = mapBounds.y + mapBounds.height - 35.0f;
       coordTxt->text = std::format(L"座標: ({:.1f}, {:.1f})", worldX, worldZ);
       coordTxt->visible = true;
 
@@ -542,8 +639,8 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
       float dz = worldZ - ballT->position.z;
       float distance = std::sqrt(dx * dx + dz * dz);
 
-      distTxt->x = ui->x + 10.0f;
-      distTxt->y = ui->y + ui->height - 20.0f;
+      distTxt->x = mapBounds.x + 10.0f;
+      distTxt->y = mapBounds.y + mapBounds.height - 20.0f;
       distTxt->text = std::format(L"距離: {:.1f}m", distance);
       distTxt->visible = true;
     } else {
