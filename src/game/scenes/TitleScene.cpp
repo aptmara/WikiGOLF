@@ -743,6 +743,9 @@ void TitleScene::Render(core::GameContext &ctx) {
  */
 void TitleScene::OnExit(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnExit");
+  if (ctx.audio) {
+    ctx.audio->StopBGM();
+  }
   StopIntroAudio(ctx);
   if (m_videoPlayer) {
     m_videoPlayer->Stop();
