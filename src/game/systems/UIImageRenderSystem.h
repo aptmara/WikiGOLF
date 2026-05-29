@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file UIImageRenderSystem.h
- * @brief UI画像描画システム
+ * @brief UI逕ｻ蜒乗緒逕ｻ繧ｷ繧ｹ繝・Β
  */
 
 #include "../../core/GameContext.h"
@@ -13,7 +13,7 @@
 
 namespace game::systems {
 
-/// @brief UI画像描画システム
+/// @brief UI逕ｻ蜒乗緒逕ｻ繧ｷ繧ｹ繝・Β
 class UIImageRenderSystem {
 public:
   explicit UIImageRenderSystem(graphics::TextRenderer &renderer)
@@ -23,7 +23,7 @@ public:
     if (!m_renderer.IsValid())
       return;
 
-    // 表示中のUI画像を収集
+    // 陦ｨ遉ｺ荳ｭ縺ｮUI逕ｻ蜒上ｒ蜿朱寔
     std::vector<const components::UIImage *> images;
     ctx.world.Query<components::UIImage>().Each(
         [&](ecs::Entity e, const components::UIImage &ui) {
@@ -32,8 +32,7 @@ public:
           }
         });
 
-    // レイヤーごとにソート（背面から順に描画するため）
-    std::sort(images.begin(), images.end(),
+    // 繝ｬ繧､繝､繝ｼ縺斐→縺ｫ繧ｽ繝ｼ繝茨ｼ郁レ髱｢縺九ｉ鬆・↓謠冗判縺吶ｋ縺溘ａ・・    std::sort(images.begin(), images.end(),
               [](const auto *a, const auto *b) { return a->layer < b->layer; });
 
 
@@ -44,16 +43,22 @@ public:
         continue;
       }
 
-      // 描画領域の計算
-      float w = (ui->width > 0) ? ui->width : 100.0f; // デフォルトサイズ
-      float h = (ui->height > 0) ? ui->height : 100.0f;
+      // 謠冗判鬆伜沺縺ｮ險育ｮ・
+      float w = 100.0f; // 繝・ヵ繧ｩ繝ｫ繝医し繧､繧ｺ
+      if (ui->width > 0) {
+        w = ui->width;
+      }
+      float h = 100.0f;
+      if (ui->height > 0) {
+        h = ui->height;
+      }
       D2D1_RECT_F rect = D2D1::RectF(ui->x, ui->y, ui->x + w, ui->y + h);
 
       if (ui->textureSRV) {
-        // 既存テクスチャで描画
+        // 譌｢蟄倥ユ繧ｯ繧ｹ繝√Ε縺ｧ謠冗判
         m_renderer.RenderImage(ui->textureSRV, rect, ui->alpha, ui->rotation);
       } else {
-        // ファイルテクスチャで描画
+        // 繝輔ぃ繧､繝ｫ繝・け繧ｹ繝√Ε縺ｧ謠冗判
         std::string path;
         if (ui->texturePath.find("Assets/") == 0) {
           path = ui->texturePath;

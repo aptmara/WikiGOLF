@@ -88,9 +88,11 @@ inline float CalculateMaxMapZoom(float fieldExtent, float desiredMinViewSpan,
   if (desiredMinViewSpan <= 0.0f)
     return baseMaxZoom;
 
-  float extentBased =
-      (fieldExtent > 0.0f) ? fieldExtent / desiredMinViewSpan : baseMaxZoom;
-  return std::max(baseMaxZoom, extentBased);
+  float targetScale = baseMaxZoom;
+  if (fieldExtent > 0.0f) {
+    targetScale = fieldExtent / desiredMinViewSpan;
+  }
+  return std::max(baseMaxZoom, targetScale);
 }
 
 } // namespace game::utils

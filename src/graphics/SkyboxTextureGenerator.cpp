@@ -1,4 +1,4 @@
-#include "SkyboxTextureGenerator.h"
+﻿#include "SkyboxTextureGenerator.h"
 #include <algorithm>
 #include <cctype>
 #include <combaseapi.h>

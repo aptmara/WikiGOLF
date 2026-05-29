@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 
 # ソースファイルの収集
-file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h") 
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.h")
 
 # 実行可能なターゲットの作成
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")

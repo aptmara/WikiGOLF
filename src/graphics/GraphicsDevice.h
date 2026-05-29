@@ -50,7 +50,10 @@ public:
   ID3D11DeviceContext *GetContext() const { return m_context.Get(); }
   IDXGISwapChain *GetSwapChain() const { return m_swapChain.Get(); }
   HRESULT GetDeviceRemovedReason() const {
-    return m_device ? m_device->GetDeviceRemovedReason() : E_FAIL;
+    if (m_device) {
+      return m_device->GetDeviceRemovedReason();
+    }
+    return E_FAIL;
   }
   D3D_DRIVER_TYPE GetDriverType() const { return m_driverType; }
   D3D_FEATURE_LEVEL GetFeatureLevel() const { return m_featureLevel; }

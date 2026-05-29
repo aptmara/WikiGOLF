@@ -67,12 +67,19 @@ constexpr float kWindLabelFontSize  = 15.0f;
 // ショットパネル & パワーゲージ (中央下)
 // =========================================================
 constexpr float kShotPanelX         = 190.0f;
-constexpr float kShotPanelY         = 540.0f;
+constexpr float kShotPanelY         = 520.0f;
 constexpr float kShotPanelWidth     = 780.0f;
+constexpr float kShotPanelBgX       = 174.0f;
+constexpr float kShotPanelBgY       = 488.0f;
+constexpr float kShotPanelBgWidth   = 812.0f;
+constexpr float kShotPanelBgHeight  = 142.0f;
+constexpr float kShotStepWidth      = 68.0f;
 constexpr float kShotLabelFontSize  = 15.0f;
 constexpr float kShotValueFontSize  = 18.0f;
+constexpr float kShotTitleFontSize  = 22.0f;
+constexpr float kShotHintFontSize   = 14.0f;
 
-constexpr float kGaugeHeight        = 18.0f;
+constexpr float kGaugeHeight        = 24.0f;
 constexpr float kGaugeBorderWidth   = 1.5f;
 constexpr float kImpactWidthGreat   = 0.04f; // 全体に対する割合
 constexpr float kImpactWidthNice    = 0.12f;

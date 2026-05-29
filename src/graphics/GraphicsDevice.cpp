@@ -150,9 +150,12 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
   }
 
   m_featureLevel = featureLevel;
+  const char* driverStr = "WARP";
+  if (m_driverType == D3D_DRIVER_TYPE_HARDWARE) {
+    driverStr = "HARDWARE";
+  }
   LOG_INFO("GraphicsDevice", "Device created. Driver={}, FeatureLevel=0x{:04X}",
-           m_driverType == D3D_DRIVER_TYPE_HARDWARE ? "HARDWARE" : "WARP",
-           static_cast<uint32_t>(featureLevel));
+           driverStr, static_cast<uint32_t>(featureLevel));
 
   // D3D11でのマルチスレッド保護を有効化
   // デバイスコンテキストからマルチスレッド保護インターフェースを取得

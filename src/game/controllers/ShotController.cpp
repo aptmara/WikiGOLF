@@ -55,7 +55,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->impactGaugeDir = 1.0f;
             
             if (hud) {
-                hud->SetImpactZonesVisible(ctx, false);
+                hud->SetImpactZonesVisible(ctx, true);
             }
 
             if (ctx.audio) {
