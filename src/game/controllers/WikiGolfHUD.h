@@ -19,6 +19,7 @@ struct ClubUIData {
     std::string iconTexture;
     std::string shortName;
     std::string categoryEN;
+    float maxPower = 0.0f;
 };
 
 class WikiGolfHUD {
@@ -89,6 +90,10 @@ public:
         ecs::Entity lieCondValueEntity      = UINT32_MAX;
 
         // ショット時のみ表示
+        ecs::Entity shotPanelBgEntity          = UINT32_MAX;
+        ecs::Entity shotPanelStepEntity        = UINT32_MAX;
+        ecs::Entity shotPanelTitleEntity       = UINT32_MAX;
+        ecs::Entity shotPanelHintEntity        = UINT32_MAX;
         ecs::Entity shotPanelPowerLabelEntity   = UINT32_MAX;
         ecs::Entity shotPanelPowerValueEntity   = UINT32_MAX;
         ecs::Entity shotPanelAccuracyLabelEntity= UINT32_MAX;
@@ -112,6 +117,8 @@ public:
      */
     void Update(core::GameContext& ctx, float dt,
                 const game::components::GolfGameState& state,
+                game::components::ShotState::Phase shotPhase,
+                float currentImpact,
                 float currentPower, float confirmedPower,
                 float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
                 const std::vector<ClubUIData>& clubs,
@@ -166,6 +173,12 @@ private:
     void UpdateBottomInfoPanels(core::GameContext& ctx, float distanceToTarget, float heightDiff, 
                                 game::components::TerrainMaterial lie, const ClubUIData& currentClub);
     void UpdateGuideUI(core::GameContext& ctx, const game::components::GolfGameState& state);
+    void UpdateShotPhasePanel(core::GameContext& ctx,
+                              game::components::ShotState::Phase shotPhase,
+                              float currentPower,
+                              float confirmedPower,
+                              float currentImpact,
+                              const ClubUIData& currentClub);
     void SetEntityAlpha(core::GameContext& ctx, ecs::Entity e, float alpha);
 
     UIEntities m_ui;

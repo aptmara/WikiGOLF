@@ -471,21 +471,96 @@ void WikiGolfHUD::InitializeControlHint(core::GameContext& ctx) {
 // ショット時ゲージパネル (初期は非表示)
 // -------------------------------------------------------
 void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
+    // ショット中の情報をまとめる背景カード
+    {
+        auto e = ctx.world.CreateEntity();
+        auto& t = ctx.world.Add<game::components::UIText>(e);
+        t.text = L"";
+        t.x = game::ui::kShotPanelBgX;
+        t.y = game::ui::kShotPanelBgY;
+        t.width = game::ui::kShotPanelBgWidth;
+        t.height = game::ui::kShotPanelBgHeight;
+        t.style.bgColor = {0.025f, 0.040f, 0.070f, 0.88f};
+        t.style.borderColor = {0.200f, 0.650f, 1.000f, 0.72f};
+        t.style.borderWidth = 1.5f;
+        t.style.cornerRadius = 10.0f;
+        t.style.useGradient = true;
+        t.style.bgGradientEnd = {0.050f, 0.085f, 0.130f, 0.90f};
+        t.visible = false;
+        t.layer = game::ui::kLayerShotPanel - 2;
+        m_ui.shotPanelBgEntity = e;
+    }
+
+    // 入力ステップ
+    {
+        auto e = ctx.world.CreateEntity();
+        auto& t = ctx.world.Add<game::components::UIText>(e);
+        t.text = L"1/2";
+        t.x = game::ui::kShotPanelX;
+        t.y = game::ui::kShotPanelY - 22.0f;
+        t.width = game::ui::kShotStepWidth;
+        t.height = 24.0f;
+        t.style = graphics::TextStyle::ShotPanelLabel();
+        t.style.align = graphics::TextAlign::Center;
+        t.style.fontSize = game::ui::kShotLabelFontSize;
+        t.style.color = game::ui::kColorBgDark;
+        t.style.bgColor = game::ui::kColorWarning;
+        t.style.borderColor = {1.0f, 0.86f, 0.24f, 0.85f};
+        t.style.borderWidth = 1.0f;
+        t.style.cornerRadius = 8.0f;
+        t.visible = false;
+        t.layer = game::ui::kLayerShotPanel + 1;
+        m_ui.shotPanelStepEntity = e;
+    }
+
+    // フェーズ見出し
+    {
+        auto e = ctx.world.CreateEntity();
+        auto& t = ctx.world.Add<game::components::UIText>(e);
+        t.text = L"飛距離を決める";
+        t.x = game::ui::kShotPanelX + game::ui::kShotStepWidth + 12.0f;
+        t.y = game::ui::kShotPanelY - 25.0f;
+        t.width = 300.0f;
+        t.height = 30.0f;
+        t.style = graphics::TextStyle::ClubName();
+        t.style.align = graphics::TextAlign::Left;
+        t.style.fontSize = game::ui::kShotTitleFontSize;
+        t.visible = false;
+        t.layer = game::ui::kLayerShotPanel + 1;
+        m_ui.shotPanelTitleEntity = e;
+    }
+
+    // 操作ヒント
+    {
+        auto e = ctx.world.CreateEntity();
+        auto& t = ctx.world.Add<game::components::UIText>(e);
+        t.text = L"左クリックで決定 / 右クリックで中止";
+        t.x = game::ui::kShotPanelX + game::ui::kShotPanelWidth - 300.0f;
+        t.y = game::ui::kShotPanelY - 19.0f;
+        t.width = 300.0f;
+        t.height = 22.0f;
+        t.style = graphics::TextStyle::ShotPanelLabel();
+        t.style.align = graphics::TextAlign::Right;
+        t.style.fontSize = game::ui::kShotHintFontSize;
+        t.style.color = game::ui::kColorTextSub;
+        t.visible = false;
+        t.layer = game::ui::kLayerShotPanel + 1;
+        m_ui.shotPanelHintEntity = e;
+    }
+
     // POWER ラベル
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
-        t.text  = L"POWER";
+        t.text  = L"強さ";
         t.x     = game::ui::kShotPanelX;
-        t.y     = game::ui::kShotPanelY;
-        t.width = 100.0f;
+        t.y     = game::ui::kShotPanelY + 38.0f;
+        t.width = 120.0f;
         t.height = 22.0f;
         t.style  = graphics::TextStyle::ShotPanelLabel();
         t.style.fontSize     = game::ui::kShotLabelFontSize;
-        t.style.bgColor      = game::ui::kColorBgPanel;
-        t.style.cornerRadius = 12.0f;
-        t.style.borderWidth  = 1.0f;
-        t.style.borderColor  = game::ui::kColorBorder;
+        t.style.bgColor      = {0.0f, 0.0f, 0.0f, 0.0f};
+        t.style.borderWidth  = 0.0f;
         t.visible = false; // ショット時のみ
         t.layer   = game::ui::kLayerShotPanel;
         m_ui.shotPanelPowerLabelEntity = e;
@@ -496,9 +571,9 @@ void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
         t.text  = L"0%";
-        t.x     = game::ui::kShotPanelX + game::ui::kShotPanelWidth - 70.0f;
-        t.y     = game::ui::kShotPanelY;
-        t.width = 65.0f;
+        t.x     = game::ui::kShotPanelX + game::ui::kShotPanelWidth - 180.0f;
+        t.y     = game::ui::kShotPanelY + 38.0f;
+        t.width = 180.0f;
         t.height = 22.0f;
         t.style  = graphics::TextStyle::ShotPanelValue();
         t.style.fontSize = game::ui::kShotValueFontSize;
@@ -511,9 +586,9 @@ void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
-        t.text  = L"ACCURACY";
+        t.text  = L"インパクト";
         t.x     = game::ui::kShotPanelX;
-        t.y     = game::ui::kShotPanelY + 50.0f;
+        t.y     = game::ui::kShotPanelY + 64.0f;
         t.width = 120.0f;
         t.height = 22.0f;
         t.style  = graphics::TextStyle::ShotPanelLabel();
@@ -527,10 +602,10 @@ void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
-        t.text  = L"---";
-        t.x     = game::ui::kShotPanelX + game::ui::kShotPanelWidth - 160.0f;
-        t.y     = game::ui::kShotPanelY + 50.0f;
-        t.width = 155.0f;
+        t.text  = L"待機";
+        t.x     = game::ui::kShotPanelX + game::ui::kShotPanelWidth - 220.0f;
+        t.y     = game::ui::kShotPanelY + 64.0f;
+        t.width = 220.0f;
         t.height = 22.0f;
         t.style  = graphics::TextStyle::ShotPanelValue();
         t.style.fontSize = game::ui::kShotValueFontSize;
@@ -543,13 +618,13 @@ void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
-        t.text  = L"CLUB: Driver";
+        t.text  = L"ドライバー";
         t.x     = game::ui::kShotPanelX;
-        t.y     = game::ui::kShotPanelY + 95.0f;
+        t.y     = game::ui::kShotPanelY + 88.0f;
         t.width = game::ui::kShotPanelWidth;
-        t.height = 22.0f;
+        t.height = 18.0f;
         t.style  = graphics::TextStyle::ClubName();
-        t.style.align    = graphics::TextAlign::Center;
+        t.style.align    = graphics::TextAlign::Left;
         t.style.fontSize = game::ui::kBrowserSubFontSize;
         t.style.color    = game::ui::kColorTextSub;
         t.visible = false;
@@ -568,14 +643,16 @@ void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
         gauge.borderColor= game::ui::kColorBorder;
         gauge.borderWidth= game::ui::kGaugeBorderWidth;
         gauge.x          = game::ui::kShotPanelX;
-        gauge.y          = game::ui::kShotPanelY + 22.0f;
+        gauge.y          = game::ui::kShotPanelY + 12.0f;
         gauge.width      = game::ui::kShotPanelWidth;
         gauge.height     = game::ui::kGaugeHeight;
         gauge.isVisible  = false;
+        gauge.mode             = game::components::UIBarGaugeMode::Power;
         gauge.showMarker       = true;
         gauge.markerValue      = 0.0f;
         gauge.markerColor      = game::ui::kColorWhite;
-        gauge.showImpactZones  = true;
+        gauge.showConfirmedMarker = false;
+        gauge.showImpactZones  = false;
         gauge.impactCenter     = 0.5f;
         gauge.impactWidthGreat = game::ui::kImpactWidthGreat;
         gauge.impactWidthNice  = game::ui::kImpactWidthNice;
@@ -608,6 +685,8 @@ void WikiGolfHUD::InitializeJudgeText(core::GameContext& ctx) {
 
 void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
                          const game::components::GolfGameState& state,
+                         game::components::ShotState::Phase shotPhase,
+                         float currentImpact,
                          float currentPower, float confirmedPower,
                          float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
                          const std::vector<ClubUIData>& clubs,
@@ -626,27 +705,113 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
 
     // TODO: GuideUI (操作ヘルプ) は後で装飾するが一旦残す
     UpdateGuideUI(ctx, state);
+    UpdateShotPhasePanel(ctx, shotPhase, currentPower, confirmedPower,
+                         currentImpact, currentClubData);
+}
 
-    // クラブ名 (ショットパネル内)
-    if (m_ui.shotPanelClubLabelEntity != UINT32_MAX &&
-        ctx.world.Has<game::components::UIText>(m_ui.shotPanelClubLabelEntity))
-    {
-        auto* ct = ctx.world.Get<game::components::UIText>(m_ui.shotPanelClubLabelEntity);
-        ct->text = core::ToWString(currentClubData.name);
+void WikiGolfHUD::UpdateShotPhasePanel(
+    core::GameContext& ctx,
+    game::components::ShotState::Phase shotPhase,
+    float currentPower,
+    float confirmedPower,
+    float currentImpact,
+    const ClubUIData& currentClub)
+{
+    const bool powerPhase =
+        shotPhase == game::components::ShotState::Phase::PowerCharging;
+    const bool impactPhase =
+        shotPhase == game::components::ShotState::Phase::ImpactTiming;
+    const bool activeShotPhase = powerPhase || impactPhase;
+
+    auto setText = [&](ecs::Entity e, const std::wstring& text) {
+        if (e != UINT32_MAX && ctx.world.Has<game::components::UIText>(e)) {
+            ctx.world.Get<game::components::UIText>(e)->text = text;
+        }
+    };
+    auto setColor = [&](ecs::Entity e, const DirectX::XMFLOAT4& color) {
+        if (e != UINT32_MAX && ctx.world.Has<game::components::UIText>(e)) {
+            ctx.world.Get<game::components::UIText>(e)->style.color = color;
+        }
+    };
+
+    const float shownPower = confirmedPower > 0.0f ? confirmedPower : currentPower;
+    const int powerPercent =
+        std::clamp(static_cast<int>(std::round(shownPower * 100.0f)), 0, 100);
+
+    if (powerPhase) {
+        setText(m_ui.shotPanelStepEntity, L"1/2");
+        setText(m_ui.shotPanelTitleEntity, L"飛距離を決める");
+        setText(m_ui.shotPanelHintEntity, L"左クリックで強さを決定 / 右クリックで中止");
+        setText(m_ui.shotPanelPowerLabelEntity, L"強さ");
+        setText(m_ui.shotPanelPowerValueEntity,
+                std::to_wstring(powerPercent) + L"%");
+        setText(m_ui.shotPanelAccuracyLabelEntity, L"次の入力");
+        setText(m_ui.shotPanelAccuracyValueEntity, L"インパクト");
+        setColor(m_ui.shotPanelPowerValueEntity, game::ui::kColorWarning);
+        setColor(m_ui.shotPanelAccuracyValueEntity, game::ui::kColorTextSub);
+    } else if (impactPhase) {
+        const float diff = currentImpact - 0.5f;
+        const float absDiff = std::abs(diff);
+        std::wstring impactText = L"芯";
+        DirectX::XMFLOAT4 impactColor = game::ui::kColorSpecial;
+        if (absDiff >= game::ui::kThresholdSpecial) {
+            const int missPercent =
+                std::clamp(static_cast<int>(std::round(absDiff * 200.0f)), 0, 100);
+            impactText = (diff < 0.0f ? L"左 " : L"右 ") +
+                         std::to_wstring(missPercent) + L"%";
+            impactColor = absDiff < game::ui::kThresholdGreat
+                              ? game::ui::kColorSuccess
+                              : game::ui::kColorWarning;
+        }
+
+        setText(m_ui.shotPanelStepEntity, L"2/2");
+        setText(m_ui.shotPanelTitleEntity, L"インパクトを合わせる");
+        setText(m_ui.shotPanelHintEntity, L"中央の芯でクリック / 右クリックで中止");
+        setText(m_ui.shotPanelPowerLabelEntity, L"強さ");
+        setText(m_ui.shotPanelPowerValueEntity,
+                std::to_wstring(powerPercent) + L"% 確定");
+        setText(m_ui.shotPanelAccuracyLabelEntity, L"インパクト");
+        setText(m_ui.shotPanelAccuracyValueEntity, impactText);
+        setColor(m_ui.shotPanelPowerValueEntity, game::ui::kColorTextSub);
+        setColor(m_ui.shotPanelAccuracyValueEntity, impactColor);
+    } else {
+        setText(m_ui.shotPanelStepEntity, L"");
+        setText(m_ui.shotPanelTitleEntity, L"ショット準備");
+        setText(m_ui.shotPanelHintEntity, L"");
+        setText(m_ui.shotPanelPowerLabelEntity, L"強さ");
+        setText(m_ui.shotPanelPowerValueEntity, L"0%");
+        setText(m_ui.shotPanelAccuracyLabelEntity, L"インパクト");
+        setText(m_ui.shotPanelAccuracyValueEntity, L"待機");
+        setColor(m_ui.shotPanelPowerValueEntity, game::ui::kColorWhite);
+        setColor(m_ui.shotPanelAccuracyValueEntity, game::ui::kColorTextSub);
     }
 
-    // POWER 値
-    if (m_ui.shotPanelPowerValueEntity != UINT32_MAX &&
-        ctx.world.Has<game::components::UIText>(m_ui.shotPanelPowerValueEntity))
+    std::wstring clubText = core::ToWString(currentClub.name);
+    if (activeShotPhase && currentClub.maxPower > 0.0f) {
+        const int output =
+            std::clamp(static_cast<int>(std::round(currentClub.maxPower * shownPower)),
+                       0, 999);
+        clubText += L" / 出力 " + std::to_wstring(output);
+    }
+    setText(m_ui.shotPanelClubLabelEntity, clubText);
+
+    if (m_ui.gaugeBarEntity != UINT32_MAX &&
+        ctx.world.Has<game::components::UIBarGauge>(m_ui.gaugeBarEntity))
     {
-        auto* pt = ctx.world.Get<game::components::UIText>(m_ui.shotPanelPowerValueEntity);
-        if (confirmedPower > 0.0f) {
-            pt->text = std::to_wstring((int)(confirmedPower * 100)) + L"%";
-            pt->style.color = game::ui::kColorWarning;
-        } else {
-            pt->text = std::to_wstring((int)(currentPower * 100)) + L"%";
-            pt->style.color = game::ui::kColorWhite;
-        }
+        auto* gauge = ctx.world.Get<game::components::UIBarGauge>(m_ui.gaugeBarEntity);
+        gauge->mode = impactPhase ? game::components::UIBarGaugeMode::Impact
+                                  : game::components::UIBarGaugeMode::Power;
+        gauge->showImpactZones = impactPhase;
+        gauge->showConfirmedMarker = false;
+        gauge->confirmedValue = confirmedPower;
+        gauge->confirmedMarkerColor = game::ui::kColorWarning;
+        gauge->color = powerPercent >= 75 ? game::ui::kColorWarning
+                     : powerPercent >= 40 ? game::ui::kColorSuccess
+                                          : game::ui::kColorAccent;
+        gauge->markerColor = impactPhase ? game::ui::kColorWhite
+                                         : game::ui::kColorWarning;
+        gauge->borderColor = impactPhase ? game::ui::kColorSuccess
+                                         : game::ui::kColorBorder;
     }
 }
 
@@ -1057,9 +1222,13 @@ void WikiGolfHUD::UpdatePowerGauge(core::GameContext& ctx,
             normalizedFill   = (fillValue   - minPower) / (maxPower - minPower);
             normalizedMarker = (markerValue - minPower) / (maxPower - minPower);
         }
-        gauge->value       = std::clamp(normalizedFill,   0.0f, 1.0f);
-        gauge->markerValue = std::clamp(normalizedMarker, 0.0f, 1.0f);
-        gauge->isVisible   = true;
+        gauge->value = std::clamp(normalizedFill, 0.0f, 1.0f);
+        gauge->markerValue =
+            gauge->mode == game::components::UIBarGaugeMode::Power
+                ? gauge->value
+                : std::clamp(normalizedMarker, 0.0f, 1.0f);
+        gauge->showMarker = true;
+        gauge->isVisible = true;
     }
 }
 
@@ -1080,7 +1249,9 @@ void WikiGolfHUD::ResetShotUI(core::GameContext& ctx) {
         gauge->value           = 0.0f;
         gauge->markerValue     = 0.0f;
         gauge->isVisible       = false;
-        gauge->showImpactZones = true;
+        gauge->mode            = game::components::UIBarGaugeMode::Power;
+        gauge->showImpactZones = false;
+        gauge->showConfirmedMarker = false;
     }
 
     SetShotPhaseUIVisible(ctx, false);
@@ -1145,30 +1316,67 @@ void WikiGolfHUD::SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase) 
     setVis(m_ui.shotButtonTextEntity, !shotPhase);
     setVis(m_ui.controlHintEntity,    !shotPhase);
 
-    // クラブリスト: ショット時は薄く
-    float clubAlpha = shotPhase ? 0.35f : 1.0f;
-    for (auto e : m_ui.clubNameEntities)  setAlpha(e, clubAlpha);
-    for (auto e : m_ui.clubSubNameEntities) setAlpha(e, clubAlpha * 0.9f);
-    for (auto e : m_ui.clubIconEntities) {
-        if (e != UINT32_MAX && ctx.world.IsAlive(e)) {
-            if (auto* img = ctx.world.Get<game::components::UIImage>(e)) {
-                // img のベース alpha は選択状態に依存するため UpdateClubSelectList 側を尊重するが
-                // ショットフェーズ全体としての乗算を行う
-                // （簡易的に 0.35f 固定でも良いが、元のAlphaとの兼ね合いで調整）
-                img->alpha = shotPhase ? 0.2f : (img->alpha > 0.5f ? 1.0f : 0.4f);
-            }
+    const bool bottomInfoVisible = !shotPhase;
+    setVis(m_ui.distPanelBgEntity, bottomInfoVisible);
+    setVis(m_ui.distLabelEntity, bottomInfoVisible);
+    setVis(m_ui.distValueEntity, bottomInfoVisible);
+    setVis(m_ui.heightLabelEntity, bottomInfoVisible);
+    setVis(m_ui.heightValueEntity, bottomInfoVisible);
+    setVis(m_ui.clubInfoPanelBgEntity, bottomInfoVisible);
+    setVis(m_ui.clubInfoLabelEntity, bottomInfoVisible);
+    setVis(m_ui.clubInfoNameEntity, bottomInfoVisible);
+    setVis(m_ui.clubInfoShortNameEntity, bottomInfoVisible);
+    setVis(m_ui.liePanelBgEntity, bottomInfoVisible);
+    setVis(m_ui.lieLabelEntity, bottomInfoVisible);
+    setVis(m_ui.lieValueEntity, bottomInfoVisible);
+    setVis(m_ui.lieCondLabelEntity, bottomInfoVisible);
+    setVis(m_ui.lieCondValueEntity, bottomInfoVisible);
+    if (m_ui.clubInfoIconEntity != UINT32_MAX && ctx.world.IsAlive(m_ui.clubInfoIconEntity)) {
+        if (auto* img = ctx.world.Get<game::components::UIImage>(m_ui.clubInfoIconEntity)) {
+            img->visible = bottomInfoVisible;
         }
     }
-    for (auto e : m_ui.clubBgEntities) {
-        if (e != UINT32_MAX && ctx.world.IsAlive(e)) {
-            if (auto* t = ctx.world.Get<game::components::UIText>(e)) {
-                t->style.bgColor.w = shotPhase ? 0.25f : (
-                    t->style.borderColor.x > 0.15f ? 0.8f : 0.7f); // 選択中(青枠=x>0.15)か判定
+
+    // クラブリスト: ショット時は選択中だけ残して視界を整理
+    float clubAlpha = shotPhase ? 0.35f : 1.0f;
+    for (size_t i = 0; i < m_ui.clubBgEntities.size(); ++i) {
+        const bool selected = i < m_ui.clubArrowEntities.size() &&
+                              ctx.world.Get<game::components::UIText>(m_ui.clubArrowEntities[i]) &&
+                              ctx.world.Get<game::components::UIText>(m_ui.clubArrowEntities[i])->visible;
+        const bool rowVisible = !shotPhase || selected;
+
+        if (i < m_ui.clubBgEntities.size()) setVis(m_ui.clubBgEntities[i], rowVisible);
+        if (i < m_ui.clubNameEntities.size()) {
+            setVis(m_ui.clubNameEntities[i], rowVisible);
+            setAlpha(m_ui.clubNameEntities[i], clubAlpha);
+        }
+        if (i < m_ui.clubSubNameEntities.size()) {
+            setVis(m_ui.clubSubNameEntities[i], rowVisible);
+            setAlpha(m_ui.clubSubNameEntities[i], clubAlpha * 0.9f);
+        }
+        if (i < m_ui.clubArrowEntities.size()) setVis(m_ui.clubArrowEntities[i], rowVisible && selected);
+        if (i < m_ui.clubIconEntities.size() && m_ui.clubIconEntities[i] != UINT32_MAX &&
+            ctx.world.IsAlive(m_ui.clubIconEntities[i])) {
+            if (auto* img = ctx.world.Get<game::components::UIImage>(m_ui.clubIconEntities[i])) {
+                img->visible = rowVisible;
+                img->alpha = shotPhase ? 0.35f : (img->alpha > 0.5f ? 1.0f : 0.4f);
+            }
+        }
+
+        if (i < m_ui.clubBgEntities.size() && m_ui.clubBgEntities[i] != UINT32_MAX &&
+            ctx.world.IsAlive(m_ui.clubBgEntities[i])) {
+            if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.clubBgEntities[i])) {
+                t->style.bgColor.w = shotPhase ? 0.35f : (
+                    t->style.borderColor.x > 0.15f ? 0.8f : 0.7f);
             }
         }
     }
 
     // ゲージパネル: ショット時のみ表示
+    setVis(m_ui.shotPanelBgEntity,          shotPhase);
+    setVis(m_ui.shotPanelStepEntity,        shotPhase);
+    setVis(m_ui.shotPanelTitleEntity,       shotPhase);
+    setVis(m_ui.shotPanelHintEntity,        shotPhase);
     setVis(m_ui.shotPanelPowerLabelEntity,    shotPhase);
     setVis(m_ui.shotPanelPowerValueEntity,    shotPhase);
     setVis(m_ui.shotPanelAccuracyLabelEntity, shotPhase);
@@ -1256,6 +1464,10 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
         setVis(m_ui.gaugeFillEntity,   false);
         setVis(m_ui.gaugeMarkerEntity, false);
         setVis(m_ui.judgeEntity,       false);
+        setVis(m_ui.shotPanelBgEntity,          false);
+        setVis(m_ui.shotPanelStepEntity,        false);
+        setVis(m_ui.shotPanelTitleEntity,       false);
+        setVis(m_ui.shotPanelHintEntity,        false);
         setVis(m_ui.shotPanelPowerLabelEntity,    false);
         setVis(m_ui.shotPanelPowerValueEntity,    false);
         setVis(m_ui.shotPanelAccuracyLabelEntity, false);

@@ -840,7 +840,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (m_clubController) {
           const auto& clubs = m_clubController->GetAllClubs();
           for (const auto& c : clubs) {
-              clubDataList.push_back({c.name, c.iconTexture, c.shortName, c.categoryEN});
+              clubDataList.push_back({c.name, c.iconTexture, c.shortName, c.categoryEN, c.maxPower});
           }
           clubIdx = m_clubController->GetCurrentClubIndex();
       }
@@ -861,6 +861,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       }
 
       m_hud->Update(ctx, dt, *state,
+                    shot->phase, currentImpact,
                     currentPower, shot->confirmedPower,
                     state->windSpeed, state->windDirection,
                     m_cameraController ? m_cameraController->GetYaw() : 0.0f,

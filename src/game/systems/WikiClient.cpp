@@ -200,7 +200,10 @@ std::vector<game::WikiLink> WikiClient::FetchPageLinks(const std::string &title,
   // limit <= 0 の場合はデフォルト500に制限
   const int batchSize = 500;
   const int maxRequests = 3;
-  const int effectiveLimit = (limit <= 0) ? 500 : limit;
+  int effectiveLimit = limit;
+  if (limit <= 0) {
+    effectiveLimit = 500;
+  }
 
   std::wstring plcontinue = L"";
   bool hasMore = true;

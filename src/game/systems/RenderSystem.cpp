@@ -20,7 +20,7 @@ struct VSConstants {
   XMMATRIX projection;
   XMFLOAT4 materialColor;
   XMFLOAT4
-      materialFlags; // マテリアルフラグ。x:テクスチャ有無、y:法線マップ有無、z:カスタムフラグx、w:カスタムフラグy
+      materialFlags; // 繝槭ユ繝ｪ繧｢繝ｫ繝輔Λ繧ｰ縲Ｙ:繝・け繧ｹ繝√Ε譛臥┌縲【:豕慕ｷ壹・繝・・譛臥┌縲】:繧ｫ繧ｹ繧ｿ繝繝輔Λ繧ｰx縲『:繧ｫ繧ｹ繧ｿ繝繝輔Λ繧ｰy
   XMFLOAT4 lightDir;
   XMFLOAT4 cameraPos;
 };
@@ -38,7 +38,7 @@ void RenderSystem(core::GameContext &ctx) {
   auto *context = ctx.graphics.GetContext();
   auto &world = ctx.world;
 
-  // 定数バッファ等の取得または作成（Global Dataを使用）
+  // 螳壽焚繝舌ャ繝輔ぃ遲峨・蜿門ｾ励∪縺溘・菴懈・・・lobal Data繧剃ｽｿ逕ｨ・・
   auto *state = world.GetGlobal<RenderState>();
   if (!state) {
     RenderState newState;
@@ -49,7 +49,7 @@ void RenderSystem(core::GameContext &ctx) {
     desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     device->CreateBuffer(&desc, nullptr, &newState.cBuffer);
 
-    // サンプラーステート作成
+    // 繧ｵ繝ｳ繝励Λ繝ｼ繧ｹ繝・・繝井ｽ懈・
     D3D11_SAMPLER_DESC sampDesc = {};
     sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -60,7 +60,7 @@ void RenderSystem(core::GameContext &ctx) {
     sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
     device->CreateSamplerState(&sampDesc, &newState.sampler);
 
-    // ブレンドステート作成（半透明対応）
+    // 繝悶Ξ繝ｳ繝峨せ繝・・繝井ｽ懈・・亥濠騾乗・蟇ｾ蠢懶ｼ・
     D3D11_BLEND_DESC blendDesc = {};
     blendDesc.AlphaToCoverageEnable = FALSE;
     blendDesc.IndependentBlendEnable = FALSE;
@@ -75,12 +75,12 @@ void RenderSystem(core::GameContext &ctx) {
         D3D11_COLOR_WRITE_ENABLE_ALL;
     device->CreateBlendState(&blendDesc, &newState.alphaBlendState);
 
-    // 乗算ブレンド
+    // 荵礼ｮ励ヶ繝ｬ繝ｳ繝・
     blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
     device->CreateBlendState(&blendDesc, &newState.multiplyBlendState);
 
-    // 加算ブレンド
+    // 蜉邂励ヶ繝ｬ繝ｳ繝・
     blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
     device->CreateBlendState(&blendDesc, &newState.addBlendState);
@@ -89,7 +89,7 @@ void RenderSystem(core::GameContext &ctx) {
     state = world.GetGlobal<RenderState>();
   }
 
-  // カメラ情報の取得
+  // 繧ｫ繝｡繝ｩ諠・ｱ縺ｮ蜿門ｾ・
   XMMATRIX view = XMMatrixIdentity();
   XMMATRIX proj = XMMatrixIdentity();
   XMFLOAT4 camPos = {0, 0, 0, 1};
@@ -106,17 +106,17 @@ void RenderSystem(core::GameContext &ctx) {
       });
 
   if (!cameraFound) {
-    // フォールバックカメラ
+    // 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ繧ｫ繝｡繝ｩ
     view = XMMatrixLookAtLH(XMVectorSet(0, 0, -5, 1), XMVectorSet(0, 0, 0, 1),
                             XMVectorSet(0, 1, 0, 0));
     proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, 16.0f / 9.0f, 0.01f, 100.0f);
   }
 
-  // 転置（HLSLは列優先）
+  // 霆｢鄂ｮ・・LSL縺ｯ蛻怜━蜈茨ｼ・
   view = XMMatrixTranspose(view);
   proj = XMMatrixTranspose(proj);
 
-  // レンダリングループ
+  // 繝ｬ繝ｳ繝繝ｪ繝ｳ繧ｰ繝ｫ繝ｼ繝・
   context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
   context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
 
@@ -129,7 +129,7 @@ void RenderSystem(core::GameContext &ctx) {
     auto *shader = ctx.resource.GetShader(r.shader);
 
     if (mesh && shader) {
-      // ブレンドステート設定
+      // 繝悶Ξ繝ｳ繝峨せ繝・・繝郁ｨｭ螳・
       if (r.blendMode == components::BlendMode::Alpha) {
         context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
                                  0xFFFFFFFF);
@@ -148,7 +148,7 @@ void RenderSystem(core::GameContext &ctx) {
 
       shader->Bind(context);
 
-      // 定数バッファ更新
+      // 螳壽焚繝舌ャ繝輔ぃ譖ｴ譁ｰ
       D3D11_MAPPED_SUBRESOURCE mapped;
       if (SUCCEEDED(context->Map(state->cBuffer.Get(), 0,
                                  D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -159,15 +159,19 @@ void RenderSystem(core::GameContext &ctx) {
         constants->materialColor = r.color;
         const bool hasDiffuse = r.hasTexture && r.textureSRV;
         const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
-        constants->materialFlags = {hasDiffuse ? 1.0f : 0.0f,
-                                    hasNormal ? 1.0f : 0.0f, r.customFlags.x,
+        float diffFlag = 0.0f;
+        if (hasDiffuse) diffFlag = 1.0f;
+        float normFlag = 0.0f;
+        if (hasNormal) normFlag = 1.0f;
+        constants->materialFlags = {diffFlag,
+                                    normFlag, r.customFlags.x,
                                     r.customFlags.y};
         constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f};
         constants->cameraPos = camPos;
         context->Unmap(state->cBuffer.Get(), 0);
       }
 
-      // テクスチャバインド
+      // 繝・け繧ｹ繝√Ε繝舌う繝ｳ繝・
       ID3D11ShaderResourceView *nullSRV = nullptr;
       if (r.hasTexture && r.textureSRV) {
         context->PSSetShaderResources(0, 1, r.textureSRV.GetAddressOf());
@@ -175,7 +179,7 @@ void RenderSystem(core::GameContext &ctx) {
         context->PSSetShaderResources(0, 1, &nullSRV);
       }
 
-      // 法線マップバインド
+      // 豕慕ｷ壹・繝・・繝舌う繝ｳ繝・
       if (r.hasNormalMap && r.normalMapSRV) {
         context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
       } else {
@@ -188,7 +192,7 @@ void RenderSystem(core::GameContext &ctx) {
     }
   };
 
-  // 不透明パス
+  // 荳埼乗・繝代せ
   world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t,
           components::MeshRenderer &r) {
@@ -197,7 +201,7 @@ void RenderSystem(core::GameContext &ctx) {
         }
       });
 
-  // 半透明パス
+  // 蜊企乗・繝代せ
   world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t,
           components::MeshRenderer &r) {

@@ -293,11 +293,21 @@ struct HoleFlag {
 };
 
 /**
+ * @brief バーゲージの表示用途です。
+ * @author 山内陽
+ */
+enum class UIBarGaugeMode {
+  Power, ///< 強さ決定用の左詰めゲージ
+  Impact ///< インパクト精度用の中央合わせゲージ
+};
+
+/**
  * @brief D2D描画用バーゲージコンポーネント
  */
 struct UIBarGauge {
   float value = 0.0f;    ///< 現在値 (0.0 - 1.0)
   float maxValue = 1.0f; ///< 最大値
+  UIBarGaugeMode mode = UIBarGaugeMode::Power; ///< ゲージの表示用途
 
   DirectX::XMFLOAT4 color = {0.0f, 1.0f, 0.0f, 1.0f};       ///< バー色
   DirectX::XMFLOAT4 bgColor = {0.0f, 0.0f, 0.0f, 0.5f};     ///< 背景色
@@ -314,6 +324,10 @@ struct UIBarGauge {
   bool showMarker = false;
   float markerValue = 0.0f;
   DirectX::XMFLOAT4 markerColor = {1.0f, 1.0f, 1.0f, 1.0f};
+
+  bool showConfirmedMarker = false; ///< 確定済みの強さなどを固定マーカーで表示するか
+  float confirmedValue = 0.0f;      ///< 確定済みマーカー値 (0.0 - 1.0)
+  DirectX::XMFLOAT4 confirmedMarkerColor = {1.0f, 0.76f, 0.16f, 1.0f};
 
   // インパクトゾーン（ゴルフゲーム特化）
   bool showImpactZones = false;

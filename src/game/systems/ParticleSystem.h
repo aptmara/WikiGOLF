@@ -1,6 +1,6 @@
 /**
  * @file ParticleSystem.h
- * @brief 環境パーティクルシステム - 大気効果（塵、雪、蛍等）
+ * @brief 迺ｰ蠅・ヱ繝ｼ繝・ぅ繧ｯ繝ｫ繧ｷ繧ｹ繝・Β - 螟ｧ豌怜柑譫懶ｼ亥｡ｵ縲・妛縲∬寫遲会ｼ・
  */
 
 #pragma once
@@ -19,7 +19,7 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 /**
- * @brief 単一パーティクル
+ * @brief 蜊倅ｸ繝代・繝・ぅ繧ｯ繝ｫ
  */
 struct Particle {
   XMFLOAT3 position;
@@ -33,28 +33,28 @@ struct Particle {
 };
 
 /**
- * @brief パーティクルシステム設定
+ * @brief 繝代・繝・ぅ繧ｯ繝ｫ繧ｷ繧ｹ繝・Β險ｭ螳・
  */
 struct ParticleConfig {
   int maxParticles = 500;
-  float spawnRadius = 50.0f;             // 発生範囲
-  float spawnHeight = 30.0f;             // 発生高さ
-  XMFLOAT3 baseVelocity = {0, -1.0f, 0}; // 基本速度
-  float velocityVariance = 0.3f;         // 速度ばらつき
+  float spawnRadius = 50.0f;             // 逋ｺ逕溽ｯ・峇
+  float spawnHeight = 30.0f;             // 逋ｺ逕滄ｫ倥＆
+  XMFLOAT3 baseVelocity = {0, -1.0f, 0}; // 蝓ｺ譛ｬ騾溷ｺｦ
+  float velocityVariance = 0.3f;         // 騾溷ｺｦ縺ｰ繧峨▽縺・
   float sizeMin = 0.05f;
   float sizeMax = 0.15f;
   float lifeMin = 3.0f;
   float lifeMax = 8.0f;
   XMFLOAT4 colorStart = {1, 1, 1, 0.8f};
   XMFLOAT4 colorEnd = {1, 1, 1, 0};
-  bool fadeInOut = true; // フェードイン・アウト
+  bool fadeInOut = true; // 繝輔ぉ繝ｼ繝峨う繝ｳ繝ｻ繧｢繧ｦ繝・
   bool rotateParticles = false;
-  float gravity = 0.0f;       // 重力影響
-  float windInfluence = 0.5f; // 風の影響
+  float gravity = 0.0f;       // 驥榊鴨蠖ｱ髻ｿ
+  float windInfluence = 0.5f; // 鬚ｨ縺ｮ蠖ｱ髻ｿ
 };
 
 /**
- * @brief プリセットからパーティクル設定を取得
+ * @brief 繝励Μ繧ｻ繝・ヨ縺九ｉ繝代・繝・ぅ繧ｯ繝ｫ險ｭ螳壹ｒ蜿門ｾ・
  */
 inline ParticleConfig GetParticleConfig(components::ParticlePreset preset) {
   ParticleConfig config;
@@ -140,7 +140,7 @@ inline ParticleConfig GetParticleConfig(components::ParticlePreset preset) {
     config.lifeMax = 5.0f;
     config.colorStart = {1.0f, 0.6f, 0.1f, 1.0f};
     config.colorEnd = {1.0f, 0.2f, 0.0f, 0.0f};
-    config.gravity = -0.2f; // 上に浮く
+    config.gravity = -0.2f; // 荳翫↓豬ｮ縺・
     break;
 
   case components::ParticlePreset::Bubbles:
@@ -243,14 +243,14 @@ inline ParticleConfig GetParticleConfig(components::ParticlePreset preset) {
 }
 
 /**
- * @brief 環境パーティクルシステム
+ * @brief 迺ｰ蠅・ヱ繝ｼ繝・ぅ繧ｯ繝ｫ繧ｷ繧ｹ繝・Β
  */
 class EnvironmentParticleSystem {
 public:
   EnvironmentParticleSystem() : m_rng(std::random_device{}()) {}
 
   /**
-   * @brief パーティクル設定を適用
+   * @brief 繝代・繝・ぅ繧ｯ繝ｫ險ｭ螳壹ｒ驕ｩ逕ｨ
    */
   void Configure(const ParticleConfig &config) {
     m_config = config;
@@ -259,52 +259,55 @@ public:
   }
 
   /**
-   * @brief 更新
-   * @param dt デルタタイム
-   * @param cameraPos カメラ位置
-   * @param windDir 風向き
+   * @brief 譖ｴ譁ｰ
+   * @param dt 繝・Ν繧ｿ繧ｿ繧､繝
+   * @param cameraPos 繧ｫ繝｡繝ｩ菴咲ｽｮ
+   * @param windDir 鬚ｨ蜷代″
    */
   void Update(float dt, const XMFLOAT3 &cameraPos, const XMFLOAT3 &windDir) {
     if (m_config.maxParticles <= 0)
       return;
 
-    // 新規パーティクル生成
+    // 譁ｰ隕上ヱ繝ｼ繝・ぅ繧ｯ繝ｫ逕滓・
     SpawnParticles(dt, cameraPos);
 
-    // 既存パーティクル更新
+    // 譌｢蟄倥ヱ繝ｼ繝・ぅ繧ｯ繝ｫ譖ｴ譁ｰ
     for (auto &p : m_particles) {
       if (p.life <= 0)
         continue;
 
-      // 速度に風の影響を追加
+      // 騾溷ｺｦ縺ｫ鬚ｨ縺ｮ蠖ｱ髻ｿ繧定ｿｽ蜉
       p.velocity.x += windDir.x * m_config.windInfluence * dt;
       p.velocity.z += windDir.z * m_config.windInfluence * dt;
 
-      // 重力
+      // 驥榊鴨
       p.velocity.y -= m_config.gravity * dt;
 
-      // 位置更新
+      // 菴咲ｽｮ譖ｴ譁ｰ
       p.position.x += p.velocity.x * dt;
       p.position.y += p.velocity.y * dt;
       p.position.z += p.velocity.z * dt;
 
-      // 回転
+      // 蝗櫁ｻ｢
       p.rotation += p.rotationSpeed * dt;
 
-      // 寿命減少
+      // 蟇ｿ蜻ｽ貂帛ｰ・
       p.life -= dt / p.maxLife;
 
-      // 色補間
+      // 濶ｲ陬憺俣
       float t = 1.0f - p.life;
       if (m_config.fadeInOut) {
-        // フェードイン・アウト (0->1->0)
-        float alpha = p.life < 0.5f ? p.life * 2.0f : (1.0f - p.life) * 2.0f;
+        // 繝輔ぉ繝ｼ繝峨う繝ｳ繝ｻ繧｢繧ｦ繝・(0->1->0)
+        float alpha = (1.0f - p.life) * 2.0f;
+        if (p.life < 0.5f) {
+          alpha = p.life * 2.0f;
+        }
         p.color.w = m_config.colorStart.w * alpha;
       } else {
         p.color.w = m_config.colorStart.w * p.life;
       }
 
-      // 色のグラデーション
+      // 濶ｲ縺ｮ繧ｰ繝ｩ繝・・繧ｷ繝ｧ繝ｳ
       p.color.x = m_config.colorStart.x +
                   (m_config.colorEnd.x - m_config.colorStart.x) * t;
       p.color.y = m_config.colorStart.y +
@@ -313,7 +316,7 @@ public:
                   (m_config.colorEnd.z - m_config.colorStart.z) * t;
     }
 
-    // 死んだパーティクルを削除
+    // 豁ｻ繧薙□繝代・繝・ぅ繧ｯ繝ｫ繧貞炎髯､
     m_particles.erase(
         std::remove_if(m_particles.begin(), m_particles.end(),
                        [](const Particle &p) { return p.life <= 0; }),
@@ -321,20 +324,20 @@ public:
   }
 
   /**
-   * @brief パーティクルリスト取得
+   * @brief 繝代・繝・ぅ繧ｯ繝ｫ繝ｪ繧ｹ繝亥叙蠕・
    */
   const std::vector<Particle> &GetParticles() const { return m_particles; }
 
   /**
-   * @brief アクティブパーティクル数
+   * @brief 繧｢繧ｯ繝・ぅ繝悶ヱ繝ｼ繝・ぅ繧ｯ繝ｫ謨ｰ
    */
   size_t GetActiveCount() const { return m_particles.size(); }
 
 private:
   void SpawnParticles(float dt, const XMFLOAT3 &cameraPos) {
-    // 毎フレーム一定数を生成（パーティクル数に応じて調整）
+    // 豈弱ヵ繝ｬ繝ｼ繝荳螳壽焚繧堤函謌撰ｼ医ヱ繝ｼ繝・ぅ繧ｯ繝ｫ謨ｰ縺ｫ蠢懊§縺ｦ隱ｿ謨ｴ・・
     float spawnRate =
-        static_cast<float>(m_config.maxParticles) / 5.0f; // 5秒で最大数に
+        static_cast<float>(m_config.maxParticles) / 5.0f; // 5遘偵〒譛螟ｧ謨ｰ縺ｫ
     int toSpawn = static_cast<int>(spawnRate * dt);
 
     std::uniform_real_distribution<float> distAngle(0, XM_2PI);
@@ -354,14 +357,14 @@ private:
          ++i) {
       Particle p;
 
-      // カメラ周辺にスポーン
+      // 繧ｫ繝｡繝ｩ蜻ｨ霎ｺ縺ｫ繧ｹ繝昴・繝ｳ
       float angle = distAngle(m_rng);
       float radius = distRadius(m_rng);
       p.position.x = cameraPos.x + cosf(angle) * radius;
       p.position.y = cameraPos.y + distHeight(m_rng);
       p.position.z = cameraPos.z + sinf(angle) * radius;
 
-      // 速度
+      // 騾溷ｺｦ
       p.velocity.x =
           m_config.baseVelocity.x + distVel(m_rng) * m_config.velocityVariance;
       p.velocity.y =
@@ -369,13 +372,16 @@ private:
       p.velocity.z =
           m_config.baseVelocity.z + distVel(m_rng) * m_config.velocityVariance;
 
-      // その他のプロパティ
+      // 縺昴・莉悶・繝励Ο繝代ユ繧｣
       p.size = distSize(m_rng);
       p.maxLife = distLife(m_rng);
       p.life = 1.0f;
       p.color = m_config.colorStart;
       p.rotation = distRot(m_rng);
-      p.rotationSpeed = m_config.rotateParticles ? distRotSpeed(m_rng) : 0.0f;
+      p.rotationSpeed = 0.0f;
+      if (m_config.rotateParticles) {
+        p.rotationSpeed = distRotSpeed(m_rng);
+      }
 
       m_particles.push_back(p);
     }

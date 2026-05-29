@@ -47,7 +47,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     mfInitialized = true;
   }
 
-  // パスをワイド文字列に変換
+  // 繝代せ繧偵Ρ繧､繝画枚蟄怜・縺ｫ螟画鋤
   int size_needed = MultiByteToWideChar(CP_UTF8, 0, &filePath[0], (int)filePath.size(), NULL, 0);
   std::wstring wpath(size_needed, 0);
   MultiByteToWideChar(CP_UTF8, 0, &filePath[0], (int)filePath.size(), &wpath[0], size_needed);
@@ -62,7 +62,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     return false;
   }
 
-  // 出力メディアタイプをRGB32に設定
+  // 蜃ｺ蜉帙Γ繝・ぅ繧｢繧ｿ繧､繝励ｒRGB32縺ｫ險ｭ螳・
   ComPtr<IMFMediaType> mediaType;
   MFCreateMediaType(&mediaType);
   mediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
@@ -74,7 +74,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     return false;
   }
 
-  // 現在のメディアタイプから幅、高さ、ストライドを抽出
+  // 迴ｾ蝨ｨ縺ｮ繝｡繝・ぅ繧｢繧ｿ繧､繝励°繧牙ｹ・・ｫ倥＆縲√せ繝医Λ繧､繝峨ｒ謚ｽ蜃ｺ
   ComPtr<IMFMediaType> currentType;
   hr = m_reader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, &currentType);
   if (FAILED(hr)) {
@@ -91,7 +91,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
   hr = currentType->GetUINT32(MF_MT_DEFAULT_STRIDE, &tempStride);
   m_stride = (LONG)tempStride;
   if (FAILED(hr)) {
-    // ストライド未設定時のフォールバック処理（通常は幅 * 4）
+    // 繧ｹ繝医Λ繧､繝画悴險ｭ螳壽凾縺ｮ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ蜃ｦ逅・ｼ磯壼ｸｸ縺ｯ蟷・* 4・・
     m_stride = m_width * 4;
   }
 
@@ -99,7 +99,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
     return false;
   }
 
-  // デコードスレッドを開始
+  // 繝・さ繝ｼ繝峨せ繝ｬ繝・ラ繧帝幕蟋・
   m_decodeThread = std::thread(&VideoPlayer::DecodeThreadFunc, this);
   
   LOG_INFO("VideoPlayer", "Initialized streaming for video: {} ({}x{})", filePath, m_width, m_height);
@@ -137,13 +137,13 @@ bool VideoPlayer::CreateTexture(int width, int height) {
 void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
   if (!m_texture || !context) return;
 
-  // dtを100ナノ秒単位に変換（1秒 = 10,000,000単位）
+  // dt繧・00繝翫ヮ遘貞腰菴阪↓螟画鋤・・遘・= 10,000,000蜊倅ｽ搾ｼ・
   m_currentPlaybackTime += (LONGLONG)(dt * 10000000LL);
 
   ComPtr<IMFSample> latestSample;
   LONGLONG latestTimestamp = -1;
 
-  // 表示期限に達したフレームをキューから抽出
+  // 陦ｨ遉ｺ譛滄剞縺ｫ驕斐＠縺溘ヵ繝ｬ繝ｼ繝繧偵く繝･繝ｼ縺九ｉ謚ｽ蜃ｺ
   {
     std::lock_guard<std::mutex> lock(m_mutex);
     while (!m_frameQueue.empty()) {
@@ -153,12 +153,12 @@ void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
         latestTimestamp = frame.timestamp;
         m_frameQueue.pop();
       } else {
-        break; // 次のフレームは未来の時刻
+        break; // 谺｡縺ｮ繝輔Ξ繝ｼ繝縺ｯ譛ｪ譚･縺ｮ譎ょ綾
       }
     }
   }
 
-  // 表示可能な新規フレームがあればD3D11テクスチャにアップロード
+  // 陦ｨ遉ｺ蜿ｯ閭ｽ縺ｪ譁ｰ隕上ヵ繝ｬ繝ｼ繝縺後≠繧後・D3D11繝・け繧ｹ繝√Ε縺ｫ繧｢繝・・繝ｭ繝ｼ繝・
   if (latestSample) {
     ComPtr<IMFMediaBuffer> buffer;
     latestSample->ConvertToContiguousBuffer(&buffer);
@@ -169,7 +169,7 @@ void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
         return;
       }
 
-      // ストライドの正負（正:上から下、負:下から上）に基づいてテクスチャを格納
+      // 繧ｹ繝医Λ繧､繝峨・豁｣雋・域ｭ｣:荳翫°繧我ｸ九∬ｲ:荳九°繧我ｸ奇ｼ峨↓蝓ｺ縺･縺・※繝・け繧ｹ繝√Ε繧呈ｼ邏・
       int stride = (int)m_stride;
       bool bottomUp = (stride < 0);
       if (bottomUp) stride = -stride;
@@ -180,11 +180,14 @@ void VideoPlayer::Update(ID3D11DeviceContext* context, float dt) {
       }
 
       for (int y = 0; y < m_height; ++y) {
-        int srcY = bottomUp ? (m_height - 1 - y) : y;
+        int srcY = y;
+        if (bottomUp) {
+          srcY = (m_height - 1 - y);
+        }
         memcpy(m_frameUploadBuffer.data() + y * m_width * 4, data + srcY * stride, m_width * 4);
       }
 
-      // アルファ値を最大化して透過処理による非表示を防止
+      // 繧｢繝ｫ繝輔ぃ蛟､繧呈怙螟ｧ蛹悶＠縺ｦ騾城℃蜃ｦ逅・↓繧医ｋ髱櫁｡ｨ遉ｺ繧帝亟豁｢
       uint32_t* pixels = reinterpret_cast<uint32_t*>(m_frameUploadBuffer.data());
       for (size_t i = 0; i < (size_t)m_width * m_height; ++i) {
         pixels[i] |= 0xFF000000;
@@ -205,7 +208,7 @@ void VideoPlayer::DecodeThreadFunc() {
     bool queueFull = false;
     {
       std::lock_guard<std::mutex> lock(m_mutex);
-      // キュー内の最大保持フレーム数を5に制限
+      // 繧ｭ繝･繝ｼ蜀・・譛螟ｧ菫晄戟繝輔Ξ繝ｼ繝謨ｰ繧・縺ｫ蛻ｶ髯・
       queueFull = (m_frameQueue.size() >= 5);
     }
 
