@@ -23,27 +23,25 @@ namespace resources {
 
 ResourceManager::ResourceManager(graphics::GraphicsDevice &device)
     : m_device(device),
-      m_meshPool(graphics::Mesh{}) // 繝繝溘・繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ
+      m_meshPool(graphics::Mesh{}) // ダミーフォールバック用
       ,
-      m_shaderPool(graphics::Shader{}) // 繝繝溘・繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ
+      m_shaderPool(graphics::Shader{}) // ダミーフォールバック用
       ,
-      m_audioPool(audio::AudioClip{}) // 繝繝溘・繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ逕ｨ
+      m_audioPool(audio::AudioClip{}) // ダミーフォールバック用
 {}
 
-// ... Mesh/Shader縺ｮ螳溯｣・...
-
-// 髻ｳ螢ｰ讖溯・螳溯｣・
+// 音声機能実装
 
 #include <wrl/client.h>
 
-// 髻ｳ螢ｰ讖溯・螳溯｣・(Media Foundation)
+// 音声機能実装 (Media Foundation)
 
 AudioHandle ResourceManager::LoadAudio(const std::string &path) {
   if (auto it = m_audioCache.find(path); it != m_audioCache.end()) {
     return it->second;
   }
 
-  // MF蛻晄悄蛹・(繧ｹ繝ｬ繝・ラ繧ｻ繝ｼ繝輔〒縺ｯ縺ｪ縺・′縲√Γ繧､繝ｳ繧ｹ繝ｬ繝・ラ縺九ｉ縺ｮ蜻ｼ縺ｳ蜃ｺ縺励ｒ諠ｳ螳・
+  // MF初期化 (スレッドセーフではないが、メインスレッドからの呼び出しを想定)
   static bool mfInitialized = false;
   if (!mfInitialized) {
     if (FAILED(MFStartup(MF_VERSION))) {
@@ -53,24 +51,24 @@ AudioHandle ResourceManager::LoadAudio(const std::string &path) {
     mfInitialized = true;
   }
 
-  // 繝代せ螟画鋤 (UTF-8 -> Wide)
+  // パス変換 (UTF-8 -> Wide)
   int size_needed =
       MultiByteToWideChar(CP_UTF8, 0, &path[0], (int)path.size(), NULL, 0);
   std::wstring wpath(size_needed, 0);
   MultiByteToWideChar(CP_UTF8, 0, &path[0], (int)path.size(), &wpath[0],
                       size_needed);
 
-  // Source Reader菴懈・
+  // Source Reader作成
   Microsoft::WRL::ComPtr<IMFSourceReader> pReader;
   HRESULT hr = MFCreateSourceReaderFromURL(
-      wpath.c_str(), NULL, &pReader); // 螻樊ｧNULL縺ｧ繝・ヵ繧ｩ繝ｫ繝域嫌蜍・
+      wpath.c_str(), NULL, &pReader); // 属性NULLでデフォルト挙動
   if (FAILED(hr)) {
     LOG_ERROR("Resource", "Failed to create SourceReader for: {} (hr={:x})",
               path, (uint32_t)hr);
     return {};
   }
 
-  // PCM繝輔か繝ｼ繝槭ャ繝医ｒ隕∵ｱ・
+  // PCMフォーマットを要求
   Microsoft::WRL::ComPtr<IMFMediaType> pPartialType;
   MFCreateMediaType(&pPartialType);
   pPartialType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
@@ -83,7 +81,7 @@ AudioHandle ResourceManager::LoadAudio(const std::string &path) {
     return {};
   }
 
-  // 螟画鋤蠕後・螳悟・縺ｪ繝輔か繝ｼ繝槭ャ繝医ｒ蜿門ｾ・
+  // 変換後の完全なフォーマットを取得
   Microsoft::WRL::ComPtr<IMFMediaType> pUncompressedAudioType;
   hr = pReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM,
                                     &pUncompressedAudioType);
@@ -92,7 +90,7 @@ AudioHandle ResourceManager::LoadAudio(const std::string &path) {
     return {};
   }
 
-  // WAVEFORMATEX縺ｸ螟画鋤
+  // WAVEFORMATEXへ変換
   WAVEFORMATEX *pWfx = NULL;
   UINT32 cbFormat = 0;
   hr = MFCreateWaveFormatExFromMFMediaType(pUncompressedAudioType.Get(), &pWfx,
@@ -107,7 +105,7 @@ AudioHandle ResourceManager::LoadAudio(const std::string &path) {
   memcpy(clip.format.data(), pWfx, cbFormat);
   CoTaskMemFree(pWfx);
 
-  // 繝・・繧ｿ隱ｭ縺ｿ霎ｼ縺ｿ
+  // データ読み込み
   while (true) {
     DWORD flags = 0;
     Microsoft::WRL::ComPtr<IMFSample> pSample;
@@ -174,7 +172,7 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
     return it->second;
   }
 
-  // 逕ｻ蜒上ヵ繧｡繧ｯ繝医Μ縺ｮ驕・ｻｶ蛻晄悄蛹・
+  // 画像ファクトリの遅延初期化
   static Microsoft::WRL::ComPtr<IWICImagingFactory> s_factory;
   if (!s_factory) {
     HRESULT hr =
@@ -299,7 +297,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
   if (paths.empty())
     return {};
 
-  // 逕ｻ蜒上ヵ繧｡繧ｯ繝医Μ縺ｮ驕・ｻｶ蛻晄悄蛹・
+  // 画像ファクトリの遅延初期化
   static Microsoft::WRL::ComPtr<IWICImagingFactory> s_factory;
   if (!s_factory) {
     CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
@@ -398,10 +396,10 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 
 MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   LOG_DEBUG("Resource", "LoadMesh: START {}", path.c_str());
-  // 繧ｭ繝｣繝・す繝･繝偵ャ繝育｢ｺ隱・
+  // キャッシュヒット確認
   if (auto it = m_meshCache.find(path); it != m_meshCache.end()) {
     LOG_DEBUG("Resource", "LoadMesh: Cache hit for {}", path.c_str());
-    if (m_meshPool.Get(it->second)) { // 繝上Φ繝峨Ν譛牙柑諤ｧ遒ｺ隱・
+    if (m_meshPool.Get(it->second)) { // ハンドル有効性確認
       return it->second;
     }
     LOG_DEBUG("Resource", "LoadMesh: Cache handle invalid for {}", path.c_str());
@@ -411,7 +409,7 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   graphics::Mesh mesh;
   bool success = false;
 
-  // 繧ｭ繝｣繝・す繝･縺ｫ蟄伜惠縺励↑縺・ｴ蜷医・讓呎ｺ也噪縺ｪ蜷・ｨｮ繝励Μ繝溘ユ繧｣繝悶Γ繝・す繝･繧堤函謌・
+  // キャッシュに存在しない場合は標準的な各種プリミティブメッシュを生成
   if (path == "builtin/cube" || path == "cube") {
     mesh = graphics::MeshPrimitives::CreateCube(m_device.GetDevice());
     success = true;
@@ -429,20 +427,20 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
     mesh = graphics::MeshPrimitives::CreateQuad(m_device.GetDevice());
     success = true;
   } else if (path == "builtin/cylinder" || path == "cylinder") {
-    // TODO: CreateCylinder螳溯｣・ｾ後↓鄂ｮ謠帙ら樟迥ｶ縺ｯsphere縺ｧ莉｣逕ｨ縲・
+    // TODO: CreateCylinder実装後に置換。現状はsphereで代用。
     mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
     success = true;
   } else if (path == "builtin/torus" || path == "torus") {
-    // TODO: CreateTorus螳溯｣・ｾ後↓鄂ｮ謠帙ら樟迥ｶ縺ｯsphere縺ｧ莉｣逕ｨ縲・
+    // TODO: CreateTorus実装後に置換。現状はsphereで代用。
     mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
     success = true;
   } else {
     LOG_DEBUG("Resource", "LoadMesh: Loading from file {}", path.c_str());
-    // 繝輔ぃ繧､繝ｫ諡｡蠑ｵ蟄舌ｒ蛻､螳壹＠縺ｦ繝ｭ繝ｼ繝繝ｼ繧帝∈謚・
+    // ファイル拡張子を判定してローダーを選択
     std::vector<graphics::Vertex> vertices;
     std::vector<uint32_t> indices;
 
-    // 諡｡蠑ｵ蟄舌ｒ蟆乗枚蟄励〒蜿門ｾ・
+    // 拡張子を小文字で取得
     std::string extension;
     size_t dotPos = path.find_last_of('.');
     if (dotPos != std::string::npos) {
@@ -453,7 +451,7 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
 
     bool loaded = false;
 
-    // FBX/glTF/3DS/DAE遲峨・FbxLoader(Assimp)繧剃ｽｿ逕ｨ
+    // FBX/glTF/3DS/DAE等はFbxLoader(Assimp)を使用
     if (extension == ".fbx" || extension == ".gltf" || extension == ".glb" ||
         extension == ".3ds" || extension == ".dae" || extension == ".blend") {
       loaded = graphics::FbxLoader::Load(path, vertices, indices);
@@ -461,14 +459,14 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
         LOG_ERROR("Resource", "FBX/Assimp Load failed: {}", path.c_str());
       }
     }
-    // OBJ繝輔ぃ繧､繝ｫ縺ｯ蟆ら畑繝ｭ繝ｼ繝繝ｼ繧剃ｽｿ逕ｨ
+    // OBJファイルは専用ローダーを使用
     else if (extension == ".obj" || extension.empty()) {
       loaded = graphics::ObjLoader::Load(path, vertices, indices);
       if (!loaded) {
         LOG_ERROR("Resource", "OBJ Load failed: {}", path.c_str());
       }
     } else {
-      // 荳肴・縺ｪ諡｡蠑ｵ蟄舌・荳蠢廣ssimp縺ｧ隧ｦ縺ｿ繧・
+      // 不明な拡張子は一応Assimpで試みる
       loaded = graphics::FbxLoader::Load(path, vertices, indices);
       if (!loaded) {
         LOG_ERROR("Resource", "Unknown format load failed: {}", path.c_str());
@@ -487,7 +485,7 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   if (!success) {
     LOG_ERROR("Resource", "Mesh load failed or fallback triggered: {}",
               path.c_str());
-    // 螟ｱ謨玲凾縺ｯCube縺ｧ莉｣逕ｨ
+    // 失敗時はCubeで代用
     mesh = graphics::MeshPrimitives::CreateCube(m_device.GetDevice());
   }
 
@@ -500,7 +498,7 @@ MeshHandle ResourceManager::CreateDynamicMesh(
     const std::string &name, const std::vector<graphics::Vertex> &vertices,
     const std::vector<uint32_t> &indices) {
 
-  // 驥崎､・く繝｣繝・す繝･譎ゅ・譛譁ｰ繝・・繧ｿ縺ｧ蜍慕噪繝｡繝・す繝･繧剃ｸ頑嶌縺堺ｽ懈・
+  // 重複キャッシュ時は最新データで動的メッシュを上書き作成
 
   graphics::Mesh mesh;
   if (!mesh.Create(m_device.GetDevice(), vertices, indices)) {
@@ -508,7 +506,7 @@ MeshHandle ResourceManager::CreateDynamicMesh(
     return {};
   }
 
-  // 繧ｭ繝｣繝・す繝･繧呈眠隕上ョ繝ｼ繧ｿ縺ｧ鄂ｮ謠帙＠縲∝商縺・ョ繝ｼ繧ｿ縺ｮ隗｣謾ｾ縺ｯ荳諡ｬ繧ｯ繝ｪ繝ｼ繝ｳ繧｢繝・・縺ｫ蟋斐・繧・
+  // キャッシュを新規データで置換し、古いデータの解放は一括クリーンアップに委ねる
 
   auto handle = m_meshPool.Add(std::move(mesh));
   m_meshCache[name] = handle;
@@ -525,10 +523,10 @@ ShaderHandle ResourceManager::LoadShader(const std::string &name,
     return it->second;
   }
 
-  // 蟆・擂縺ｮ諡｡蠑ｵ諤ｧ繧定・・縺励▽縺､迴ｾ蝨ｨ縺ｯ讓呎ｺ也噪縺ｪ蜈･蜉帙Ξ繧､繧｢繧ｦ繝医ｒ菴ｿ逕ｨ縺励※繧ｳ繝ｳ繝代う繝ｫ
+  // 将来の拡張性を考慮しつつ現在は標準的な入力レイアウトを使用してコンパイル
   auto inputLayout = graphics::Shader::GetDefaultInputLayout();
 
-  // 繧ｳ繝ｳ繝代う繝ｫ・亥ｭ伜惠縺励↑縺代ｌ縺ｰ Assets/ 繝代せ繧偵ヵ繧ｩ繝ｼ繝ｫ繝舌ャ繧ｯ・・
+  // コンパイル（存在しなければ Assets/ パスをフォールバック）
   graphics::Shader shader;
   auto tryCompile = [&](const std::wstring &vs, const std::wstring &ps) {
     return shader.LoadFromFile(m_device.GetDevice(), vs, "main", ps, "main",

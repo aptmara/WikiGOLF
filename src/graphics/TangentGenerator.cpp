@@ -71,11 +71,11 @@ void ComputeTangents(std::vector<Vertex> &vertices,
     XMVECTOR t = XMLoadFloat3(&v.tangent);
     XMVECTOR b = XMLoadFloat3(&v.bitangent);
 
-    // 繧ｪ繝ｫ繧ｽ蛹・
+    // オルソ化
     t = XMVector3Normalize(t - n * XMVector3Dot(n, t));
     b = XMVector3Normalize(b - n * XMVector3Dot(n, b));
 
-    // 繝薙ち繝ｳ繧ｰ繝ｫ縺ｮ蜷代″陬懈ｭ｣
+    // ビタングルの向き補正
     XMVECTOR c = XMVector3Cross(n, t);
     float handedness = 1.0f;
     if (XMVectorGetX(XMVector3Dot(c, b)) < 0.0f) {

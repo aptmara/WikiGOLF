@@ -9,17 +9,17 @@ namespace game::systems {
 
 using namespace DirectX;
 
-// 繝倥Ν繝代・・夂ｷ壼ｽ｢陬憺俣
+// ヘルパー：線形補間
 static float Lerp(float a, float b, float t) { return a + (b - a) * t; }
 
-// 繝倥Ν繝代・・壹せ繝繝ｼ繧ｹ繧ｹ繝・ャ繝・
+// ヘルパー：スムースステップ
 static float SmoothStep(float edge0, float edge1, float x) {
   x = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
   return x * x * (3 - 2 * x);
 }
 
 /**
- * @brief 蝨ｰ蠖｢繝・・繧ｿ繧堤函謌舌＠縺ｾ縺吶・
+ * @brief 地形チ（�（タを生成します、（
  */
 TerrainData TerrainGenerator::GenerateTerrain(
     const std::string &articleText,
@@ -28,29 +28,29 @@ TerrainData TerrainGenerator::GenerateTerrain(
   TerrainData data;
   data.config = config;
 
-  // 繝上う繝医・繝・・蛻晄悄蛹・
+  // ハイトマップ初期化
   int totalVerts = config.resolutionX * config.resolutionZ;
   data.heightMap.resize(totalVerts, 0.0f);
   data.materialMap.resize(totalVerts, 0); // 0: Fairway
 
-  // 蝓ｺ譛ｬ蠖｢迥ｶ縺ｮ逕滓・
+  // 基本形状の生成
   GenerateBaseHeightMap(data, articleText);
 
-  // 繝ｪ繝ｳ繧ｯ菴咲ｽｮ縺ｫ蝓ｺ縺･縺上・繝ｩ繝・ヨ繝輔か繝ｼ繝縺ｮ逕滓・
+  // リンク位置に基づくプラットフォームの生成
   CreatePlatforms(data, holePositions);
 
-  // 繧ｹ繝繝ｼ繧ｸ繝ｳ繧ｰ蜃ｦ逅・
-  ApplySmoothing(data, 3); // 3蝗槭せ繝繝ｼ繧ｸ繝ｳ繧ｰ
+  // スムージング処理
+  ApplySmoothing(data, 3); // 3回スムージング
 
-  // 繝｡繝・す繝･縺ｮ逕滓・
+  // メッシュの生成
   CalculateNormals(data);
-  GenerateMesh(data, holePositions); // 繝帙・繝ｫ菴咲ｽｮ繧呈ｸ｡縺・
+  GenerateMesh(data, holePositions); // ホール位置を渡す
 
   return data;
 }
 
 /**
- * @brief 蝓ｺ貅悶ワ繧､繝医・繝・・繧堤函謌舌＠縺ｾ縺吶・
+ * @brief 基準ハイト�（チ（�（を生成します、（
  */
 void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
                                              const std::string &text) {
@@ -63,7 +63,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
   int biome = data.config.biome;
   float hScale = data.config.heightScale;
 
-  // 蜈ｨ菴薙ｒ繝・ヵ繧ｩ繝ｫ繝医〒蛻晄悄蛹・
+  // 全体をデフォルトで初期化
   for (int i = 0; i < resX * resZ; ++i) {
     data.materialMap[i] = 1;
     data.heightMap[i] = data.config.baseHeight;
@@ -73,7 +73,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
   float startV = 0.85f;
   float fairwayWidthBase = resX * 0.12f;
 
-  // 繝ｫ繝ｼ繝育函謌・
+  // ルート生成
   std::vector<std::pair<float, float>> routePoints;
   routePoints.push_back({startU, startV});
 
@@ -105,7 +105,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
         std::clamp(prevHeight + heightChange, -1.0f * hScale, 2.0f * hScale));
   }
 
-  // 繝槭え繝ｳ繝臥函謌・
+  // マウンド生成
   struct Mound {
     float u, v, radius, height;
   };
@@ -127,7 +127,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
     mounds.push_back(m);
   }
 
-  // 鬮倥＆險育ｮ・
+  // 高さ計算
   for (int z = 0; z < resZ; ++z) {
     float v = (float)z / (resZ - 1);
     float routeU = startU;
@@ -154,15 +154,15 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
 
       float h = data.config.baseHeight;
 
-      // 騾ｲ陦梧婿蜷代・襍ｷ莨・
+      // 進行方向の起伏
       float routeInfluence =
           1.0f - std::clamp(distFromRoute * 4.0f, 0.0f, 1.0f);
       h += routeHeight * routeInfluence;
 
-      // 繧ｵ繧､繝峨せ繝ｭ繝ｼ繝・
+      // サイドスロープ
       h += std::min(distFromRoute * 0.3f, 0.2f) * hScale;
 
-      // 繝槭え繝ｳ繝・
+      // マウンド
       for (const auto &m : mounds) {
         float du = u - m.u;
         float dv = v - m.v;
@@ -173,7 +173,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
         }
       }
 
-      // 繝舌う繧ｪ繝ｼ繝蛻･繝代ち繝ｼ繝ｳ
+      // バイオーム別パターン
       switch (biome) {
       case 0:
         h += std::sin(u * 9.42f) * std::sin(v * 12.56f) * 0.1f * hScale;
@@ -191,12 +191,12 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
         break;
       }
 
-      // 繝・ぅ繝ｼ繧､繝ｳ繧ｰ繧ｨ繝ｪ繧｢
+      // ティーイングエリア
       if (v > 0.8f && distFromRoute < 0.1f) {
         h += SmoothStep(0.8f, 0.9f, v) * 0.2f * hScale;
       }
 
-      // 螟門捉螢・
+      // 外周壁
       float dx = u - 0.5f;
       float dz = v - 0.5f;
       float distFromCenter = std::sqrt(dx * dx + dz * dz) * 2.0f;
@@ -204,12 +204,12 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
         h += SmoothStep(0.85f, 1.0f, distFromCenter) * 4.0f;
       }
 
-      // 蠕ｮ蟆上ヮ繧､繧ｺ
+      // 微小ノイズ
       h += (dist(rng) - 0.5f) * 0.03f * hScale;
 
       SetHeight(data, x, z, h);
 
-      // 繝槭ユ繝ｪ繧｢繝ｫ蛻､螳・
+      // マテリアル判定
       float wallFactor = 0.0f;
       if (distFromCenter > 0.85f) {
         wallFactor = SmoothStep(0.85f, 1.0f, distFromCenter);
@@ -256,7 +256,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
 }
 
 /**
- * @brief 繝帙・繝ｫ蜻ｨ霎ｺ縺ｫ蟷ｳ繧峨↑繝励Λ繝・ヨ繝輔か繝ｼ繝繧剃ｽ懈・縺励∪縺吶・
+ * @brief ホ�（ル周辺に平らなプラチ（��フォームを作�（します、（
  */
 void TerrainGenerator::CreatePlatforms(
     TerrainData &data, const std::vector<DirectX::XMFLOAT2> &holePositions) {
@@ -265,9 +265,9 @@ void TerrainGenerator::CreatePlatforms(
   float worldW = data.config.worldWidth;
   float worldD = data.config.worldDepth;
 
-  // 繝ｪ繝ｳ繧ｯ菴咲ｽｮ縺ｫ蝓ｺ縺･縺・※繝励Λ繝・ヨ繝輔か繝ｼ繝繧剃ｽ懊ｋ
+  // リンク位置に基づいてプラットフォームを作る
   for (const auto &pos : holePositions) {
-    // 繝ｯ繝ｼ繝ｫ繝牙ｺｧ讓吶°繧峨げ繝ｪ繝・ラUV縲√う繝ｳ繝・ャ繧ｯ繧ｹ縺ｸ縺ｮ騾・ｮ怜､画鋤蠑・
+    // ワールド座標からグリッドUV、インデックスへの逆算変換式
 
     float u = pos.x / worldW + 0.5f;
     float v = 0.5f - pos.y / worldD; // pos.y is Z in world coords here (vector2
@@ -276,17 +276,17 @@ void TerrainGenerator::CreatePlatforms(
     int cx = (int)(u * (resX - 1));
     int cz = (int)(v * (resZ - 1));
 
-    // 繝励Λ繝・ヨ繝輔か繝ｼ繝蜊雁ｾ・(繧ｰ繝ｪ繝ｼ繝ｳ)
-    int radius = resX / 10; // 縺ｻ縺ｩ繧医＞螟ｧ縺阪＆縺ｧ繝・く繧ｹ繝医ｒ驍ｪ鬲斐＠縺ｪ縺・
+    // プラットフォーム半径 (グリーン)
+    int radius = resX / 10; // ほどよい大きさでテキストを邪魔しない
 
-    // 繝励Λ繝・ヨ繝輔か繝ｼ繝縺ｮ鬮倥＆
+    // プラットフォームの高さ
     float currentCenterH = GetHeight(data, cx, cz);
-    float targetHeight = currentCenterH + 0.05f; // 繧上★縺九↓謖√■荳翫￡縺ｦ蝓区ｲ｡繧帝亟縺・
+    float targetHeight = currentCenterH + 0.05f; // わずかに持ち上げて埋没を防ぐ
 
-    // 繧ｫ繝・・蠎暮Κ縺ｮ豺ｱ縺・
+    // カップ底部の深さ
     float bowlDepth = 0.2f;
 
-    // 繝舌Φ繧ｫ繝ｼ縺ｮ逕滓・蜃ｦ逅・
+    // バンカーの生成処理
     std::mt19937 tempRng(cx + cz * resX);
     std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
     float bunkerAngle = dist01(tempRng) * 6.28f;
@@ -302,28 +302,28 @@ void TerrainGenerator::CreatePlatforms(
         float dist = std::sqrt(dx * dx + dz * dz);
         int idx = z * resX + x;
 
-        // 繧ｰ繝ｪ繝ｼ繝ｳ繧ｨ繝ｪ繧｢
+        // グリーンエリア
         if (dist < radius) {
           data.materialMap[idx] = 3; // Green
 
-          float cupRadius = 3.0f; // 繧ｫ繝・・蜊雁ｾ・ｼ医げ繝ｪ繝・ラ蜊倅ｽ搾ｼ・
+          float cupRadius = 3.0f; // カップ半径（グリッド単位）
           if (dist < cupRadius) {
-            // 蟷ｳ蝮ｦ縺ｪ遨ｴ・医☆繧企欧縺ｧ縺ｯ縺ｪ縺丈ｸ螳壽ｷｱ縺包ｼ・
+            // 平坦な穴（すり鉢ではなく一定深さ）
             float h = targetHeight - bowlDepth;
             SetHeight(data, x, z, h);
           } else {
             SetHeight(data, x, z, targetHeight);
           }
         } else if (dist < radius * 1.5f) {
-          // 繧ｨ繝励Ο繝ｳ繧ｨ繝ｪ繧｢
+          // エプロンエリア
           data.materialMap[idx] = 0;
 
-          // 繝ｩ繝輔→縺ｮ繝悶Ξ繝ｳ繝画磁邯・
+          // ラフとのブレンド接続
           float t = SmoothStep(radius, radius * 1.5f, dist);
           float currentH = GetHeight(data, x, z);
           SetHeight(data, x, z, Lerp(targetHeight, currentH, t));
         } else {
-          // 繝舌Φ繧ｫ繝ｼ縺ｮ逕滓・
+          // バンカーの生成
           float angle = std::atan2(dz, dx);
           float angleDiff = angle - bunkerAngle;
           while (angleDiff > 3.14159f)
@@ -337,7 +337,7 @@ void TerrainGenerator::CreatePlatforms(
             float bunkerRadius = radius * 0.5f;
             if (distFromBunkerCenter < bunkerRadius) {
               data.materialMap[idx] = 2; // Bunker
-              // 遯ｪ縺ｾ縺帙ｋ
+              // 窪ませる
               float currentH = GetHeight(data, x, z);
               SetHeight(data, x, z,
                         currentH - 0.25f * std::cos(distFromBunkerCenter /
@@ -351,7 +351,7 @@ void TerrainGenerator::CreatePlatforms(
 }
 
 /**
- * @brief 繝上う繝医・繝・・縺ｫ繧ｹ繝繝ｼ繧ｸ繝ｳ繧ｰ蜃ｦ逅・ｒ驕ｩ逕ｨ縺励∪縺吶・
+ * @brief ハイト�（チ（�（にスムージング処理��適用します、（
  */
 void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
   int resX = data.config.resolutionX;
@@ -361,7 +361,7 @@ void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
   for (int iter = 0; iter < iterations; ++iter) {
     for (int z = 1; z < resZ - 1; ++z) {
       for (int x = 1; x < resX - 1; ++x) {
-        // 3x3 蟷ｳ蝮・
+        // 3x3 平均
         float sum = 0.0f;
         sum += GetHeight(data, x - 1, z - 1);
         sum += GetHeight(data, x, z - 1);
@@ -383,7 +383,7 @@ void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
 }
 
 /**
- * @brief 蝨ｰ蠖｢縺ｮ豕慕ｷ壹ｒ險育ｮ励＠縺ｾ縺吶・
+ * @brief 地形の法線を計算します、（
  */
 void TerrainGenerator::CalculateNormals(TerrainData &data) {
   int resX = data.config.resolutionX;
@@ -395,7 +395,7 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
 
   for (int z = 0; z < resZ; ++z) {
     for (int x = 0; x < resX; ++x) {
-      // 蜍ｾ驟崎ｨ育ｮ礼畑縺ｮ髫｣謗･繧ｻ繝ｫ繧､繝ｳ繝・ャ繧ｯ繧ｹ謖・ｮ・
+      // 勾配計算用の隣接セルインデックス指定
 
       float hL = GetHeight(data, x, z);
       if (x > 0) hL = GetHeight(data, x - 1, z);
@@ -409,11 +409,11 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
       float hU = GetHeight(data, x, z);
       if (z < resZ - 1) hU = GetHeight(data, x, z + 1);
 
-      // 謗･邱壹・繧ｯ繝医Ν
+      // 接線ベクトル
       XMVECTOR tangentX = XMVectorSet(2.0f * cellW, hR - hL, 0.0f, 0.0f);
       XMVECTOR tangentZ = XMVectorSet(0.0f, hU - hD, -2.0f * cellD, 0.0f);
 
-      // 豕慕ｷ・= Cross(X, Z)  (蟾ｦ謇句ｺｧ讓咏ｳｻ Y-up)縲る・ｺ上ｒ隱､繧九→荳句髄縺阪↓縺ｪ繧九・
+      // 法線 = Cross(X, Z)  (左手座標系 Y-up)。順序を誤ると下向きになる。
       XMVECTOR normal = XMVector3Cross(tangentX, tangentZ);
       normal = XMVector3Normalize(normal);
 
@@ -423,7 +423,7 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
 }
 
 /**
- * @brief 蝨ｰ蠖｢繝｡繝・す繝･繧堤函謌舌＠縺ｾ縺吶・
+ * @brief 地形メチ（��ュを生成します、（
  */
 void TerrainGenerator::GenerateMesh(
     TerrainData &data, const std::vector<DirectX::XMFLOAT2> &holePositions) {
@@ -438,15 +438,15 @@ void TerrainGenerator::GenerateMesh(
   vertices.reserve(resX * resZ);
   indices.reserve((resX - 1) * (resZ - 1) * 6);
 
-  // 鬆らせ逕滓・
+  // 頂点生成
   for (int z = 0; z < resZ; ++z) {
     for (int x = 0; x < resX; ++x) {
       float u = (float)x / (resX - 1);
-      float v = (float)z / (resZ - 1); // 1.0 - ... 縺ｫ縺吶ｋ縺九・UV蠎ｧ讓咏ｳｻ縺ｫ繧医ｋ
+      float v = (float)z / (resZ - 1); // 1.0 - ... にするかはUV座標系による
 
       float px = (u - 0.5f) * width;
       float pz =
-          (0.5f - v) * depth; // Z霆ｸ蜿崎ｻ｢豕ｨ諢上ゅ％縺薙〒縺ｯ謇句燕縺・Z縺ｨ縺吶ｋ縺ｪ繧峨％繧後〒OK
+          (0.5f - v) * depth; // Z軸反転注意。ここでは手前が-ZとするならこれでOK
       float py = GetHeight(data, x, z);
 
       graphics::Vertex vert;
@@ -454,33 +454,33 @@ void TerrainGenerator::GenerateMesh(
       vert.normal = data.normals[z * resX + x];
       vert.texCoord = {u, v};
 
-      // 繝・ヵ繧ｩ繝ｫ繝郁牡 (繝槭ユ繝ｪ繧｢繝ｫ繝槭ャ繝励↓蝓ｺ縺･縺・
+      // デフォルト色 (マテリアルマップに基づく)
       int idx = z * resX + x;
       uint8_t mat = data.materialMap[idx];
 
       switch (mat) {
-      case 0: // 繝輔ぉ繧｢繧ｦ繧ｧ繧､
+      case 0: // フェアウェイ
         vert.color = {0.2f, 0.6f, 0.2f, 0.25f};
         break;
-      case 1: // 繝ｩ繝・
+      case 1: // ラフ
         vert.color = {0.1f, 0.35f, 0.1f, 0.50f};
         break;
-      case 2: // 繝舌Φ繧ｫ繝ｼ
+      case 2: // バンカー
         vert.color = {0.85f, 0.75f, 0.55f, 0.75f};
         break;
-      case 3: // 繧ｰ繝ｪ繝ｼ繝ｳ
+      case 3: // グリーン
         vert.color = {0.3f, 0.8f, 0.3f, 1.0f};
         break;
-      case 4: // 豌ｷ蜴・
+      case 4: // 氷原
         vert.color = {0.7f, 0.85f, 1.0f, 0.6f};
         break;
-      case 5: // 豌ｴ
+      case 5: // 水
         vert.color = {0.2f, 0.4f, 0.8f, 0.5f};
         break;
-      case 6: // 貅ｶ蟯ｩ
+      case 6: // 溶岩
         vert.color = {1.0f, 0.3f, 0.1f, 0.9f};
         break;
-      case 7: // 蟯ｩ遏ｳ
+      case 7: // 岩石
         vert.color = {0.5f, 0.5f, 0.55f, 0.8f};
         break;
       default:
@@ -492,10 +492,10 @@ void TerrainGenerator::GenerateMesh(
     }
   }
 
-  // 繧､繝ｳ繝・ャ繧ｯ繧ｹ逕滓・ (Triangle List)
+  // インデックス生成 (Triangle List)
   for (int z = 0; z < resZ - 1; ++z) {
     for (int x = 0; x < resX - 1; ++x) {
-      // 荳芽ｧ貞ｽ｢繧､繝ｳ繝・ャ繧ｯ繧ｹ縺ｮ險ｭ螳夲ｼ・-1-2縺翫ｈ縺ｳ2-1-3・・
+      // 三角形インデックスの設定（0-1-2および2-1-3）
       // Tri 1: 0-1-2
       // Tri 2: 2-1-3
 
@@ -518,13 +518,13 @@ void TerrainGenerator::GenerateMesh(
 
   graphics::ComputeTangents(vertices, indices);
 
-  // 繝・・繧ｿ譬ｼ邏・
+  // データ格納
   data.vertices = std::move(vertices);
   data.indices = std::move(indices);
 }
 
 /**
- * @brief 謖・ｮ壹＠縺滓ｼ蟄仙ｺｧ讓吶・蝨ｰ蠖｢鬮倥＆繧貞叙蠕励＠縺ｾ縺吶・
+ * @brief 指定��した格子座標�（地形高さを取得します、（
  */
 float TerrainGenerator::GetHeight(const TerrainData &data, int x, int z) {
   if (x < 0 || x >= data.config.resolutionX || z < 0 ||
@@ -534,7 +534,7 @@ float TerrainGenerator::GetHeight(const TerrainData &data, int x, int z) {
 }
 
 /**
- * @brief 謖・ｮ壹＠縺滓ｼ蟄仙ｺｧ讓呷攪蝨ｰ蠖｢鬮倥＆繧定ｨｭ螳壹＠縺ｾ縺吶・
+ * @brief 指定��した格子座標의地形高さを設定します、（
  */
 void TerrainGenerator::SetHeight(TerrainData &data, int x, int z, float h) {
   if (x < 0 || x >= data.config.resolutionX || z < 0 ||

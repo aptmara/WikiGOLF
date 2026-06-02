@@ -1,6 +1,6 @@
 ﻿/**
  * @file WikiTextureGenerator.cpp
- * @brief Wikipedia險倅ｺ九ユ繧ｭ繧ｹ繝医°繧吋3D11繝・け繧ｹ繝√Ε繧堤函謌舌☆繧句ｮ溯｣・
+ * @brief Wikipedia記事テキストからD3D11チ（��スチャを生成する実装
  */
 
 #include "WikiTextureGenerator.h"
@@ -23,7 +23,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
 
   HRESULT hr;
 
-  // D2D1.1繝輔ぃ繧ｯ繝医Μ縺ｮ逕滓・
+  // D2D1.1ファクトリの生成
   D2D1_FACTORY_OPTIONS options = {};
 #ifdef _DEBUG
   options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
@@ -36,7 +36,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // DirectWrite繝輔ぃ繧ｯ繝医Μ縺ｮ逕滓・
+  // DirectWriteファクトリの生成
   hr = DWriteCreateFactory(
       DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
       reinterpret_cast<IUnknown **>(m_dwriteFactory.GetAddressOf()));
@@ -46,7 +46,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // DXGI繝・ヰ繧､繧ｹ縺ｮ蜿門ｾ・
+  // DXGIデバイスの取得
   ComPtr<IDXGIDevice> dxgiDevice;
   hr = device->QueryInterface(IID_PPV_ARGS(&dxgiDevice));
   if (FAILED(hr)) {
@@ -55,7 +55,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // D2D繝・ヰ繧､繧ｹ縺ｮ逕滓・
+  // D2Dデバイスの生成
   hr = m_d2dFactory->CreateDevice(dxgiDevice.Get(), &m_d2dDevice);
   if (FAILED(hr)) {
     LOG_ERROR("WikiTexGen", "Failed to create D2D Device (HRESULT: {:08X})",
@@ -63,7 +63,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // D2D繝・ヰ繧､繧ｹ繧ｳ繝ｳ繝・く繧ｹ繝医・逕滓・
+  // D2Dデバイスコンテキストの生成
   hr = m_d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE,
                                         &m_d2dContext);
   if (FAILED(hr)) {
@@ -73,7 +73,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // 繧ｿ繧､繝医Ν謠冗判逕ｨ縺ｮ繝・く繧ｹ繝医ヵ繧ｩ繝ｼ繝槭ャ繝医・逕滓・
+  // タイトル描画用のテキストフォーマットの生成
   hr = m_dwriteFactory->CreateTextFormat(
       L"Georgia", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
       DWRITE_FONT_STRETCH_NORMAL, 128.0f, L"ja-JP", &m_titleFormat);
@@ -82,7 +82,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
     return false;
   }
 
-  // 譛ｬ譁・畑 - 2蛟阪し繧､繧ｺ
+  // 本文用 - 2倍サイズ
   hr = m_dwriteFactory->CreateTextFormat(
       L"Meiryo", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
       DWRITE_FONT_STRETCH_NORMAL, 64.0f, L"ja-JP", &m_bodyFormat);
@@ -109,17 +109,17 @@ void WikiTextureGenerator::Shutdown() {
 
 bool WikiTextureGenerator::CreateOffscreenTarget(uint32_t width,
                                                  uint32_t height) {
-  // 繝ｬ繧ｬ繧ｷ繝ｼ莠呈鋤逕ｨ・亥腰荳繧ｿ繧､繝ｫ逕滓・縺ｧ菴ｿ逕ｨ縺吶ｋ蝣ｴ蜷茨ｼ・
+  // レガシー互換用（単一タイル生成で使用する場合）
   D3D11_TEXTURE2D_DESC texDesc = {};
   texDesc.Width = width;
   texDesc.Height = height;
   texDesc.MipLevels = 1;
   texDesc.ArraySize = 1;
-  texDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // D2D莠呈鋤蠖｢蠑・
+  texDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // D2D互換形式
   texDesc.SampleDesc.Count = 1;
   texDesc.Usage = D3D11_USAGE_DEFAULT;
   texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-  texDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED; // D2D縺ｨ蜈ｱ譛・
+  texDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED; // D2Dと共有
 
   HRESULT hr = m_d3dDevice->CreateTexture2D(&texDesc, nullptr,
                                             m_offscreenTexture.GetAddressOf());
@@ -161,7 +161,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
   state.requestedWidth = width;
   state.requestedHeight = height;
 
-  // 繝・く繧ｹ繝医Ξ繧､繧｢繧ｦ繝医・逕滓・
+  // テキストレイアウトの生成
   state.marginX = 40.0f;
   state.currentY = 140.0f;
   float maxWidth = static_cast<float>(width) - state.marginX * 2;
@@ -199,7 +199,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
   state.remainingHeight = state.totalHeight;
   state.currentOffsetY = 0;
 
-  // 繝ｪ繝ｳ繧ｯ菴咲ｽｮ縺ｮ隗｣譫・
+  // リンク位置の解析
   state.linkMatched.assign(links.size(), false);
   for (size_t i = 0; i < links.size(); ++i) {
     const auto &linkPair = links[i];
@@ -243,12 +243,12 @@ bool WikiTextureGenerator::BeginGenerateTexture(
 bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   if (!state.started || state.completed) return true;
 
-  // 謠冗判雋闕ｷ繧偵ヵ繝ｬ繝ｼ繝蛻・淵縺吶ｋ縺溘ａ縲√Ο繝ｼ繝画ｼ泌・荳ｭ縺ｯ蟆上＆繧√・繧ｿ繧､繝ｫ縺ｧ逕滓・縺吶ｋ縲・
+  // 描画負荷をフレーム分散するために最大タイル高さを半分に調整
   const uint32_t kMaxTileHeight = 512;
   uint32_t tileH = std::min(state.remainingHeight, kMaxTileHeight);
   uint32_t width = state.actualWidth;
 
-  // 繝悶Λ繧ｷ濶ｲ
+  // ブラシ色
   D2D1::ColorF colBg(1.0f, 1.0f, 1.0f, 1.0f);
   D2D1::ColorF colText(0.125f, 0.129f, 0.133f, 1.0f);
   D2D1::ColorF colLink(0.023f, 0.270f, 0.678f, 1.0f);
@@ -413,7 +413,7 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
   }
 
   while (!GenerateNextTile(state)) {
-    // 繧ｿ繧､繝ｫ逕滓・繝ｫ繝ｼ繝励ｒ邯咏ｶ・
+    // タイル生成ループを継続
   }
 
   return std::move(state.result);
