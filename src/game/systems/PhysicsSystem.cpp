@@ -1,13 +1,13 @@
 /**
  * @file PhysicsSystem.cpp
- * @brief 迚ｩ逅・ｼ皮ｮ励す繧ｹ繝・Β・亥ｮ牙ｮ夂沿・・
+ * @brief 物理��算システム���（�安定版�（�（
  *
- * 繧ｴ繝ｫ繝輔ご繝ｼ繝蜷代￠縺ｮ螳牙ｮ壹＠縺溽黄逅・す繝溘Η繝ｬ繝ｼ繧ｷ繝ｧ繝ｳ繧呈署萓帙・
- * NaN髦ｲ豁｢縲∝慍蠖｢陦晉ｪ√√・繝ｼ繝ｫ蜷ｸ蠑輔ｒ螳溯｣・・
+ * ゴルフゲーム向けの安定した物理��ミュレーションを提供、（
+ * NaN防止、地形衝突、�（ール吸引を実装��（
  */
 
 #include "PhysicsSystem.h"
-#include "../../audio/AudioSystem.h" // 蜉ｹ譫憺浹蜀咲函逕ｨ
+#include "../../audio/AudioSystem.h" // 効果音再生用
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../ecs/World.h"
@@ -15,7 +15,7 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
-#include "GameJuiceSystem.h" // 貍泌・蜉ｹ譫懃畑
+#include "GameJuiceSystem.h" // 演出効果用
 #include "PhysicsFriction.h"
 #include "TerrainGenerator.h"
 #include <algorithm>
@@ -28,16 +28,16 @@ using namespace DirectX;
 using namespace game::components;
 
 // ========================================
-// 螳牙・縺ｪ繝吶け繝医Ν貍皮ｮ励・繝ｫ繝代・
+// 安全なベクトル演算ヘルパー
 // ========================================
 
 /**
- * @brief NaN繝√ぉ繝・け
+ * @brief NaNチェチ（��
  */
 static bool IsNaN(float v) { return v != v; }
 
 /**
- * @brief 繝吶け繝医Ν縺君aN繧貞性繧縺九メ繧ｧ繝・け
+ * @brief ベクトルがNaNを含むかチェチ（��
  */
 static bool IsVectorNaN(XMVECTOR v) {
   float x = XMVectorGetX(v);
@@ -47,7 +47,7 @@ static bool IsVectorNaN(XMVECTOR v) {
 }
 
 /**
- * @brief 螳牙・縺ｪ繝吶け繝医Ν豁｣隕丞喧・医ぞ繝ｭ繝吶け繝医Ν蟇ｾ遲厄ｼ・
+ * @brief 安�（なベクトル正規化�（�ゼロベクトル対策）
  */
 static XMVECTOR SafeNormalize(XMVECTOR v,
                               XMVECTOR fallback = XMVectorSet(0, 1, 0, 0)) {
@@ -59,7 +59,7 @@ static XMVECTOR SafeNormalize(XMVECTOR v,
 }
 
 /**
- * @brief 蛟､繧貞ｮ牙・縺ｪ遽・峇縺ｫ繧ｯ繝ｩ繝ｳ繝・
+ * @brief 値を安�（な範囲��にクランチ（
  */
 static float SafeClamp(float v, float minVal, float maxVal) {
   if (IsNaN(v))
@@ -68,7 +68,7 @@ static float SafeClamp(float v, float minVal, float maxVal) {
 }
 
 /**
- * @brief 繝吶け繝医Ν縺ｮ髟ｷ縺輔ｒ螳牙・縺ｫ蜿門ｾ・
+ * @brief ベクトルの長さを安�（に取得
  */
 static float SafeLength(XMVECTOR v) {
   float lenSq = XMVectorGetX(XMVector3LengthSq(v));
@@ -78,11 +78,11 @@ static float SafeLength(XMVECTOR v) {
 }
 
 // ========================================
-// 陦晉ｪ∝愛螳・
+// 衝突判定
 // ========================================
 
 /**
- * @brief 逅・ｽ薙→OBB・域怏蜷大｢・阜繝懊ャ繧ｯ繧ｹ・峨・陦晉ｪ∝愛螳・
+ * @brief 琁（��とOBB�（�有向壁面��ボックス�（��（衝突判定
  */
 static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
                            const XMFLOAT3 &boxPos, const XMFLOAT3 &boxSize,
@@ -90,26 +90,26 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
                            float &outDepth) {
   XMVECTOR sPos = XMLoadFloat3(&spherePos);
   XMVECTOR bPos = XMLoadFloat3(&boxPos);
-  // 繝懊ャ繧ｯ繧ｹ縺ｮ繧ｵ繧､繧ｺ諠・ｱ縺九ｉ蜊翫し繧､繧ｺ・医ワ繝ｼ繝輔お繧ｯ繧ｹ繝・Φ繝茨ｼ峨ｒ邂怜・
+  // ボックスのサイズ情報から半サイズ（ハーフエクステント）を算出
   XMVECTOR bHalf = XMVectorScale(XMLoadFloat3(&boxSize), 0.5f);
   XMVECTOR bRot = XMLoadFloat4(&boxRot);
 
-  // 逅・ｒ繝懊ャ繧ｯ繧ｹ縺ｮ繝ｭ繝ｼ繧ｫ繝ｫ蠎ｧ讓咏ｳｻ縺ｫ螟画鋤
+  // 球をボックスのローカル座標系に変換
   XMVECTOR relPos = XMVectorSubtract(sPos, bPos);
   XMVECTOR invRot = XMQuaternionInverse(bRot);
   XMVECTOR localPos = XMVector3Rotate(relPos, invRot);
 
-  // 繝ｭ繝ｼ繧ｫ繝ｫ蠎ｧ讓咏ｳｻ縺ｧ縺ｮAABB蛻､螳夲ｼ医け繝ｩ繝ｳ繝暦ｼ・
+  // ローカル座標系でのAABB判定（クランプ）
   XMVECTOR closestLocal = XMVectorClamp(localPos, XMVectorNegate(bHalf), bHalf);
 
-  // 霍晞屬繝√ぉ繝・け
+  // 距離チェック
   XMVECTOR distVecLocal = XMVectorSubtract(localPos, closestLocal);
   float d2 = XMVectorGetX(XMVector3LengthSq(distVecLocal));
 
-  // 荳ｭ蠢・′螟門・縺ｫ縺ゅｋ蝣ｴ蜷・
+  // 中心が外側にある場合
   if (d2 > 0.00001f) {
     if (d2 > radius * radius) {
-      return false; // 陦晉ｪ√↑縺・
+      return false; // 衝突なし
     }
 
     float d = std::sqrt(d2);
@@ -119,7 +119,7 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
     return true;
   }
 
-  // 荳ｭ蠢・′蜀・Κ縺ｫ縺ゅｋ蝣ｴ蜷茨ｼ壽怙繧りｿ代＞髱｢繧呈爾縺・
+  // 中心が内部にある場合：最も近い面を探す
   float x = XMVectorGetX(localPos);
   float y = XMVectorGetY(localPos);
   float z = XMVectorGetZ(localPos);
@@ -127,7 +127,7 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
   float hy = XMVectorGetY(bHalf);
   float hz = XMVectorGetZ(bHalf);
 
-  // 蜷・擇縺ｸ縺ｮ霍晞屬・域ｭ｣: 蜀・・縺ｸ縺ｮ霍晞屬・・
+  // 各面への距離（正: 内側への距離）
   float dx_p = hx - x; // +X face
   float dx_n = x + hx; // -X face
   float dy_p = hy - y; // +Y face
@@ -135,7 +135,7 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
   float dz_p = hz - z; // +Z face
   float dz_n = z + hz; // -Z face
 
-  // 譛蟆上・邨ｶ蟇ｾ蛟､繧呈戟縺､霆ｸ繧呈爾縺呻ｼ医◎縺薙′譛繧よｵ・＞閼ｱ蜃ｺ繝ｫ繝ｼ繝茨ｼ・
+  // 最小の絶対値を持つ軸を探す（そこが最も浅い脱出ルート）
   float minD = dx_p;
   int axis = 0; // 0:+x, 1:-x, 2:+y, 3:-y, 4:+z, 5:-z
 
@@ -161,7 +161,7 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
   }
 
   XMVECTOR localNormal;
-  // 閼ｱ蜃ｺ譁ｹ蜷代・髱｢豕慕ｷ・
+  // 脱出方向は面法線
   switch (axis) {
   case 0:
     localNormal = XMVectorSet(1, 0, 0, 0);
@@ -184,15 +184,15 @@ static bool CheckSphereOBB(const XMFLOAT3 &spherePos, float radius,
   }
 
   outNormal = XMVector3Rotate(localNormal, bRot);
-  // 雋ｫ騾壽ｷｱ蠎ｦ = (陦ｨ髱｢縺ｾ縺ｧ縺ｮ霍晞屬) + 蜊雁ｾ・
-  // minD縺ｯ縲瑚｡ｨ髱｢縺ｾ縺ｧ縺ｮ霍晞屬縲・
+  // 貫通深度 = (表面までの距離) + 半径
+  // minDは「表面までの距離」
   outDepth = minD + radius;
 
   return true;
 }
 
 /**
- * @brief 蝨ｰ蠖｢縺ｮ鬮倥＆縺ｨ豕慕ｷ壹ｒ蜿門ｾ・
+ * @brief 地形の高さと法線を取得
  */
 static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
                                       float z, float &outHeight,
@@ -202,11 +202,11 @@ static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
   int resX = terrain.config.resolutionX;
   int resZ = terrain.config.resolutionZ;
 
-  // UV蠎ｧ讓・(0.0~1.0)
+  // UV座標 (0.0~1.0)
   float u = (x / width) + 0.5f;
   float v = 0.5f - (z / depth);
 
-  // 遽・峇螟悶メ繧ｧ繝・け
+  // 範囲外チェック
   if (u < 0.0f || u >= 1.0f || v < 0.0f || v >= 1.0f) {
     outHeight = 0.0f;
     outNormal = XMVectorSet(0, 1, 0, 0);
@@ -219,14 +219,14 @@ static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
   int ix = static_cast<int>(fx);
   int iz = static_cast<int>(fz);
 
-  // 蠅・阜繧ｯ繝ｩ繝ｳ繝・
+  // 境界クランプ
   ix = std::clamp(ix, 0, resX - 2);
   iz = std::clamp(iz, 0, resZ - 2);
 
   float dx = fx - ix;
   float dz = fz - iz;
 
-  // 螳牙・縺ｪ繧､繝ｳ繝・ャ繧ｯ繧ｹ繧｢繧ｯ繧ｻ繧ｹ
+  // 安全なインデックスアクセス
   auto GetHeightSafe = [&](int gx, int gz) -> float {
     int idx = gz * resX + gx;
     if (idx >= 0 && idx < static_cast<int>(terrain.heightMap.size())) {
@@ -239,7 +239,7 @@ static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
     int idx = gz * resX + gx;
     if (idx >= 0 && idx < static_cast<int>(terrain.normals.size())) {
       XMVECTOR n = XMLoadFloat3(&terrain.normals[idx]);
-      // 豕慕ｷ壹′荳肴ｭ｣縺ｪ蝣ｴ蜷医・繝・ヵ繧ｩ繝ｫ繝亥､
+      // 法線が不正な場合はデフォルト値
       if (IsVectorNaN(n)) {
         return XMVectorSet(0, 1, 0, 0);
       }
@@ -258,17 +258,17 @@ static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
   XMVECTOR n01 = GetNormalSafe(ix, iz + 1);
   XMVECTOR n11 = GetNormalSafe(ix + 1, iz + 1);
 
-  // 繝舌う繝ｪ繝九い陬憺俣
+  // バイリニア補間
   float h0 = h00 * (1.0f - dx) + h10 * dx;
   float h1 = h01 * (1.0f - dx) + h11 * dx;
   outHeight = h0 * (1.0f - dz) + h1 * dz;
 
-  // 豕慕ｷ壹・陬憺俣
+  // 法線の補間
   XMVECTOR n0 = XMVectorLerp(n00, n10, dx);
   XMVECTOR n1 = XMVectorLerp(n01, n11, dx);
   outNormal = SafeNormalize(XMVectorLerp(n0, n1, dz));
 
-  // NaN繝√ぉ繝・け
+  // NaNチェック
   if (IsNaN(outHeight)) {
     outHeight = 0.0f;
   }
@@ -277,21 +277,21 @@ static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
 }
 
 // ========================================
-// 繝｡繧､繝ｳ迚ｩ逅・す繧ｹ繝・Β
+// メイン物理システム
 // ========================================
 
 void PhysicsSystem(core::GameContext &ctx, float dt) {
-  // DT繧ｭ繝｣繝・・・医Λ繧ｰ繧ｹ繝代う繧ｯ蟇ｾ遲厄ｼ・
-  float clampedDt = std::min(dt, 0.033f); // 譛螟ｧ30FPS蛻・
+  // DTキャップ（ラグスパイク対策）
+  float clampedDt = std::min(dt, 0.033f); // 最大30FPS分
 
-  // 繧ｵ繝悶せ繝・ャ繝暦ｼ亥ｮ牙ｮ壽ｧ蜷台ｸ奇ｼ・
+  // サブステップ（安定性向上）
   const int subSteps = 4;
   float subDt = clampedDt / static_cast<float>(subSteps);
 
-  // 驥榊鴨
+  // 重力
   const XMVECTOR gravity = XMVectorSet(0.0f, -9.8f, 0.0f, 0.0f);
 
-  // 繧､繝吶Φ繝医Μ繧ｽ繝ｼ繧ｹ縺ｮ貅門ｙ
+  // イベントリソースの準備
   auto *events = ctx.world.GetGlobal<CollisionEvents>();
   if (!events) {
     CollisionEvents newEvents;
@@ -300,7 +300,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
   }
   events->events.clear();
 
-  // 蝨ｰ蠖｢繝・・繧ｿ蜿門ｾ・
+  // 地形データ取得
   TerrainData *terrainData = nullptr;
   ctx.world.Query<TerrainCollider>().Each(
       [&](ecs::Entity, TerrainCollider &tc) {
@@ -309,7 +309,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       });
 
-  // 繝帙・繝ｫ諠・ｱ蜿朱寔
+  // ホール情報収集
   struct HoleInfo {
     XMVECTOR position;
     float radius;
@@ -321,18 +321,18 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         holes.push_back({XMLoadFloat3(&t.position), h.radius, h.gravity});
       });
 
-  // 繧ｲ繝ｼ繝迥ｶ諷・
+  // ゲーム状態
   auto *golfState = ctx.world.GetGlobal<GolfGameState>();
   ecs::Entity ballEntity = 0xFFFFFFFF;
   if (golfState) {
     ballEntity = static_cast<ecs::Entity>(golfState->ballEntity);
   }
 
-  // 繝・ヰ繝・げ繝ｭ繧ｰ逕ｨ
+  // デバッグログ用
   static float debugTimer = 0.0f;
   debugTimer += clampedDt;
 
-  // 繝輔Μ繝・ヱ繝ｼ蛻ｶ蠕｡・医ヴ繝ｳ繝懊・繝ｫ逕ｨ・・
+  // フリッパー制御（ピンボール用）
   float flipperSpeed = 15.0f * clampedDt;
   ctx.world.Query<Transform, Flipper>().Each(
       [&](ecs::Entity, Transform &t, Flipper &f) {
@@ -361,9 +361,9 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         XMStoreFloat4(&t.rotation, q);
       });
 
-  // 繧ｵ繝悶せ繝・ャ繝励Ν繝ｼ繝・
+  // サブステップループ
   for (int step = 0; step < subSteps; ++step) {
-    // 繝懊ョ繧｣繝ｪ繧ｹ繝亥庶髮・
+    // ボディリスト収集
     struct BodyInfo {
       ecs::Entity entity;
       Transform *t;
@@ -382,7 +382,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           staticBodies.push_back(info);
         });
 
-    // 蜍慕噪繧ｪ繝悶ず繧ｧ繧ｯ繝医・譖ｴ譁ｰ
+    // 動的オブジェクトの更新
     for (auto &body : dynamicBodies) {
       Transform &t = *body.t;
       RigidBody &rb = *body.rb;
@@ -391,8 +391,8 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       XMVECTOR pos = XMLoadFloat3(&t.position);
       XMVECTOR vel = XMLoadFloat3(&rb.velocity);
 
-      // 繝槭ユ繝ｪ繧｢繝ｫ蛻､螳夲ｼ医Ν繝ｼ繝怜・鬆ｭ縺ｧ螳滓命・・
-      uint8_t mat = 0; // 繝輔ぉ繧｢繧ｦ繧ｧ繧､・医ョ繝輔か繝ｫ繝亥､・・
+      // マテリアル判定（ループ冒頭で実施）
+      uint8_t mat = 0; // フェアウェイ（デフォルト値）
       if (terrainData) {
         float u = XMVectorGetX(pos) / terrainData->config.worldWidth + 0.5f;
         float v = 0.5f - XMVectorGetZ(pos) / terrainData->config.worldDepth;
@@ -405,11 +405,11 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // Lava繧ｨ繝ｪ繧｢縺ｫ髱呎ｭ｢縺励◆繧碓B繝輔Λ繧ｰ繧堤ｫ九※繧具ｼ磯夐℃譎ゅ・繧ｻ繝ｼ繝包ｼ・
+      // Lavaエリアに静止したらOBフラグを立てる（通過時はセーフ）
       if (static_cast<TerrainMaterial>(mat) == TerrainMaterial::Lava) {
         if (golfState && body.entity == ballEntity) {
           float speed = SafeLength(vel);
-          // 騾溷ｺｦ縺悟香蛻・ｽ弱＞(髱呎ｭ｢迥ｶ諷・縺ｨ縺阪・縺ｿOB
+          // 速度が十分低い(静止状態)ときのみOB
           if (speed < 0.5f) {
             golfState->isOB = true;
             LOG_INFO("Physics", "Ball stopped in Lava zone - OB!");
@@ -417,7 +417,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // NaN繝√ぉ繝・け - 逡ｰ蟶ｸ蛟､縺ｪ繧我ｽ咲ｽｮ繝ｪ繧ｻ繝・ヨ
+      // NaNチェック - 異常値なら位置リセット
       if (IsVectorNaN(pos) || IsVectorNaN(vel)) {
         LOG_DEBUG("Physics", "NaN detected, resetting position");
         pos = XMVectorSet(0, 2, 0, 0);
@@ -427,16 +427,16 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         continue;
       }
 
-      // 騾溷ｺｦ繧ｯ繝ｩ繝ｳ繝・
+      // 速度クランプ
       float speed = SafeLength(vel);
       if (speed > 100.0f) {
         vel = XMVectorScale(SafeNormalize(vel), 100.0f);
       }
 
-      // 蜉騾溷ｺｦ險育ｮ・
+      // 加速度計算
       XMVECTOR acc = gravity;
 
-      // 蝨ｰ蠖｢陦晉ｪ∝愛螳・
+      // 地形衝突判定
       bool isGrounded = false;
       XMVECTOR groundNormal = XMVectorSet(0, 1, 0, 0);
 
@@ -455,26 +455,26 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           float dx = posX - XMVectorGetX(hole.position);
           float dz = posZ - XMVectorGetZ(hole.position);
           float distSq = dx * dx + dz * dz;
-          // 繝帙・繝ｫ隕冶ｦ壹し繧､繧ｺ縺ｫ蜷医ｏ縺帙◆蛻､螳夲ｼ・cale 0.5 = 蜊雁ｾ・.5・・
-          float holeVisualRadius = 0.5f; // 繝薙ず繝･繧｢繝ｫ縺ｨ邨ｱ荳
+          // ホール視覚サイズに合わせた判定（scale 0.5 = 半径0.5）
+          float holeVisualRadius = 0.5f; // ビジュアルと統一
           if (distSq < holeVisualRadius * holeVisualRadius &&
               std::abs(posY - XMVectorGetY(hole.position)) < 2.0f) {
             insideHole = true;
-            carveDepth = 0.6f; // 遨ｴ縺ｮ豺ｱ縺・
+            carveDepth = 0.6f; // 穴の深さ
             holeCenter = hole.position;
 
-            // 繝帙・繝ｫ蜀・°繧峨・閼ｱ蜃ｺ髦ｲ豁｢・夂ｸ√↓蜷代°縺・溷ｺｦ繧偵き繝・ヨ
+            // ホール内からの脱出防止：縁に向かう速度をカット
             float dist = std::sqrt(distSq);
             if (dist > 0.01f) {
-              // 繝懊・繝ｫ縺九ｉ繝帙・繝ｫ荳ｭ蠢・∈縺ｮ譁ｹ蜷・
+              // ボールからホール中心への方向
               XMVECTOR toCenter = XMVectorSubtract(hole.position, pos);
-              toCenter = XMVectorSetY(toCenter, 0.0f); // XZ蟷ｳ髱｢縺ｮ縺ｿ
+              toCenter = XMVectorSetY(toCenter, 0.0f); // XZ平面のみ
               toCenter = XMVector3Normalize(toCenter);
 
-              // 迴ｾ蝨ｨ縺ｮ騾溷ｺｦ縺ｮ縺・■縲∫ｸ√↓蜷代°縺・・蛻・ｼ井ｸｭ蠢・°繧蛾屬繧後ｋ譁ｹ蜷托ｼ・
+              // 現在の速度のうち、縁に向かう成分（中心から離れる方向）
               float velOutward = -XMVectorGetX(XMVector3Dot(vel, toCenter));
               if (velOutward > 0.0f) {
-                // 邵√↓蜷代°縺・溷ｺｦ繧貞､ｧ蟷・き繝・ヨ・郁┳蜃ｺ髦ｲ豁｢・・
+                // 縁に向かう速度を大幅カット（脱出防止）
                 vel = XMVectorAdd(vel,
                                   XMVectorScale(toCenter, velOutward * 0.9f));
               }
@@ -497,31 +497,31 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             if (insideHole) {
               penetration = std::min(penetration, 0.01f);
             }
-            // 繧√ｊ霎ｼ縺ｿ隗｣豸茨ｼ域ｳ慕ｷ壽婿蜷代↓謚ｼ縺怜・縺暦ｼ・
+            // めり込み解消（法線方向に押し出し）
             float ny = std::max(XMVectorGetY(terrainN), 0.1f);
             float pushAmount = penetration / ny;
             pushAmount =
-                std::min(pushAmount, col.radius * 2.0f); // 驕主ｺｦ縺ｪ謚ｼ縺怜・縺鈴亟豁｢
+                std::min(pushAmount, col.radius * 2.0f); // 過度な押し出し防止
 
             pos = XMVectorAdd(pos, XMVectorScale(terrainN, pushAmount));
 
-            // 騾溷ｺｦ縺ｮ豕慕ｷ壽・蛻・ｒ蜃ｦ逅・
+            // 速度の法線成分を処理
             float vn = XMVectorGetX(XMVector3Dot(vel, terrainN));
             if (vn < 0.0f) {
-              // 陦晉ｪ√↓繧医ｋ蜿榊ｰ・・繧ｯ繝医Ν繧定ｨ育ｮ励＠縲∝ュ縺九↑繝ｩ繝ｳ繝繝謖吝虚繧貞刈邂・
+              // 衝突による反射ベクトルを計算し、僅かなランダム挙動を加算
               float jitter = 1.0f + (((float)(rand() % 100) / 100.0f) - 0.5f) *
                                         0.18f;
               float bounce = std::max(0.0f, rb.restitution * 0.5f * jitter);
               vel = XMVectorSubtract(
                   vel, XMVectorScale(terrainN, vn * (1.0f + bounce)));
 
-              // 荳螳壹・騾溷ｺｦ莉･荳翫〒陦晉ｪ√＠縺滄圀縺ｫ繝舌え繝ｳ繝画ｼ泌・縺翫ｈ縺ｳ蜉ｹ譫憺浹繧貞・逕・
+              // 一定の速度以上で衝突した際にバウンド演出および効果音を再生
               float impactSpeed = std::abs(vn);
               if (impactSpeed > 2.0f) {
                 float strength =
                     std::clamp((impactSpeed - 2.0f) / 10.0f, 0.0f, 1.0f);
 
-                // 繝槭ユ繝ｪ繧｢繝ｫ繧ｨ繝輔ぉ繧ｯ繝・
+                // マテリアルエフェクト
                 auto *juice = ctx.world.GetGlobal<
                     GameJuiceSystem>();
                 if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
@@ -535,7 +535,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                   }
                 }
 
-                // SE蜀咲函
+                // SE再生
                 std::string seName = "se_shot_soft";
                 float volume = strength;
                 float pitch = 1.0f;
@@ -550,7 +550,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                   break;
                 case TerrainMaterial::Green:
                   seName = "se_Fairway";
-                  pitch = 1.1f; // 繧ｰ繝ｪ繝ｼ繝ｳ縺ｯ遑ｬ繧・
+                  pitch = 1.1f; // グリーンは硬め
                   break;
                 default: // Fairway
                   seName = "se_Fairway";
@@ -560,20 +560,20 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                 if (ctx.audio) {
                   ctx.audio->PlaySE(ctx, seName, volume, pitch);
                 }
-                // 縺ｪ縺代ｌ縺ｰ volume縺ｮ縺ｿ縲・
+                // なければ volumeのみ。
               }
             }
 
             isGrounded = true;
             groundNormal = terrainN;
           } else if (penetration > -0.1f) {
-            // 謗･蝨ｰ繝槭・繧ｸ繝ｳ
+            // 接地マージン
             isGrounded = true;
             groundNormal = terrainN;
           }
         }
       } else {
-        // 繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ: 蟷ｳ髱｢繧ｳ繝ｪ繧ｸ繝ｧ繝ｳ (y=0)
+        // フォールバック: 平面コリジョン (y=0)
         float posY = XMVectorGetY(pos);
         float bottom = posY - col.radius;
 
@@ -587,7 +587,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // 繝帙・繝ｫ蜷ｸ蠑・
+      // ホール吸引
       if (col.type == ColliderType::Sphere) {
         float ballY = XMVectorGetY(pos);
         for (const auto &hole : holes) {
@@ -597,12 +597,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
           XMVECTOR toHole = XMVectorSubtract(hole.position, pos);
           float distSq = XMVectorGetX(
-              XMVector3LengthSq(XMVectorSetY(toHole, 0.0f))); // XZ霍晞屬
+              XMVector3LengthSq(XMVectorSetY(toHole, 0.0f))); // XZ距離
           float range = hole.radius * 2.5f;
 
           if (distSq < range * range && distSq > 0.001f) {
             float verticalBias =
-                XMVectorGetY(toHole) - 0.05f; // 蟶ｸ縺ｫ繧上★縺九↓荳句髄縺阪↓蠑輔￥
+                XMVectorGetY(toHole) - 0.05f; // 常にわずかに下向きに引く
             verticalBias = std::min(verticalBias, -0.05f);
             XMVECTOR pullVec = XMVectorSetY(toHole, verticalBias);
 
@@ -627,16 +627,16 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // 謗･蝨ｰ譎ゅ・豕慕ｷ壽婿蜷代・蜉騾溷ｺｦ繧帝勁蜴ｻ縺励∵万髱｢譁ｹ蜷代・驥榊鴨縺ｮ縺ｿ繧呈ｮ九☆
+      // 接地時は法線方向の加速度を除去し、斜面方向の重力のみを残す
       if (isGrounded) {
         XMVECTOR normalComponent = XMVectorScale(
             groundNormal, XMVectorGetX(XMVector3Dot(acc, groundNormal)));
         acc = XMVectorSubtract(acc, normalComponent);
       }
 
-      // 謗･蝨ｰ譎ゅ・鞫ｩ謫ｦ縺ｨ譁憺擇蜃ｦ逅・
+      // 接地時の摩擦と斜面処理
       if (isGrounded) {
-        // 謗･蝨ｰ譎ゅ↓縺翫￠繧区万髱｢縺ｫ豐ｿ縺｣縺滓束謫ｦ蜉帙→驥榊鴨蜉騾溷ｺｦ縺ｮ貂幄｡ｰ蜃ｦ逅・
+        // 接地時における斜面に沿った摩擦力と重力加速度の減衰処理
         float vn = XMVectorGetX(XMVector3Dot(vel, groundNormal));
         if (vn < 0.0f) {
           vel = XMVectorSubtract(vel, XMVectorScale(groundNormal, vn));
@@ -652,7 +652,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           slopeDir = XMVectorScale(slopeAccel, 1.0f / slopeMag);
         }
 
-        // 繧ｼ繝ｭ騾溘↓縺ｪ縺｣縺ｦ繧よ万髱｢縺ｪ繧画ｻ代ｊ蜃ｺ縺吶◆繧√・蠕ｮ蟆上ヶ繝ｬ繝ｼ繧ｯ繧｢繧ｦ繧ｧ繧､
+        // ゼロ速になっても斜面なら滑り出すための微小ブレークアウェイ
         float breakaway = 0.0f;
         if (slopeMag > 0.15f && SafeLength(vel) < 0.1f) {
           breakaway = 0.05f;
@@ -677,23 +677,23 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           frictionAccel *= scale;
         }
 
-        // 迺ｰ蠅・憾諷九・菫晏ｭ假ｼ医・繝ｼ繝ｫ縺ｮ縺ｿ蟇ｾ雎｡・・
+        // 環境状態の保存（ボールのみ対象）
         if (golfState && body.entity == ballEntity) {
           golfState->isBallGrounded = true;
           golfState->currentMaterial = static_cast<TerrainMaterial>(mat);
           golfState->currentBallSpeed = currentSpeed;
         }
 
-        // 謗･邱壽婿蜷代・驥榊鴨謌仙・縺ｫ蟇ｾ縺吶ｋ髱呎ｭ｢鞫ｩ謫ｦ繝√ぉ繝・け
+        // 接線方向の重力成分に対する静止摩擦チェック
         float tangentialAcc = SafeLength(acc);
         float staticLimit = frictionAccel * 1.2f;
 
         if (currentSpeed < 0.05f && tangentialAcc < staticLimit) {
-          // 縺ｻ縺ｼ蛛懈ｭ｢ & 驥榊鴨縺ｫ蜍昴※繧区束謫ｦ縺後≠繧・-> 螳悟・蛛懈ｭ｢
+          // ほぼ停止 & 重力に勝てる摩擦がある -> 完全停止
           vel = XMVectorZero();
           acc = XMVectorZero();
         } else if (currentSpeed > 0.0001f) {
-          // 鬮倬溷沺縺ｮ謖・焚貂幄｡ｰ縺ｨ菴朱溷沺縺ｮ邱壼ｽ｢貂幄｡ｰ繧偵ヶ繝ｬ繝ｳ繝峨＠縺ｦ閾ｪ辟ｶ縺ｪ謇玖ｧｦ繧翫〒蛛懈ｭ｢縺輔○繧・
+          // 高速域の指数減衰と低速域の線形減衰をブレンドして自然な手触りで停止させる
           float t = std::clamp((currentSpeed - 1.0f) / 4.0f, 0.0f, 1.0f);
 
           float k = frictionAccel;
@@ -707,13 +707,13 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           float finalRatio = t * expRatio + (1.0f - t) * linearRatio;
           vel = XMVectorScale(vel, finalRatio);
 
-          // 讌ｵ菴朱滓凾縺ｮ蛛懈ｭ｢蛻､螳・
+          // 極低速時の停止判定
           if (SafeLength(vel) < 0.02f) {
             vel = XMVectorZero();
           }
         }
 
-        // 讌ｵ菴朱滓凾縺ｮ蠕ｮ邏ｰ謖ｯ蜍輔き繝・ヨ (Green荳翫↑縺ｩ縺ｧ縺ｮ繝斐け莉倥″髦ｲ豁｢)
+        // 極低速時の微細振動カット (Green上などでのピク付き防止)
         float speedAfter = SafeLength(vel);
         float slopeFlatness = XMVectorGetY(groundNormal);
         if (speedAfter < 0.03f && slopeFlatness > 0.90f) {
@@ -721,7 +721,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // 騾溷ｺｦ縺ｮ莠御ｹ励↓豈比ｾ九☆繧狗ｰ｡譏鍋噪縺ｪ遨ｺ豌玲慣謚励ｒ繝懊・繝ｫ縺ｫ蟇ｾ縺励※蟶ｸ譎る←逕ｨ
+      // 速度の二乗に比例する簡易的な空気抵抗をボールに対して常時適用
       speed = SafeLength(vel);
       if (speed > 0.001f) {
         float K = 0.000876f;
@@ -734,34 +734,34 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         acc = XMVectorAdd(acc, dragAcc);
       }
 
-      // 繧ｪ繧､繝ｩ繝ｼ遨榊・ (蠕ｩ豢ｻ)
+      // オイラー積分 (復活)
       vel = XMVectorAdd(vel, XMVectorScale(acc, subDt));
       pos = XMVectorAdd(pos, XMVectorScale(vel, subDt));
-      // 譛邨・aN繝√ぉ繝・け
+      // 最終NaNチェック
       if (IsVectorNaN(pos) || IsVectorNaN(vel)) {
         LOG_DEBUG("Physics", "Post-integration NaN detected, resetting");
         pos = XMVectorSet(0, 2, 0, 0);
         vel = XMVectorZero();
       }
 
-      // 蛛懈ｭ｢蛻､螳夲ｼ亥ｹｳ蝮ｦ譎ゅ・縺ｿ・峨・
+      // 停止判定（平坦時のみ）。
       float speedFinal = SafeLength(vel);
       float slopeFlatnessFinal = XMVectorGetY(groundNormal);
       if (speedFinal < 0.008f && isGrounded && slopeFlatnessFinal > 0.98f) {
         vel = XMVectorZero();
       }
 
-      // 關ｽ荳矩剞逡・
+      // 落下限界
       if (XMVectorGetY(pos) < -50.0f) {
         pos = XMVectorSet(0, 5, 0, 0);
         vel = XMVectorZero();
       }
 
-      // 蛟､繧呈嶌縺肴綾縺・
+      // 値を書き戻す
       XMStoreFloat3(&t.position, pos);
       XMStoreFloat3(&rb.velocity, vel);
 
-      // 謗･蝨ｰ荳ｭ縺ｮ襍ｰ陦碁浹 (Rolling SE)
+      // 接地中の走行音 (Rolling SE)
       if (ctx.audio && body.entity == ballEntity) {
         if (isGrounded && speedFinal > 0.5f) {
           std::string seName = "se_Fairway";
@@ -782,18 +782,18 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           default:
             break;
           }
-          // 騾溷ｺｦ縺ｫ蠢懊§縺ｦ髻ｳ驥上・繝斐ャ繝∬ｪｿ謨ｴ (0.0~1.0)
+          // 速度に応じて音量・ピッチ調整 (0.0~1.0)
           float vol = std::clamp(speedFinal / 20.0f, 0.0f, 1.0f) * 0.4f;
           float p = pBase + (speedFinal / 40.0f);
           ctx.audio->SetLoopingSE(ctx, "BallRoll", seName, vol, p);
         } else {
-          // 蛛懈ｭ｢荳ｭ縺ｾ縺溘・遨ｺ荳ｭ縺ｪ繧牙●豁｢
+          // 停止中または空中なら停止
           ctx.audio->SetLoopingSE(ctx, "BallRoll", "", 0.0f);
         }
       }
     }
 
-    // 髱咏噪繧ｪ繝悶ず繧ｧ繧ｯ繝医→縺ｮ陦晉ｪ・
+    // 静的オブジェクトとの衝突
     for (auto &dyn : dynamicBodies) {
       if (dyn.c->type != ColliderType::Sphere)
         continue;
@@ -812,7 +812,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
         if (CheckSphereOBB(dyn.t->position, dyn.c->radius, other.t->position,
                            scaledSize, other.t->rotation, normal, depth)) {
-          // 繝帙・繝ｫ縺ｯ繝医Μ繧ｬ繝ｼ縺ｮ縺ｿ
+          // ホールはトリガーのみ
           if (ctx.world.Has<GolfHole>(other.entity)) {
             events->events.push_back({dyn.entity, other.entity});
             continue;
@@ -820,17 +820,17 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
           events->events.push_back({dyn.entity, other.entity});
 
-          // 謚ｼ縺怜・縺・
+          // 押し出し
           XMVECTOR pos = XMLoadFloat3(&dyn.t->position);
           pos = XMVectorAdd(pos, XMVectorScale(normal, depth));
           XMStoreFloat3(&dyn.t->position, pos);
 
-          // 蜿榊ｰ・
+          // 反射
           XMVECTOR vel = XMLoadFloat3(&dyn.rb->velocity);
           float vn = XMVectorGetX(XMVector3Dot(vel, normal));
           if (vn < 0.0f) {
             float jitter = 1.0f + (((float)(rand() % 100) / 100.0f) - 0.5f) *
-                                      0.2f; // 霍ｳ縺ｭ譁ｹ縺ｫ蟆代＠繝ｩ繝ｳ繝繝縺輔ｒ莉倅ｸ・
+                                      0.2f; // 跳ね方に少しランダムさを付与
             float bounce =
                 std::max(0.0f, (dyn.rb->restitution + other.rb->restitution) *
                                    0.5f * jitter);
@@ -843,7 +843,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
     }
   }
 
-  // 繝・ヰ繝・げ繝ｭ繧ｰ蜃ｺ蜉・
+  // デバッグログ出力
   if (debugTimer > 0.25f) {
     debugTimer = 0.0f;
 
@@ -852,7 +852,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           if (golfState && e == golfState->ballEntity) {
             XMVECTOR vel = XMLoadFloat3(&rb.velocity);
             float speed = SafeLength(vel);
-            bool grounded = t.position.y < 1.0f; // 邁｡譏灘愛螳・
+            bool grounded = t.position.y < 1.0f; // 簡易判定
             std::string groundedStr = "N";
             if (grounded) groundedStr = "Y";
             LOG_DEBUG(
