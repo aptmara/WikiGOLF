@@ -27,6 +27,7 @@
 #include "CupInUtils.h"
 #include "ResultScene.h"
 #include "TitleScene.h"
+#include "LoadingScene.h"
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
@@ -47,6 +48,7 @@ constexpr float kFieldScale = 4.0f;
 constexpr float kMinMapViewSpan = 5.0f; // マップビューでこれ以上縮まらない幅
 } // namespace
 
+WikiGolfScene::WikiGolfScene(bool isTutorial) : m_isTutorial(isTutorial) {}
 WikiGolfScene::~WikiGolfScene() = default;
 
 /**
@@ -87,6 +89,28 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   // ページローダーの初期化
   m_pageLoader = std::make_unique<WikiPageLoader>();
+
+  if (m_isTutorial) {
+    m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
+    m_tutorialOverlay->Initialize(ctx);
+
+    auto *globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>();
+    if (!globalData) {
+      // WikiGlobalDataが存在しない場合は作成
+      ctx.world.SetGlobal(game::components::WikiGlobalData{});
+      globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>();
+    }
+    
+    globalData->startPage = "チュートリアル";
+    globalData->targetPage = "ゴール";
+    globalData->targetPageId = 1;
+    
+    std::vector<game::WikiLink> links;
+    links.push_back({"バンカー", "バンカー"});
+    globalData->cachedLinks = links;
+    globalData->cachedExtract = "チュートリアルへようこそ。ここでは地形による影響を学びます。砂地のバンカーに注意して進みましょう。";
+    globalData->hasCachedData = true;
+  }
   
   // フィールドの初期化
   CreateField(ctx);
@@ -482,6 +506,11 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
  * @brief シーンを抜ける際の後処理を行います。
  */
 void WikiGolfScene::OnExit(core::GameContext &ctx) {
+  if (m_tutorialOverlay) {
+    m_tutorialOverlay->Shutdown(ctx);
+    m_tutorialOverlay.reset();
+  }
+
   if (m_terrainSystem) {
     m_terrainSystem->Clear(ctx);
   }
@@ -573,6 +602,22 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           m_minimapController->UpdateMapCamera(ctx, fieldW, fieldD);
       }
       isMapView = m_minimapController->IsMapView();
+  }
+
+  if (m_isTutorial && m_tutorialOverlay) {
+    m_tutorialOverlay->Update(ctx, m_cameraController.get(), m_clubController.get(), m_shotController.get(), m_minimapController.get());
+    if (m_tutorialOverlay->IsDone()) {
+      // チュートリアル終了後、タイトルへ戻る処理など
+      // （フラグの保存はTitleScene側か、ここで行う）
+      std::string path = "save_tutorial_done.flag";
+      std::ofstream ofs(path);
+      ofs << "done";
+      ofs.close();
+      
+      auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<TitleScene>(); });
+      ctx.sceneManager->ChangeScene(std::move(loadingScene));
+      return;
+    }
   }
 
   // クラブ更新

@@ -19,6 +19,7 @@
 #include "../controllers/ArticleTransitionController.h"
 #include "../controllers/WikiGolfHUD.h"
 #include "WikiPageLoader.h"
+#include "../controllers/TutorialOverlayController.h"
 
 #include "../systems/ParticleSystem.h"
 #include "../systems/PostProcessSystem.h"
@@ -49,6 +50,7 @@ namespace game::scenes {
 class WikiGolfScene : public core::Scene {
 public:
   const char *GetName() const override { return "WikiGolfScene"; }
+  explicit WikiGolfScene(bool isTutorial = false);
   ~WikiGolfScene() override;
 
   void OnEnter(core::GameContext &ctx) override;
@@ -86,6 +88,9 @@ private:
   std::unique_ptr<game::controllers::ShotController>       m_shotController;
   std::unique_ptr<WikiPageLoader>                          m_pageLoader;
   std::unique_ptr<game::controllers::ArticleTransitionController> m_transitionController;
+  std::unique_ptr<game::controllers::TutorialOverlayController>   m_tutorialOverlay;
+
+  bool m_isTutorial = false;
 
   enum class ScenePhase { Playing, Transitioning };
   ScenePhase m_phase = ScenePhase::Playing;
