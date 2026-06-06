@@ -24,6 +24,8 @@
 #include "../../core/StringUtils.h"
 #include "LoadingScene.h"
 #include "WikiGolfScene.h"
+#include <filesystem>
+#include <fstream>
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
@@ -438,15 +440,17 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     tp.layer = 10;
 
     // 各メニュー項目を UIButton コンポーネントで定義
+    bool tutorialDone = std::filesystem::exists("save_tutorial_done.flag");
     const struct { const wchar_t* label; const char* action; } menuItems[] = {
         {L"▶  はじめから",   "new_game"},
+        {tutorialDone ? L"🎓  チュートリアル" : L"🎓  チュートリアル (NEW!)", "tutorial"},
         {L"↺  デイリーチャレンジ", "daily"},
         {L"⚑  コース選択",   "course"},
         {L"⚙  オプション",     "option"},
         {L"🚪  終了",         "exit"},
     };
 
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 6; ++i) {
       auto eb = CreateEntity(ctx.world);
       auto &btn = ctx.world.Add<components::UIButton>(eb);
       btn.label = menuItems[i].label;
@@ -466,8 +470,13 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
       btn.textStyle.color = {0.95f, 0.95f, 0.95f, 1.0f};
       btn.textStyle.align = graphics::TextAlign::Left;
 
+      if (i == 1 && !tutorialDone) {
+          btn.normalColor  = {0.8f,  0.6f,  0.1f,  0.2f};
+          btn.textStyle.color = {1.0f, 0.9f, 0.3f, 1.0f};
+      }
+
       // セパレータ（最後以外）
-      if (i < 4) {
+      if (i < 5) {
         auto es = CreateEntity(ctx.world);
         auto &ts = ctx.world.Add<components::UIText>(es);
         ts.text = L"────────────────────────";
@@ -626,6 +635,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
 
   // UIButton の状態をポーリングしてアクションを処理
   bool newGame = false;
+  bool startTutorial = false;
   bool exitGame = false;
   bool prevHoveredAny = false;
 
@@ -661,6 +671,9 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       if (btn.action == "new_game") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
         newGame = true;
+      } else if (btn.action == "tutorial") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+        startTutorial = true;
       } else if (btn.action == "course") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
         m_state = TitleState::CourseSelect;
@@ -683,8 +696,12 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
 
   if (newGame) {
     StopIntroAudio(ctx);
-    auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(); });
+    auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(false); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));
+  }
+  if (startTutorial) {
+    StopIntroAudio(ctx);
+    ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>(true));
   }
   if (exitGame) {
     StopIntroAudio(ctx);
