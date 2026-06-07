@@ -183,6 +183,16 @@ if(MSVC)
 endif()
 add_test(NAME physics_friction COMMAND test_physics_friction)
 
+add_executable(test_shot_gauge_rules test_shot_gauge_rules.cpp)
+target_precompile_headers(test_shot_gauge_rules PRIVATE src/pch.h)
+target_include_directories(test_shot_gauge_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_shot_gauge_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                              -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_shot_gauge_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME shot_gauge_rules COMMAND test_shot_gauge_rules)
+
 add_executable(test_terrain_generation test_terrain_generation.cpp
                                        src/game/systems/TerrainGenerator.cpp
                                        src/graphics/TangentGenerator.cpp)

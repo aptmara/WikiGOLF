@@ -7,11 +7,27 @@
 #include "../components/Transform.h"
 #include "../systems/TimeOfDaySystem.h"
 #include "../utils/JudgeFeedback.h"
+#include "../utils/ShotGaugeRules.h"
 #include "../utils/UIConstants.h"
 #include "WikiGolfHUD.h"
 #include <cmath>
 
 namespace game::controllers {
+
+namespace {
+
+void AdvanceGauge(float& value, float& direction, float speed, float dt) {
+    value += direction * speed * dt;
+    if (value >= 1.0f) {
+        value = 1.0f;
+        direction = -1.0f;
+    } else if (value <= 0.0f) {
+        value = 0.0f;
+        direction = 1.0f;
+    }
+}
+
+} // namespace
 
 ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bool canAim, WikiGolfHUD* hud, ClubController* clubCtrl) {
     ShotEvent eventOut;
@@ -37,16 +53,6 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
     }
     
     case game::components::ShotState::Phase::PowerCharging: {
-        // パワーゲージ往復
-        shot->powerGaugePos += shot->powerGaugeDir * shot->powerGaugeSpeed * dt;
-        if (shot->powerGaugePos >= 1.0f) {
-            shot->powerGaugePos = 1.0f;
-            shot->powerGaugeDir = -1.0f;
-        } else if (shot->powerGaugePos <= 0.0f) {
-            shot->powerGaugePos = 0.0f;
-            shot->powerGaugeDir = 1.0f;
-        }
-        
         // パワー決定
         if (ctx.input.GetMouseButtonDown(0)) {
             shot->confirmedPower = shot->powerGaugePos;
@@ -61,6 +67,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             if (ctx.audio) {
                 ctx.audio->PlaySE(ctx, "se_shot_charge.mp3", 0.5f);
             }
+            break;
         }
         
         // 右クリックキャンセル
@@ -68,39 +75,31 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->Reset();
             if (hud) hud->ResetShotUI(ctx);
             if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.6f);
+            break;
         }
+
+        // パワーゲージ往復
+        AdvanceGauge(shot->powerGaugePos, shot->powerGaugeDir,
+                     shot->powerGaugeSpeed, dt);
         break;
     }
     
     case game::components::ShotState::Phase::ImpactTiming: {
-        // インパクトゲージ往復
-        shot->impactGaugePos += shot->impactGaugeDir * shot->impactGaugeSpeed * dt;
-        if (shot->impactGaugePos >= 1.0f) {
-            shot->impactGaugePos = 1.0f;
-            shot->impactGaugeDir = -1.0f;
-        } else if (shot->impactGaugePos <= 0.0f) {
-            shot->impactGaugePos = 0.0f;
-            shot->impactGaugeDir = 1.0f;
-        }
-        
         // インパクト決定
         if (ctx.input.GetMouseButtonDown(0)) {
             shot->confirmedImpact = shot->impactGaugePos;
             if (hud) hud->SetGaugeVisible(ctx, false);
             
             // 判定ロジック
-            float diff = std::abs(shot->confirmedImpact - 0.5f);
-            if (diff < game::ui::kThresholdSpecial) {
-                shot->judgement = game::components::ShotJudgement::Special;
+            shot->judgement =
+                game::utils::EvaluateImpactJudgement(shot->confirmedImpact);
+            if (shot->judgement == game::components::ShotJudgement::Special) {
                 if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorSpecial);
-            } else if (diff < game::ui::kThresholdGreat) {
-                shot->judgement = game::components::ShotJudgement::Great;
+            } else if (shot->judgement == game::components::ShotJudgement::Great) {
                 if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorError);
-            } else if (diff < game::ui::kThresholdNice) {
-                shot->judgement = game::components::ShotJudgement::Nice;
+            } else if (shot->judgement == game::components::ShotJudgement::Nice) {
                 if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorAccent);
             } else {
-                shot->judgement = game::components::ShotJudgement::Miss;
                 if (hud) hud->UpdateJudge(ctx, L"", {0.2f, 0.2f, 0.8f, 1.0f});
             }
 
@@ -112,6 +111,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             
             state->lastShotPosition = ctx.world.Get<game::components::Transform>(state->ballEntity)->position;
             eventOut.shotFired = true;
+            break;
         }
         
         // キャンセル
@@ -119,7 +119,12 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->Reset();
             if (hud) hud->ResetShotUI(ctx);
             if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.6f);
+            break;
         }
+
+        // インパクトゲージ往復
+        AdvanceGauge(shot->impactGaugePos, shot->impactGaugeDir,
+                     shot->impactGaugeSpeed, dt);
         break;
     }
     
@@ -157,7 +162,9 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
         curveAmount = 0.3f;
     }
 
-    float power = clubPower * shot->powerGaugePos * powerMultiplier;
+    const float powerRatio = game::utils::ClampGaugeValue(
+        shot->confirmedPower > 0.0f ? shot->confirmedPower : shot->powerGaugePos);
+    float power = clubPower * powerRatio * powerMultiplier;
 
     float angleRad = DirectX::XMConvertToRadians(clubAngle);
     float vy = power * std::sin(angleRad);

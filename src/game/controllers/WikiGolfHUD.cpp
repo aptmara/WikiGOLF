@@ -17,6 +17,7 @@
 #include "../components/UIImage.h"
 #include "../components/WikiComponents.h"
 #include "../../core/StringUtils.h"
+#include "../utils/ShotGaugeRules.h"
 #include "../utils/UIConstants.h"
 #include <algorithm>
 #include <cmath>
@@ -654,8 +655,12 @@ void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
         gauge.showConfirmedMarker = false;
         gauge.showImpactZones  = false;
         gauge.impactCenter     = 0.5f;
-        gauge.impactWidthGreat = game::ui::kImpactWidthGreat;
-        gauge.impactWidthNice  = game::ui::kImpactWidthNice;
+        gauge.impactWidthSpecial =
+            game::utils::GetImpactZoneVisualWidth(game::ui::kThresholdSpecial);
+        gauge.impactWidthGreat =
+            game::utils::GetImpactZoneVisualWidth(game::ui::kThresholdGreat);
+        gauge.impactWidthNice =
+            game::utils::GetImpactZoneVisualWidth(game::ui::kThresholdNice);
         m_ui.gaugeBarEntity = e;
     }
 }

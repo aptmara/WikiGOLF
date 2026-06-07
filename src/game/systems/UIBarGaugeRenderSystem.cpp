@@ -78,7 +78,7 @@ void FillImpactZones(graphics::TextRenderer &renderer,
   const float centerX = gauge.x + gauge.width * gauge.impactCenter;
   const float niceW = gauge.width * gauge.impactWidthNice;
   const float greatW = gauge.width * gauge.impactWidthGreat;
-  const float specialW = greatW * 0.40f;
+  const float specialW = gauge.width * gauge.impactWidthSpecial;
 
   renderer.FillRect(D2D1::RectF(centerX - niceW * 0.5f, gauge.y,
                                 centerX + niceW * 0.5f,

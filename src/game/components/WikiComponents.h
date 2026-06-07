@@ -341,6 +341,7 @@ struct UIBarGauge {
   // インパクトゾーン（ゴルフゲーム特化）
   bool showImpactZones = false;
   float impactCenter = 0.5f;     ///< インパクト中心 (0.0-1.0)
+  float impactWidthSpecial = 0.03f; ///< Specialゾーン幅 (全体に対する割合)
   float impactWidthGreat = 0.1f; ///< Greatゾーン幅 (全体に対する割合)
   float impactWidthNice = 0.3f;  ///< Niceゾーン幅
 };
