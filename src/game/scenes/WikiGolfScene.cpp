@@ -213,6 +213,10 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
                "Found cached page data. Skipping initial network request.");
       m_pageLoader->SetPreloadedData(preloadedData->cachedLinks, preloadedData->cachedExtract);
     }
+
+    game::components::WikiGlobalData consumedData;
+    ctx.world.SetGlobal(std::move(consumedData));
+    LOG_INFO("WikiGolf", "Consumed preloaded WikiGlobalData and reset startup state");
   } else {
     LOG_INFO("WikiGolf", "No preloaded data found or pathSystem invalid. "
                          "Falling back to sync load.");

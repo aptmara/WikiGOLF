@@ -148,7 +148,7 @@ public:
      */
     void CreateHole(core::GameContext& ctx, float x, float z,
                     const std::string& linkTarget, bool isTargetHole,
-                    int hopsToTarget = -1);
+                    int hopsToTarget = -1, bool addMapIcon = true);
 
     /**
      * @brief 最後に生成したテクスチャ結果を取得します。
@@ -176,11 +176,6 @@ private:
 
     /// @brief テクスチャのリンク領域からホールを一括配置する
     void CreateLinksFromTexture(core::GameContext& ctx);
-
-    /// @brief ページ構築中の最短経路ホップ数をキャッシュ付きで取得します。 山内陽
-    int GetCachedHopsToTarget(const std::string& sourceTitle,
-                              const game::components::GolfGameState& state,
-                              int maxDepth);
 
     // ---- 借用ポインタ（非所有） ----
     graphics::WikiTextureGenerator*    m_textureGenerator = nullptr;
@@ -211,10 +206,75 @@ private:
         BeginTerrain,     ///< 地形生成処理の開始
         BuildTerrainStep, ///< 地形生成処理のインクリメンタル更新
         RepositionBall,
+        EvaluateHoles,    ///< 全リンク領域のホール候補化
+        EvaluateHolePaths, ///< 一部候補のリンク距離評価
+        CreateMapIcons,   ///< マップビュー用の軽量リンク表示
         CreateHoles,
         SetupWind,
         Finish
     };
+
+    /**
+     * @brief テクスチャリンクから作ったホール配置候補です。 山内陽
+     */
+    struct HolePlacementCandidate {
+        float x = 0.0f;
+        float z = 0.0f;
+        std::string linkTarget;
+        bool isTarget = false;
+        int hopsToTarget = -1;
+        size_t originalIndex = 0;
+        bool isPlayable = false;
+    };
+
+    /**
+     * @brief リンク領域からホール候補を作ります。 山内陽
+     */
+    HolePlacementCandidate BuildHolePlacementCandidate(
+        const graphics::LinkRegion& link,
+        size_t originalIndex) const;
+
+    /**
+     * @brief マップビューに残す軽量リンク候補を選びます。 山内陽
+     */
+    std::vector<HolePlacementCandidate> SelectMapHoleIconCandidates(
+        const std::vector<HolePlacementCandidate>& candidates) const;
+
+    /**
+     * @brief リンク距離を評価する代表候補を安い条件だけで絞ります。 山内陽
+     */
+    std::vector<HolePlacementCandidate> SelectPathEvaluationCandidates(
+        const std::vector<HolePlacementCandidate>& candidates) const;
+
+    /**
+     * @brief 評価結果を同じリンク候補へ反映します。 山内陽
+     */
+    void ApplyPathEvaluationResults(
+        const std::vector<HolePlacementCandidate>& evaluatedCandidates);
+
+    /**
+     * @brief 候補のリンク距離をページ内キャッシュ付きで評価します。 山内陽
+     */
+    void EvaluateCandidatePath(core::GameContext& ctx,
+                               HolePlacementCandidate& candidate);
+
+    /**
+     * @brief マップ候補がプレイ可能ホールとして選ばれたかを判定します。 山内陽
+     */
+    bool IsPlayableCandidate(const HolePlacementCandidate& candidate) const;
+
+    /**
+     * @brief リンク距離を評価した代表ホールをマップ候補にも必ず含めます。 山内陽
+     */
+    void EnsurePathCandidatesHaveMapIcons();
+
+    /**
+     * @brief 既存選抜候補から十分離れているかを判定します。 山内陽
+     */
+    bool IsFarEnoughFromSelected(
+        const std::vector<HolePlacementCandidate>& selected,
+        const HolePlacementCandidate& candidate,
+        float minDistance) const;
 
     BuildStep m_buildStep = BuildStep::None;
     PageDataAsyncResult m_buildData;
@@ -227,9 +287,14 @@ private:
 
     std::vector<std::pair<std::string, std::wstring>> m_buildValidLinks;
     std::vector<std::pair<std::wstring, std::string>> m_buildLinkPairs;
+    std::vector<HolePlacementCandidate> m_buildHoleCandidates;
+    std::vector<HolePlacementCandidate> m_buildPathCandidates;
+    std::vector<HolePlacementCandidate> m_buildMapHoleCandidates;
     std::unordered_map<std::string, int> m_pathHopCache;
 
     size_t m_nextHoleIndex = 0;
+    size_t m_nextMapIconIndex = 0;
+    size_t m_nextPathIndex = 0;
     graphics::WikiTextureGenerationState m_textureState;
 
     float m_buildFieldWidth = 80.0f;

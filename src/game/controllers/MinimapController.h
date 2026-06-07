@@ -56,7 +56,9 @@ public:
   void ClearHoleIcons(core::GameContext &ctx);
 
   /// @brief マップ上のリンク穴アイコンを追加
-  void AddHoleIcon(core::GameContext &ctx, float x, float z, const std::string& linkTarget, bool isTargetHole);
+  void AddHoleIcon(core::GameContext &ctx, float x, float z,
+                   const std::string& linkTarget, bool isTargetHole,
+                   bool isPlayableHole = true, int hopsToTarget = -1);
 
   /// @brief マップビュー状態のトグル
   void ToggleMapView(core::GameContext &ctx, ecs::Entity skyboxEntity);
@@ -131,6 +133,8 @@ private:
     ecs::Entity iconEntity;
     DirectX::XMFLOAT2 worldPos;
     bool isTarget;
+    bool isPlayable;
+    int hopsToTarget;
   };
   std::vector<MapHoleIcon> m_mapHoleIcons;
 };

@@ -38,6 +38,17 @@ using namespace DirectX;
 
 namespace {
 constexpr float kIntroAudioVolume = 0.8f;
+
+/**
+ * @brief 標準スタート用にWiki開始情報を初期化します。 山内陽
+ * @details 前回のカスタムコースやロード済みデータが残っていると抽選がスキップされるため、
+ *          「はじめから」では空の開始情報を明示的に渡します。
+ */
+void ResetStandardStartData(core::GameContext &ctx) {
+  game::components::WikiGlobalData data;
+  ctx.world.SetGlobal(std::move(data));
+  LOG_INFO("TitleScene", "Reset WikiGlobalData for standard random start");
+}
 }
 
 namespace {
@@ -696,6 +707,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
 
   if (newGame) {
     StopIntroAudio(ctx);
+    ResetStandardStartData(ctx);
     auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(false); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));
   }

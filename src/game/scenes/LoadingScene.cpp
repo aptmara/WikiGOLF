@@ -25,6 +25,19 @@
 
 namespace game::scenes {
 
+namespace {
+
+/**
+ * @brief ロード前グローバルデータが明示的な開始指定か判定します。 山内陽
+ * @details 標準スタートでは空データを渡すため、空のままならランダム抽選を継続します。
+ */
+bool HasExplicitStartData(const game::components::WikiGlobalData &data) {
+  return data.isUserOverride || !data.startPage.empty() ||
+         !data.targetPage.empty() || data.targetPageId != -1;
+}
+
+} // namespace
+
 LoadingScene::LoadingScene(
     std::function<std::unique_ptr<core::Scene>()> nextSceneFactory)
     : m_nextSceneFactory(std::move(nextSceneFactory)) {}
@@ -67,11 +80,15 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   int overrideTargetId = -1;
   bool overrideIsUserOverride = false;
   if (auto* globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>()) {
-    overrideStartPage = globalData->startPage;
-    overrideTargetPage = globalData->targetPage;
-    overrideTargetId = globalData->targetPageId;
-    overrideIsUserOverride = globalData->isUserOverride;
-    LOG_INFO("LoadingScene", "Found overridden global data: Start={}, Target={}", overrideStartPage, overrideTargetPage);
+    if (HasExplicitStartData(*globalData)) {
+      overrideStartPage = globalData->startPage;
+      overrideTargetPage = globalData->targetPage;
+      overrideTargetId = globalData->targetPageId;
+      overrideIsUserOverride = globalData->isUserOverride;
+      LOG_INFO("LoadingScene", "Found overridden global data: Start={}, Target={}", overrideStartPage, overrideTargetPage);
+    } else {
+      LOG_INFO("LoadingScene", "No explicit start data. Standard random selection will run.");
+    }
   }
 
   // 非同期ロード開始

@@ -356,18 +356,27 @@ void MinimapController::ClearHoleIcons(core::GameContext &ctx) {
 /**
  * @brief ミニマップ上にホールアイコンを追加します。
  */
-void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z, const std::string& linkTarget, bool isTargetHole) {
+void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
+                                    const std::string& linkTarget,
+                                    bool isTargetHole, bool isPlayableHole,
+                                    int hopsToTarget) {
+  (void)linkTarget;
+  (void)hopsToTarget;
+
   auto iconEntity = ctx.world.CreateEntity();
   auto &ui = ctx.world.Add<UIImage>(iconEntity);
   
   ui = UIImage::Create("golf_hole_icon_transparent.png", 0.0f, 0.0f);
-  ui.width = isTargetHole ? 34.0f : 20.0f;
-  ui.height = isTargetHole ? 34.0f : 20.0f;
-  ui.alpha = isTargetHole ? 1.0f : 0.72f;
-  ui.layer = isTargetHole ? game::ui::kLayerMarker + 3 : game::ui::kLayerMarker + 1;
+  ui.width = isTargetHole ? 34.0f : (isPlayableHole ? 20.0f : 12.0f);
+  ui.height = ui.width;
+  ui.alpha = isTargetHole ? 1.0f : (isPlayableHole ? 0.72f : 0.34f);
+  ui.layer = isTargetHole ? game::ui::kLayerMarker + 3
+                          : (isPlayableHole ? game::ui::kLayerMarker + 1
+                                            : game::ui::kLayerMarker);
   ui.visible = false;
   
-  m_mapHoleIcons.push_back({iconEntity, {x, z}, isTargetHole});
+  m_mapHoleIcons.push_back(
+      {iconEntity, {x, z}, isTargetHole, isPlayableHole, hopsToTarget});
 }
 
 /**
@@ -528,32 +537,26 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   // ホール（カップ）アイコンのミニマップ投影座標更新および🚩フラッグアニメーション
   for (auto &icon : m_mapHoleIcons) {
     if (auto *iconUI = ctx.world.Get<UIImage>(icon.iconEntity)) {
-      if (m_isMapView) {
-        iconUI->visible = false;
-        if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {
-          if (auto *flagTxt = ctx.world.Get<UIText>(m_minimapFlagMarkerEntity)) {
-            flagTxt->visible = false;
-          }
-        }
-        continue;
-      }
-
       if (markerSurfaceVisible) {
         float u = 0.0f;
         float v = 0.0f;
         if (ProjectToMinimap(icon.worldPos.x, icon.worldPos.y, params, u, v)) {
+          const float normalSize = icon.isPlayable ? 20.0f : 12.0f;
+          const float mapSize = icon.isPlayable ? 28.0f : 16.0f;
           iconUI->width = icon.isTarget ? (m_isMapView ? 44.0f : 34.0f)
-                                        : (m_isMapView ? 28.0f : 20.0f);
+                                        : (m_isMapView ? mapSize : normalSize);
           iconUI->height = iconUI->width;
           iconUI->x = mapBounds.x + u * mapBounds.width - iconUI->width * 0.5f;
           iconUI->y = mapBounds.y + v * mapBounds.height - iconUI->height * 0.5f;
-          iconUI->visible = markerSurfaceVisible;
+          iconUI->alpha = icon.isTarget ? 1.0f
+                                        : (icon.isPlayable ? 0.72f : 0.34f);
+          iconUI->visible = markerSurfaceVisible && (m_isMapView || icon.isPlayable);
 
           if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {
             if (auto *flagTxt = ctx.world.Get<UIText>(m_minimapFlagMarkerEntity)) {
               flagTxt->x = mapBounds.x + u * mapBounds.width - 8.0f;
               flagTxt->y = mapBounds.y + v * mapBounds.height - 12.0f;
-              flagTxt->visible = false;
+              flagTxt->visible = m_isMapView;
 
               float flagPulse = 1.0f + 0.16f * std::sin(m_markerPulseTimer * 2.8f);
               flagTxt->style.fontSize = game::ui::kMinimapMarkerSize * flagPulse;
