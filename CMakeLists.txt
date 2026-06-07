@@ -182,3 +182,15 @@ if(MSVC)
     target_compile_options(test_physics_friction PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME physics_friction COMMAND test_physics_friction)
+
+add_executable(test_terrain_generation test_terrain_generation.cpp
+                                       src/game/systems/TerrainGenerator.cpp
+                                       src/graphics/TangentGenerator.cpp)
+target_precompile_headers(test_terrain_generation PRIVATE src/pch.h)
+target_include_directories(test_terrain_generation PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_terrain_generation PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                               -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_terrain_generation PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME terrain_generation COMMAND test_terrain_generation)

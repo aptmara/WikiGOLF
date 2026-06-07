@@ -72,7 +72,7 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
         { L"Rough (ラフ)", L"草が深く、ボールの転がりが少し悪くなります。" },
         { L"Bunker (バンカー)", L"砂地です。転がりにくく、パワーも落ちやすくなります。" },
         { L"Green (グリーン)", L"カップ周りの滑らかな地形です。よく転がります。" },
-        { L"OB / Lava", L"危険エリア。入るとペナルティで1打戻されます。" }
+        { L"OB / Water / Lava", L"水や溶岩などの危険エリア。入るとペナルティで1打戻されます。" }
     };
 
     UpdateUI(ctx);

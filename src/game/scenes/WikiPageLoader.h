@@ -14,12 +14,17 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace game::systems {
 class WikiShortestPath;
 } // namespace game::systems
+
+namespace game::components {
+struct GolfGameState;
+} // namespace game::components
 
 namespace game::controllers {
 class MinimapController;
@@ -172,6 +177,11 @@ private:
     /// @brief テクスチャのリンク領域からホールを一括配置する
     void CreateLinksFromTexture(core::GameContext& ctx);
 
+    /// @brief ページ構築中の最短経路ホップ数をキャッシュ付きで取得します。 山内陽
+    int GetCachedHopsToTarget(const std::string& sourceTitle,
+                              const game::components::GolfGameState& state,
+                              int maxDepth);
+
     // ---- 借用ポインタ（非所有） ----
     graphics::WikiTextureGenerator*    m_textureGenerator = nullptr;
     game::systems::WikiTerrainSystem*  m_terrainSystem    = nullptr;
@@ -217,6 +227,7 @@ private:
 
     std::vector<std::pair<std::string, std::wstring>> m_buildValidLinks;
     std::vector<std::pair<std::wstring, std::string>> m_buildLinkPairs;
+    std::unordered_map<std::string, int> m_pathHopCache;
 
     size_t m_nextHoleIndex = 0;
     graphics::WikiTextureGenerationState m_textureState;

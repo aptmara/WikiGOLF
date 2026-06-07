@@ -24,19 +24,18 @@ Texture2DArray g_NormalArray : register(t1);
 SamplerState g_Sampler : register(s0);
 
 float4 main(PS_INPUT input) : SV_TARGET {
-    // 1. マテリアルIDの取得 (Alpha値に (mat+0.5)/255.0 が入っていると仮定)
-    float matId = floor(input.Color.a * 255.0f);
-    
     // UVスケール適用
     float uvScale = max(MaterialFlags.z, 1.0f);
-    float3 uvw = float3(input.Tex * uvScale, matId);
+    float3 uvw = float3(input.Tex * uvScale, 0.0f);
 
-    // 2. ベースカラー (頂点カラーのRGBのみ使用、AはID用なので無視)
+    // 2. ベースカラー。
+    // 素材IDを補間してTexture2DArrayのlayerに使うと、境界に水/OB等の偽素材が出る。
+    // 地形本体は連続した頂点色を正とし、質感だけ共通レイヤーから薄く加える。
     float4 baseColor = float4(input.Color.rgb, 1.0f);
     
     // テクスチャサンプリング
     float4 texColor = g_AlbedoArray.Sample(g_Sampler, uvw);
-    baseColor.rgb *= texColor.rgb;
+    baseColor.rgb *= lerp(float3(1.0f, 1.0f, 1.0f), texColor.rgb, 0.35f);
 
     // 3. 法線計算
     float3 N = normalize(input.Normal);

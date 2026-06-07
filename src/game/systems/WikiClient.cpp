@@ -2,13 +2,202 @@
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
 #include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
+#include <unordered_set>
 
 #pragma comment(lib, "winhttp.lib")
 
 namespace game::systems {
+
+std::string ReplaceAll(std::string str, const std::string &from,
+                       const std::string &to);
+std::string DecodeUnicodeEscape(const std::string &str);
+
+namespace {
+
+constexpr int kWikiLinksBatchSize = 500;
+constexpr int kUnlimitedWikiLinkLimit = std::numeric_limits<int>::max();
+
+/**
+ * @brief JSON文字列値をUTF-8文字列へ復元します。 山内陽
+ */
+std::string DecodeJsonString(std::string value) {
+  value = ReplaceAll(value, "\\\"", "\"");
+  value = ReplaceAll(value, "\\/", "/");
+  value = ReplaceAll(value, "\\\\", "\\");
+  value = DecodeUnicodeEscape(value);
+  return value;
+}
+
+/**
+ * @brief 指定キーのJSON文字列値を安全に切り出します。 山内陽
+ */
+bool ExtractJsonStringField(const std::string &json, const std::string &key,
+                            size_t searchFrom, size_t searchLimit,
+                            std::string &value, size_t &nextPos) {
+  size_t keyPos = json.find(key, searchFrom);
+  if (keyPos == std::string::npos || keyPos >= searchLimit) {
+    return false;
+  }
+
+  const size_t start = keyPos + key.length();
+  bool escaped = false;
+  for (size_t i = start; i < json.length() && i < searchLimit; ++i) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (json[i] == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (json[i] == '"') {
+      value = DecodeJsonString(json.substr(start, i - start));
+      nextPos = i + 1;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * @brief JSONオブジェクト内の整数フィールドを取得します。 山内陽
+ */
+bool ExtractJsonIntField(const std::string &json, const std::string &key,
+                         size_t searchFrom, size_t searchLimit, int &value) {
+  size_t keyPos = json.find(key, searchFrom);
+  if (keyPos == std::string::npos || keyPos >= searchLimit) {
+    return false;
+  }
+
+  size_t pos = keyPos + key.length();
+  while (pos < json.length() && pos < searchLimit &&
+         std::isspace(static_cast<unsigned char>(json[pos]))) {
+    ++pos;
+  }
+
+  bool negative = false;
+  if (pos < json.length() && json[pos] == '-') {
+    negative = true;
+    ++pos;
+  }
+
+  if (pos >= json.length() ||
+      !std::isdigit(static_cast<unsigned char>(json[pos]))) {
+    return false;
+  }
+
+  int parsed = 0;
+  while (pos < json.length() && pos < searchLimit &&
+         std::isdigit(static_cast<unsigned char>(json[pos]))) {
+    parsed = parsed * 10 + (json[pos] - '0');
+    ++pos;
+  }
+
+  value = negative ? -parsed : parsed;
+  return true;
+}
+
+/**
+ * @brief ゲーム候補として扱う通常記事リンクを追加します。 山内陽
+ */
+void AddWikiLink(std::vector<game::WikiLink> &links,
+                 std::unordered_set<std::string> &seen,
+                 const std::string &sourceTitle,
+                 const std::string &linkTitle) {
+  if (linkTitle.empty() || linkTitle == sourceTitle ||
+      seen.find(linkTitle) != seen.end()) {
+    return;
+  }
+
+  links.push_back({linkTitle, linkTitle});
+  seen.insert(linkTitle);
+}
+
+/**
+ * @brief query APIのlinks配列から通常記事リンクを抽出します。 山内陽
+ */
+void ParseQueryPageLinks(const std::string &response,
+                         const std::string &sourceTitle, int effectiveLimit,
+                         std::vector<game::WikiLink> &links,
+                         std::unordered_set<std::string> &seen) {
+  size_t linksStart = response.find("\"links\":");
+  if (linksStart == std::string::npos) {
+    return;
+  }
+
+  size_t linksEnd = response.find("]", linksStart);
+  if (linksEnd == std::string::npos) {
+    linksEnd = response.length();
+  }
+
+  size_t pos = linksStart;
+  while ((int)links.size() < effectiveLimit) {
+    std::string linkTitle;
+    size_t nextPos = 0;
+    if (!ExtractJsonStringField(response, "\"title\":\"", pos, linksEnd,
+                                linkTitle, nextPos)) {
+      break;
+    }
+
+    AddWikiLink(links, seen, sourceTitle, linkTitle);
+    pos = nextPos;
+  }
+}
+
+/**
+ * @brief parse APIのレンダリング後リンクから通常記事リンクを抽出します。 山内陽
+ */
+void ParseRenderedPageLinks(const std::string &response,
+                            const std::string &sourceTitle, int effectiveLimit,
+                            std::vector<game::WikiLink> &links,
+                            std::unordered_set<std::string> &seen) {
+  size_t linksStart = response.find("\"links\":[");
+  if (linksStart == std::string::npos) {
+    return;
+  }
+
+  size_t linksEnd = response.find("],", linksStart);
+  if (linksEnd == std::string::npos) {
+    linksEnd = response.find("]}", linksStart);
+  }
+  if (linksEnd == std::string::npos) {
+    linksEnd = response.length();
+  }
+
+  size_t pos = linksStart;
+  while ((int)links.size() < effectiveLimit) {
+    size_t objectStart = response.find("{", pos);
+    if (objectStart == std::string::npos || objectStart >= linksEnd) {
+      break;
+    }
+
+    size_t objectEnd = response.find("}", objectStart);
+    if (objectEnd == std::string::npos || objectEnd > linksEnd) {
+      break;
+    }
+
+    int ns = -1;
+    if (ExtractJsonIntField(response, "\"ns\":", objectStart, objectEnd, ns) &&
+        ns == 0 && response.find("\"exists\":true", objectStart) < objectEnd) {
+      std::string linkTitle;
+      size_t nextPos = 0;
+      if (ExtractJsonStringField(response, "\"*\":\"", objectStart, objectEnd,
+                                 linkTitle, nextPos)) {
+        AddWikiLink(links, seen, sourceTitle, linkTitle);
+      }
+    }
+
+    pos = objectEnd + 1;
+  }
+}
+
+} // namespace
 
 WikiClient::WikiClient() {
   m_hSession =
@@ -192,27 +381,22 @@ std::string WikiClient::UrlEncode(const std::string &str) {
 std::vector<game::WikiLink> WikiClient::FetchPageLinks(const std::string &title,
                                                        int limit) {
   std::vector<game::WikiLink> links;
+  std::unordered_set<std::string> seen;
 
   std::string encodedTitle = UrlEncode(title);
   std::wstring wtitle = core::ToWString(encodedTitle);
 
-  // API負荷軽減: 1リクエストで最大500、最大3リクエスト（=1500リンク）
-  // limit <= 0 の場合はデフォルト500に制限
-  const int batchSize = 500;
-  const int maxRequests = 3;
-  int effectiveLimit = limit;
-  if (limit <= 0) {
-    effectiveLimit = 500;
-  }
+  // limit <= 0 は記事内リンクを取り切る。明示 limit は軽量モード用に尊重する。
+  const int effectiveLimit = (limit <= 0) ? kUnlimitedWikiLinkLimit : limit;
 
   std::wstring plcontinue = L"";
   bool hasMore = true;
-  int requestCount = 0;
+  std::unordered_set<std::wstring> seenContinueTokens;
 
-  while (hasMore && requestCount < maxRequests) {
+  while (hasMore && (int)links.size() < effectiveLimit) {
     std::wstring path =
         L"/w/api.php?action=query&titles=" + wtitle + L"&prop=links&pllimit=" +
-        std::to_wstring(batchSize) +
+        std::to_wstring(kWikiLinksBatchSize) +
         L"&plnamespace=0&redirects=1&format=json&formatversion=2";
 
     if (!plcontinue.empty()) {
@@ -220,48 +404,31 @@ std::vector<game::WikiLink> WikiClient::FetchPageLinks(const std::string &title,
     }
 
     std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
-    requestCount++;
+    if (response.empty()) {
+      LOG_WARN("WikiClient", "FetchPageLinks got empty response for {}", title);
+      break;
+    }
 
     if (links.empty()) {
       LOG_INFO("WikiClient", "FetchPageLinks response length: {}",
                response.length());
     }
 
-    size_t linksStart = response.find("\"links\":");
-    if (linksStart != std::string::npos) {
-      size_t pos = linksStart;
-      while ((pos = response.find("\"title\":\"", pos)) != std::string::npos) {
-        size_t start = pos + 9;
-        size_t end = response.find("\"", start);
-        if (end == std::string::npos)
-          break;
-
-        std::string linkTitle = response.substr(start, end - start);
-        linkTitle = ReplaceAll(linkTitle, "\\\"", "\"");
-        linkTitle = ReplaceAll(linkTitle, "\\/", "/");
-        linkTitle = DecodeUnicodeEscape(linkTitle);
-
-        if (linkTitle != title) {
-          links.push_back({linkTitle, linkTitle});
-        }
-        pos = end;
-
-        if ((int)links.size() >= effectiveLimit) {
-          hasMore = false;
-          break;
-        }
-      }
-    }
+    ParseQueryPageLinks(response, title, effectiveLimit, links, seen);
 
     size_t contPos = response.find("\"plcontinue\":\"");
-    if (contPos != std::string::npos && hasMore) {
-      size_t contStart = contPos + 14;
-      size_t contEnd = response.find("\"", contStart);
-      if (contEnd != std::string::npos) {
-        std::string continueValue =
-            response.substr(contStart, contEnd - contStart);
-        continueValue = ReplaceAll(continueValue, "\\|", "|");
+    if (contPos != std::string::npos && (int)links.size() < effectiveLimit) {
+      std::string continueValue;
+      size_t nextPos = 0;
+      if (ExtractJsonStringField(response, "\"plcontinue\":\"", contPos,
+                                 response.length(), continueValue, nextPos)) {
         plcontinue = core::ToWString(UrlEncode(continueValue));
+        if (!seenContinueTokens.insert(plcontinue).second) {
+          LOG_WARN("WikiClient",
+                   "FetchPageLinks stopped repeated continuation for {}",
+                   title);
+          hasMore = false;
+        }
       } else {
         hasMore = false;
       }
@@ -270,7 +437,17 @@ std::vector<game::WikiLink> WikiClient::FetchPageLinks(const std::string &title,
     }
   }
 
-  LOG_INFO("WikiClient", "Found {} links", links.size());
+  const size_t queryLinkCount = links.size();
+  if ((int)links.size() < effectiveLimit) {
+    std::wstring parsePath =
+        L"/w/api.php?action=parse&page=" + wtitle +
+        L"&prop=links&redirects=1&format=json&formatversion=2";
+    std::string response = PerformGetRequest(L"ja.wikipedia.org", parsePath);
+    ParseRenderedPageLinks(response, title, effectiveLimit, links, seen);
+  }
+
+  LOG_INFO("WikiClient", "Found {} links (query={}, rendered={})",
+           links.size(), queryLinkCount, links.size() - queryLinkCount);
   return links;
 }
 

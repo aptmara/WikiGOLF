@@ -405,14 +405,16 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // Lavaエリアに静止したらOBフラグを立てる（通過時はセーフ）
-      if (static_cast<TerrainMaterial>(mat) == TerrainMaterial::Lava) {
+      // 水・溶岩などOB地形に静止したらOBフラグを立てる（通過時はセーフ）
+      const TerrainMaterial currentMaterial = static_cast<TerrainMaterial>(mat);
+      if (IsOutOfBoundsTerrainMaterial(currentMaterial)) {
         if (golfState && body.entity == ballEntity) {
           float speed = SafeLength(vel);
           // 速度が十分低い(静止状態)ときのみOB
           if (speed < 0.5f) {
             golfState->isOB = true;
-            LOG_INFO("Physics", "Ball stopped in Lava zone - OB!");
+            LOG_INFO("Physics", "Ball stopped in OB terrain. material={}",
+                     static_cast<int>(currentMaterial));
           }
         }
       }

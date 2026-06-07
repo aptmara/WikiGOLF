@@ -44,6 +44,7 @@ PS_INPUT main(VS_INPUT input) {
     output.Bitangent = normalize(mul(input.Bitangent, world3x3));
     
     output.Tex = input.Tex;
+
     output.Color = input.Color * Color; // マテリアル色 * 頂点色
     
     return output;

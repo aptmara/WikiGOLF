@@ -56,7 +56,12 @@ private:
    */
   static void
   CreatePlatforms(TerrainData &data,
-                  const std::vector<DirectX::XMFLOAT2> &holePositions);
+                   const std::vector<DirectX::XMFLOAT2> &holePositions);
+
+  /**
+   * @brief 小さすぎる孤立地形を整理し、コースの読みやすさを保ちます。
+   */
+  static void ApplyMaterialCleanup(TerrainData &data);
 
   /**
    * @brief ハイトマップにスムージング処理を適用します。

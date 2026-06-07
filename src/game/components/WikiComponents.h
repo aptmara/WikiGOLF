@@ -141,11 +141,20 @@ enum class TerrainMaterial : uint8_t {
   Bunker = 2,
   Green = 3,
   Ice = 4,   ///< 極地テーマ用（低摩擦）
-  Water = 5, ///< 海洋テーマ用（スリップ+減速）
+  Water = 5, ///< 海洋テーマ用（停止時OB）
   Lava = 6,  ///< 火山テーマ用（OB扱い）
   Stone = 7, ///< 中世/遺跡テーマ用（高反発）
   None = 255
 };
+
+/**
+ * @brief 停止したボールをOB扱いにする地形か判定します。
+ * @param material 判定対象の地形マテリアル
+ * @return OB扱いする場合はtrue
+ */
+inline bool IsOutOfBoundsTerrainMaterial(TerrainMaterial material) {
+  return material == TerrainMaterial::Water || material == TerrainMaterial::Lava;
+}
 
 /**
  * @brief ゴルフゲーム状態

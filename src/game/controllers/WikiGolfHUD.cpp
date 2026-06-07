@@ -1183,9 +1183,11 @@ void WikiGolfHUD::UpdateBottomInfoPanels(core::GameContext& ctx, float distanceT
         case game::components::TerrainMaterial::Ice: 
             lieStr = L"アイス"; condStr = L"コンディション: 滑る"; lieColor = {0.6f, 0.9f, 1.0f, 1.0f}; break;
         case game::components::TerrainMaterial::Water: 
-            lieStr = L"ウォーター"; condStr = L"コンディション: 水没"; lieColor = {0.2f, 0.4f, 0.9f, 1.0f}; break;
+            lieStr = L"ウォーター"; condStr = L"コンディション: OB"; lieColor = {0.2f, 0.4f, 0.9f, 1.0f}; break;
         case game::components::TerrainMaterial::Lava: 
             lieStr = L"溶岩"; condStr = L"コンディション: OB"; lieColor = {0.9f, 0.2f, 0.1f, 1.0f}; break;
+        case game::components::TerrainMaterial::Stone:
+            lieStr = L"ストーン"; condStr = L"コンディション: 跳ねやすい"; lieColor = {0.6f, 0.6f, 0.65f, 1.0f}; break;
         default: break;
     }
     

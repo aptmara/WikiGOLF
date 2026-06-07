@@ -730,15 +730,24 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   case game::components::TerrainMaterial::Green:
                       terrainTex = GetTerrainTex("ui_terrain_green.png", "ui_judge_perfect.png");
                       break;
-                  default: 
-                      // Ice, Water, Stone, Lava などはすべてOB扱い
+                  case game::components::TerrainMaterial::Ice:
+                      terrainTex = GetTerrainTex("ui_terrain_fairway.png", "ui_judge_nice.png");
+                      break;
+                  case game::components::TerrainMaterial::Stone:
+                      terrainTex = GetTerrainTex("ui_terrain_rough.png", "ui_judge_miss.png");
+                      break;
+                  case game::components::TerrainMaterial::Water:
+                  case game::components::TerrainMaterial::Lava:
                       terrainTex = GetTerrainTex("ui_terrain_ob.png", "ui_judge_miss.png");
                       treatAsOB = true;
+                      break;
+                  default:
+                      terrainTex = GetTerrainTex("ui_terrain_rough.png", "ui_judge_miss.png");
                       break;
                   }
 
                   if (treatAsOB) {
-                      LOG_INFO("WikiGolf", "Hazard! Treating as OB. Material: {}", (int)state->currentMaterial);
+                      LOG_INFO("WikiGolf", "Out-of-bounds terrain. Material: {}", (int)state->currentMaterial);
                       state->shotCount++;
                       auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
                       if (ballT) {

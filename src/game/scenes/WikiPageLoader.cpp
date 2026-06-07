@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <tuple>
 #include <utility>
 
 
@@ -192,6 +193,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     LOG_INFO("WikiPageLoader", "Building page: {}", pageName);
 
     ClearGeneratedPageObjects(ctx, minimapController);
+    m_pathHopCache.clear();
 
     // 記事の情報を取得します。
     std::vector<game::WikiLink> allLinks = std::move(asyncData.allLinks);
@@ -213,21 +215,22 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         return false;
     };
 
-    // 本文長に応じた上限（2000 文字につき 5 リンク、上限 50）
-    const size_t kLinksPerChars = 5;
-    const size_t kCharsPerUnit  = 2000;
-    const size_t kMaxLinks      = 50;
-    size_t dynamicLimit = (articleText.length() / kCharsPerUnit + 1) * kLinksPerChars;
-    size_t linkLimit    = (dynamicLimit < kMaxLinks) ? dynamicLimit : kMaxLinks;
-
     std::vector<std::pair<std::string, std::wstring>> validLinks;
+    std::vector<std::tuple<size_t, std::string, std::wstring>> articleLinks;
     for (const auto& link : allLinks) {
         if (isIgnored(link.title)) continue;
         if (link.title == state->targetPage) continue; // ターゲットは後で追加
-        if (articleText.find(link.title) != std::string::npos) {
-            validLinks.push_back({link.title, core::ToWString(link.title)});
+        const size_t pos = articleText.find(link.title);
+        if (pos != std::string::npos) {
+            articleLinks.push_back({pos, link.title, core::ToWString(link.title)});
         }
-        if (validLinks.size() >= linkLimit) break;
+    }
+    std::sort(articleLinks.begin(), articleLinks.end(),
+              [](const auto& a, const auto& b) {
+                  return std::get<0>(a) < std::get<0>(b);
+              });
+    for (const auto& link : articleLinks) {
+        validLinks.push_back({std::get<1>(link), std::get<2>(link)});
     }
 
     // ターゲットページが本文に含まれていれば無条件追加
@@ -403,13 +406,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
             createdPositions.push_back({worldX, worldZ});
 
             // SDOW 距離計算
-            int hops = -1;
-            if (m_shortestPath && m_shortestPath->IsAvailable() &&
-                state->targetPageId != -1) {
-                auto r = m_shortestPath->FindShortestPath(
-                    linkRegion.targetPage, state->targetPageId, 6);
-                if (r.success) hops = r.degrees;
-            }
+            int hops = GetCachedHopsToTarget(linkRegion.targetPage, *state, 6);
 
             CreateHole(ctx, worldX, worldZ, linkRegion.targetPage,
                        linkRegion.isTarget, hops);
@@ -474,6 +471,7 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
 {
     m_buildStep = BuildStep::ClearOldHoles;
     m_buildData = std::move(asyncData);
+    m_pathHopCache.clear();
     m_buildBall = ballEntity;
     m_buildCamera = cameraEntity;
     m_buildSkybox = skyboxEntity;
@@ -537,20 +535,22 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             return false;
         };
 
-        const size_t kLinksPerChars = 5;
-        const size_t kCharsPerUnit  = 2000;
-        const size_t kMaxLinks      = 50;
-        size_t dynamicLimit = (m_buildData.articleText.length() / kCharsPerUnit + 1) * kLinksPerChars;
-        size_t linkLimit    = (dynamicLimit < kMaxLinks) ? dynamicLimit : kMaxLinks;
-
         m_buildValidLinks.clear();
+        std::vector<std::tuple<size_t, std::string, std::wstring>> articleLinks;
         for (const auto& link : m_buildData.allLinks) {
             if (isIgnored(link.title)) continue;
             if (link.title == state->targetPage) continue;
-            if (m_buildData.articleText.find(link.title) != std::string::npos) {
-                m_buildValidLinks.push_back({link.title, core::ToWString(link.title)});
+            const size_t pos = m_buildData.articleText.find(link.title);
+            if (pos != std::string::npos) {
+                articleLinks.push_back({pos, link.title, core::ToWString(link.title)});
             }
-            if (m_buildValidLinks.size() >= linkLimit) break;
+        }
+        std::sort(articleLinks.begin(), articleLinks.end(),
+                  [](const auto& a, const auto& b) {
+                      return std::get<0>(a) < std::get<0>(b);
+                  });
+        for (const auto& link : articleLinks) {
+            m_buildValidLinks.push_back({std::get<1>(link), std::get<2>(link)});
         }
 
         if (!state->targetPage.empty() &&
@@ -761,11 +761,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             float worldX = (cx / texW - 0.5f) * m_buildFieldWidth;
             float worldZ = (0.5f - cy / texH) * m_buildFieldDepth;
 
-            int hops = -1;
-            if (m_shortestPath && m_shortestPath->IsAvailable() && state->targetPageId != -1) {
-                auto r = m_shortestPath->FindShortestPath(linkRegion.targetPage, state->targetPageId, 6);
-                if (r.success) hops = r.degrees;
-            }
+            int hops = GetCachedHopsToTarget(linkRegion.targetPage, *state, 6);
 
             CreateHole(ctx, worldX, worldZ, linkRegion.targetPage, linkRegion.isTarget, hops);
         }
@@ -931,6 +927,37 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
 }
 
 /**
+ * @brief ページ構築中の最短経路ホップ数をキャッシュ付きで取得します。 山内陽
+ */
+int WikiPageLoader::GetCachedHopsToTarget(
+    const std::string& sourceTitle,
+    const game::components::GolfGameState& state,
+    int maxDepth)
+{
+    if (!m_shortestPath || !m_shortestPath->IsAvailable() ||
+        state.targetPageId == -1) {
+        return -1;
+    }
+
+    const std::string cacheKey =
+        sourceTitle + "#" + std::to_string(state.targetPageId) + "#" +
+        std::to_string(maxDepth);
+    auto cached = m_pathHopCache.find(cacheKey);
+    if (cached != m_pathHopCache.end()) {
+        return cached->second;
+    }
+
+    int hops = -1;
+    auto result = m_shortestPath->FindShortestPath(
+        sourceTitle, state.targetPageId, maxDepth);
+    if (result.success) {
+        hops = result.degrees;
+    }
+    m_pathHopCache[cacheKey] = hops;
+    return hops;
+}
+
+/**
  * @brief テクスチャのリンク領域からホールを一括配置する
  */
 void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
@@ -951,13 +978,7 @@ void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
 
         bool isTarget = (link.targetPage == state->targetPage);
 
-        int hops = -1;
-        if (m_shortestPath && m_shortestPath->IsAvailable() &&
-            state->targetPageId != -1) {
-            auto r = m_shortestPath->FindShortestPath(
-                link.targetPage, state->targetPageId, 6);
-            if (r.success) hops = r.degrees;
-        }
+        int hops = GetCachedHopsToTarget(link.targetPage, *state, 6);
         CreateHole(ctx, worldX, worldZ, link.targetPage, isTarget, hops);
     }
 }
