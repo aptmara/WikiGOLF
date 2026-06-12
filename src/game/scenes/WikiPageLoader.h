@@ -241,17 +241,22 @@ private:
         const std::vector<HolePlacementCandidate>& candidates) const;
 
     /**
-    /**
      * @brief 評価結果を同じリンク候補へ反映します。 山内陽
      */
     void ApplyPathEvaluationResults(
         const std::vector<HolePlacementCandidate>& evaluatedCandidates);
 
     /**
-     * @brief 候補群のリンク距離を一括評価します。 山内陽
+     * @brief リンク距離を評価する代表候補を選びます。 山内陽
      */
-    void EvaluateCandidatePaths(core::GameContext& ctx,
-                                std::vector<HolePlacementCandidate>& candidates);
+    std::vector<HolePlacementCandidate> SelectPathEvaluationCandidates(
+        const std::vector<HolePlacementCandidate>& candidates) const;
+
+    /**
+     * @brief 候補のリンク距離を評価します。 山内陽
+     */
+    void EvaluateCandidatePath(core::GameContext& ctx,
+                               HolePlacementCandidate& candidate);
 
     /**
      * @brief マップ候補がプレイ可能ホールとして選ばれたかを判定します。 山内陽

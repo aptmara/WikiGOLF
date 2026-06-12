@@ -52,6 +52,7 @@ constexpr float kMaxSafeDepth   = 20000.0f;
 constexpr float kMaxSafeWidth   = 20000.0f;
 constexpr float kMinLinkHoleDistance = 4.0f;
 constexpr float kMinMapIconDistance = 8.0f;
+constexpr size_t kMaxPathEvaluationTargets = 32;
 constexpr size_t kMaxMapHoleIcons = 160;
 
 /**
@@ -771,14 +772,15 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             m_nextHoleIndex >= m_wikiTexture->links.size()) {
             m_buildMapHoleCandidates =
                 SelectMapHoleIconCandidates(m_buildHoleCandidates);
-            m_buildPathCandidates = m_buildHoleCandidates;
+            m_buildPathCandidates =
+                SelectPathEvaluationCandidates(m_buildHoleCandidates);
             m_nextPathIndex = 0;
             m_buildStep = BuildStep::EvaluateHolePaths;
             LOG_INFO("WikiPageLoader",
                      "Hole candidates staged: textureLinks={}, mapIcons={}, "
-                     "pathTargets={}",
+                     "pathTargets={}/{}",
                      m_wikiTexture->links.size(), m_buildMapHoleCandidates.size(),
-                     m_buildPathCandidates.size());
+                     m_buildPathCandidates.size(), m_buildHoleCandidates.size());
         } else {
             float holeProgress =
                 (float)m_nextHoleIndex / (float)m_wikiTexture->links.size();
@@ -789,15 +791,29 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::EvaluateHolePaths:
     {
-        EvaluateCandidatePaths(ctx, m_buildPathCandidates);
-        ApplyPathEvaluationResults(m_buildPathCandidates);
-        for (auto& candidate : m_buildHoleCandidates) {
-            candidate.isPlayable = true;
+        while (m_nextPathIndex < m_buildPathCandidates.size() &&
+               std::chrono::steady_clock::now() < m_buildDeadline) {
+            EvaluateCandidatePath(ctx, m_buildPathCandidates[m_nextPathIndex]);
+            ++m_nextPathIndex;
         }
-        m_nextPathIndex = m_buildPathCandidates.size();
-        m_nextMapIconIndex = 0;
-        m_buildStep = BuildStep::CreateMapIcons;
-        m_buildProgress = 0.91f;
+
+        if (m_buildPathCandidates.empty() ||
+            m_nextPathIndex >= m_buildPathCandidates.size()) {
+            ApplyPathEvaluationResults(m_buildPathCandidates);
+            for (auto& candidate : m_buildHoleCandidates) {
+                candidate.isPlayable = true;
+            }
+            m_nextMapIconIndex = 0;
+            m_buildStep = BuildStep::CreateMapIcons;
+            m_buildProgress = 0.91f;
+            LOG_INFO("WikiPageLoader",
+                     "Path evaluation finished: evaluated={}, candidates={}",
+                     m_buildPathCandidates.size(), m_buildHoleCandidates.size());
+        } else {
+            float pathProgress =
+                (float)m_nextPathIndex / (float)m_buildPathCandidates.size();
+            m_buildProgress = 0.88f + 0.03f * pathProgress;
+        }
         return false;
     }
 
@@ -1093,6 +1109,37 @@ WikiPageLoader::SelectMapHoleIconCandidates(
 }
 
 /**
+ * @brief リンク距離を評価する代表候補を安い条件だけで絞ります。 山内陽
+ */
+std::vector<WikiPageLoader::HolePlacementCandidate>
+WikiPageLoader::SelectPathEvaluationCandidates(
+    const std::vector<HolePlacementCandidate>& candidates) const
+{
+    std::vector<HolePlacementCandidate> sorted = candidates;
+    std::stable_sort(sorted.begin(), sorted.end(),
+        [](const HolePlacementCandidate& lhs,
+           const HolePlacementCandidate& rhs) {
+            if (lhs.isTarget != rhs.isTarget) {
+                return lhs.isTarget;
+            }
+            return lhs.originalIndex < rhs.originalIndex;
+        });
+
+    std::vector<HolePlacementCandidate> selected;
+    selected.reserve(std::min(sorted.size(), kMaxPathEvaluationTargets));
+    for (const auto& candidate : sorted) {
+        if (candidate.isTarget ||
+            IsFarEnoughFromSelected(selected, candidate, kMinLinkHoleDistance)) {
+            selected.push_back(candidate);
+        }
+        if (selected.size() >= kMaxPathEvaluationTargets) {
+            break;
+        }
+    }
+    return selected;
+}
+
+/**
  * @brief 経路評価結果を全ホール候補とマップ候補へ反映します。 山内陽
  */
 void WikiPageLoader::ApplyPathEvaluationResults(
@@ -1123,53 +1170,37 @@ void WikiPageLoader::ApplyPathEvaluationResults(
 }
 
 /**
- * @brief 候補群のリンク距離をページ内キャッシュ付きで一括評価します。 山内陽
+ * @brief 候補のリンク距離をページ内キャッシュ付きで評価します。 山内陽
  */
-void WikiPageLoader::EvaluateCandidatePaths(
-    core::GameContext& ctx,
-    std::vector<HolePlacementCandidate>& candidates)
+void WikiPageLoader::EvaluateCandidatePath(core::GameContext& ctx,
+                                           HolePlacementCandidate& candidate)
 {
     const auto* state = ctx.world.GetGlobal<GolfGameState>();
     if (!m_shortestPath || !m_shortestPath->IsAvailable() || !state ||
-        state->targetPageId == -1 || candidates.empty()) {
+        state->targetPageId == -1 || candidate.linkTarget.empty()) {
         return;
     }
 
-    std::vector<std::string> pendingTitles;
-    pendingTitles.reserve(candidates.size());
-    for (auto& candidate : candidates) {
-        if (candidate.linkTarget.empty()) {
-            continue;
-        }
-
-        const std::string cacheKey =
-            candidate.linkTarget + "\x1f" + std::to_string(state->targetPageId);
-        if (auto it = m_pathHopCache.find(cacheKey); it != m_pathHopCache.end()) {
-            candidate.hopsToTarget = it->second;
-        } else {
-            pendingTitles.push_back(candidate.linkTarget);
-        }
+    const std::string cacheKey =
+        candidate.linkTarget + "\x1f" + std::to_string(state->targetPageId);
+    if (auto it = m_pathHopCache.find(cacheKey); it != m_pathHopCache.end()) {
+        candidate.hopsToTarget = it->second;
+        return;
     }
 
-    if (!pendingTitles.empty()) {
-        auto distances = m_shortestPath->ComputeDistancesToTarget(
-            pendingTitles, state->targetPageId, 6);
-        for (const auto& title : pendingTitles) {
-            const std::string cacheKey =
-                title + "\x1f" + std::to_string(state->targetPageId);
-            auto distIt = distances.find(title);
-            m_pathHopCache[cacheKey] =
-                distIt != distances.end() ? distIt->second : -1;
-        }
+    const auto startedAt = std::chrono::steady_clock::now();
+    auto r = m_shortestPath->FindShortestPath(
+        candidate.linkTarget, state->targetPageId, 6);
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - startedAt).count();
+    if (elapsedMs > 100) {
+        LOG_WARN("WikiPageLoader",
+                 "Path candidate evaluation took {} ms: target='{}'",
+                 elapsedMs, candidate.linkTarget);
     }
 
-    for (auto& candidate : candidates) {
-        const std::string cacheKey =
-            candidate.linkTarget + "\x1f" + std::to_string(state->targetPageId);
-        if (auto it = m_pathHopCache.find(cacheKey); it != m_pathHopCache.end()) {
-            candidate.hopsToTarget = it->second;
-        }
-    }
+    candidate.hopsToTarget = r.success ? r.degrees : -1;
+    m_pathHopCache[cacheKey] = candidate.hopsToTarget;
 }
 
 /**
@@ -1201,8 +1232,10 @@ void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
 
     m_buildMapHoleCandidates = SelectMapHoleIconCandidates(candidates);
     m_buildHoleCandidates = candidates;
-    m_buildPathCandidates = m_buildHoleCandidates;
-    EvaluateCandidatePaths(ctx, m_buildPathCandidates);
+    m_buildPathCandidates = SelectPathEvaluationCandidates(m_buildHoleCandidates);
+    for (auto& candidate : m_buildPathCandidates) {
+        EvaluateCandidatePath(ctx, candidate);
+    }
     ApplyPathEvaluationResults(m_buildPathCandidates);
     for (auto& candidate : m_buildHoleCandidates) {
         candidate.isPlayable = true;
