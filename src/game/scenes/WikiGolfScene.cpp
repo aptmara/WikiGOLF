@@ -46,6 +46,23 @@ using namespace game::components;
 namespace {
 constexpr float kFieldScale = 4.0f;
 constexpr float kMinMapViewSpan = 5.0f; // マップビューでこれ以上縮まらない幅
+
+/**
+ * @brief インゲーム中に頻出する描画リソースを事前にキャッシュへ載せます。
+ * @author 山内陽
+ */
+void PreloadGameplayResources(core::GameContext& ctx) {
+  ctx.resource.LoadMesh("builtin/cube");
+  ctx.resource.LoadMesh("builtin/sphere");
+  ctx.resource.LoadMesh("builtin/cylinder");
+  ctx.resource.LoadMesh("Assets/models/flag.obj");
+  ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                          L"Assets/shaders/BasicPS.hlsl");
+  ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
+                          L"shaders/ParticlePS.hlsl");
+  ctx.resource.LoadShader("Terrain", L"Assets/shaders/TerrainVS.hlsl",
+                          L"Assets/shaders/TerrainPS.hlsl");
+}
 } // namespace
 
 WikiGolfScene::WikiGolfScene(bool isTutorial) : m_isTutorial(isTutorial) {}
@@ -83,6 +100,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   m_textureGenerator = std::make_unique<graphics::WikiTextureGenerator>();
   m_textureGenerator->Initialize(ctx.graphics.GetDevice());
+  PreloadGameplayResources(ctx);
 
   // 地形システムの初期化
   m_terrainSystem = std::make_unique<game::systems::WikiTerrainSystem>();
@@ -601,7 +619,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       float fieldD = m_pageLoader ? m_pageLoader->GetFieldDepth() : 120.0f;
       m_minimapController->ProcessInput(ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
       DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
-      m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, shotDir);
+      const bool mapViewNow = m_minimapController->IsMapView();
+      const float minimapInterval = mapViewNow ? (1.0f / 60.0f) : (1.0f / 30.0f);
+      m_minimapUpdateTimer += dt;
+      if (m_minimapUpdateTimer >= minimapInterval) {
+          m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, shotDir);
+          m_minimapUpdateTimer = 0.0f;
+      }
       if (m_minimapController->IsMapView()) {
           m_minimapController->UpdateMapCamera(ctx, fieldW, fieldD);
       }
@@ -891,40 +915,49 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           currentPower = shot->confirmedPower;
       }
       float currentImpact = (shot->phase == game::components::ShotState::Phase::ImpactTiming) ? shot->impactGaugePos : 0.5f;
+      const bool isShotPhase = (shot->phase != game::components::ShotState::Phase::Idle &&
+                                shot->phase != game::components::ShotState::Phase::ShowResult &&
+                                shot->phase != game::components::ShotState::Phase::RestoringCamera);
+      m_hudUpdateTimer += dt;
+      const bool shouldRefreshHud = isShotPhase || m_hudUpdateTimer >= 0.1f;
 
-      // クラブ情報リストを構築して渡す
-      std::vector<game::controllers::ClubUIData> clubDataList;
-      int clubIdx = 0;
-      if (m_clubController) {
-          const auto& clubs = m_clubController->GetAllClubs();
-          for (const auto& c : clubs) {
-              clubDataList.push_back({c.name, c.iconTexture, c.shortName, c.categoryEN, c.maxPower});
+      if (shouldRefreshHud) {
+          m_hudUpdateTimer = 0.0f;
+
+          // クラブ情報リストを構築して渡す
+          std::vector<game::controllers::ClubUIData> clubDataList;
+          int clubIdx = 0;
+          if (m_clubController) {
+              const auto& clubs = m_clubController->GetAllClubs();
+              for (const auto& c : clubs) {
+                  clubDataList.push_back({c.name, c.iconTexture, c.shortName, c.categoryEN, c.maxPower});
+              }
+              clubIdx = m_clubController->GetCurrentClubIndex();
           }
-          clubIdx = m_clubController->GetCurrentClubIndex();
-      }
 
-      // ターゲット距離と高低差を計算
-      float distanceToTarget = 0.0f;
-      float heightDiff = 0.0f;
-      if (!state->holes.empty()) {
-          auto targetHoleEntity = state->holes[0];
-          auto* holeT = ctx.world.Get<game::components::Transform>(targetHoleEntity);
-          auto* ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
-          if (holeT && ballT) {
-              float dx = holeT->position.x - ballT->position.x;
-              float dz = holeT->position.z - ballT->position.z;
-              distanceToTarget = std::sqrt(dx * dx + dz * dz);
-              heightDiff = holeT->position.y - ballT->position.y;
+          // ターゲット距離と高低差を計算
+          float distanceToTarget = 0.0f;
+          float heightDiff = 0.0f;
+          if (!state->holes.empty()) {
+              auto targetHoleEntity = state->holes[0];
+              auto* holeT = ctx.world.Get<game::components::Transform>(targetHoleEntity);
+              auto* ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
+              if (holeT && ballT) {
+                  float dx = holeT->position.x - ballT->position.x;
+                  float dz = holeT->position.z - ballT->position.z;
+                  distanceToTarget = std::sqrt(dx * dx + dz * dz);
+                  heightDiff = holeT->position.y - ballT->position.y;
+              }
           }
-      }
 
-      m_hud->Update(ctx, dt, *state,
-                    shot->phase, currentImpact,
-                    currentPower, shot->confirmedPower,
-                    state->windSpeed, state->windDirection,
-                    m_cameraController ? m_cameraController->GetYaw() : 0.0f,
-                    clubDataList, clubIdx,
-                    distanceToTarget, heightDiff);
+          m_hud->Update(ctx, dt, *state,
+                        shot->phase, currentImpact,
+                        currentPower, shot->confirmedPower,
+                        state->windSpeed, state->windDirection,
+                        m_cameraController ? m_cameraController->GetYaw() : 0.0f,
+                        clubDataList, clubIdx,
+                        distanceToTarget, heightDiff);
+      }
       
       // HUDへのパワーゲージ更新
       if (shot->phase == game::components::ShotState::Phase::PowerCharging ||
@@ -933,9 +966,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       }
 
       // 通常時 <-> ショット時 UI 切り替え
-      const bool isShotPhase = (shot->phase != game::components::ShotState::Phase::Idle &&
-                                shot->phase != game::components::ShotState::Phase::ShowResult &&
-                                shot->phase != game::components::ShotState::Phase::RestoringCamera);
       m_hud->SetShotPhaseUIVisible(ctx, isShotPhase);
   }
 

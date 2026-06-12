@@ -493,6 +493,83 @@ WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
   return result;
 }
 
+std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
+    const std::vector<std::string> &sourceTitles, int targetId, int maxDepth) {
+  std::unordered_map<std::string, int> distances;
+  if (!m_db || targetId < 0 || sourceTitles.empty() || maxDepth < 0) {
+    return distances;
+  }
+
+  std::unordered_map<int, std::vector<std::string>> titlesByPageId;
+  std::unordered_set<int> unresolvedPageIds;
+  for (const auto &title : sourceTitles) {
+    if (title.empty() || distances.find(title) != distances.end()) {
+      continue;
+    }
+
+    int pageId = FetchPageId(title);
+    if (pageId < 0) {
+      continue;
+    }
+
+    titlesByPageId[pageId].push_back(title);
+    if (pageId == targetId) {
+      distances[title] = 0;
+    } else {
+      unresolvedPageIds.insert(pageId);
+    }
+  }
+
+  if (unresolvedPageIds.empty()) {
+    return distances;
+  }
+
+  std::vector<int> frontier = {targetId};
+  std::unordered_set<int> visited;
+  visited.insert(targetId);
+
+  for (int depth = 1; depth <= maxDepth && !frontier.empty() &&
+                      !unresolvedPageIds.empty();
+       ++depth) {
+    std::unordered_map<int, std::vector<int>> linkMap;
+    if (!FetchLinks(m_db, frontier, "incoming_links", linkMap)) {
+      return distances;
+    }
+
+    std::vector<int> next;
+    for (int pageId : frontier) {
+      const auto linkIt = linkMap.find(pageId);
+      if (linkIt == linkMap.end()) {
+        continue;
+      }
+
+      for (int incomingId : linkIt->second) {
+        if (!visited.insert(incomingId).second) {
+          continue;
+        }
+
+        if (auto titleIt = titlesByPageId.find(incomingId);
+            titleIt != titlesByPageId.end()) {
+          for (const auto &title : titleIt->second) {
+            distances[title] = depth;
+          }
+          unresolvedPageIds.erase(incomingId);
+        }
+
+        next.push_back(incomingId);
+      }
+    }
+
+    frontier = std::move(next);
+  }
+
+  LOG_INFO("WikiShortestPath",
+           "Computed target distances: sources={}, resolved={}, targetId={}, "
+           "maxDepth={}",
+           sourceTitles.size(), distances.size(), targetId, maxDepth);
+  return distances;
+}
+
 std::pair<std::string, int>
 WikiShortestPath::FetchPopularPageTitle(int minIncomingLinks) {
   if (!m_db)

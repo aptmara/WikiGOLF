@@ -26,6 +26,27 @@
 namespace game {
 namespace controllers {
 
+namespace {
+bool SetTextIfChanged(game::components::UIText& text,
+                      const std::wstring& value) {
+    if (text.text == value) {
+        return false;
+    }
+    text.text = value;
+    return true;
+}
+
+bool SetColorIfChanged(DirectX::XMFLOAT4& color,
+                       const DirectX::XMFLOAT4& value) {
+    if (color.x == value.x && color.y == value.y && color.z == value.z &&
+        color.w == value.w) {
+        return false;
+    }
+    color = value;
+    return true;
+}
+} // namespace
+
 // =====================================================
 // Initialize
 // =====================================================
@@ -730,12 +751,13 @@ void WikiGolfHUD::UpdateShotPhasePanel(
 
     auto setText = [&](ecs::Entity e, const std::wstring& text) {
         if (e != UINT32_MAX && ctx.world.Has<game::components::UIText>(e)) {
-            ctx.world.Get<game::components::UIText>(e)->text = text;
+            SetTextIfChanged(*ctx.world.Get<game::components::UIText>(e), text);
         }
     };
     auto setColor = [&](ecs::Entity e, const DirectX::XMFLOAT4& color) {
         if (e != UINT32_MAX && ctx.world.Has<game::components::UIText>(e)) {
-            ctx.world.Get<game::components::UIText>(e)->style.color = color;
+            SetColorIfChanged(ctx.world.Get<game::components::UIText>(e)->style.color,
+                              color);
         }
     };
 
@@ -830,22 +852,22 @@ void WikiGolfHUD::UpdateCourseInfoPanel(core::GameContext& ctx,
         ctx.world.Has<game::components::UIText>(m_ui.browserCurrentPageEntity))
     {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.browserCurrentPageEntity);
-        t->text = core::ToWString(state.currentPage);
+        SetTextIfChanged(*t, core::ToWString(state.currentPage));
     }
 
     if (m_ui.browserTargetEntity != UINT32_MAX &&
         ctx.world.Has<game::components::UIText>(m_ui.browserTargetEntity))
     {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.browserTargetEntity);
-        t->text = L"-> " + core::ToWString(state.targetPage);
+        SetTextIfChanged(*t, L"-> " + core::ToWString(state.targetPage));
     }
 
     if (m_ui.browserShotInfoEntity != UINT32_MAX &&
         ctx.world.Has<game::components::UIText>(m_ui.browserShotInfoEntity))
     {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.browserShotInfoEntity);
-        t->text = L"Shots: " + std::to_wstring(state.shotCount) +
-                  L" / Par " + std::to_wstring(state.par);
+        SetTextIfChanged(*t, L"Shots: " + std::to_wstring(state.shotCount) +
+                                  L" / Par " + std::to_wstring(state.par));
     }
 }
 
@@ -864,15 +886,15 @@ void WikiGolfHUD::UpdateWindUI(core::GameContext& ctx,
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.windCardValueEntity);
         wchar_t buf[32];
         swprintf(buf, 32, L"%.1f", windSpeed);
-        t->text = buf;
+        SetTextIfChanged(*t, buf);
 
         // 強風時は色を変える: 5 m/s 以上で黄色、10 m/s 以上で赤寄り
         if (windSpeed >= 10.0f) {
-            t->style.color = game::ui::kColorError;
+            SetColorIfChanged(t->style.color, game::ui::kColorError);
         } else if (windSpeed >= 5.0f) {
-            t->style.color = game::ui::kColorWarning;
+            SetColorIfChanged(t->style.color, game::ui::kColorWarning);
         } else {
-            t->style.color = game::ui::kColorWhite;
+            SetColorIfChanged(t->style.color, game::ui::kColorWhite);
         }
     }
 
@@ -899,7 +921,7 @@ void WikiGolfHUD::UpdateWindUI(core::GameContext& ctx,
         else if (angle < -3*DirectX::XM_PI/8)                                 arrow = L"\u2190";
         else if (angle < -DirectX::XM_PI/8)                                   arrow = L"\u2196";
 
-        t->text = arrow + L" m/s";
+        SetTextIfChanged(*t, arrow + L" m/s");
     }
 }
 
@@ -1155,17 +1177,21 @@ void WikiGolfHUD::UpdateBottomInfoPanels(core::GameContext& ctx, float distanceT
     // 距離
     if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.distValueEntity)) {
         swprintf(buf, 64, L"%d m", (int)distanceToTarget);
-        t->text = buf;
+        SetTextIfChanged(*t, buf);
     }
     if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.heightValueEntity)) {
         const wchar_t* arrow = (heightDiff < 0) ? L"\u2B07" : L"\u2B06"; // ⬇ or ⬆
         swprintf(buf, 64, L"高低差 %.1f m %ls", heightDiff, arrow);
-        t->text = buf;
+        SetTextIfChanged(*t, buf);
     }
 
     // クラブ
-    if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.clubInfoNameEntity)) t->text = core::ToWString(currentClub.name);
-    if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.clubInfoShortNameEntity)) t->text = core::ToWString(currentClub.shortName + " " + currentClub.categoryEN);
+    if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.clubInfoNameEntity)) {
+        SetTextIfChanged(*t, core::ToWString(currentClub.name));
+    }
+    if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.clubInfoShortNameEntity)) {
+        SetTextIfChanged(*t, core::ToWString(currentClub.shortName + " " + currentClub.categoryEN));
+    }
     if (auto* img = ctx.world.Get<game::components::UIImage>(m_ui.clubInfoIconEntity)) {
         if (img->texturePath != currentClub.iconTexture) {
             img->texturePath = currentClub.iconTexture;
@@ -1197,11 +1223,11 @@ void WikiGolfHUD::UpdateBottomInfoPanels(core::GameContext& ctx, float distanceT
     }
     
     if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.lieValueEntity)) {
-        t->text = lieStr;
-        t->style.color = lieColor;
+        SetTextIfChanged(*t, lieStr);
+        SetColorIfChanged(t->style.color, lieColor);
     }
     if (auto* t = ctx.world.Get<game::components::UIText>(m_ui.lieCondValueEntity)) {
-        t->text = condStr;
+        SetTextIfChanged(*t, condStr);
     }
 }
 
@@ -1288,15 +1314,15 @@ void WikiGolfHUD::UpdateJudge(core::GameContext& ctx,
         ctx.world.Has<game::components::UIText>(m_ui.judgeEntity))
     {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.judgeEntity);
-        t->text = text;
-        t->style.color = color;
+        SetTextIfChanged(*t, text);
+        SetColorIfChanged(t->style.color, color);
     }
     if (m_ui.shotPanelAccuracyValueEntity != UINT32_MAX &&
         ctx.world.Has<game::components::UIText>(m_ui.shotPanelAccuracyValueEntity))
     {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.shotPanelAccuracyValueEntity);
-        t->text = text;
-        t->style.color = color;
+        SetTextIfChanged(*t, text);
+        SetColorIfChanged(t->style.color, color);
     }
 }
 

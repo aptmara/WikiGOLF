@@ -19,7 +19,11 @@
 #include "PhysicsFriction.h"
 #include "TerrainGenerator.h"
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <cmath>
+#include <limits>
+#include <unordered_map>
 #include <vector>
 
 namespace game::systems {
@@ -75,6 +79,13 @@ static float SafeLength(XMVECTOR v) {
   if (lenSq < 0.0f || IsNaN(lenSq))
     return 0.0f;
   return std::sqrt(lenSq);
+}
+
+static float SafeLengthSq(XMVECTOR v) {
+  float lenSq = XMVectorGetX(XMVector3LengthSq(v));
+  if (lenSq < 0.0f || IsNaN(lenSq))
+    return 0.0f;
+  return lenSq;
 }
 
 // ========================================
@@ -276,6 +287,215 @@ static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
   return true;
 }
 
+struct TerrainSample {
+  bool valid = false;
+  float height = 0.0f;
+  XMVECTOR normal = XMVectorSet(0, 1, 0, 0);
+  uint8_t material = 0;
+};
+
+/**
+ * @brief 地形の高さ・法線・マテリアルを一度の座標変換で取得します。
+ * @author 山内陽
+ */
+static TerrainSample SampleTerrainAt(const TerrainData &terrain, float x,
+                                     float z) {
+  TerrainSample sample;
+  float width = terrain.config.worldWidth;
+  float depth = terrain.config.worldDepth;
+  int resX = terrain.config.resolutionX;
+  int resZ = terrain.config.resolutionZ;
+
+  float u = (x / width) + 0.5f;
+  float v = 0.5f - (z / depth);
+  if (u < 0.0f || u >= 1.0f || v < 0.0f || v >= 1.0f || resX < 2 ||
+      resZ < 2) {
+    return sample;
+  }
+
+  float fx = u * (resX - 1);
+  float fz = v * (resZ - 1);
+  int ix = std::clamp(static_cast<int>(fx), 0, resX - 2);
+  int iz = std::clamp(static_cast<int>(fz), 0, resZ - 2);
+  float dx = fx - ix;
+  float dz = fz - iz;
+
+  auto getHeightSafe = [&](int gx, int gz) -> float {
+    int idx = gz * resX + gx;
+    if (idx >= 0 && idx < static_cast<int>(terrain.heightMap.size())) {
+      return terrain.heightMap[idx];
+    }
+    return 0.0f;
+  };
+  auto getNormalSafe = [&](int gx, int gz) -> XMVECTOR {
+    int idx = gz * resX + gx;
+    if (idx >= 0 && idx < static_cast<int>(terrain.normals.size())) {
+      XMVECTOR n = XMLoadFloat3(&terrain.normals[idx]);
+      if (!IsVectorNaN(n))
+        return n;
+    }
+    return XMVectorSet(0, 1, 0, 0);
+  };
+
+  float h00 = getHeightSafe(ix, iz);
+  float h10 = getHeightSafe(ix + 1, iz);
+  float h01 = getHeightSafe(ix, iz + 1);
+  float h11 = getHeightSafe(ix + 1, iz + 1);
+  float h0 = h00 * (1.0f - dx) + h10 * dx;
+  float h1 = h01 * (1.0f - dx) + h11 * dx;
+  sample.height = h0 * (1.0f - dz) + h1 * dz;
+  if (IsNaN(sample.height)) {
+    sample.height = 0.0f;
+  }
+
+  XMVECTOR n0 = XMVectorLerp(getNormalSafe(ix, iz), getNormalSafe(ix + 1, iz),
+                             dx);
+  XMVECTOR n1 = XMVectorLerp(getNormalSafe(ix, iz + 1),
+                             getNormalSafe(ix + 1, iz + 1), dx);
+  sample.normal = SafeNormalize(XMVectorLerp(n0, n1, dz));
+
+  int matX = std::clamp(static_cast<int>(u * (resX - 1)), 0, resX - 1);
+  int matZ = std::clamp(static_cast<int>(v * (resZ - 1)), 0, resZ - 1);
+  int matIdx = matZ * resX + matX;
+  if (matIdx >= 0 && matIdx < static_cast<int>(terrain.materialMap.size())) {
+    sample.material = terrain.materialMap[matIdx];
+  }
+  sample.valid = true;
+  return sample;
+}
+
+struct BodyInfo {
+  ecs::Entity entity = UINT32_MAX;
+  Transform *t = nullptr;
+  RigidBody *rb = nullptr;
+  Collider *c = nullptr;
+};
+
+struct HoleInfo {
+  ecs::Entity entity = UINT32_MAX;
+  XMVECTOR position = XMVectorZero();
+  XMFLOAT3 positionFloat = {0.0f, 0.0f, 0.0f};
+  float radius = 0.0f;
+  float gravity = 0.0f;
+  float suctionRange = 0.0f;
+};
+
+static int64_t MakeGridKey(int x, int z) {
+  return (static_cast<int64_t>(x) << 32) ^
+         (static_cast<uint32_t>(z) & 0xffffffffu);
+}
+
+static int GridCoord(float v, float cellSize) {
+  return static_cast<int>(std::floor(v / cellSize));
+}
+
+struct HoleSpatialGrid {
+  float cellSize = 5.0f;
+  std::vector<HoleInfo> holes;
+  std::unordered_map<int64_t, std::vector<uint32_t>> cells;
+
+  void Build(const std::vector<HoleInfo> &source) {
+    holes = source;
+    cells.clear();
+    cells.reserve(holes.size() * 2 + 1);
+    for (uint32_t i = 0; i < static_cast<uint32_t>(holes.size()); ++i) {
+      int cx = GridCoord(holes[i].positionFloat.x, cellSize);
+      int cz = GridCoord(holes[i].positionFloat.z, cellSize);
+      cells[MakeGridKey(cx, cz)].push_back(i);
+    }
+  }
+
+  template <typename Func>
+  void Query(float x, float z, float radius, Func &&func) const {
+    int minX = GridCoord(x - radius, cellSize);
+    int maxX = GridCoord(x + radius, cellSize);
+    int minZ = GridCoord(z - radius, cellSize);
+    int maxZ = GridCoord(z + radius, cellSize);
+    for (int cz = minZ; cz <= maxZ; ++cz) {
+      for (int cx = minX; cx <= maxX; ++cx) {
+        auto it = cells.find(MakeGridKey(cx, cz));
+        if (it == cells.end())
+          continue;
+        for (uint32_t index : it->second) {
+          func(holes[index]);
+        }
+      }
+    }
+  }
+};
+
+struct StaticBodySpatialGrid {
+  float cellSize = 8.0f;
+  const std::vector<BodyInfo> *bodies = nullptr;
+  std::unordered_map<int64_t, std::vector<uint32_t>> cells;
+
+  void Build(const std::vector<BodyInfo> &source) {
+    bodies = &source;
+    cells.clear();
+    cells.reserve(source.size() * 2 + 1);
+    for (uint32_t i = 0; i < static_cast<uint32_t>(source.size()); ++i) {
+      const BodyInfo &body = source[i];
+      if (!body.t || !body.c || body.c->type != ColliderType::Box)
+        continue;
+      float halfX = std::abs(body.c->size.x * body.t->scale.x);
+      float halfZ = std::abs(body.c->size.z * body.t->scale.z);
+      int minX = GridCoord(body.t->position.x - halfX, cellSize);
+      int maxX = GridCoord(body.t->position.x + halfX, cellSize);
+      int minZ = GridCoord(body.t->position.z - halfZ, cellSize);
+      int maxZ = GridCoord(body.t->position.z + halfZ, cellSize);
+      for (int cz = minZ; cz <= maxZ; ++cz) {
+        for (int cx = minX; cx <= maxX; ++cx) {
+          cells[MakeGridKey(cx, cz)].push_back(i);
+        }
+      }
+    }
+  }
+
+  template <typename Func>
+  void Query(float x, float z, float radius, Func &&func) const {
+    if (!bodies)
+      return;
+    std::vector<uint32_t> emitted;
+    int minX = GridCoord(x - radius, cellSize);
+    int maxX = GridCoord(x + radius, cellSize);
+    int minZ = GridCoord(z - radius, cellSize);
+    int maxZ = GridCoord(z + radius, cellSize);
+    for (int cz = minZ; cz <= maxZ; ++cz) {
+      for (int cx = minX; cx <= maxX; ++cx) {
+        auto it = cells.find(MakeGridKey(cx, cz));
+        if (it == cells.end())
+          continue;
+        for (uint32_t index : it->second) {
+          if (std::find(emitted.begin(), emitted.end(), index) !=
+              emitted.end()) {
+            continue;
+          }
+          emitted.push_back(index);
+          func((*bodies)[index]);
+        }
+      }
+    }
+  }
+};
+
+struct PhysicsPerfStats {
+  uint32_t terrainSamples = 0;
+  uint32_t holeCandidates = 0;
+  uint32_t staticCandidates = 0;
+  uint32_t staticChecks = 0;
+};
+
+static float GetJitterFromTable(uint32_t &cursor, float amplitude) {
+  static constexpr std::array<float, 32> kJitterTable = {
+      -0.47f, 0.12f,  0.38f,  -0.21f, 0.04f,  0.49f,  -0.34f, 0.27f,
+      -0.08f, 0.31f,  -0.42f, 0.18f,  -0.16f, 0.44f,  -0.29f, 0.06f,
+      0.23f,  -0.36f, 0.41f,  -0.02f, -0.25f, 0.15f,  0.33f,  -0.45f,
+      0.09f,  -0.11f, 0.46f,  -0.31f, 0.21f,  -0.39f, 0.02f,  0.28f};
+  float jitter = kJitterTable[cursor % kJitterTable.size()];
+  ++cursor;
+  return 1.0f + jitter * amplitude;
+}
+
 // ========================================
 // メイン物理システム
 // ========================================
@@ -283,10 +503,6 @@ static bool GetTerrainHeightAndNormal(const TerrainData &terrain, float x,
 void PhysicsSystem(core::GameContext &ctx, float dt) {
   // DTキャップ（ラグスパイク対策）
   float clampedDt = std::min(dt, 0.033f); // 最大30FPS分
-
-  // サブステップ（安定性向上）
-  const int subSteps = 4;
-  float subDt = clampedDt / static_cast<float>(subSteps);
 
   // 重力
   const XMVECTOR gravity = XMVectorSet(0.0f, -9.8f, 0.0f, 0.0f);
@@ -299,6 +515,9 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
     events = ctx.world.GetGlobal<CollisionEvents>();
   }
   events->events.clear();
+  if (events->events.capacity() < 64) {
+    events->events.reserve(64);
+  }
 
   // 地形データ取得
   TerrainData *terrainData = nullptr;
@@ -310,16 +529,23 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       });
 
   // ホール情報収集
-  struct HoleInfo {
-    XMVECTOR position;
-    float radius;
-    float gravity;
-  };
   std::vector<HoleInfo> holes;
+  holes.reserve(64);
+  float maxHoleQueryRange = 0.5f;
   ctx.world.Query<Transform, GolfHole>().Each(
-      [&](ecs::Entity, Transform &t, GolfHole &h) {
-        holes.push_back({XMLoadFloat3(&t.position), h.radius, h.gravity});
+      [&](ecs::Entity e, Transform &t, GolfHole &h) {
+        HoleInfo info;
+        info.entity = e;
+        info.position = XMLoadFloat3(&t.position);
+        info.positionFloat = t.position;
+        info.radius = h.radius;
+        info.gravity = h.gravity;
+        info.suctionRange = h.radius * 2.5f;
+        maxHoleQueryRange = std::max(maxHoleQueryRange, info.suctionRange);
+        holes.push_back(info);
       });
+  HoleSpatialGrid holeGrid;
+  holeGrid.Build(holes);
 
   // ゲーム状態
   auto *golfState = ctx.world.GetGlobal<GolfGameState>();
@@ -328,9 +554,55 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
     ballEntity = static_cast<ecs::Entity>(golfState->ballEntity);
   }
 
+  // ボディリストはサブステップ中に構成が変わらないため、フレーム先頭で一度だけ収集します。
+  std::vector<BodyInfo> dynamicBodies;
+  std::vector<BodyInfo> staticBodies;
+  dynamicBodies.reserve(8);
+  staticBodies.reserve(128);
+  ctx.world.Query<Transform, RigidBody, Collider>().Each(
+      [&](ecs::Entity e, Transform &t, RigidBody &rb, Collider &c) {
+        BodyInfo info = {e, &t, &rb, &c};
+        if (!rb.isStatic) {
+          dynamicBodies.push_back(info);
+        }
+        if (rb.isStatic) {
+          staticBodies.push_back(info);
+        }
+      });
+
+  StaticBodySpatialGrid staticBodyGrid;
+  staticBodyGrid.Build(staticBodies);
+
+  bool skipPhysics = false;
+  if (golfState && golfState->canShoot) {
+    if (auto *ballRb = ctx.world.Get<RigidBody>(ballEntity)) {
+      XMVECTOR ballVel = XMLoadFloat3(&ballRb->velocity);
+      skipPhysics = SafeLengthSq(ballVel) < 0.000001f;
+    }
+  }
+
+  // サブステップ（速度に応じて可変化）
+  int subSteps = 4;
+  if (skipPhysics) {
+    subSteps = 0;
+  } else if (golfState && golfState->currentBallSpeed < 0.75f) {
+    subSteps = 1;
+  } else if (golfState && golfState->currentBallSpeed < 8.0f) {
+    subSteps = 2;
+  }
+  float subDt = subSteps > 0 ? clampedDt / static_cast<float>(subSteps) : 0.0f;
+  PhysicsPerfStats perfStats;
+  static uint32_t jitterCursor = 0;
+  static float rollingAudioTimer = 0.0f;
+  static float holeSlowMotionCooldown = 0.0f;
+  rollingAudioTimer += clampedDt;
+  holeSlowMotionCooldown = std::max(0.0f, holeSlowMotionCooldown - clampedDt);
+
   // デバッグログ用
+#ifndef NDEBUG
   static float debugTimer = 0.0f;
   debugTimer += clampedDt;
+#endif
 
   // フリッパー制御（ピンボール用）
   float flipperSpeed = 15.0f * clampedDt;
@@ -361,27 +633,14 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         XMStoreFloat4(&t.rotation, q);
       });
 
+  if (subSteps == 0) {
+    if (ctx.audio && ballEntity != UINT32_MAX) {
+      ctx.audio->SetLoopingSE(ctx, "BallRoll", "", 0.0f);
+    }
+  }
+
   // サブステップループ
   for (int step = 0; step < subSteps; ++step) {
-    // ボディリスト収集
-    struct BodyInfo {
-      ecs::Entity entity;
-      Transform *t;
-      RigidBody *rb;
-      Collider *c;
-    };
-    std::vector<BodyInfo> dynamicBodies;
-    std::vector<BodyInfo> staticBodies;
-
-    ctx.world.Query<Transform, RigidBody, Collider>().Each(
-        [&](ecs::Entity e, Transform &t, RigidBody &rb, Collider &c) {
-          BodyInfo info = {e, &t, &rb, &c};
-          if (!rb.isStatic) {
-            dynamicBodies.push_back(info);
-          }
-          staticBodies.push_back(info);
-        });
-
     // 動的オブジェクトの更新
     for (auto &body : dynamicBodies) {
       Transform &t = *body.t;
@@ -391,19 +650,17 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       XMVECTOR pos = XMLoadFloat3(&t.position);
       XMVECTOR vel = XMLoadFloat3(&rb.velocity);
 
-      // マテリアル判定（ループ冒頭で実施）
-      uint8_t mat = 0; // フェアウェイ（デフォルト値）
+      float posX = XMVectorGetX(pos);
+      float posY = XMVectorGetY(pos);
+      float posZ = XMVectorGetZ(pos);
+
+      // マテリアル・地形高さ・法線をまとめて取得します。
+      TerrainSample terrainSample;
       if (terrainData) {
-        float u = XMVectorGetX(pos) / terrainData->config.worldWidth + 0.5f;
-        float v = 0.5f - XMVectorGetZ(pos) / terrainData->config.worldDepth;
-        int ix = (int)(u * (terrainData->config.resolutionX - 1));
-        int iz = (int)(v * (terrainData->config.resolutionZ - 1));
-        if (ix >= 0 && ix < terrainData->config.resolutionX && iz >= 0 &&
-            iz < terrainData->config.resolutionZ) {
-          mat = terrainData
-                    ->materialMap[iz * terrainData->config.resolutionX + ix];
-        }
+        terrainSample = SampleTerrainAt(*terrainData, posX, posZ);
+        ++perfStats.terrainSamples;
       }
+      uint8_t mat = terrainSample.material; // フェアウェイ（デフォルト値）
 
       // 水・溶岩などOB地形に静止したらOBフラグを立てる（通過時はセーフ）
       const TerrainMaterial currentMaterial = static_cast<TerrainMaterial>(mat);
@@ -446,14 +703,10 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         float terrainH = 0.0f;
         XMVECTOR terrainN;
 
-        float posX = XMVectorGetX(pos);
-        float posY = XMVectorGetY(pos);
-        float posZ = XMVectorGetZ(pos);
-
         bool insideHole = false;
         float carveDepth = 0.0f;
-        XMVECTOR holeCenter = XMVectorZero();
-        for (const auto &hole : holes) {
+        holeGrid.Query(posX, posZ, 0.5f, [&](const HoleInfo &hole) {
+          ++perfStats.holeCandidates;
           float dx = posX - XMVectorGetX(hole.position);
           float dz = posZ - XMVectorGetZ(hole.position);
           float distSq = dx * dx + dz * dz;
@@ -463,7 +716,6 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
               std::abs(posY - XMVectorGetY(hole.position)) < 2.0f) {
             insideHole = true;
             carveDepth = 0.6f; // 穴の深さ
-            holeCenter = hole.position;
 
             // ホール内からの脱出防止：縁に向かう速度をカット
             float dist = std::sqrt(distSq);
@@ -481,12 +733,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                                   XMVectorScale(toCenter, velOutward * 0.9f));
               }
             }
-            break;
           }
-        }
+        });
 
-        if (GetTerrainHeightAndNormal(*terrainData, posX, posZ, terrainH,
-                                      terrainN)) {
+        if (terrainSample.valid) {
+          terrainH = terrainSample.height;
+          terrainN = terrainSample.normal;
           if (insideHole) {
             terrainH -= carveDepth;
             terrainN = XMVectorSet(0, 1, 0, 0);
@@ -511,8 +763,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             float vn = XMVectorGetX(XMVector3Dot(vel, terrainN));
             if (vn < 0.0f) {
               // 衝突による反射ベクトルを計算し、僅かなランダム挙動を加算
-              float jitter = 1.0f + (((float)(rand() % 100) / 100.0f) - 0.5f) *
-                                        0.18f;
+              float jitter = GetJitterFromTable(jitterCursor, 0.18f);
               float bounce = std::max(0.0f, rb.restitution * 0.5f * jitter);
               vel = XMVectorSubtract(
                   vel, XMVectorScale(terrainN, vn * (1.0f + bounce)));
@@ -589,18 +840,20 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       }
 
-      // ホール吸引
-      if (col.type == ColliderType::Sphere) {
+      // ホール吸引（ボールのみ対象）
+      if (body.entity == ballEntity && col.type == ColliderType::Sphere) {
         float ballY = XMVectorGetY(pos);
-        for (const auto &hole : holes) {
+        holeGrid.Query(posX, posZ, maxHoleQueryRange,
+                       [&](const HoleInfo &hole) {
+          ++perfStats.holeCandidates;
           float holeY = XMVectorGetY(hole.position);
           if (std::abs(ballY - holeY) > 1.0f)
-            continue;
+            return;
 
           XMVECTOR toHole = XMVectorSubtract(hole.position, pos);
           float distSq = XMVectorGetX(
               XMVector3LengthSq(XMVectorSetY(toHole, 0.0f))); // XZ距離
-          float range = hole.radius * 2.5f;
+          float range = hole.suctionRange;
 
           if (distSq < range * range && distSq > 0.001f) {
             float verticalBias =
@@ -619,14 +872,17 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             float ease = std::pow(std::max(0.0f, 1.0f - normalized), 2.2f);
             float factor =
                 std::clamp((expo * 0.65f + ease * 0.75f), 0.0f, 1.1f);
-            if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
+            if (holeSlowMotionCooldown <= 0.0f) {
+              if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
               float slowScale = 0.35f + normalized * 0.25f;
               float slowDuration = 0.5f + (1.0f - normalized) * 0.4f;
               juiceSys->TriggerSlowMotion(slowDuration, slowScale);
+              holeSlowMotionCooldown = 0.25f;
+              }
             }
             acc = XMVectorAdd(acc, XMVectorScale(dir, hole.gravity * factor));
           }
-        }
+        });
       }
 
       // 接地時は法線方向の加速度を除去し、斜面方向の重力のみを残す
@@ -764,7 +1020,8 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       XMStoreFloat3(&rb.velocity, vel);
 
       // 接地中の走行音 (Rolling SE)
-      if (ctx.audio && body.entity == ballEntity) {
+      if (ctx.audio && body.entity == ballEntity && step == subSteps - 1 &&
+          rollingAudioTimer >= (1.0f / 30.0f)) {
         if (isGrounded && speedFinal > 0.5f) {
           std::string seName = "se_Fairway";
           float pBase = 0.0f;
@@ -795,16 +1052,21 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       }
     }
 
+    if (step == subSteps - 1 && rollingAudioTimer >= (1.0f / 30.0f)) {
+      rollingAudioTimer = 0.0f;
+    }
+
     // 静的オブジェクトとの衝突
     for (auto &dyn : dynamicBodies) {
       if (dyn.c->type != ColliderType::Sphere)
         continue;
 
-      for (auto &other : staticBodies) {
-        if (dyn.entity == other.entity)
-          continue;
+      const float queryRadius = std::max(12.0f, dyn.c->radius + staticBodyGrid.cellSize);
+      staticBodyGrid.Query(dyn.t->position.x, dyn.t->position.z, queryRadius,
+                           [&](const BodyInfo &other) {
+        ++perfStats.staticCandidates;
         if (other.c->type != ColliderType::Box)
-          continue;
+          return;
 
         XMVECTOR normal;
         float depth;
@@ -812,12 +1074,13 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                                other.c->size.y * other.t->scale.y,
                                other.c->size.z * other.t->scale.z};
 
+          ++perfStats.staticChecks;
         if (CheckSphereOBB(dyn.t->position, dyn.c->radius, other.t->position,
                            scaledSize, other.t->rotation, normal, depth)) {
           // ホールはトリガーのみ
           if (ctx.world.Has<GolfHole>(other.entity)) {
             events->events.push_back({dyn.entity, other.entity});
-            continue;
+            return;
           }
 
           events->events.push_back({dyn.entity, other.entity});
@@ -831,8 +1094,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           XMVECTOR vel = XMLoadFloat3(&dyn.rb->velocity);
           float vn = XMVectorGetX(XMVector3Dot(vel, normal));
           if (vn < 0.0f) {
-            float jitter = 1.0f + (((float)(rand() % 100) / 100.0f) - 0.5f) *
-                                      0.2f; // 跳ね方に少しランダムさを付与
+            float jitter = GetJitterFromTable(jitterCursor, 0.2f);
             float bounce =
                 std::max(0.0f, (dyn.rb->restitution + other.rb->restitution) *
                                    0.5f * jitter);
@@ -841,11 +1103,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             XMStoreFloat3(&dyn.rb->velocity, vel);
           }
         }
-      }
+      });
     }
   }
 
   // デバッグログ出力
+#ifndef NDEBUG
   if (debugTimer > 0.25f) {
     debugTimer = 0.0f;
 
@@ -857,14 +1120,17 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             bool grounded = t.position.y < 1.0f; // 簡易判定
             std::string groundedStr = "N";
             if (grounded) groundedStr = "Y";
-            LOG_DEBUG(
-                "Physics",
-                "ball speed={:.3f} grounded={} pos=({:.3f},{:.3f},{:.3f})",
-                speed, groundedStr, t.position.x, t.position.y,
-                t.position.z);
+            LOG_DEBUG("Physics",
+                      "ball speed={:.3f} grounded={} pos=({:.3f},{:.3f},{:.3f}) "
+                      "subSteps={} terrainSamples={} holeCandidates={} staticCandidates={} staticChecks={}",
+                      speed, groundedStr, t.position.x, t.position.y,
+                      t.position.z, subSteps, perfStats.terrainSamples,
+                      perfStats.holeCandidates, perfStats.staticCandidates,
+                      perfStats.staticChecks);
           }
         });
   }
+#endif
 }
 
 } // namespace game::systems

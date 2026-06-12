@@ -5,6 +5,7 @@
 #include "../components/Camera.h"
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
+#include "../components/WikiComponents.h"
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -124,6 +125,18 @@ void RenderSystem(core::GameContext &ctx) {
                           components::MeshRenderer &r) {
     if (!r.isVisible)
       return;
+    if (r.isTransparent) {
+      if (r.color.w <= 0.01f) {
+        return;
+      }
+      const float dx = t.position.x - camPos.x;
+      const float dy = t.position.y - camPos.y;
+      const float dz = t.position.z - camPos.z;
+      const float distSq = dx * dx + dy * dy + dz * dz;
+      if (distSq > 220.0f * 220.0f && !world.Has<components::HoleFlag>(e)) {
+        return;
+      }
+    }
 
     auto *mesh = ctx.resource.GetMesh(r.mesh);
     auto *shader = ctx.resource.GetShader(r.shader);

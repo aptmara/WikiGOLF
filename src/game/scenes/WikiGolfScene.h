@@ -131,6 +131,8 @@ private:
   
   ecs::Entity m_terrainImageEntity = UINT32_MAX;
   float m_terrainDisplayTimer = 0.0f;
+  float m_hudUpdateTimer = 0.0f;     ///< HUD静的表示の更新間引きタイマーです。山内陽
+  float m_minimapUpdateTimer = 0.0f; ///< ミニマップ描画の更新間引きタイマーです。山内陽
 
   /// @brief ページ読み込み（WikiPageLoader へ委譲）
   

@@ -75,6 +75,17 @@ public:
   ShortestPathResult FindShortestPath(const std::string &sourceTitle,
                                       int targetId, int maxDepth = 6);
 
+  /**
+   * @brief 複数記事からターゲットまでの最短リンク数を一括計算します。 山内陽
+   * @param sourceTitles 開始記事タイトル一覧
+   * @param targetId 目標記事ID
+   * @param maxDepth 最大探索深度
+   * @return タイトルごとのリンク数（未到達・未登録記事は含めない）
+   */
+  std::unordered_map<std::string, int>
+  ComputeDistancesToTarget(const std::vector<std::string> &sourceTitles,
+                           int targetId, int maxDepth = 6);
+
 private:
   /// @brief タイトルからページIDを取得
   int FetchPageId(const std::string &title);

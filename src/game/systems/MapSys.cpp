@@ -153,6 +153,11 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
         // スカイボックスはミニマップ描画対象外
         if (params.cullSkybox && ctx.world.Has<components::Skybox>(e))
           return;
+        const float cullMargin = 12.0f;
+        if (std::abs(t.position.x - params.center.x) > orthoWidth * 0.5f + cullMargin ||
+            std::abs(t.position.z - params.center.z) > orthoWidth * 0.5f + cullMargin) {
+          return;
+        }
 
         auto *mesh = ctx.resource.GetMesh(r.mesh);
         if (!mesh || !shaderPtr)

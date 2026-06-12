@@ -150,8 +150,8 @@ private:
   std::vector<DirectX::XMFLOAT4> m_trailBaseColors;
   int m_trailWriteIndex = 0;
   float m_trailUpdateTimer = 0.0f;
-  static constexpr int kTrailCount = 40;                // 派手に増量
-  static constexpr float kTrailUpdateInterval = 0.01f;  // 高頻度生成
+  static constexpr int kTrailCount = 24;                ///< 軌跡プール数です。山内陽
+  static constexpr float kTrailUpdateInterval = 0.025f; ///< 軌跡更新間隔です。山内陽
 
   // --- インパクトエフェクト ---
   struct ImpactParticle {
@@ -163,7 +163,7 @@ private:
     DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
   };
   std::vector<ImpactParticle> m_impactParticles;
-  static constexpr int kImpactParticleCount = 80; // 大幅増量で派手に
+  static constexpr int kImpactParticleCount = 48; ///< インパクト粒子数です。山内陽
 
   // --- 環境エフェクト（転がり・スライド） ---
   struct EnvironmentParticle {
@@ -178,7 +178,7 @@ private:
   std::vector<EnvironmentParticle> m_envParticles;
   int m_envWriteIndex = 0;
   float m_envEmitTimer = 0.0f;
-  static constexpr int kEnvParticleCount = 120; // 豊かな環境表現のため多めに
+  static constexpr int kEnvParticleCount = 64; ///< 環境粒子数です。山内陽
 
   // --- リップルエフェクト ---
   struct Ripple {
@@ -189,7 +189,7 @@ private:
   };
   std::vector<Ripple> m_ripples;
   int m_rippleWriteIndex = 0;
-  static constexpr int kRippleCount = 24;
+  static constexpr int kRippleCount = 12; ///< リップル同時数です。山内陽
 
   // --- 内部処理 ---
   void UpdateCameraShake(core::GameContext &ctx, ecs::Entity cameraEntity);

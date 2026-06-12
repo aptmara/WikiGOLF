@@ -542,14 +542,14 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
         float v = 0.0f;
         if (ProjectToMinimap(icon.worldPos.x, icon.worldPos.y, params, u, v)) {
           const float normalSize = icon.isPlayable ? 20.0f : 12.0f;
-          const float mapSize = icon.isPlayable ? 28.0f : 16.0f;
+          const float mapSize = icon.isPlayable ? 28.0f : 6.0f;
           iconUI->width = icon.isTarget ? (m_isMapView ? 44.0f : 34.0f)
                                         : (m_isMapView ? mapSize : normalSize);
           iconUI->height = iconUI->width;
           iconUI->x = mapBounds.x + u * mapBounds.width - iconUI->width * 0.5f;
           iconUI->y = mapBounds.y + v * mapBounds.height - iconUI->height * 0.5f;
           iconUI->alpha = icon.isTarget ? 1.0f
-                                        : (icon.isPlayable ? 0.72f : 0.34f);
+                                        : (icon.isPlayable ? 0.72f : 0.18f);
           iconUI->visible = markerSurfaceVisible && (m_isMapView || icon.isPlayable);
 
           if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {

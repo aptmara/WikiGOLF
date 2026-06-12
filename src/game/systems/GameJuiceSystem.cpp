@@ -616,9 +616,9 @@ void GameJuiceSystem::TriggerMaterialEffect(
   // EnvironmentParticle の放出ロジックを流用・拡張する
 
   // 放出数（強さに応じて）
-  int count = std::max(1, (int)(strength * 10.0f));
+  int count = std::clamp(static_cast<int>(strength * 6.0f), 1, 6);
   if (material == game::components::TerrainMaterial::Bunker)
-    count = std::max(2, count * 3); // バンカーはさらに多め
+    count = std::clamp(count * 2, 2, 8);
 
   for (int k = 0; k < count; ++k) {
     auto &p = m_envParticles[m_envWriteIndex];
@@ -771,7 +771,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
   m_envEmitTimer += ctx.dt;
   // 速度が速いほどたくさん出す
   float interval =
-      0.05f / (std::max<float>(1.0f, state->currentBallSpeed * 0.2f));
+      0.08f / (std::max<float>(1.0f, state->currentBallSpeed * 0.16f));
 
   if (m_envEmitTimer >= interval) {
     m_envEmitTimer = 0.0f;
@@ -781,7 +781,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
       return;
 
     // 放出量
-    int count = (state->currentMaterial == TerrainMaterial::Bunker) ? 3 : 1;
+    int count = (state->currentMaterial == TerrainMaterial::Bunker) ? 2 : 1;
 
     for (int k = 0; k < count; ++k) {
       auto &p = m_envParticles[m_envWriteIndex];

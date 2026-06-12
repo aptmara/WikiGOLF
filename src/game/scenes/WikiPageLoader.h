@@ -241,11 +241,6 @@ private:
         const std::vector<HolePlacementCandidate>& candidates) const;
 
     /**
-     * @brief リンク距離を評価する代表候補を安い条件だけで絞ります。 山内陽
-     */
-    std::vector<HolePlacementCandidate> SelectPathEvaluationCandidates(
-        const std::vector<HolePlacementCandidate>& candidates) const;
-
     /**
      * @brief 評価結果を同じリンク候補へ反映します。 山内陽
      */
@@ -253,20 +248,15 @@ private:
         const std::vector<HolePlacementCandidate>& evaluatedCandidates);
 
     /**
-     * @brief 候補のリンク距離をページ内キャッシュ付きで評価します。 山内陽
+     * @brief 候補群のリンク距離を一括評価します。 山内陽
      */
-    void EvaluateCandidatePath(core::GameContext& ctx,
-                               HolePlacementCandidate& candidate);
+    void EvaluateCandidatePaths(core::GameContext& ctx,
+                                std::vector<HolePlacementCandidate>& candidates);
 
     /**
      * @brief マップ候補がプレイ可能ホールとして選ばれたかを判定します。 山内陽
      */
     bool IsPlayableCandidate(const HolePlacementCandidate& candidate) const;
-
-    /**
-     * @brief リンク距離を評価した代表ホールをマップ候補にも必ず含めます。 山内陽
-     */
-    void EnsurePathCandidatesHaveMapIcons();
 
     /**
      * @brief 既存選抜候補から十分離れているかを判定します。 山内陽
