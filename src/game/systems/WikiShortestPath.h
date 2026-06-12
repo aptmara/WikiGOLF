@@ -47,7 +47,7 @@ public:
    * @param dbPath SQLiteデータベースパス
    * @return 成功ならtrue
    */
-  bool Initialize(const std::string &dbPath);
+  bool Initialize(const std::string &dbPath, bool cachePopularPages = true);
 
   /**
    * @brief データベースが利用可能か
@@ -66,21 +66,25 @@ public:
    * @param sourceTitle 開始記事タイトル
    * @param targetTitle 目標記事タイトル
    * @param maxDepth 最大探索深度（デフォルト6）
+   * @param logSuccess 成功時の経路ログを出すか
    * @return 計算結果
    */
   ShortestPathResult FindShortestPath(const std::string &sourceTitle,
                                       const std::string &targetTitle,
-                                      int maxDepth = 6);
+                                      int maxDepth = 6,
+                                      bool logSuccess = true);
 
   /**
    * @brief 最短経路を計算（ターゲットID指定）
    * @param sourceTitle 開始記事タイトル
    * @param targetId 目標記事ID
    * @param maxDepth 最大探索深度（デフォルト6）
+   * @param logSuccess 成功時の経路ログを出すか
    * @return 計算結果
    */
   ShortestPathResult FindShortestPath(const std::string &sourceTitle,
-                                      int targetId, int maxDepth = 6);
+                                      int targetId, int maxDepth = 6,
+                                      bool logSuccess = true);
 
   /**
    * @brief 複数記事からターゲットまでの最短リンク数を一括計算します。 山内陽

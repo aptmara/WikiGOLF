@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <mutex>
 #include <queue>
 #include <sqlite3.h>
 #include <sstream>
@@ -18,6 +19,8 @@ namespace {
 
 // IN句のチャンクサイズ。ベンチでは 512〜1024 で差がほぼ無かったため安全側の512に固定。
 constexpr size_t kLinkChunkSize = 512;
+
+std::recursive_mutex g_sqliteMutex;
 
 struct NodeInfo {
   int parent = -1;
@@ -55,6 +58,7 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
   if (pageIds.empty())
     return true;
 
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   size_t index = 0;
   while (index < pageIds.size()) {
     size_t count = std::min(kLinkChunkSize, pageIds.size() - index);
@@ -123,17 +127,21 @@ std::vector<int> BuildPath(int meet,
 } // namespace
 
 WikiShortestPath::~WikiShortestPath() {
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   if (m_db) {
     sqlite3_close(m_db);
     m_db = nullptr;
   }
 }
 
-bool WikiShortestPath::Initialize(const std::string &dbPath) {
+bool WikiShortestPath::Initialize(const std::string &dbPath,
+                                  bool cachePopularPages) {
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   if (m_db) {
     sqlite3_close(m_db);
     m_db = nullptr;
   }
+  m_popularPageIds.clear();
 
   int rc =
       sqlite3_open_v2(dbPath.c_str(), &m_db, SQLITE_OPEN_READONLY, nullptr);
@@ -145,6 +153,10 @@ bool WikiShortestPath::Initialize(const std::string &dbPath) {
   }
 
   LOG_INFO("WikiShortestPath", "Database initialized: {}", dbPath);
+
+  if (!cachePopularPages) {
+    return true;
+  }
 
   // 人気記事のキャッシュを作成（初回）
   LOG_INFO("WikiShortestPath", "Caching popular pages...");
@@ -189,6 +201,7 @@ int WikiShortestPath::FetchPageId(const std::string &title) {
   if (!m_db)
     return -1;
 
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   // スペースをアンダースコアに変換
   std::string normalized = title;
   std::replace(normalized.begin(), normalized.end(), ' ', '_');
@@ -215,6 +228,7 @@ std::string WikiShortestPath::FetchPageTitle(int pageId) {
   if (!m_db)
     return "";
 
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   const char *sql = "SELECT title FROM pages WHERE id = ?";
   sqlite3_stmt *stmt;
 
@@ -242,6 +256,7 @@ std::string WikiShortestPath::FetchOutgoingLinks(int pageId) {
   if (!m_db)
     return "";
 
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   const char *sql = "SELECT outgoing_links FROM links WHERE id = ?";
   sqlite3_stmt *stmt;
 
@@ -266,6 +281,7 @@ std::string WikiShortestPath::FetchIncomingLinks(int pageId) {
   if (!m_db)
     return "";
 
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   const char *sql = "SELECT incoming_links FROM links WHERE id = ?";
   sqlite3_stmt *stmt;
 
@@ -290,6 +306,7 @@ int WikiShortestPath::FetchOutgoingLinksCount(const std::vector<int> &pageIds) {
   if (!m_db || pageIds.empty())
     return 0;
 
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   std::string sql = "SELECT SUM(outgoing_links_count) FROM links WHERE id IN (";
   for (size_t i = 0; i < pageIds.size(); ++i) {
     if (i > 0)
@@ -316,6 +333,7 @@ int WikiShortestPath::FetchIncomingLinksCount(const std::vector<int> &pageIds) {
   if (!m_db || pageIds.empty())
     return 0;
 
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   std::string sql = "SELECT SUM(incoming_links_count) FROM links WHERE id IN (";
   for (size_t i = 0; i < pageIds.size(); ++i) {
     if (i > 0)
@@ -366,14 +384,14 @@ std::vector<std::vector<int>> WikiShortestPath::ReconstructPaths(
 ShortestPathResult
 WikiShortestPath::FindShortestPath(const std::string &sourceTitle,
                                    const std::string &targetTitle,
-                                   int maxDepth) {
+                                   int maxDepth, bool logSuccess) {
   int targetId = FetchPageId(targetTitle);
-  return FindShortestPath(sourceTitle, targetId, maxDepth);
+  return FindShortestPath(sourceTitle, targetId, maxDepth, logSuccess);
 }
 
 ShortestPathResult
 WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
-                                   int maxDepth) {
+                                   int maxDepth, bool logSuccess) {
   ShortestPathResult result;
 
   if (!m_db) {
@@ -491,8 +509,10 @@ WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
       pathStr += " -> ";
     pathStr += result.path[i];
   }
-  LOG_INFO("WikiShortestPath", "{} -> ID:{} ({} hops): {}", sourceTitle,
-           targetId, result.degrees, pathStr);
+  if (logSuccess) {
+    LOG_INFO("WikiShortestPath", "{} -> ID:{} ({} hops): {}", sourceTitle,
+             targetId, result.degrees, pathStr);
+  }
 
   return result;
 }

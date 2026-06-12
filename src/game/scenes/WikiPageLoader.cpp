@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <future>
 #include <tuple>
 #include <utility>
 
@@ -52,7 +53,6 @@ constexpr float kMaxSafeDepth   = 20000.0f;
 constexpr float kMaxSafeWidth   = 20000.0f;
 constexpr float kMinLinkHoleDistance = 4.0f;
 constexpr float kMinMapIconDistance = 8.0f;
-constexpr size_t kMaxPathEvaluationTargets = 32;
 constexpr size_t kMaxMapHoleIcons = 160;
 
 /**
@@ -481,6 +481,10 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
     m_buildPathCandidates.clear();
     m_buildMapHoleCandidates.clear();
     m_pathHopCache.clear();
+    if (m_pathEvaluationTask.valid()) {
+        m_pathEvaluationTask.wait();
+    }
+    m_pathEvaluationStarted = false;
     m_nextHoleIndex = 0;
     m_nextMapIconIndex = 0;
     m_nextPathIndex = 0;
@@ -772,9 +776,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             m_nextHoleIndex >= m_wikiTexture->links.size()) {
             m_buildMapHoleCandidates =
                 SelectMapHoleIconCandidates(m_buildHoleCandidates);
-            m_buildPathCandidates =
-                SelectPathEvaluationCandidates(m_buildHoleCandidates);
+            m_buildPathCandidates = m_buildHoleCandidates;
             m_nextPathIndex = 0;
+            m_pathEvaluationStarted = false;
             m_buildStep = BuildStep::EvaluateHolePaths;
             LOG_INFO("WikiPageLoader",
                      "Hole candidates staged: textureLinks={}, mapIcons={}, "
@@ -791,14 +795,53 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::EvaluateHolePaths:
     {
-        while (m_nextPathIndex < m_buildPathCandidates.size() &&
-               std::chrono::steady_clock::now() < m_buildDeadline) {
-            EvaluateCandidatePath(ctx, m_buildPathCandidates[m_nextPathIndex]);
-            ++m_nextPathIndex;
+        const auto* state = ctx.world.GetGlobal<GolfGameState>();
+        if (!m_pathEvaluationStarted) {
+            m_pathEvaluationStarted = true;
+            m_nextPathIndex = 0;
+
+            const int targetPageId = state ? state->targetPageId : -1;
+            auto candidates = m_buildPathCandidates;
+            m_pathEvaluationTask = std::async(
+                std::launch::async,
+                [candidates = std::move(candidates), targetPageId]() mutable {
+                    if (targetPageId == -1 || candidates.empty()) {
+                        return candidates;
+                    }
+
+                    game::systems::WikiShortestPath pathSystem;
+                    if (!pathSystem.Initialize("Assets/data/jawiki_sdow.sqlite",
+                                               false)) {
+                        return candidates;
+                    }
+
+                    for (auto& candidate : candidates) {
+                        if (candidate.linkTarget.empty()) {
+                            continue;
+                        }
+                        auto result = pathSystem.FindShortestPath(
+                            candidate.linkTarget, targetPageId, 6, false);
+                        candidate.hopsToTarget =
+                            result.success ? result.degrees : -1;
+                    }
+                    return candidates;
+                });
+
+            LOG_INFO("WikiPageLoader",
+                     "Path evaluation started asynchronously: targets={}",
+                     m_buildPathCandidates.size());
         }
 
-        if (m_buildPathCandidates.empty() ||
-            m_nextPathIndex >= m_buildPathCandidates.size()) {
+        if (!m_pathEvaluationTask.valid()) {
+            m_buildStep = BuildStep::CreateMapIcons;
+            m_nextMapIconIndex = 0;
+            m_buildProgress = 0.91f;
+            return false;
+        }
+
+        if (m_pathEvaluationTask.wait_for(std::chrono::milliseconds(0)) ==
+            std::future_status::ready) {
+            m_buildPathCandidates = m_pathEvaluationTask.get();
             ApplyPathEvaluationResults(m_buildPathCandidates);
             for (auto& candidate : m_buildHoleCandidates) {
                 candidate.isPlayable = true;
@@ -810,9 +853,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                      "Path evaluation finished: evaluated={}, candidates={}",
                      m_buildPathCandidates.size(), m_buildHoleCandidates.size());
         } else {
-            float pathProgress =
-                (float)m_nextPathIndex / (float)m_buildPathCandidates.size();
-            m_buildProgress = 0.88f + 0.03f * pathProgress;
+            m_buildProgress = 0.90f;
         }
         return false;
     }
@@ -1109,37 +1150,6 @@ WikiPageLoader::SelectMapHoleIconCandidates(
 }
 
 /**
- * @brief リンク距離を評価する代表候補を安い条件だけで絞ります。 山内陽
- */
-std::vector<WikiPageLoader::HolePlacementCandidate>
-WikiPageLoader::SelectPathEvaluationCandidates(
-    const std::vector<HolePlacementCandidate>& candidates) const
-{
-    std::vector<HolePlacementCandidate> sorted = candidates;
-    std::stable_sort(sorted.begin(), sorted.end(),
-        [](const HolePlacementCandidate& lhs,
-           const HolePlacementCandidate& rhs) {
-            if (lhs.isTarget != rhs.isTarget) {
-                return lhs.isTarget;
-            }
-            return lhs.originalIndex < rhs.originalIndex;
-        });
-
-    std::vector<HolePlacementCandidate> selected;
-    selected.reserve(std::min(sorted.size(), kMaxPathEvaluationTargets));
-    for (const auto& candidate : sorted) {
-        if (candidate.isTarget ||
-            IsFarEnoughFromSelected(selected, candidate, kMinLinkHoleDistance)) {
-            selected.push_back(candidate);
-        }
-        if (selected.size() >= kMaxPathEvaluationTargets) {
-            break;
-        }
-    }
-    return selected;
-}
-
-/**
  * @brief 経路評価結果を全ホール候補とマップ候補へ反映します。 山内陽
  */
 void WikiPageLoader::ApplyPathEvaluationResults(
@@ -1232,7 +1242,7 @@ void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
 
     m_buildMapHoleCandidates = SelectMapHoleIconCandidates(candidates);
     m_buildHoleCandidates = candidates;
-    m_buildPathCandidates = SelectPathEvaluationCandidates(m_buildHoleCandidates);
+    m_buildPathCandidates = m_buildHoleCandidates;
     for (auto& candidate : m_buildPathCandidates) {
         EvaluateCandidatePath(ctx, candidate);
     }

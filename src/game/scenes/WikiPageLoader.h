@@ -12,6 +12,7 @@
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
 #include <chrono>
+#include <future>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -247,12 +248,6 @@ private:
         const std::vector<HolePlacementCandidate>& evaluatedCandidates);
 
     /**
-     * @brief リンク距離を評価する代表候補を選びます。 山内陽
-     */
-    std::vector<HolePlacementCandidate> SelectPathEvaluationCandidates(
-        const std::vector<HolePlacementCandidate>& candidates) const;
-
-    /**
      * @brief 候補のリンク距離を評価します。 山内陽
      */
     void EvaluateCandidatePath(core::GameContext& ctx,
@@ -286,6 +281,8 @@ private:
     std::vector<HolePlacementCandidate> m_buildPathCandidates;
     std::vector<HolePlacementCandidate> m_buildMapHoleCandidates;
     std::unordered_map<std::string, int> m_pathHopCache;
+    std::future<std::vector<HolePlacementCandidate>> m_pathEvaluationTask;
+    bool m_pathEvaluationStarted = false;
 
     size_t m_nextHoleIndex = 0;
     size_t m_nextMapIconIndex = 0;
