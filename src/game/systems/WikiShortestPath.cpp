@@ -181,6 +181,10 @@ bool WikiShortestPath::Initialize(const std::string &dbPath) {
   return true;
 }
 
+int WikiShortestPath::ResolvePageId(const std::string &title) {
+  return FetchPageId(title);
+}
+
 int WikiShortestPath::FetchPageId(const std::string &title) {
   if (!m_db)
     return -1;

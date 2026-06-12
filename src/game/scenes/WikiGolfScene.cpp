@@ -272,6 +272,18 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     }
   }
 
+  if (targetId == -1 && m_shortestPath && m_shortestPath->IsAvailable() &&
+      !targetPage.empty()) {
+    targetId = m_shortestPath->ResolvePageId(targetPage);
+    if (targetId != -1) {
+      LOG_INFO("WikiGolf", "Resolved target page ID: {} -> {}", targetPage,
+               targetId);
+    } else {
+      LOG_WARN("WikiGolf", "Failed to resolve target page ID: {}",
+               targetPage);
+    }
+  }
+
   if (!isUserOverride && m_shortestPath && m_shortestPath->IsAvailable() && !startPage.empty() &&
       !targetPage.empty()) {
     const int maxRetry = 5;

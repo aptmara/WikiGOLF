@@ -118,6 +118,25 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       // ログは別スレッドからは注意が必要だが、ここでは簡易的に
     }
 
+    /**
+     * @brief ユーザー指定ターゲットでも経路評価用のページIDを補完します。 山内陽
+     */
+    const auto resolveTargetPageId = [&]() {
+      if (!dbLoaded || !data->pathSystem || !data->pathSystem->IsAvailable() ||
+          data->targetPage.empty() || data->targetPageId != -1) {
+        return;
+      }
+
+      data->targetPageId = data->pathSystem->ResolvePageId(data->targetPage);
+      if (data->targetPageId != -1) {
+        LOG_INFO("LoadingScene", "Resolved target page ID: {} -> {}",
+                 data->targetPage, data->targetPageId);
+      } else {
+        LOG_WARN("LoadingScene", "Failed to resolve target page ID: {}",
+                 data->targetPage);
+      }
+    };
+
     // スタート選定
     game::systems::WikiClient wikiClient;
     if (data->startPage.empty()) {
@@ -138,21 +157,25 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       }
     }
 
+    resolveTargetPageId();
+
     // フォールバック
     if (data->targetPage.empty()) {
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
+      resolveTargetPageId();
       setProgress(0.8f);
     }
 
     if (overrideTargetPage.empty() && data->startPage == data->targetPage) {
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
+      resolveTargetPageId();
       setProgress(0.82f);
     }
 
-    // 最短1記事（または同一）のターゲットは再抽選 (ユーザー指定がない場合のみ)
-    if (overrideTargetPage.empty() && dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
+    // 最短1記事（または同一）のターゲットは自動選定時のみ再抽選します。
+    if (dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
         !data->startPage.empty() && !data->targetPage.empty()) {
       const int maxRetry = 5;
       for (int attempt = 0; attempt < maxRetry; ++attempt) {
@@ -165,8 +188,20 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
                                                           data->targetPage, 6);
         }
 
-        if (!pathResult.success || pathResult.degrees > 1) {
-          break; // 計算失敗時もここで抜ける
+        if (!pathResult.success) {
+          LOG_WARN("LoadingScene",
+                   "Shortest path check failed (attempt {}): {} (start={}, "
+                   "target={})",
+                   attempt + 1, pathResult.errorMessage, data->startPage,
+                   data->targetPage);
+          break;
+        }
+
+        LOG_INFO("LoadingScene", "Shortest path to '{}' is {} hops from '{}'",
+                 data->targetPage, pathResult.degrees, data->startPage);
+
+        if (overrideIsUserOverride || pathResult.degrees > 1) {
+          break;
         }
 
         auto newTarget = data->pathSystem->FetchPopularPageTitle(100);
@@ -180,6 +215,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
 
         data->targetPage = newTarget.first;
         data->targetPageId = newTarget.second;
+        resolveTargetPageId();
       }
     }
 

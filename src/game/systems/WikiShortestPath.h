@@ -55,6 +55,13 @@ public:
   bool IsAvailable() const { return m_db != nullptr; }
 
   /**
+   * @brief 記事タイトルからページIDを解決します。 山内陽
+   * @param title 記事タイトル
+   * @return 解決できたページID（失敗時は-1）
+   */
+  int ResolvePageId(const std::string &title);
+
+  /**
    * @brief 最短経路を計算
    * @param sourceTitle 開始記事タイトル
    * @param targetTitle 目標記事タイトル
