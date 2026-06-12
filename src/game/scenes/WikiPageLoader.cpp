@@ -30,6 +30,7 @@
 #include <cstdlib>
 #include <future>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 
 
@@ -815,14 +816,23 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                         return candidates;
                     }
 
-                    for (auto& candidate : candidates) {
-                        if (candidate.linkTarget.empty()) {
+                    std::vector<std::string> linkTargets;
+                    std::unordered_set<std::string> seenTargets;
+                    linkTargets.reserve(candidates.size());
+                    for (const auto& candidate : candidates) {
+                        if (candidate.linkTarget.empty() ||
+                            !seenTargets.insert(candidate.linkTarget).second) {
                             continue;
                         }
-                        auto result = pathSystem.FindShortestPath(
-                            candidate.linkTarget, targetPageId, 6, false);
+                        linkTargets.push_back(candidate.linkTarget);
+                    }
+
+                    const auto distances = pathSystem.ComputeDistancesToTarget(
+                        linkTargets, targetPageId, 6);
+                    for (auto& candidate : candidates) {
+                        const auto distance = distances.find(candidate.linkTarget);
                         candidate.hopsToTarget =
-                            result.success ? result.degrees : -1;
+                            distance != distances.end() ? distance->second : -1;
                     }
                     return candidates;
                 });
