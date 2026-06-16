@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -271,6 +272,12 @@ private:
     bool TryConsumePathEvaluation(core::GameContext& ctx, bool updateWorld);
 
     /**
+     * @brief 経路評価タスクから届いた部分結果を未消費分だけ反映します。山内陽
+     */
+    size_t ConsumePartialPathEvaluation(core::GameContext& ctx,
+                                        bool updateWorld);
+
+    /**
      * @brief 既に生成済みのホール表示へ経路評価結果を反映します。 山内陽
      */
     void ApplyPathEvaluationToWorld(
@@ -351,6 +358,9 @@ private:
     std::vector<std::future<std::vector<HolePlacementCandidate>>> m_retiredPathEvaluationTasks;
     std::shared_ptr<std::atomic<size_t>> m_pathEvaluationProgress;
     std::shared_ptr<std::atomic<size_t>> m_pathEvaluationTotal;
+    std::shared_ptr<std::mutex> m_pathEvaluationPartialMutex;
+    std::shared_ptr<std::vector<HolePlacementCandidate>> m_pathEvaluationPartialResults;
+    size_t m_pathEvaluationConsumedResults = 0;
     bool m_pathEvaluationStarted = false;
 
     size_t m_nextHoleIndex = 0;

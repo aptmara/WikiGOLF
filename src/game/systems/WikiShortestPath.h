@@ -8,6 +8,7 @@
  */
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -94,13 +95,16 @@ public:
    * @param maxDepth 最大探索深度
    * @param progressUnits 進捗の完了単位数を書き込む先
    * @param progressBase この計算の開始前に完了済みとして扱う単位数
+   * @param onResolved タイトルごとの距離が確定した時に呼ばれる通知です。山内陽
    * @return タイトルごとのリンク数（未到達・未登録記事は含めない）
    */
   std::unordered_map<std::string, int>
   ComputeDistancesToTarget(const std::vector<std::string> &sourceTitles,
                            int targetId, int maxDepth = 4,
                            std::atomic<size_t> *progressUnits = nullptr,
-                           size_t progressBase = 0);
+                           size_t progressBase = 0,
+                           const std::function<void(const std::string&, int)>&
+                               onResolved = nullptr);
 
 private:
   /// @brief タイトルからページIDを取得

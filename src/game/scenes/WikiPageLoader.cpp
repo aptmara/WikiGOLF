@@ -375,15 +375,30 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
     m_pathEvaluationProgress = std::make_shared<std::atomic<size_t>>(0);
     m_pathEvaluationTotal = std::make_shared<std::atomic<size_t>>(
         m_buildPathCandidates.size() + std::max(0, maxDepth));
+    m_pathEvaluationPartialMutex = std::make_shared<std::mutex>();
+    m_pathEvaluationPartialResults =
+        std::make_shared<std::vector<HolePlacementCandidate>>();
+    m_pathEvaluationConsumedResults = 0;
 
     const uint64_t loadId = m_buildLoadId;
     auto candidates = m_buildPathCandidates;
+    std::unordered_map<std::string, std::vector<HolePlacementCandidate>>
+        candidatesByTarget;
+    for (const auto& candidate : candidates) {
+        if (!candidate.linkTarget.empty()) {
+            candidatesByTarget[candidate.linkTarget].push_back(candidate);
+        }
+    }
     auto progress = m_pathEvaluationProgress;
     auto totalUnits = m_pathEvaluationTotal;
+    auto partialMutex = m_pathEvaluationPartialMutex;
+    auto partialResults = m_pathEvaluationPartialResults;
     m_pathEvaluationTask = std::async(
         std::launch::async,
         [candidates = std::move(candidates), targetPageId, progress,
-         totalUnits, loadId, maxDepth]() mutable {
+         totalUnits, loadId, maxDepth, partialMutex,
+         partialResults,
+         candidatesByTarget = std::move(candidatesByTarget)]() mutable {
             const auto taskStartedAt = std::chrono::steady_clock::now();
             LOG_INFO("WikiPageLoader",
                      "Path evaluation task started: loadId={} candidates={} targetId={} maxDepth={}",
@@ -445,7 +460,25 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
             const auto distanceStartedAt = std::chrono::steady_clock::now();
             const auto distances = pathSystem.ComputeDistancesToTarget(
                 linkTargets, targetPageId, maxDepth, progress.get(),
-                candidates.size());
+                candidates.size(),
+                [&](const std::string& resolvedTitle, int hopsToTarget) {
+                    if (!partialMutex || !partialResults) {
+                        return;
+                    }
+
+                    const auto targetIt = candidatesByTarget.find(resolvedTitle);
+                    if (targetIt == candidatesByTarget.end()) {
+                        return;
+                    }
+
+                    std::lock_guard<std::mutex> lock(*partialMutex);
+                    for (const auto& candidate : targetIt->second) {
+                        auto resolved = candidate;
+                        resolved.hopsToTarget = hopsToTarget;
+                        resolved.isPlayable = true;
+                        partialResults->push_back(std::move(resolved));
+                    }
+                });
             LOG_INFO("WikiPageLoader",
                      "Path evaluation distance map ready: loadId={} uniqueTargets={} "
                      "resolved={} maxDepth={} elapsed={}ms",
@@ -479,6 +512,8 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
 bool WikiPageLoader::TryConsumePathEvaluation(core::GameContext& ctx,
                                               bool updateWorld)
 {
+    ConsumePartialPathEvaluation(ctx, updateWorld);
+
     for (auto it = m_retiredPathEvaluationTasks.begin();
          it != m_retiredPathEvaluationTasks.end();) {
         if (it->valid() &&
@@ -517,6 +552,47 @@ bool WikiPageLoader::UpdateAsyncPathEvaluation(core::GameContext& ctx)
     return TryConsumePathEvaluation(ctx, true);
 }
 
+size_t WikiPageLoader::ConsumePartialPathEvaluation(core::GameContext& ctx,
+                                                    bool updateWorld)
+{
+    if (!m_pathEvaluationPartialMutex || !m_pathEvaluationPartialResults) {
+        return 0;
+    }
+
+    std::vector<HolePlacementCandidate> partial;
+    {
+        std::lock_guard<std::mutex> lock(*m_pathEvaluationPartialMutex);
+        if (m_pathEvaluationConsumedResults >=
+            m_pathEvaluationPartialResults->size()) {
+            return 0;
+        }
+
+        partial.assign(
+            m_pathEvaluationPartialResults->begin() +
+                static_cast<std::vector<HolePlacementCandidate>::difference_type>(
+                    m_pathEvaluationConsumedResults),
+            m_pathEvaluationPartialResults->end());
+        m_pathEvaluationConsumedResults = m_pathEvaluationPartialResults->size();
+    }
+
+    ApplyPathEvaluationResults(partial);
+    for (const auto& resolved : partial) {
+        for (auto& candidate : m_buildHoleCandidates) {
+            if (candidate.originalIndex == resolved.originalIndex) {
+                candidate.isPlayable = true;
+                break;
+            }
+        }
+    }
+    if (updateWorld) {
+        ApplyPathEvaluationToWorld(ctx, partial);
+    }
+    LOG_INFO("WikiPageLoader",
+             "Path evaluation partial consumed: loadId={} count={} updateWorld={}",
+             m_buildLoadId, partial.size(), updateWorld ? "true" : "false");
+    return partial.size();
+}
+
 void WikiPageLoader::ApplyPathEvaluationToWorld(
     core::GameContext& ctx,
     const std::vector<HolePlacementCandidate>& evaluatedCandidates)
@@ -524,7 +600,7 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
     std::unordered_map<std::string, int> hopsByTarget;
     hopsByTarget.reserve(evaluatedCandidates.size());
     for (const auto& candidate : evaluatedCandidates) {
-        if (!candidate.linkTarget.empty() && candidate.hopsToTarget >= 0) {
+        if (!candidate.linkTarget.empty()) {
             hopsByTarget[candidate.linkTarget] = candidate.hopsToTarget;
         }
     }
@@ -973,6 +1049,9 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
     RetireActivePathEvaluationTask();
     m_pathEvaluationProgress.reset();
     m_pathEvaluationTotal.reset();
+    m_pathEvaluationPartialMutex.reset();
+    m_pathEvaluationPartialResults.reset();
+    m_pathEvaluationConsumedResults = 0;
     m_pathEvaluationStarted = false;
     m_nextHoleIndex = 0;
     m_nextMapIconIndex = 0;

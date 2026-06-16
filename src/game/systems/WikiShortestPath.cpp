@@ -612,7 +612,8 @@ WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
 
 std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     const std::vector<std::string> &sourceTitles, int targetId, int maxDepth,
-    std::atomic<size_t> *progressUnits, size_t progressBase) {
+    std::atomic<size_t> *progressUnits, size_t progressBase,
+    const std::function<void(const std::string&, int)>& onResolved) {
   const auto computeStartedAt = std::chrono::steady_clock::now();
   std::unordered_map<std::string, int> distances;
   if (!m_db || targetId < 0 || sourceTitles.empty() || maxDepth < 0) {
@@ -655,6 +656,9 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     titlesByPageId[pageId].push_back(title);
     if (pageId == targetId) {
       distances[title] = 0;
+      if (onResolved) {
+        onResolved(title, 0);
+      }
     } else {
       unresolvedPageIds.insert(pageId);
     }
@@ -714,6 +718,9 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
             titleIt != titlesByPageId.end()) {
           for (const auto &title : titleIt->second) {
             distances[title] = depth;
+            if (onResolved) {
+              onResolved(title, depth);
+            }
           }
           unresolvedPageIds.erase(incomingId);
         }
