@@ -109,20 +109,18 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_pageLoader = std::make_unique<WikiPageLoader>();
 
   if (m_isTutorial) {
-    m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
-    m_tutorialOverlay->Initialize(ctx);
-
+    // チュートリアルオーバーレイはロード演出（Transitioning）が終わってから
+    // 初期化する。ここでは固定データのみセットする。
     auto *globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>();
     if (!globalData) {
-      // WikiGlobalDataが存在しない場合は作成
       ctx.world.SetGlobal(game::components::WikiGlobalData{});
       globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>();
     }
-    
+
     globalData->startPage = "チュートリアル";
     globalData->targetPage = "ゴール";
     globalData->targetPageId = 1;
-    
+
     std::vector<game::WikiLink> links;
     links.push_back({"バンカー", "バンカー"});
     globalData->cachedLinks = links;
@@ -235,7 +233,9 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     game::components::WikiGlobalData consumedData;
     ctx.world.SetGlobal(std::move(consumedData));
     LOG_INFO("WikiGolf", "Consumed preloaded WikiGlobalData and reset startup state");
-  } else {
+  } else if (!m_isTutorial) {
+    // チュートリアル時は固定データを使用するため、DB/API同期ロードをスキップする。
+    // 通常ゲームのみここで同期フォールバックを実行する。
     LOG_INFO("WikiGolf", "No preloaded data found or pathSystem invalid. "
                          "Falling back to sync load.");
 
@@ -623,6 +623,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (m_hud) m_hud->SetVisible(ctx, true);
           if (m_minimapController) m_minimapController->SetVisible(ctx, true);
           if (m_cameraController) m_cameraController->Update(ctx);
+          // チュートリアルオーバーレイはロード演出完了後に初期化する
+          // （ロード中にUIが重なって表示されるのを防ぐ）
+          if (m_isTutorial && !m_tutorialOverlay) {
+              m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
+              m_tutorialOverlay->Initialize(ctx);
+          }
       }
       return;
   }
@@ -1136,8 +1142,16 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       if (hole->isTarget) {
         LOG_INFO("WikiGolf", "GAME CLEAR! Reached target page!");
 
+        // gameCleared をセット: TutorialStep::CupIn の完了判定が依存する
+        state->gameCleared = true;
+
         if (ctx.audio) {
           ctx.audio->PlaySE(ctx, "se_goal.mp3", 1.0f);
+        }
+
+        // チュートリアル中はゴール検知をオーバーレイに委ねてリザルトへは進まない
+        if (m_isTutorial) {
+          return true;
         }
 
         // ResultSceneへ遷移
