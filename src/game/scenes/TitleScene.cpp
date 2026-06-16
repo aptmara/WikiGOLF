@@ -718,6 +718,10 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
         m_focusIndex = 0;
       } else if (btn.action == "daily" || btn.action == "option" || btn.action == "ranking" || btn.action == "achievement") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
+        auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
+        if (ptxt) {
+            ptxt->text = L"Coming Soon...\n\n現在開発中です";
+        }
         m_popupTimer = 2.0f; // 2秒間表示
       } else if (btn.action == "exit") {
         exitGame = true;
