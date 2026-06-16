@@ -58,6 +58,87 @@ constexpr float kMinMapIconDistance = 8.0f;
 constexpr size_t kMaxMapHoleIcons = 160;
 constexpr int kPathEvaluationMaxDepth = 4;
 constexpr auto kLongBuildStepLogInterval = std::chrono::seconds(2);
+constexpr float kTutorialFieldWidth = 96.0f;
+constexpr float kTutorialFieldDepth = 144.0f;
+
+struct TutorialLinkPlacement {
+    const char* page;
+    float worldX;
+    float worldZ;
+};
+
+constexpr TutorialLinkPlacement kTutorialLinkPlacements[] = {
+    {"フェアウェイ", 0.0f, -28.0f},
+    {"ラフ", -30.0f, -12.0f},
+    {"バンカー", 24.0f, -3.0f},
+    {"ウォーターハザード", -24.0f, 20.0f},
+    {"グリーン", 12.0f, 42.0f},
+    {"ゴール", 0.0f, 56.0f},
+};
+
+/**
+ * @brief チュートリアル固定コースを使うページか判定します。 山内陽
+ */
+bool IsTutorialPresetPage(const std::string& pageName) {
+    return pageName == "チュートリアル";
+}
+
+/**
+ * @brief ワールド座標をテクスチャ上のリンク矩形へ変換します。 山内陽
+ */
+void PlaceLinkAtWorld(graphics::LinkRegion& link, const graphics::WikiTextureResult& texture,
+                      float fieldWidth, float fieldDepth, float worldX, float worldZ) {
+    if (texture.width == 0 || texture.height == 0) {
+        return;
+    }
+
+    const float cx = (worldX / fieldWidth + 0.5f) * static_cast<float>(texture.width);
+    const float cy = (0.5f - worldZ / fieldDepth) * static_cast<float>(texture.height);
+    const float maxCenteredWidth =
+        std::max(1.0f, std::min(cx, static_cast<float>(texture.width) - cx) * 2.0f);
+    const float maxCenteredHeight =
+        std::max(1.0f, std::min(cy, static_cast<float>(texture.height) - cy) * 2.0f);
+    const float linkWidth =
+        std::min(std::min(260.0f, static_cast<float>(texture.width) * 0.18f),
+                 maxCenteredWidth);
+    const float linkHeight = std::min(72.0f, maxCenteredHeight);
+    link.width = linkWidth;
+    link.height = linkHeight;
+    link.x = std::clamp(cx - link.width * 0.5f, 0.0f,
+                        std::max(0.0f, static_cast<float>(texture.width) - link.width));
+    link.y = std::clamp(cy - link.height * 0.5f, 0.0f,
+                        std::max(0.0f, static_cast<float>(texture.height) - link.height));
+}
+
+/**
+ * @brief チュートリアル用にホール配置だけを教材コースへ固定します。 山内陽
+ */
+std::vector<graphics::LinkRegion>
+BuildTutorialPresetGameplayLinks(const graphics::WikiTextureResult& texture,
+                                 const std::string& targetPage) {
+    std::vector<graphics::LinkRegion> links;
+    links.reserve(std::size(kTutorialLinkPlacements));
+    for (const auto& placement : kTutorialLinkPlacements) {
+        graphics::LinkRegion link;
+        if (const auto sourceLink = std::find_if(
+                texture.links.begin(), texture.links.end(),
+                [&placement](const graphics::LinkRegion& candidate) {
+                    return candidate.targetPage == placement.page;
+                });
+            sourceLink != texture.links.end()) {
+            link = *sourceLink;
+        } else {
+            link.targetPage = placement.page;
+        }
+
+        link.isTarget = (link.targetPage == targetPage);
+        PlaceLinkAtWorld(link, texture, kTutorialFieldWidth,
+                         kTutorialFieldDepth, placement.worldX,
+                         placement.worldZ);
+        links.push_back(link);
+    }
+    return links;
+}
 
 /**
  * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
@@ -179,6 +260,11 @@ void WikiPageLoader::SetSystems(
     m_terrainSystem    = terrainSys;
     m_skyboxGenerator  = skyboxGen;
     m_shortestPath     = shortestPath;
+}
+
+void WikiPageLoader::SetTutorialMode(bool enabled)
+{
+    m_tutorialMode = enabled;
 }
 
 void WikiPageLoader::SetPreloadedData(std::vector<game::WikiLink> links,
@@ -656,6 +742,10 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     float fieldWidth = kMinFieldWidth * std::pow(articleLengthFactor, 0.45f);
     fieldWidth = std::clamp(fieldWidth, kMinFieldWidth, kMinFieldWidth * 4.0f);
     float fieldDepth = kMinFieldDepth;
+    if (m_tutorialMode && IsTutorialPresetPage(pageName)) {
+        fieldWidth = kTutorialFieldWidth;
+        fieldDepth = kTutorialFieldDepth;
+    }
 
     // 地形生成用のテクスチャ解像度を計算します。
     const uint32_t kMaxTexWidth = 16384;
@@ -695,11 +785,21 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     if (actualFieldDepth < kMinFieldDepth)
         scaleFix = std::max(scaleFix, kMinFieldDepth / actualFieldDepth);
 
-    fieldWidth = std::min(actualFieldWidth * scaleFix, kMaxSafeWidth);
-    fieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
+    if (m_tutorialMode && IsTutorialPresetPage(pageName)) {
+        fieldWidth = kTutorialFieldWidth;
+        fieldDepth = kTutorialFieldDepth;
+    } else {
+        fieldWidth = std::min(actualFieldWidth * scaleFix, kMaxSafeWidth);
+        fieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
+    }
 
     m_wikiTexture =
         std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
+    m_buildGameplayLinks.clear();
+    if (m_tutorialMode && IsTutorialPresetPage(pageName)) {
+        m_buildGameplayLinks =
+            BuildTutorialPresetGameplayLinks(*m_wikiTexture, state->targetPage);
+    }
 
     // 記事のテーマに応じたスカイボックスを適用します。
     auto* skyboxComp = ctx.world.Get<components::Skybox>(skyboxEntity);
@@ -759,7 +859,11 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     // 地形の構築処理を行います。
     if (m_terrainSystem) {
         const auto terrainStartedAt = std::chrono::steady_clock::now();
-        m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture,
+        auto terrainTexture = *m_wikiTexture;
+        if (!m_buildGameplayLinks.empty()) {
+            terrainTexture.links = m_buildGameplayLinks;
+        }
+        m_terrainSystem->BuildField(ctx, pageName, terrainTexture,
                                     fieldWidth, fieldDepth, pageCategories);
         LOG_INFO("WikiPageLoader", "BuildPageSync terrain built elapsed={}ms",
                  ElapsedMs(terrainStartedAt));
@@ -859,6 +963,7 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
     m_buildHoleCandidates.clear();
     m_buildPathCandidates.clear();
     m_buildMapHoleCandidates.clear();
+    m_buildGameplayLinks.clear();
     m_pathHopCache.clear();
     RetireActivePathEvaluationTask();
     m_pathEvaluationProgress.reset();
@@ -980,9 +1085,14 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
         // フィールドサイズ計算
         float articleLengthFactor = std::max(1.0f, (float)m_buildData.articleText.length() / 1500.0f);
-        m_buildFieldWidth = kMinFieldWidth * std::pow(articleLengthFactor, 0.45f);
-        m_buildFieldWidth = std::clamp(m_buildFieldWidth, kMinFieldWidth, kMinFieldWidth * 4.0f);
-        m_buildFieldDepth = kMinFieldDepth;
+        if (m_tutorialMode && IsTutorialPresetPage(m_buildData.pageName)) {
+            m_buildFieldWidth = kTutorialFieldWidth;
+            m_buildFieldDepth = kTutorialFieldDepth;
+        } else {
+            m_buildFieldWidth = kMinFieldWidth * std::pow(articleLengthFactor, 0.45f);
+            m_buildFieldWidth = std::clamp(m_buildFieldWidth, kMinFieldWidth, kMinFieldWidth * 4.0f);
+            m_buildFieldDepth = kMinFieldDepth;
+        }
 
         // テクスチャサイズ
         const uint32_t kMaxTexWidth = 16384;
@@ -1055,15 +1165,26 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                 if (actualFieldDepth < kMinFieldDepth)
                     scaleFix = std::max(scaleFix, kMinFieldDepth / actualFieldDepth);
 
-                m_buildFieldWidth = std::min(actualFieldWidth * scaleFix, kMaxSafeWidth);
-                m_buildFieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
+                if (m_tutorialMode && IsTutorialPresetPage(m_buildData.pageName)) {
+                    m_buildFieldWidth = kTutorialFieldWidth;
+                    m_buildFieldDepth = kTutorialFieldDepth;
+                } else {
+                    m_buildFieldWidth = std::min(actualFieldWidth * scaleFix, kMaxSafeWidth);
+                    m_buildFieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
+                }
 
                 m_wikiTexture = std::make_unique<graphics::WikiTextureResult>(std::move(m_textureState.result));
+                if (m_tutorialMode && IsTutorialPresetPage(m_buildData.pageName)) {
+                    m_buildGameplayLinks =
+                        BuildTutorialPresetGameplayLinks(*m_wikiTexture, state->targetPage);
+                }
                 LOG_INFO("WikiPageLoader",
                          "BuildPage loadId={} texture generation finished "
-                         "size={}x{} links={} field={:.1f}x{:.1f}",
+                         "size={}x{} links={} gameplayLinks={} field={:.1f}x{:.1f}",
                          m_buildLoadId, m_wikiTexture->width,
                          m_wikiTexture->height, m_wikiTexture->links.size(),
+                         m_buildGameplayLinks.empty() ? m_wikiTexture->links.size()
+                                                      : m_buildGameplayLinks.size(),
                          m_buildFieldWidth, m_buildFieldDepth);
                 
                 m_buildStep = BuildStep::ApplySkybox;
@@ -1119,9 +1240,13 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         const auto terrainBeginStartedAt = std::chrono::steady_clock::now();
         // 地形生成システムを非同期で開始
         if (m_terrainSystem && m_wikiTexture) {
+            auto terrainTexture = *m_wikiTexture;
+            if (!m_buildGameplayLinks.empty()) {
+                terrainTexture.links = m_buildGameplayLinks;
+            }
             m_terrainSystem->BeginBuildField(
                 m_buildData.pageName,
-                *m_wikiTexture,
+                terrainTexture,
                 m_buildFieldWidth,
                 m_buildFieldDepth,
                 m_buildData.pageCategories);
@@ -1182,21 +1307,23 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             return false;
         }
 
+        const auto& gameplayLinks =
+            m_buildGameplayLinks.empty() ? m_wikiTexture->links : m_buildGameplayLinks;
         constexpr size_t kHoleEvaluationsPerFrame = 2;
         for (size_t i = 0; i < kHoleEvaluationsPerFrame &&
-                           m_nextHoleIndex < m_wikiTexture->links.size();
+                           m_nextHoleIndex < gameplayLinks.size();
              ++i, ++m_nextHoleIndex) {
             if (std::chrono::steady_clock::now() >= m_buildDeadline) {
                 break;
             }
 
-            const auto& linkRegion = m_wikiTexture->links[m_nextHoleIndex];
+            const auto& linkRegion = gameplayLinks[m_nextHoleIndex];
             m_buildHoleCandidates.push_back(
                 BuildHolePlacementCandidate(linkRegion, m_nextHoleIndex));
         }
 
-        if (m_wikiTexture->links.empty() ||
-            m_nextHoleIndex >= m_wikiTexture->links.size()) {
+        if (gameplayLinks.empty() ||
+            m_nextHoleIndex >= gameplayLinks.size()) {
             m_buildMapHoleCandidates =
                 SelectMapHoleIconCandidates(m_buildHoleCandidates);
             m_buildPathCandidates = m_buildHoleCandidates;
@@ -1209,11 +1336,11 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             LOG_INFO("WikiPageLoader",
                      "Hole candidates staged: textureLinks={}, mapIcons={}, "
                      "pathTargets={}/{} pathEvaluation=background",
-                     m_wikiTexture->links.size(), m_buildMapHoleCandidates.size(),
+                     gameplayLinks.size(), m_buildMapHoleCandidates.size(),
                      m_buildPathCandidates.size(), m_buildHoleCandidates.size());
         } else {
             float holeProgress =
-                (float)m_nextHoleIndex / (float)m_wikiTexture->links.size();
+                (float)m_nextHoleIndex / (float)gameplayLinks.size();
             m_buildProgress = 0.85f + 0.03f * holeProgress;
         }
         return false;
@@ -1633,11 +1760,13 @@ void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
 {
     if (!m_wikiTexture) return;
 
+    const auto& gameplayLinks =
+        m_buildGameplayLinks.empty() ? m_wikiTexture->links : m_buildGameplayLinks;
     std::vector<HolePlacementCandidate> candidates;
-    candidates.reserve(m_wikiTexture->links.size());
-    for (size_t i = 0; i < m_wikiTexture->links.size(); ++i) {
+    candidates.reserve(gameplayLinks.size());
+    for (size_t i = 0; i < gameplayLinks.size(); ++i) {
         candidates.push_back(
-            BuildHolePlacementCandidate(m_wikiTexture->links[i], i));
+            BuildHolePlacementCandidate(gameplayLinks[i], i));
     }
 
     m_buildMapHoleCandidates = SelectMapHoleIconCandidates(candidates);

@@ -168,10 +168,15 @@ void WikiTerrainSystem::BeginBuildField(
     }
   }
 
+  const bool useTutorialPreset = m_tutorialMode && pageTitle == "チュートリアル";
+
   // ラムダにコピーして非同期実行（thisへの参照を持たない）
   m_terrainFuture = std::async(
       std::launch::async,
-      [seedText, holePositions, config]() mutable {
+      [seedText, holePositions, config, useTutorialPreset]() mutable {
+          if (useTutorialPreset) {
+              return TerrainGenerator::GenerateTutorialTerrain(config, holePositions);
+          }
           return TerrainGenerator::GenerateTerrain(seedText, holePositions, config);
       });
 
@@ -586,8 +591,13 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   }
 
   // 地形データの生成
-  m_terrainData = std::make_shared<TerrainData>(
-      TerrainGenerator::GenerateTerrain(seedText, holePositions, config));
+  if (m_tutorialMode && pageTitle == "チュートリアル") {
+    m_terrainData = std::make_shared<TerrainData>(
+        TerrainGenerator::GenerateTutorialTerrain(config, holePositions));
+  } else {
+    m_terrainData = std::make_shared<TerrainData>(
+        TerrainGenerator::GenerateTerrain(seedText, holePositions, config));
+  }
 
   // 物理エンティティの作成
   {

@@ -18,6 +18,11 @@ namespace {
 constexpr uint8_t kWater = 5;
 constexpr uint8_t kLava = 6;
 
+constexpr uint8_t kFairway = 0;
+constexpr uint8_t kRough = 1;
+constexpr uint8_t kBunker = 2;
+constexpr uint8_t kGreen = 3;
+
 int ToGridX(const game::systems::TerrainData &data, float worldX) {
   float u = worldX / data.config.worldWidth + 0.5f;
   return std::clamp(static_cast<int>(u * (data.config.resolutionX - 1)), 0,
@@ -28,6 +33,13 @@ int ToGridZ(const game::systems::TerrainData &data, float worldZ) {
   float v = 0.5f - worldZ / data.config.worldDepth;
   return std::clamp(static_cast<int>(v * (data.config.resolutionZ - 1)), 0,
                     data.config.resolutionZ - 1);
+}
+
+uint8_t MaterialAt(const game::systems::TerrainData &data, float worldX,
+                   float worldZ) {
+  const int gx = ToGridX(data, worldX);
+  const int gz = ToGridZ(data, worldZ);
+  return data.materialMap[gz * data.config.resolutionX + gx];
 }
 
 } // namespace
@@ -107,6 +119,51 @@ int main() {
 
   CHECK(variedSeedsWithHazards >= 3,
         "Most biome variants include hazard or gimmick terrain");
+
+  game::systems::TerrainConfig tutorialConfig;
+  tutorialConfig.resolutionX = 64;
+  tutorialConfig.resolutionZ = 96;
+  tutorialConfig.worldWidth = 96.0f;
+  tutorialConfig.worldDepth = 144.0f;
+  tutorialConfig.heightScale = 1.0f;
+  tutorialConfig.biome = 0;
+
+  std::vector<DirectX::XMFLOAT2> tutorialHoles = {
+      {0.0f, -28.0f}, {-30.0f, -12.0f}, {24.0f, -3.0f},
+      {-24.0f, 20.0f}, {12.0f, 42.0f}, {0.0f, 56.0f}};
+
+  auto tutorialData =
+      game::systems::TerrainGenerator::GenerateTutorialTerrain(
+          tutorialConfig, tutorialHoles);
+
+  CHECK(tutorialData.materialMap.size() ==
+            static_cast<size_t>(tutorialConfig.resolutionX *
+                                tutorialConfig.resolutionZ),
+        "Tutorial material map has one entry per terrain vertex");
+  CHECK(!tutorialData.vertices.empty() && !tutorialData.indices.empty(),
+        "Tutorial terrain mesh is generated");
+
+  std::array<int, 8> tutorialCounts{};
+  for (uint8_t mat : tutorialData.materialMap) {
+    if (mat < tutorialCounts.size()) {
+      ++tutorialCounts[mat];
+    }
+  }
+
+  CHECK(tutorialCounts[kFairway] > 0, "Tutorial fairway is present");
+  CHECK(tutorialCounts[kRough] > 0, "Tutorial rough is present");
+  CHECK(tutorialCounts[kBunker] > 0, "Tutorial bunker is present");
+  CHECK(tutorialCounts[kGreen] > 0, "Tutorial green is present");
+  CHECK(tutorialCounts[kWater] > 0, "Tutorial water hazard is present");
+  CHECK(MaterialAt(tutorialData, 0.0f, -28.0f) == kFairway,
+        "Tutorial fairway lesson is on fairway");
+  CHECK(MaterialAt(tutorialData, 24.0f, -3.0f) == kBunker,
+        "Tutorial bunker lesson is in the bunker");
+  CHECK(MaterialAt(tutorialData, -24.0f, 20.0f) == kWater,
+        "Tutorial water lesson is in the water hazard");
+  CHECK(MaterialAt(tutorialData, 0.0f, 56.0f) == kGreen,
+        "Tutorial goal is on the green");
+
   std::cout << "All terrain generation tests passed!\n";
   return 0;
 }

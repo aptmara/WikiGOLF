@@ -35,6 +35,9 @@ public:
   WikiTerrainSystem() = default;
   ~WikiTerrainSystem() = default;
 
+  /// @brief チュートリアル専用の固定教材地形を使うか設定します。 山内陽
+  void SetTutorialMode(bool enabled) { m_tutorialMode = enabled; }
+
   /// @brief フィールドを再構築する（同期版 / 後方互換用）
   void BuildField(core::GameContext &ctx, const std::string &pageTitle,
                   const graphics::WikiTextureResult &textureResult,
@@ -79,6 +82,7 @@ private:
   std::vector<ecs::Entity> m_entities;
   ecs::Entity m_floorEntity = 0xFFFFFFFF;
   std::shared_ptr<TerrainData> m_terrainData;
+  bool m_tutorialMode = false;
 
   /// @brief 床作成（同期版 / BuildFieldから呼ぶ）
   void CreateFloor(core::GameContext &ctx,

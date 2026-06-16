@@ -119,12 +119,20 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
     globalData->startPage = "チュートリアル";
     globalData->targetPage = "ゴール";
-    globalData->targetPageId = 1;
+    globalData->targetPageId = -1;
 
     std::vector<game::WikiLink> links;
+    links.push_back({"フェアウェイ", "フェアウェイ"});
+    links.push_back({"ラフ", "ラフ"});
     links.push_back({"バンカー", "バンカー"});
+    links.push_back({"グリーン", "グリーン"});
+    links.push_back({"ウォーターハザード", "ウォーターハザード"});
+    links.push_back({"ゴール", "ゴール"});
     globalData->cachedLinks = links;
-    globalData->cachedExtract = "チュートリアルへようこそ。ここでは地形による影響を学びます。砂地のバンカーに注意して進みましょう。";
+    globalData->cachedExtract =
+        "チュートリアルへようこそ。フェアウェイ、ラフ、バンカー、"
+        "グリーン、ウォーターハザードの違いを確認しながら、"
+        "最後はゴールへカップインしましょう。";
     globalData->hasCachedData = true;
   }
   
@@ -215,10 +223,16 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
       ctx.world.GetGlobal<game::components::WikiGlobalData>();
   std::string startPage;
 
-  if (preloadedData && preloadedData->pathSystem) {
+  const bool hasPreloadedStartupData =
+      preloadedData &&
+      (preloadedData->pathSystem || (m_isTutorial && preloadedData->hasCachedData));
+
+  if (hasPreloadedStartupData) {
     LOG_INFO("WikiGolf", "Using preloaded data. Start: {}, Target: {}",
              preloadedData->startPage, preloadedData->targetPage);
-    m_shortestPath = std::move(preloadedData->pathSystem);
+    if (preloadedData->pathSystem) {
+      m_shortestPath = std::move(preloadedData->pathSystem);
+    }
     startPage = preloadedData->startPage;
     targetPage = preloadedData->targetPage;
     targetId = preloadedData->targetPageId;
@@ -375,6 +389,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
             ctx.world.IsAlive(m_cameraEntity) ? "true" : "false");
   
   m_pageLoader->SetSystems(m_textureGenerator.get(), m_terrainSystem.get(), m_skyboxGenerator.get(), m_shortestPath.get());
+  m_pageLoader->SetTutorialMode(m_isTutorial);
+  m_terrainSystem->SetTutorialMode(m_isTutorial);
 
   // コントローラの初期化
   m_cameraController = std::make_unique<game::controllers::CameraController>();
@@ -619,6 +635,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       bool finished = m_transitionController->Update(ctx);
       if (finished) {
           m_phase = ScenePhase::Playing;
+          m_prevTutorialInputLocked = false;
           // ロード完了: HUD/ミニマップを再表示する
           if (m_hud) m_hud->SetVisible(ctx, true);
           if (m_minimapController) m_minimapController->SetVisible(ctx, true);
@@ -628,6 +645,15 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (m_isTutorial && !m_tutorialOverlay) {
               m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
               m_tutorialOverlay->Initialize(ctx);
+
+              std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> targets = {
+                  { {0.0f, 15.0f, -25.0f}, {0.0f, 0.0f, -10.0f}, L"Fairway (フェアウェイ)", L"ボールが転がりやすい標準的な地形です。" },
+                  { {-15.0f, 15.0f, -15.0f}, {-15.0f, 0.0f, 0.0f}, L"Rough (ラフ)", L"草が深く、ボールの転がりが少し悪くなります。" },
+                  { {24.0f, 15.0f, -18.0f}, {24.0f, 0.0f, -3.0f}, L"Bunker (バンカー)", L"砂地です。転がりにくく、パワーも落ちやすくなります。" },
+                  { {0.0f, 15.0f, 37.0f}, {0.0f, 0.0f, 52.0f}, L"Green (グリーン)", L"カップ周りの滑らかな地形です。よく転がります。" },
+                  { {-24.0f, 15.0f, 5.0f}, {-24.0f, 0.0f, 20.0f}, L"OB / Water / Lava", L"水や溶岩などの危険エリア。入るとペナルティで1打戻されます。" }
+              };
+              m_tutorialOverlay->SetEventCameraTargets(m_cameraEntity, std::move(targets));
           }
       }
       return;
@@ -637,9 +663,27 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   int mouseX = mousePos.x;
   int mouseY = mousePos.y;
 
+  bool tutorialInputLocked = false;
+  if (m_isTutorial && m_tutorialOverlay) {
+    m_tutorialOverlay->Update(ctx, m_cameraController.get(), m_clubController.get(), m_shotController.get(), m_minimapController.get());
+    if (m_tutorialOverlay->IsDone()) {
+      // チュートリアル終了後、タイトルへ戻る処理など
+      // （フラグの保存はTitleScene側か、ここで行う）
+      std::string path = "save_tutorial_done.flag";
+      std::ofstream ofs(path);
+      ofs << "done";
+      ofs.close();
+
+      auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<TitleScene>(); });
+      ctx.sceneManager->ChangeScene(std::move(loadingScene));
+      return;
+    }
+    tutorialInputLocked = m_tutorialOverlay->IsInputLocked();
+  }
+
   // マップビュー更新
   bool isMapView = false;
-  if (m_minimapController) {
+  if (m_minimapController && !tutorialInputLocked) {
       float fieldW = m_pageLoader ? m_pageLoader->GetFieldWidth() : 80.0f;
       float fieldD = m_pageLoader ? m_pageLoader->GetFieldDepth() : 120.0f;
       m_minimapController->ProcessInput(ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
@@ -657,24 +701,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       isMapView = m_minimapController->IsMapView();
   }
 
-  if (m_isTutorial && m_tutorialOverlay) {
-    m_tutorialOverlay->Update(ctx, m_cameraController.get(), m_clubController.get(), m_shotController.get(), m_minimapController.get());
-    if (m_tutorialOverlay->IsDone()) {
-      // チュートリアル終了後、タイトルへ戻る処理など
-      // （フラグの保存はTitleScene側か、ここで行う）
-      std::string path = "save_tutorial_done.flag";
-      std::ofstream ofs(path);
-      ofs << "done";
-      ofs.close();
-      
-      auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<TitleScene>(); });
-      ctx.sceneManager->ChangeScene(std::move(loadingScene));
-      return;
-    }
+  if (m_prevTutorialInputLocked && !tutorialInputLocked && m_cameraController) {
+      m_cameraController->ResetForTransition(kFieldScale);
   }
+  m_prevTutorialInputLocked = tutorialInputLocked;
 
   // クラブ更新
-  if (m_clubController && !isMapView && shot->phase == game::components::ShotState::Phase::Idle) {
+  if (m_clubController && !tutorialInputLocked && !isMapView &&
+      shot->phase == game::components::ShotState::Phase::Idle) {
       game::controllers::ClubController::InputParams cParams;
       cParams.allowInput = state->canShoot;
       auto cResult = m_clubController->UpdateInput(ctx, cParams);
@@ -686,13 +720,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // カメラ更新
-  if (m_cameraController && !isMapView) {
+  if (m_cameraController && !tutorialInputLocked && !isMapView) {
       m_cameraController->ProcessInput(ctx, mouseX, mouseY);
       m_cameraController->Update(ctx);
   }
 
   // ショット処理
-  if (m_shotController && !isMapView) {
+  if (m_shotController && !tutorialInputLocked && !isMapView) {
       auto event = m_shotController->ProcessShot(ctx, state->canShoot, m_hud.get(), m_clubController.get());
       if (event.shotFired) {
           state->canShoot = false;
@@ -721,7 +755,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
   
   // クラブアニメーション更新
-  if (m_clubController) {
+  if (m_clubController && !tutorialInputLocked) {
       DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
       m_clubController->UpdateAnimation(ctx, dt, m_ballEntity, shotDir);
   }
@@ -886,7 +920,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // 予測軌道アップデート (Idle 時も表示: クラブ切り替えやパワーレビューのため)
-  bool canShowTrajectory = m_trajectoryPredictor && state->canShoot && !isMapView;
+  bool canShowTrajectory = m_trajectoryPredictor && state->canShoot &&
+                           !tutorialInputLocked && !isMapView;
   if (canShowTrajectory &&
       (shot->phase == game::components::ShotState::Phase::Idle ||
        shot->phase == game::components::ShotState::Phase::PowerCharging ||
@@ -921,7 +956,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       auto* guideT = ctx.world.Get<game::components::Transform>(m_guideArrowEntity);
       auto* ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
       if (guideMR && guideT && ballT) {
-          if (shot->phase == game::components::ShotState::Phase::Idle && state->canShoot && !isMapView) {
+          if (shot->phase == game::components::ShotState::Phase::Idle &&
+              state->canShoot && !tutorialInputLocked && !isMapView) {
               guideMR->isVisible = true;
               guideT->position = ballT->position;
               DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);

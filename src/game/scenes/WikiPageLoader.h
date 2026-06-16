@@ -78,6 +78,11 @@ public:
                     game::systems::WikiShortestPath* shortestPath);
 
     /**
+     * @brief チュートリアル専用の固定教材コースを使うか設定します。 山内陽
+     */
+    void SetTutorialMode(bool enabled);
+
+    /**
      * @brief 記事の地形・ホールを構築する
      * @param ctx       ゲームコンテキスト
      * @param pageName  ロードする記事名
@@ -192,6 +197,7 @@ private:
     game::systems::WikiTerrainSystem*  m_terrainSystem    = nullptr;
     graphics::SkyboxTextureGenerator*  m_skyboxGenerator  = nullptr;
     game::systems::WikiShortestPath*   m_shortestPath     = nullptr;
+    bool                               m_tutorialMode     = false;
 
     // ---- 所有リソース ----
     std::unique_ptr<graphics::WikiTextureResult> m_wikiTexture;
@@ -337,6 +343,7 @@ private:
     std::vector<HolePlacementCandidate> m_buildHoleCandidates;
     std::vector<HolePlacementCandidate> m_buildPathCandidates;
     std::vector<HolePlacementCandidate> m_buildMapHoleCandidates;
+    std::vector<graphics::LinkRegion> m_buildGameplayLinks;
     std::unordered_map<std::string, int> m_pathHopCache;
     std::future<std::vector<HolePlacementCandidate>> m_pathEvaluationTask;
     std::vector<std::future<std::vector<HolePlacementCandidate>>> m_retiredPathEvaluationTasks;

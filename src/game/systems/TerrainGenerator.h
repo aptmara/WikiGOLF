@@ -45,6 +45,13 @@ public:
                   const std::vector<DirectX::XMFLOAT2> &holePositions,
                   const TerrainConfig &config);
 
+  /**
+   * @brief チュートリアル用の固定教材地形を生成します。
+   */
+  static TerrainData
+  GenerateTutorialTerrain(const TerrainConfig &config,
+                          const std::vector<DirectX::XMFLOAT2> &holePositions);
+
 private:
   /**
    * @brief 基準ハイトマップを生成します。
