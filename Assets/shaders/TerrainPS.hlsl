@@ -26,7 +26,8 @@ SamplerState g_Sampler : register(s0);
 float4 main(PS_INPUT input) : SV_TARGET {
     // UVスケール適用
     float uvScale = max(MaterialFlags.z, 1.0f);
-    float3 uvw = float3(input.Tex * uvScale, 0.0f);
+    float materialLayer = clamp(floor(input.Color.a * 255.0f), 0.0f, 7.0f);
+    float3 uvw = float3(input.Tex * uvScale, materialLayer);
 
     // 2. ベースカラー。
     // 素材IDを補間してTexture2DArrayのlayerに使うと、境界に水/OB等の偽素材が出る。
@@ -34,8 +35,10 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float4 baseColor = float4(input.Color.rgb, 1.0f);
     
     // テクスチャサンプリング
-    float4 texColor = g_AlbedoArray.Sample(g_Sampler, uvw);
-    baseColor.rgb *= lerp(float3(1.0f, 1.0f, 1.0f), texColor.rgb, 0.35f);
+    if (MaterialFlags.x > 0.5f) {
+        float4 texColor = g_AlbedoArray.Sample(g_Sampler, uvw);
+        baseColor.rgb *= lerp(float3(1.0f, 1.0f, 1.0f), texColor.rgb, 0.45f);
+    }
 
     // 3. 法線計算
     float3 N = normalize(input.Normal);

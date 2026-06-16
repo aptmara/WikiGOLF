@@ -30,6 +30,7 @@
 #include <cstdlib>
 #include <future>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -55,6 +56,20 @@ constexpr float kMaxSafeWidth   = 20000.0f;
 constexpr float kMinLinkHoleDistance = 4.0f;
 constexpr float kMinMapIconDistance = 8.0f;
 constexpr size_t kMaxMapHoleIcons = 160;
+constexpr int kPathEvaluationMaxDepth = 4;
+constexpr auto kLongBuildStepLogInterval = std::chrono::seconds(2);
+
+/**
+ * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
+ */
+long long ElapsedMs(const std::chrono::steady_clock::time_point& startedAt) {
+    if (startedAt == std::chrono::steady_clock::time_point::min()) {
+        return 0;
+    }
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now() - startedAt)
+        .count();
+}
 
 /**
  * @brief ホップ数に応じたホール色を返します。 山内陽
@@ -174,6 +189,304 @@ void WikiPageLoader::SetPreloadedData(std::vector<game::WikiLink> links,
     m_hasPreloadedData = true;
 }
 
+const char* WikiPageLoader::BuildStepName(BuildStep step)
+{
+    switch (step) {
+    case BuildStep::None: return "None";
+    case BuildStep::ClearOldHoles: return "ClearOldHoles";
+    case BuildStep::PrepareLinks: return "PrepareLinks";
+    case BuildStep::BeginTexture: return "BeginTexture";
+    case BuildStep::GenerateTextureTiles: return "GenerateTextureTiles";
+    case BuildStep::ApplySkybox: return "ApplySkybox";
+    case BuildStep::BeginTerrain: return "BeginTerrain";
+    case BuildStep::BuildTerrainStep: return "BuildTerrainStep";
+    case BuildStep::RepositionBall: return "RepositionBall";
+    case BuildStep::EvaluateHoles: return "EvaluateHoles";
+    case BuildStep::EvaluateHolePaths: return "EvaluateHolePaths";
+    case BuildStep::CreateMapIcons: return "CreateMapIcons";
+    case BuildStep::CreateHoles: return "CreateHoles";
+    case BuildStep::SetupWind: return "SetupWind";
+    case BuildStep::Finish: return "Finish";
+    default: return "Unknown";
+    }
+}
+
+void WikiPageLoader::LogBuildStepTransition()
+{
+    if (m_loggedBuildStep == m_buildStep) {
+        return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (m_loggedBuildStep != BuildStep::None) {
+        LOG_INFO("WikiPageLoader",
+                 "BuildPage loadId={} step={} finished elapsed={}ms total={}ms "
+                 "progress={:.1f}%",
+                 m_buildLoadId, BuildStepName(m_loggedBuildStep),
+                 ElapsedMs(m_stepStartedAt), ElapsedMs(m_buildStartedAt),
+                 m_buildProgress * 100.0f);
+    }
+
+    m_loggedBuildStep = m_buildStep;
+    m_stepStartedAt = now;
+    m_lastLongStepLogAt = now;
+
+    if (m_buildStep != BuildStep::None) {
+        LOG_INFO("WikiPageLoader",
+                 "BuildPage loadId={} step={} started total={}ms progress={:.1f}%",
+                 m_buildLoadId, BuildStepName(m_buildStep),
+                 ElapsedMs(m_buildStartedAt), m_buildProgress * 100.0f);
+    }
+}
+
+void WikiPageLoader::LogLongRunningBuildStep()
+{
+    if (m_loggedBuildStep == BuildStep::None) {
+        return;
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (now - m_lastLongStepLogAt < kLongBuildStepLogInterval) {
+        return;
+    }
+
+    LOG_INFO("WikiPageLoader",
+             "BuildPage loadId={} step={} still-running elapsed={}ms total={}ms "
+             "progress={:.1f}%",
+             m_buildLoadId, BuildStepName(m_loggedBuildStep),
+             ElapsedMs(m_stepStartedAt), ElapsedMs(m_buildStartedAt),
+             m_buildProgress * 100.0f);
+    m_lastLongStepLogAt = now;
+}
+
+void WikiPageLoader::RetireActivePathEvaluationTask()
+{
+    if (!m_pathEvaluationTask.valid()) {
+        return;
+    }
+
+    if (m_pathEvaluationTask.wait_for(std::chrono::milliseconds(0)) ==
+        std::future_status::ready) {
+        (void)m_pathEvaluationTask.get();
+        return;
+    }
+
+    LOG_WARN("WikiPageLoader",
+             "Path evaluation task retired without blocking: loadId={}",
+             m_buildLoadId);
+    m_retiredPathEvaluationTasks.push_back(std::move(m_pathEvaluationTask));
+}
+
+void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId)
+{
+    if (m_pathEvaluationStarted) {
+        return;
+    }
+
+    m_pathEvaluationStarted = true;
+    m_nextPathIndex = 0;
+    m_pathEvaluationProgress = std::make_shared<std::atomic<size_t>>(0);
+    m_pathEvaluationTotal = std::make_shared<std::atomic<size_t>>(
+        m_buildPathCandidates.size() + kPathEvaluationMaxDepth);
+
+    const uint64_t loadId = m_buildLoadId;
+    auto candidates = m_buildPathCandidates;
+    auto progress = m_pathEvaluationProgress;
+    auto totalUnits = m_pathEvaluationTotal;
+    m_pathEvaluationTask = std::async(
+        std::launch::async,
+        [candidates = std::move(candidates), targetPageId, progress,
+         totalUnits, loadId]() mutable {
+            const auto taskStartedAt = std::chrono::steady_clock::now();
+            LOG_INFO("WikiPageLoader",
+                     "Path evaluation task started: loadId={} candidates={} targetId={}",
+                     loadId, candidates.size(), targetPageId);
+            if (targetPageId == -1 || candidates.empty()) {
+                progress->store(totalUnits->load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+                LOG_WARN("WikiPageLoader",
+                         "Path evaluation task skipped: loadId={} candidates={} targetId={}",
+                         loadId, candidates.size(), targetPageId);
+                return candidates;
+            }
+
+            game::systems::WikiShortestPath pathSystem;
+            const auto dbStartedAt = std::chrono::steady_clock::now();
+            if (!pathSystem.Initialize("Assets/data/jawiki_sdow.sqlite",
+                                       false)) {
+                progress->store(totalUnits->load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+                LOG_ERROR("WikiPageLoader",
+                          "Path evaluation DB initialize failed: loadId={} elapsed={}ms",
+                          loadId, ElapsedMs(dbStartedAt));
+                return candidates;
+            }
+            LOG_INFO("WikiPageLoader",
+                     "Path evaluation DB initialized: loadId={} elapsed={}ms",
+                     loadId, ElapsedMs(dbStartedAt));
+
+            std::vector<std::string> linkTargets;
+            std::unordered_set<std::string> seenTargets;
+            linkTargets.reserve(candidates.size());
+            size_t emptyTargets = 0;
+            size_t duplicateTargets = 0;
+            for (size_t i = 0; i < candidates.size(); ++i) {
+                const auto& candidate = candidates[i];
+                if (candidate.linkTarget.empty()) {
+                    ++emptyTargets;
+                    progress->store(i + 1, std::memory_order_relaxed);
+                    continue;
+                }
+                if (!seenTargets.insert(candidate.linkTarget).second) {
+                    ++duplicateTargets;
+                    progress->store(i + 1, std::memory_order_relaxed);
+                    continue;
+                }
+                linkTargets.push_back(candidate.linkTarget);
+                progress->store(i + 1, std::memory_order_relaxed);
+            }
+
+            totalUnits->store(
+                candidates.size() + linkTargets.size() + kPathEvaluationMaxDepth,
+                std::memory_order_relaxed);
+            LOG_INFO("WikiPageLoader",
+                     "Path evaluation targets prepared: loadId={} candidates={} unique={} "
+                     "empty={} duplicates={} totalUnits={}",
+                     loadId, candidates.size(), linkTargets.size(), emptyTargets,
+                     duplicateTargets,
+                     totalUnits->load(std::memory_order_relaxed));
+            const auto distanceStartedAt = std::chrono::steady_clock::now();
+            const auto distances = pathSystem.ComputeDistancesToTarget(
+                linkTargets, targetPageId, kPathEvaluationMaxDepth, progress.get(),
+                candidates.size());
+            LOG_INFO("WikiPageLoader",
+                     "Path evaluation distance map ready: loadId={} uniqueTargets={} "
+                     "resolved={} elapsed={}ms",
+                     loadId, linkTargets.size(), distances.size(),
+                     ElapsedMs(distanceStartedAt));
+            size_t assignedDistances = 0;
+            for (auto& candidate : candidates) {
+                const auto distance = distances.find(candidate.linkTarget);
+                candidate.hopsToTarget =
+                    distance != distances.end() ? distance->second : -1;
+                if (distance != distances.end()) {
+                    ++assignedDistances;
+                }
+            }
+            progress->store(totalUnits->load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            LOG_INFO("WikiPageLoader",
+                     "Path evaluation task finished: loadId={} candidates={} assigned={} "
+                     "unresolved={} elapsed={}ms",
+                     loadId, candidates.size(), assignedDistances,
+                     candidates.size() - assignedDistances,
+                     ElapsedMs(taskStartedAt));
+            return candidates;
+        });
+
+    LOG_INFO("WikiPageLoader",
+             "Path evaluation launched in background: loadId={} targets={}",
+             m_buildLoadId, m_buildPathCandidates.size());
+}
+
+bool WikiPageLoader::TryConsumePathEvaluation(core::GameContext& ctx,
+                                              bool updateWorld)
+{
+    for (auto it = m_retiredPathEvaluationTasks.begin();
+         it != m_retiredPathEvaluationTasks.end();) {
+        if (it->valid() &&
+            it->wait_for(std::chrono::milliseconds(0)) ==
+                std::future_status::ready) {
+            (void)it->get();
+            it = m_retiredPathEvaluationTasks.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    if (!m_pathEvaluationTask.valid() ||
+        m_pathEvaluationTask.wait_for(std::chrono::milliseconds(0)) !=
+            std::future_status::ready) {
+        return false;
+    }
+
+    m_buildPathCandidates = m_pathEvaluationTask.get();
+    ApplyPathEvaluationResults(m_buildPathCandidates);
+    for (auto& candidate : m_buildHoleCandidates) {
+        candidate.isPlayable = true;
+    }
+    if (updateWorld) {
+        ApplyPathEvaluationToWorld(ctx, m_buildPathCandidates);
+    }
+    LOG_INFO("WikiPageLoader",
+             "Path evaluation consumed: loadId={} evaluated={} updateWorld={}",
+             m_buildLoadId, m_buildPathCandidates.size(),
+             updateWorld ? "true" : "false");
+    return true;
+}
+
+bool WikiPageLoader::UpdateAsyncPathEvaluation(core::GameContext& ctx)
+{
+    return TryConsumePathEvaluation(ctx, true);
+}
+
+void WikiPageLoader::ApplyPathEvaluationToWorld(
+    core::GameContext& ctx,
+    const std::vector<HolePlacementCandidate>& evaluatedCandidates)
+{
+    std::unordered_map<std::string, int> hopsByTarget;
+    hopsByTarget.reserve(evaluatedCandidates.size());
+    for (const auto& candidate : evaluatedCandidates) {
+        if (!candidate.linkTarget.empty() && candidate.hopsToTarget >= 0) {
+            hopsByTarget[candidate.linkTarget] = candidate.hopsToTarget;
+        }
+    }
+    if (hopsByTarget.empty()) {
+        return;
+    }
+
+    std::unordered_map<uint32_t, int> updatedHoles;
+    ctx.world.Query<Transform, GolfHole>().Each(
+        [&](ecs::Entity e, Transform&, GolfHole& hole) {
+            const auto it = hopsByTarget.find(hole.linkTarget);
+            if (it == hopsByTarget.end()) {
+                return;
+            }
+
+            hole.hopsToTarget = it->second;
+            if (auto* mr = ctx.world.Get<MeshRenderer>(e)) {
+                mr->color = GetHoleBodyColor(hole.isTarget, hole.hopsToTarget);
+            }
+            if (hole.labelEntity != 0 &&
+                ctx.world.IsAlive(static_cast<ecs::Entity>(hole.labelEntity))) {
+                if (auto* label = ctx.world.Get<UIText>(
+                        static_cast<ecs::Entity>(hole.labelEntity))) {
+                    label->style.color =
+                        GetHoleColor(hole.isTarget, hole.hopsToTarget);
+                }
+            }
+            updatedHoles[static_cast<uint32_t>(e)] = hole.hopsToTarget;
+        });
+
+    ctx.world.Query<HoleFlag>().Each([&](ecs::Entity e, HoleFlag& flag) {
+        const auto it = updatedHoles.find(flag.holeEntity);
+        if (it == updatedHoles.end()) {
+            return;
+        }
+
+        if (auto* hole = ctx.world.Get<GolfHole>(
+                static_cast<ecs::Entity>(flag.holeEntity))) {
+            if (auto* mr = ctx.world.Get<MeshRenderer>(e)) {
+                mr->color = GetHoleColor(hole->isTarget, it->second);
+            }
+        }
+    });
+
+    LOG_INFO("WikiPageLoader",
+             "Path evaluation applied to world: loadId={} holes={}",
+             m_buildLoadId, updatedHoles.size());
+}
+
 // ============================================================
 // LoadPage
 // ============================================================
@@ -185,11 +498,22 @@ PageLoadResult WikiPageLoader::LoadPage(
     ecs::Entity                     skyboxEntity,
     controllers::MinimapController* minimapController)
 {
+    const auto loadStartedAt = std::chrono::steady_clock::now();
+    const uint64_t loadId = s_nextBuildLoadId.fetch_add(1, std::memory_order_relaxed);
+    LOG_INFO("WikiPageLoader", "LoadPage sync started loadId={} page='{}'",
+             loadId, pageName);
     auto asyncData = FetchPageDataAsync(pageName);
-    return BuildPageSync(ctx, std::move(asyncData), ballEntity, cameraEntity, skyboxEntity, minimapController);
+    auto result = BuildPageSync(ctx, std::move(asyncData), ballEntity,
+                                cameraEntity, skyboxEntity, minimapController);
+    LOG_INFO("WikiPageLoader",
+             "LoadPage sync finished loadId={} page='{}' success={} elapsed={}ms",
+             loadId, pageName, result.success ? "true" : "false",
+             ElapsedMs(loadStartedAt));
+    return result;
 }
 
 PageDataAsyncResult WikiPageLoader::FetchPageDataAsync(const std::string& pageName) {
+    const auto loadStartedAt = std::chrono::steady_clock::now();
     PageDataAsyncResult res;
     res.pageName = pageName;
     game::systems::WikiClient wikiClient;
@@ -199,14 +523,35 @@ PageDataAsyncResult WikiPageLoader::FetchPageDataAsync(const std::string& pageNa
         res.allLinks    = std::move(m_preloadedLinks);
         res.articleText = std::move(m_preloadedExtract);
         m_hasPreloadedData = false;
+        const auto categoryStartedAt = std::chrono::steady_clock::now();
         res.pageCategories = wikiClient.FetchPageCategories(pageName);
+        LOG_INFO("WikiPageLoader",
+                 "FetchPageData category fetch page='{}' categories={} elapsed={}ms",
+                 pageName, res.pageCategories.size(), ElapsedMs(categoryStartedAt));
     } else {
         LOG_INFO("WikiPageLoader", "Fetching live data async for: {}", pageName);
+        const auto linksStartedAt = std::chrono::steady_clock::now();
         res.allLinks    = wikiClient.FetchPageLinks(pageName, 0);
+        LOG_INFO("WikiPageLoader",
+                 "FetchPageData links page='{}' count={} elapsed={}ms",
+                 pageName, res.allLinks.size(), ElapsedMs(linksStartedAt));
+        const auto extractStartedAt = std::chrono::steady_clock::now();
         res.articleText = wikiClient.FetchPageExtract(pageName, 5000);
+        LOG_INFO("WikiPageLoader",
+                 "FetchPageData extract page='{}' bytes={} elapsed={}ms",
+                 pageName, res.articleText.size(), ElapsedMs(extractStartedAt));
+        const auto categoryStartedAt = std::chrono::steady_clock::now();
         res.pageCategories = wikiClient.FetchPageCategories(pageName);
+        LOG_INFO("WikiPageLoader",
+                 "FetchPageData category fetch page='{}' categories={} elapsed={}ms",
+                 pageName, res.pageCategories.size(), ElapsedMs(categoryStartedAt));
     }
     res.hasData = true;
+    LOG_INFO("WikiPageLoader",
+             "FetchPageData finished page='{}' links={} extractBytes={} "
+             "categories={} elapsed={}ms",
+             pageName, res.allLinks.size(), res.articleText.size(),
+             res.pageCategories.size(), ElapsedMs(loadStartedAt));
     return res;
 }
 
@@ -218,6 +563,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     ecs::Entity                     skyboxEntity,
     controllers::MinimapController* minimapController)
 {
+    const auto buildStartedAt = std::chrono::steady_clock::now();
     PageLoadResult result;
     const std::string& pageName = asyncData.pageName;
     m_buildMinimap = minimapController;
@@ -229,9 +575,16 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         return result;
     }
 
-    LOG_INFO("WikiPageLoader", "Building page: {}", pageName);
+    LOG_INFO("WikiPageLoader",
+             "BuildPageSync started page='{}' links={} extractBytes={} "
+             "categories={}",
+             pageName, asyncData.allLinks.size(), asyncData.articleText.size(),
+             asyncData.pageCategories.size());
 
+    const auto clearStartedAt = std::chrono::steady_clock::now();
     ClearGeneratedPageObjects(ctx, minimapController);
+    LOG_INFO("WikiPageLoader", "BuildPageSync clear old objects elapsed={}ms",
+             ElapsedMs(clearStartedAt));
     m_pathHopCache.clear();
 
     // 記事の情報を取得します。
@@ -322,9 +675,14 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         linkPairs.push_back({link.second, link.first});
     }
 
+    const auto textureStartedAt = std::chrono::steady_clock::now();
     auto texResult = m_textureGenerator->GenerateTexture(
         core::ToWString(pageName), core::ToWString(articleText),
         linkPairs, state->targetPage, texWidth, texHeight);
+    LOG_INFO("WikiPageLoader",
+             "BuildPageSync texture generated size={}x{} links={} elapsed={}ms",
+             texResult.width, texResult.height, texResult.links.size(),
+             ElapsedMs(textureStartedAt));
 
     // 実際のピクセル数からフィールドサイズを逆算
     float actualFieldDepth = (float)texResult.height / (100.0f * texScale);
@@ -346,6 +704,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     // 記事のテーマに応じたスカイボックスを適用します。
     auto* skyboxComp = ctx.world.Get<components::Skybox>(skyboxEntity);
     if (skyboxComp && m_skyboxGenerator) {
+        const auto skyboxStartedAt = std::chrono::steady_clock::now();
         graphics::SkyboxTheme theme =
             m_skyboxGenerator->DetermineTheme(pageName, articleText);
         std::wstring themeName =
@@ -382,6 +741,8 @@ PageLoadResult WikiPageLoader::BuildPageSync(
                 LOG_WARN("WikiPageLoader", "Failed to load any skybox");
             }
         }
+        LOG_INFO("WikiPageLoader", "BuildPageSync skybox step elapsed={}ms",
+                 ElapsedMs(skyboxStartedAt));
     }
 
     // 計算された最終フィールドサイズをゲーム状態に保存します。
@@ -397,8 +758,11 @@ PageLoadResult WikiPageLoader::BuildPageSync(
 
     // 地形の構築処理を行います。
     if (m_terrainSystem) {
+        const auto terrainStartedAt = std::chrono::steady_clock::now();
         m_terrainSystem->BuildField(ctx, pageName, *m_wikiTexture,
                                     fieldWidth, fieldDepth, pageCategories);
+        LOG_INFO("WikiPageLoader", "BuildPageSync terrain built elapsed={}ms",
+                 ElapsedMs(terrainStartedAt));
     }
 
     // ボールをティーグラウンド位置に再配置します。
@@ -414,7 +778,10 @@ PageLoadResult WikiPageLoader::BuildPageSync(
                 ctx, 0.0f, m_fieldWidth, m_fieldDepth, true);
     }
 
+    const auto holesStartedAt = std::chrono::steady_clock::now();
     CreateLinksFromTexture(ctx);
+    LOG_INFO("WikiPageLoader", "BuildPageSync links/holes created elapsed={}ms",
+             ElapsedMs(holesStartedAt));
 
     // 風向および風速を決定します。
     {
@@ -456,6 +823,11 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     result.fieldWidth = fieldWidth;
     result.fieldDepth = fieldDepth;
     result.success    = true;
+    LOG_INFO("WikiPageLoader",
+             "BuildPageSync finished page='{}' elapsed={}ms field={:.1f}x{:.1f} "
+             "validLinks={} par={}",
+             pageName, ElapsedMs(buildStartedAt), fieldWidth, fieldDepth,
+             validLinks.size(), state->par);
     return result;
 }
 
@@ -469,7 +841,13 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
                                     ecs::Entity skyboxEntity,
                                     controllers::MinimapController* minimapController)
 {
+    m_buildLoadId = s_nextBuildLoadId.fetch_add(1, std::memory_order_relaxed);
+    m_buildStartedAt = std::chrono::steady_clock::now();
+    m_stepStartedAt = std::chrono::steady_clock::time_point::min();
+    m_lastLongStepLogAt = std::chrono::steady_clock::time_point::min();
+    m_lastCreateHolesProgressLogAt = std::chrono::steady_clock::time_point::min();
     m_buildStep = BuildStep::ClearOldHoles;
+    m_loggedBuildStep = BuildStep::None;
     m_buildData = std::move(asyncData);
     m_pathHopCache.clear();
     m_buildBall = ballEntity;
@@ -482,13 +860,18 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
     m_buildPathCandidates.clear();
     m_buildMapHoleCandidates.clear();
     m_pathHopCache.clear();
-    if (m_pathEvaluationTask.valid()) {
-        m_pathEvaluationTask.wait();
-    }
+    RetireActivePathEvaluationTask();
+    m_pathEvaluationProgress.reset();
+    m_pathEvaluationTotal.reset();
     m_pathEvaluationStarted = false;
     m_nextHoleIndex = 0;
     m_nextMapIconIndex = 0;
     m_nextPathIndex = 0;
+    LOG_INFO("WikiPageLoader",
+             "BeginBuildPage loadId={} page='{}' links={} extractBytes={} "
+             "categories={}",
+             m_buildLoadId, m_buildData.pageName, m_buildData.allLinks.size(),
+             m_buildData.articleText.size(), m_buildData.pageCategories.size());
 }
 
 /**
@@ -498,6 +881,7 @@ bool WikiPageLoader::StepBuildPageWithinFrameBudget(
     core::GameContext& ctx, std::chrono::milliseconds budget)
 {
     m_buildDeadline = std::chrono::steady_clock::now() + budget;
+    TryConsumePathEvaluation(ctx, true);
 
     bool done = false;
     while (std::chrono::steady_clock::now() < m_buildDeadline) {
@@ -513,13 +897,21 @@ bool WikiPageLoader::StepBuildPageWithinFrameBudget(
     }
 
     m_buildDeadline = std::chrono::steady_clock::time_point::max();
+    LogLongRunningBuildStep();
     return done;
 }
 
 bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 {
     auto* state = ctx.world.GetGlobal<GolfGameState>();
-    if (!state) return true;
+    if (!state) {
+        LOG_ERROR("WikiPageLoader", "BuildPage loadId={} aborted: GameState not found",
+                  m_buildLoadId);
+        return true;
+    }
+
+    TryConsumePathEvaluation(ctx, false);
+    LogBuildStepTransition();
 
     switch (m_buildStep) {
     case BuildStep::ClearOldHoles:
@@ -533,6 +925,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::PrepareLinks:
     {
+        const auto prepareStartedAt = std::chrono::steady_clock::now();
         // リンクフィルタリング
         auto isIgnored = [](const std::string& t) {
             if (t.empty()) return true;
@@ -609,11 +1002,18 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
         m_buildStep = BuildStep::BeginTexture;
         m_buildProgress = 0.20f;
+        LOG_INFO("WikiPageLoader",
+                 "BuildPage loadId={} prepared links valid={} all={} "
+                 "articleBytes={} tex={}x{} elapsed={}ms",
+                 m_buildLoadId, m_buildValidLinks.size(),
+                 m_buildData.allLinks.size(), m_buildData.articleText.size(),
+                 m_buildTexWidth, m_buildTexHeight, ElapsedMs(prepareStartedAt));
         return false;
     }
 
     case BuildStep::BeginTexture:
     {
+        const auto textureBeginStartedAt = std::chrono::steady_clock::now();
         if (m_textureGenerator) {
             m_textureGenerator->BeginGenerateTexture(
                 m_textureState,
@@ -627,6 +1027,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         }
         m_buildStep = BuildStep::GenerateTextureTiles;
         m_buildProgress = 0.25f;
+        LOG_INFO("WikiPageLoader",
+                 "BuildPage loadId={} texture generation initialized elapsed={}ms",
+                 m_buildLoadId, ElapsedMs(textureBeginStartedAt));
         return false;
     }
 
@@ -656,6 +1059,12 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                 m_buildFieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
 
                 m_wikiTexture = std::make_unique<graphics::WikiTextureResult>(std::move(m_textureState.result));
+                LOG_INFO("WikiPageLoader",
+                         "BuildPage loadId={} texture generation finished "
+                         "size={}x{} links={} field={:.1f}x{:.1f}",
+                         m_buildLoadId, m_wikiTexture->width,
+                         m_wikiTexture->height, m_wikiTexture->links.size(),
+                         m_buildFieldWidth, m_buildFieldDepth);
                 
                 m_buildStep = BuildStep::ApplySkybox;
                 m_buildProgress = 0.60f;
@@ -668,6 +1077,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::ApplySkybox:
     {
+        const auto skyboxStartedAt = std::chrono::steady_clock::now();
         auto* skyboxComp = ctx.world.Get<components::Skybox>(m_buildSkybox);
         if (skyboxComp && m_skyboxGenerator) {
             graphics::SkyboxTheme theme =
@@ -696,11 +1106,17 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
         m_buildStep = BuildStep::BeginTerrain;
         m_buildProgress = 0.65f;
+        LOG_INFO("WikiPageLoader",
+                 "BuildPage loadId={} skybox applied field={:.1f}x{:.1f} "
+                 "elapsed={}ms",
+                 m_buildLoadId, m_buildFieldWidth, m_buildFieldDepth,
+                 ElapsedMs(skyboxStartedAt));
         return false;
     }
 
     case BuildStep::BeginTerrain:
     {
+        const auto terrainBeginStartedAt = std::chrono::steady_clock::now();
         // 地形生成システムを非同期で開始
         if (m_terrainSystem && m_wikiTexture) {
             m_terrainSystem->BeginBuildField(
@@ -712,6 +1128,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         }
         m_buildStep = BuildStep::BuildTerrainStep;
         m_buildProgress = 0.68f;
+        LOG_INFO("WikiPageLoader",
+                 "BuildPage loadId={} terrain build started elapsed={}ms",
+                 m_buildLoadId, ElapsedMs(terrainBeginStartedAt));
         return false;
     }
 
@@ -725,6 +1144,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             if (!done) {
                 return false; // 次フレームへ
             }
+            LOG_INFO("WikiPageLoader",
+                     "BuildPage loadId={} terrain build finished terrainProgress={:.1f}%",
+                     m_buildLoadId, terrainProg * 100.0f);
         }
         m_buildStep = BuildStep::RepositionBall;
         m_buildProgress = 0.85f;
@@ -780,10 +1202,13 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             m_buildPathCandidates = m_buildHoleCandidates;
             m_nextPathIndex = 0;
             m_pathEvaluationStarted = false;
-            m_buildStep = BuildStep::EvaluateHolePaths;
+            StartAsyncPathEvaluation(state ? state->targetPageId : -1);
+            m_nextMapIconIndex = 0;
+            m_buildStep = BuildStep::CreateMapIcons;
+            m_buildProgress = 0.88f;
             LOG_INFO("WikiPageLoader",
                      "Hole candidates staged: textureLinks={}, mapIcons={}, "
-                     "pathTargets={}/{}",
+                     "pathTargets={}/{} pathEvaluation=background",
                      m_wikiTexture->links.size(), m_buildMapHoleCandidates.size(),
                      m_buildPathCandidates.size(), m_buildHoleCandidates.size());
         } else {
@@ -796,75 +1221,10 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::EvaluateHolePaths:
     {
-        const auto* state = ctx.world.GetGlobal<GolfGameState>();
-        if (!m_pathEvaluationStarted) {
-            m_pathEvaluationStarted = true;
-            m_nextPathIndex = 0;
-
-            const int targetPageId = state ? state->targetPageId : -1;
-            auto candidates = m_buildPathCandidates;
-            m_pathEvaluationTask = std::async(
-                std::launch::async,
-                [candidates = std::move(candidates), targetPageId]() mutable {
-                    if (targetPageId == -1 || candidates.empty()) {
-                        return candidates;
-                    }
-
-                    game::systems::WikiShortestPath pathSystem;
-                    if (!pathSystem.Initialize("Assets/data/jawiki_sdow.sqlite",
-                                               false)) {
-                        return candidates;
-                    }
-
-                    std::vector<std::string> linkTargets;
-                    std::unordered_set<std::string> seenTargets;
-                    linkTargets.reserve(candidates.size());
-                    for (const auto& candidate : candidates) {
-                        if (candidate.linkTarget.empty() ||
-                            !seenTargets.insert(candidate.linkTarget).second) {
-                            continue;
-                        }
-                        linkTargets.push_back(candidate.linkTarget);
-                    }
-
-                    const auto distances = pathSystem.ComputeDistancesToTarget(
-                        linkTargets, targetPageId, 6);
-                    for (auto& candidate : candidates) {
-                        const auto distance = distances.find(candidate.linkTarget);
-                        candidate.hopsToTarget =
-                            distance != distances.end() ? distance->second : -1;
-                    }
-                    return candidates;
-                });
-
-            LOG_INFO("WikiPageLoader",
-                     "Path evaluation started asynchronously: targets={}",
-                     m_buildPathCandidates.size());
-        }
-
-        if (!m_pathEvaluationTask.valid()) {
-            m_buildStep = BuildStep::CreateMapIcons;
-            m_nextMapIconIndex = 0;
-            m_buildProgress = 0.91f;
-            return false;
-        }
-
-        if (m_pathEvaluationTask.wait_for(std::chrono::milliseconds(0)) ==
-            std::future_status::ready) {
-            m_buildPathCandidates = m_pathEvaluationTask.get();
-            ApplyPathEvaluationResults(m_buildPathCandidates);
-            for (auto& candidate : m_buildHoleCandidates) {
-                candidate.isPlayable = true;
-            }
-            m_nextMapIconIndex = 0;
-            m_buildStep = BuildStep::CreateMapIcons;
-            m_buildProgress = 0.91f;
-            LOG_INFO("WikiPageLoader",
-                     "Path evaluation finished: evaluated={}, candidates={}",
-                     m_buildPathCandidates.size(), m_buildHoleCandidates.size());
-        } else {
-            m_buildProgress = 0.90f;
-        }
+        TryConsumePathEvaluation(ctx, false);
+        m_nextMapIconIndex = 0;
+        m_buildStep = BuildStep::CreateMapIcons;
+        m_buildProgress = 0.88f;
         return false;
     }
 
@@ -895,36 +1255,58 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         } else {
             float iconProgress =
                 (float)m_nextMapIconIndex / (float)m_buildMapHoleCandidates.size();
-            m_buildProgress = 0.91f + 0.02f * iconProgress;
+            m_buildProgress = 0.88f + 0.02f * iconProgress;
         }
         return false;
     }
 
     case BuildStep::CreateHoles:
     {
-        constexpr size_t kHolesPerFrame = 4;
-        for (size_t i = 0; i < kHolesPerFrame &&
+        constexpr size_t kMaxHolesPerStep = 256;
+        if (m_lastCreateHolesProgressLogAt ==
+            std::chrono::steady_clock::time_point::min()) {
+            m_lastCreateHolesProgressLogAt = std::chrono::steady_clock::now();
+            LOG_INFO("WikiPageLoader",
+                     "CreateHoles started: loadId={} total={} maxPerStep={}",
+                     m_buildLoadId, m_buildHoleCandidates.size(), kMaxHolesPerStep);
+        }
+        for (size_t i = 0; i < kMaxHolesPerStep &&
                            m_nextHoleIndex < m_buildHoleCandidates.size();
              ++i, ++m_nextHoleIndex) {
+            if (std::chrono::steady_clock::now() >= m_buildDeadline) {
+                break;
+            }
             const auto& candidate = m_buildHoleCandidates[m_nextHoleIndex];
             CreateHole(ctx, candidate.x, candidate.z, candidate.linkTarget,
                        candidate.isTarget, candidate.hopsToTarget, false);
         }
 
+        const auto now = std::chrono::steady_clock::now();
+        if (!m_buildHoleCandidates.empty() &&
+            now - m_lastCreateHolesProgressLogAt >= kLongBuildStepLogInterval) {
+            LOG_INFO("WikiPageLoader",
+                     "CreateHoles progress: loadId={} created={}/{} progress={:.1f}%",
+                     m_buildLoadId, m_nextHoleIndex, m_buildHoleCandidates.size(),
+                     100.0f * static_cast<float>(m_nextHoleIndex) /
+                         static_cast<float>(m_buildHoleCandidates.size()));
+            m_lastCreateHolesProgressLogAt = now;
+        }
+
         if (m_buildHoleCandidates.empty() ||
             m_nextHoleIndex >= m_buildHoleCandidates.size()) {
             LOG_INFO("WikiPageLoader",
-                     "Link holes created: textureLinks={}, physicalHoles={}, "
+                     "Link holes created: loadId={} textureLinks={}, physicalHoles={}, "
                      "mapIcons={}, pathEvaluated={}",
+                     m_buildLoadId,
                      m_wikiTexture ? m_wikiTexture->links.size() : 0,
                      m_buildHoleCandidates.size(), m_buildMapHoleCandidates.size(),
                      m_buildPathCandidates.size());
             m_buildStep = BuildStep::SetupWind;
-            m_buildProgress = 0.96f;
+            m_buildProgress = 0.995f;
         } else {
             float holeProgress =
                 (float)m_nextHoleIndex / (float)m_buildHoleCandidates.size();
-            m_buildProgress = 0.93f + 0.03f * holeProgress;
+            m_buildProgress = 0.90f + 0.095f * holeProgress;
         }
         return false;
     }
@@ -958,13 +1340,21 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         m_buildResult.calculatedPar = calculatedPar;
 
         m_buildStep = BuildStep::Finish;
-        m_buildProgress = 0.98f;
+        m_buildProgress = 0.998f;
         return false;
     }
 
     case BuildStep::Finish:
+        LOG_INFO("WikiPageLoader",
+                 "BuildPage loadId={} finished page='{}' total={}ms "
+                 "field={:.1f}x{:.1f} holes={} mapIcons={} par={}",
+                 m_buildLoadId, m_buildData.pageName, ElapsedMs(m_buildStartedAt),
+                 m_buildFieldWidth, m_buildFieldDepth,
+                 m_buildHoleCandidates.size(), m_buildMapHoleCandidates.size(),
+                 state->par);
         m_buildProgress = 1.0f;
         m_buildStep = BuildStep::None;
+        LogBuildStepTransition();
         return true;
 
     default:
@@ -1210,7 +1600,7 @@ void WikiPageLoader::EvaluateCandidatePath(core::GameContext& ctx,
 
     const auto startedAt = std::chrono::steady_clock::now();
     auto r = m_shortestPath->FindShortestPath(
-        candidate.linkTarget, state->targetPageId, 6);
+        candidate.linkTarget, state->targetPageId, kPathEvaluationMaxDepth);
     const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now() - startedAt).count();
     if (elapsedMs > 100) {

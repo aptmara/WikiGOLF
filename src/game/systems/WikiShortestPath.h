@@ -7,6 +7,7 @@
  * 2記事間の最短リンク数を計算する。
  */
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -65,25 +66,25 @@ public:
    * @brief 最短経路を計算
    * @param sourceTitle 開始記事タイトル
    * @param targetTitle 目標記事タイトル
-   * @param maxDepth 最大探索深度（デフォルト6）
+   * @param maxDepth 最大探索深度（デフォルト4）
    * @param logSuccess 成功時の経路ログを出すか
    * @return 計算結果
    */
   ShortestPathResult FindShortestPath(const std::string &sourceTitle,
                                       const std::string &targetTitle,
-                                      int maxDepth = 6,
+                                      int maxDepth = 4,
                                       bool logSuccess = true);
 
   /**
    * @brief 最短経路を計算（ターゲットID指定）
    * @param sourceTitle 開始記事タイトル
    * @param targetId 目標記事ID
-   * @param maxDepth 最大探索深度（デフォルト6）
+   * @param maxDepth 最大探索深度（デフォルト4）
    * @param logSuccess 成功時の経路ログを出すか
    * @return 計算結果
    */
   ShortestPathResult FindShortestPath(const std::string &sourceTitle,
-                                      int targetId, int maxDepth = 6,
+                                      int targetId, int maxDepth = 4,
                                       bool logSuccess = true);
 
   /**
@@ -91,11 +92,15 @@ public:
    * @param sourceTitles 開始記事タイトル一覧
    * @param targetId 目標記事ID
    * @param maxDepth 最大探索深度
+   * @param progressUnits 進捗の完了単位数を書き込む先
+   * @param progressBase この計算の開始前に完了済みとして扱う単位数
    * @return タイトルごとのリンク数（未到達・未登録記事は含めない）
    */
   std::unordered_map<std::string, int>
   ComputeDistancesToTarget(const std::vector<std::string> &sourceTitles,
-                           int targetId, int maxDepth = 6);
+                           int targetId, int maxDepth = 4,
+                           std::atomic<size_t> *progressUnits = nullptr,
+                           size_t progressBase = 0);
 
 private:
   /// @brief タイトルからページIDを取得

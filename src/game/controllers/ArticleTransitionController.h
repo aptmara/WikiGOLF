@@ -7,6 +7,7 @@
 #include "../scenes/WikiPageLoader.h"
 #include <DirectXMath.h>
 #include <atomic>
+#include <chrono>
 #include <future>
 #include <memory>
 #include <optional>
@@ -72,6 +73,12 @@ private:
     bool m_buildDelayStarted = false;
     float m_buildDelayTimer = 0.0f;
     float m_displayProgress = 0.0f;
+    std::chrono::steady_clock::time_point m_transitionStartedAt =
+        std::chrono::steady_clock::time_point::min();
+    std::chrono::steady_clock::time_point m_fetchStartedAt =
+        std::chrono::steady_clock::time_point::min();
+    std::chrono::steady_clock::time_point m_buildStartedAt =
+        std::chrono::steady_clock::time_point::min();
 
     // アニメーション用変数
     float m_globeRotation = 0.0f;

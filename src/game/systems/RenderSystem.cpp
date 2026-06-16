@@ -1,4 +1,5 @@
 #include "RenderSystem.h"
+#include "../../core/Logger.h"
 #include "../../ecs/World.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../resources/ResourceManager.h"
@@ -7,6 +8,7 @@
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
 #include <DirectXMath.h>
+#include <chrono>
 #include <d3d11.h>
 #include <wrl/client.h>
 
@@ -34,10 +36,37 @@ struct RenderState {
   ComPtr<ID3D11BlendState> addBlendState;
 };
 
+/**
+ * @brief 1フレーム分の描画負荷を集計します。 山内陽
+ */
+struct RenderFrameStats {
+  size_t candidates = 0;
+  size_t visibleCandidates = 0;
+  size_t drawn = 0;
+  size_t opaqueDrawn = 0;
+  size_t transparentDrawn = 0;
+  size_t texturedDrawn = 0;
+  size_t normalMappedDrawn = 0;
+  size_t terrainDrawn = 0;
+  size_t holeFlagDrawn = 0;
+  size_t invisibleSkipped = 0;
+  size_t alphaSkipped = 0;
+  size_t transparentDistanceSkipped = 0;
+  size_t missingResourceSkipped = 0;
+};
+
 void RenderSystem(core::GameContext &ctx) {
+  static auto s_lastStatsLogAt = std::chrono::steady_clock::time_point::min();
+  static auto s_lastSlowStatsLogAt =
+      std::chrono::steady_clock::time_point::min();
+  static uint64_t s_frameIndex = 0;
+  const auto frameStartedAt = std::chrono::steady_clock::now();
+  ++s_frameIndex;
+
   auto *device = ctx.graphics.GetDevice();
   auto *context = ctx.graphics.GetContext();
   auto &world = ctx.world;
+  RenderFrameStats stats;
 
   // 定数バッファ等の取得または作成（Global Dataを使用）
   auto *state = world.GetGlobal<RenderState>();
@@ -123,10 +152,15 @@ void RenderSystem(core::GameContext &ctx) {
 
   auto DrawRenderer = [&](ecs::Entity e, components::Transform &t,
                           components::MeshRenderer &r) {
-    if (!r.isVisible)
+    ++stats.candidates;
+    if (!r.isVisible) {
+      ++stats.invisibleSkipped;
       return;
+    }
+    ++stats.visibleCandidates;
     if (r.isTransparent) {
       if (r.color.w <= 0.01f) {
+        ++stats.alphaSkipped;
         return;
       }
       const float dx = t.position.x - camPos.x;
@@ -134,6 +168,7 @@ void RenderSystem(core::GameContext &ctx) {
       const float dz = t.position.z - camPos.z;
       const float distSq = dx * dx + dy * dy + dz * dz;
       if (distSq > 220.0f * 220.0f && !world.Has<components::HoleFlag>(e)) {
+        ++stats.transparentDistanceSkipped;
         return;
       }
     }
@@ -142,6 +177,25 @@ void RenderSystem(core::GameContext &ctx) {
     auto *shader = ctx.resource.GetShader(r.shader);
 
     if (mesh && shader) {
+      ++stats.drawn;
+      if (r.isTransparent) {
+        ++stats.transparentDrawn;
+      } else {
+        ++stats.opaqueDrawn;
+      }
+      if (r.hasTexture && r.textureSRV) {
+        ++stats.texturedDrawn;
+      }
+      if (r.hasNormalMap && r.normalMapSRV) {
+        ++stats.normalMappedDrawn;
+      }
+      if (world.Has<components::TerrainObject>(e)) {
+        ++stats.terrainDrawn;
+      }
+      if (world.Has<components::HoleFlag>(e)) {
+        ++stats.holeFlagDrawn;
+      }
+
       // ブレンドステート設定
       if (r.blendMode == components::BlendMode::Alpha) {
         context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
@@ -192,7 +246,7 @@ void RenderSystem(core::GameContext &ctx) {
         context->PSSetShaderResources(0, 1, &nullSRV);
       }
 
-      // 法線�（チ（�（バインチ（
+      // 法線マップのバインド
       if (r.hasNormalMap && r.normalMapSRV) {
         context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
       } else {
@@ -202,6 +256,8 @@ void RenderSystem(core::GameContext &ctx) {
       context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
       mesh->Bind(context);
       mesh->Draw(context);
+    } else {
+      ++stats.missingResourceSkipped;
     }
   };
 
@@ -224,6 +280,35 @@ void RenderSystem(core::GameContext &ctx) {
       });
 
   context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+
+  const auto now = std::chrono::steady_clock::now();
+  const auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                             now - frameStartedAt)
+                             .count();
+  const bool isSlowFrame =
+      elapsedUs >= 4000 &&
+      (s_lastSlowStatsLogAt == std::chrono::steady_clock::time_point::min() ||
+       now - s_lastSlowStatsLogAt >= std::chrono::seconds(1));
+  const bool isPeriodicLog =
+      s_lastStatsLogAt == std::chrono::steady_clock::time_point::min() ||
+      now - s_lastStatsLogAt >= std::chrono::seconds(5);
+  if (isSlowFrame || isPeriodicLog) {
+    LOG_INFO("RenderSystem",
+             "Render stats frame={} elapsed={:.3f}ms candidates={} visible={} "
+             "drawn={} opaque={} transparent={} textured={} normalMapped={} "
+             "terrain={} holeFlags={} skippedInvisible={} skippedAlpha={} "
+             "skippedTransparentDistance={} skippedMissingResource={}",
+             s_frameIndex, static_cast<double>(elapsedUs) / 1000.0,
+             stats.candidates, stats.visibleCandidates, stats.drawn,
+             stats.opaqueDrawn, stats.transparentDrawn, stats.texturedDrawn,
+             stats.normalMappedDrawn, stats.terrainDrawn, stats.holeFlagDrawn,
+             stats.invisibleSkipped, stats.alphaSkipped,
+             stats.transparentDistanceSkipped, stats.missingResourceSkipped);
+    s_lastStatsLogAt = now;
+    if (isSlowFrame) {
+      s_lastSlowStatsLogAt = now;
+    }
+  }
 }
 
 } // namespace game::systems

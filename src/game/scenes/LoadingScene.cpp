@@ -18,6 +18,7 @@
 #include "LoadingSceneUtils.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <d2d1_1.h>
 #include <random>
@@ -36,6 +37,15 @@ bool HasExplicitStartData(const game::components::WikiGlobalData &data) {
          !data.targetPage.empty() || data.targetPageId != -1;
 }
 
+/**
+ * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
+ */
+long long ElapsedMs(const std::chrono::steady_clock::time_point &startedAt) {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now() - startedAt)
+      .count();
+}
+
 } // namespace
 
 LoadingScene::LoadingScene(
@@ -43,6 +53,7 @@ LoadingScene::LoadingScene(
     : m_nextSceneFactory(std::move(nextSceneFactory)) {}
 
 void LoadingScene::OnEnter(core::GameContext &ctx) {
+  const auto enterStartedAt = std::chrono::steady_clock::now();
   LOG_INFO("LoadingScene", "OnEnter");
 
   m_balls.clear();
@@ -95,14 +106,21 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_isLoading = true;
   auto progressPtr = m_loadProgress;
   m_loadTask = std::async(std::launch::async, [progressPtr, overrideStartPage, overrideTargetPage, overrideTargetId, overrideIsUserOverride]() {
+    const auto loadStartedAt = std::chrono::steady_clock::now();
     const auto setProgress = [progressPtr](float value) {
       if (progressPtr) {
         progressPtr->store(std::clamp(value, 0.0f, 1.0f),
                            std::memory_order_relaxed);
       }
     };
+    const auto logStage = [&](const char *stage, float progress) {
+      LOG_INFO("LoadingScene",
+               "AsyncLoad stage={} elapsed={}ms progress={:.0f}%",
+               stage, ElapsedMs(loadStartedAt), progress * 100.0f);
+    };
 
     setProgress(0.02f);
+    logStage("start", 0.02f);
     auto data = std::make_unique<game::components::WikiGlobalData>();
     data->startPage = overrideStartPage;
     data->targetPage = overrideTargetPage;
@@ -110,12 +128,17 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     data->isUserOverride = overrideIsUserOverride;
 
     // WikiShortestPathの初期化（重い処理）
+    const auto dbStartedAt = std::chrono::steady_clock::now();
     data->pathSystem = std::make_unique<game::systems::WikiShortestPath>();
     bool dbLoaded =
         data->pathSystem->Initialize("Assets/data/jawiki_sdow.sqlite");
     setProgress(0.3f);
+    LOG_INFO("LoadingScene", "AsyncLoad dbInitialize loaded={} elapsed={}ms",
+             dbLoaded ? "true" : "false", ElapsedMs(dbStartedAt));
+    logStage("db-ready", 0.3f);
     if (!dbLoaded) {
-      // ログは別スレッドからは注意が必要だが、ここでは簡易的に
+      LOG_WARN("LoadingScene",
+               "AsyncLoad DB initialization failed. Falling back to API target.");
     }
 
     /**
@@ -140,12 +163,21 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     // スタート選定
     game::systems::WikiClient wikiClient;
     if (data->startPage.empty()) {
+      const auto randomStartedAt = std::chrono::steady_clock::now();
       data->startPage = wikiClient.FetchRandomPageTitle();
+      LOG_INFO("LoadingScene",
+               "AsyncLoad random start fetched: title='{}' elapsed={}ms",
+               data->startPage, ElapsedMs(randomStartedAt));
+    } else {
+      LOG_INFO("LoadingScene", "AsyncLoad start override used: title='{}'",
+               data->startPage);
     }
     setProgress(0.45f);
+    logStage("start-page-ready", 0.45f);
 
     // 人気記事からターゲット選定
     if (data->targetPage.empty() && dbLoaded && data->pathSystem->IsAvailable()) {
+      const auto targetStartedAt = std::chrono::steady_clock::now();
       auto result = data->pathSystem->FetchPopularPageTitle(100);
       data->targetPage = result.first;
       data->targetPageId = result.second;
@@ -155,37 +187,55 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
         data->targetPage = result.first;
         data->targetPageId = result.second;
       }
+      LOG_INFO("LoadingScene",
+               "AsyncLoad popular target fetched: title='{}' id={} elapsed={}ms",
+               data->targetPage, data->targetPageId, ElapsedMs(targetStartedAt));
+    } else if (!data->targetPage.empty()) {
+      LOG_INFO("LoadingScene",
+               "AsyncLoad target override used: title='{}' id={}",
+               data->targetPage, data->targetPageId);
     }
 
     resolveTargetPageId();
 
     // フォールバック
     if (data->targetPage.empty()) {
+      const auto fallbackStartedAt = std::chrono::steady_clock::now();
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
       resolveTargetPageId();
       setProgress(0.8f);
+      LOG_INFO("LoadingScene",
+               "AsyncLoad fallback target fetched: title='{}' elapsed={}ms",
+               data->targetPage, ElapsedMs(fallbackStartedAt));
     }
 
     if (overrideTargetPage.empty() && data->startPage == data->targetPage) {
+      const auto retryStartedAt = std::chrono::steady_clock::now();
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
       resolveTargetPageId();
       setProgress(0.82f);
+      LOG_INFO("LoadingScene",
+               "AsyncLoad duplicate target replaced: title='{}' elapsed={}ms",
+               data->targetPage, ElapsedMs(retryStartedAt));
     }
 
     // 最短1記事（または同一）のターゲットは自動選定時のみ再抽選します。
     if (dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
         !data->startPage.empty() && !data->targetPage.empty()) {
+      constexpr int kStartPagePathCheckMaxDepth = 4;
       const int maxRetry = 5;
+      const auto pathCheckStartedAt = std::chrono::steady_clock::now();
       for (int attempt = 0; attempt < maxRetry; ++attempt) {
+        const auto attemptStartedAt = std::chrono::steady_clock::now();
         game::systems::ShortestPathResult pathResult;
         if (data->targetPageId != -1) {
           pathResult = data->pathSystem->FindShortestPath(
-              data->startPage, data->targetPageId, 6);
+              data->startPage, data->targetPageId, kStartPagePathCheckMaxDepth);
         } else {
-          pathResult = data->pathSystem->FindShortestPath(data->startPage,
-                                                          data->targetPage, 6);
+          pathResult = data->pathSystem->FindShortestPath(
+              data->startPage, data->targetPage, kStartPagePathCheckMaxDepth);
         }
 
         if (!pathResult.success) {
@@ -199,6 +249,10 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
 
         LOG_INFO("LoadingScene", "Shortest path to '{}' is {} hops from '{}'",
                  data->targetPage, pathResult.degrees, data->startPage);
+        LOG_INFO("LoadingScene",
+                 "AsyncLoad shortest path attempt={} elapsed={}ms total={}ms",
+                 attempt + 1, ElapsedMs(attemptStartedAt),
+                 ElapsedMs(pathCheckStartedAt));
 
         if (overrideIsUserOverride || pathResult.degrees > 1) {
           break;
@@ -217,25 +271,47 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
         data->targetPageId = newTarget.second;
         resolveTargetPageId();
       }
+      setProgress(0.9f);
+      logStage("path-check-ready", 0.9f);
     }
 
     // 初回ページのデータを先行ロード（通信ラグ解消）
     if (!data->startPage.empty()) {
+      const auto linksStartedAt = std::chrono::steady_clock::now();
       data->cachedLinks = wikiClient.FetchPageLinks(data->startPage, 0);
+      LOG_INFO("LoadingScene",
+               "AsyncLoad cached links fetched: count={} elapsed={}ms",
+               data->cachedLinks.size(), ElapsedMs(linksStartedAt));
+      const auto extractStartedAt = std::chrono::steady_clock::now();
       data->cachedExtract = wikiClient.FetchPageExtract(data->startPage, 5000);
+      LOG_INFO("LoadingScene",
+               "AsyncLoad cached extract fetched: bytes={} elapsed={}ms",
+               data->cachedExtract.size(), ElapsedMs(extractStartedAt));
       data->hasCachedData = true;
       setProgress(0.97f);
+      logStage("initial-page-cache-ready", 0.97f);
     }
 
     setProgress(1.0f);
+    LOG_INFO("LoadingScene",
+             "AsyncLoad complete elapsed={}ms start='{}' target='{}' "
+             "targetId={} cachedLinks={} cachedExtractBytes={}",
+             ElapsedMs(loadStartedAt), data->startPage, data->targetPage,
+             data->targetPageId, data->cachedLinks.size(),
+             data->cachedExtract.size());
     return data;
   });
+  LOG_INFO("LoadingScene", "Async load task launched at {} ms",
+           ElapsedMs(enterStartedAt));
 
   // マウスカーソルを非表示
   ctx.input.SetMouseCursorVisible(false);
 
   // ゴルフボールメッシュをロード
+  const auto ballMeshStartedAt = std::chrono::steady_clock::now();
   m_ballMeshHandle = ctx.resource.LoadMesh("Assets/models/golfball.glb");
+  LOG_INFO("LoadingScene", "Ball mesh load requested in {} ms",
+           ElapsedMs(ballMeshStartedAt));
 
   // カメラを作成
   m_cameraEntity = CreateEntity(ctx.world);
@@ -250,7 +326,10 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   cam.isMainCamera = true;
 
   // 床と壁を生成
+  const auto boundaryStartedAt = std::chrono::steady_clock::now();
   CreateBoundaries(ctx);
+  LOG_INFO("LoadingScene", "Boundary setup finished in {} ms",
+           ElapsedMs(boundaryStartedAt));
 
   // UIスタイル構築
   m_primaryStyle = graphics::TextStyle::Title();
@@ -314,7 +393,8 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   // 最初のボールは即スポーンさせて動きを見せる
   SpawnBall(ctx);
 
-  LOG_INFO("LoadingScene", "OnEnter complete");
+  LOG_INFO("LoadingScene", "OnEnter complete ({} ms)",
+           ElapsedMs(enterStartedAt));
 }
 
 void LoadingScene::CreateBoundaries(core::GameContext &ctx) {
@@ -849,9 +929,15 @@ void LoadingScene::UpdateCamera(core::GameContext &ctx, float dt) {
 }
 
 void LoadingScene::UpdateUI(core::GameContext &ctx) {
-  const std::array<std::wstring, 4> tips = {
-      L"芝目をスキャン中...", L"Wikipediaの芝刈り準備中",
-      L"ショットの風向きをプレビュー中", L"リンクをフェアウェイに整地中"};
+  const std::array<std::wstring, 8> tips = {
+      L"サーバー室で羊にゴルフを教えています...",
+      L"「要出典」タグをバンカーに埋設中...",
+      L"ナレッジグラフの芝目を精密スキャン中...",
+      L"ハイパーリンクの張力をティーアップ中...",
+      L"パズルピースの球体を高光沢研磨中...",
+      L"Wiki記法をゴルフ場の等高線に変換中...",
+      L"カテゴリツリーの枝をアイアンで剪定中...",
+      L"リダイレクトの嵐をフェアウェイに誘導中..."};
 
   const float spawnRatio =
       static_cast<float>(m_spawnedCount) / static_cast<float>(TOTAL_BALLS);

@@ -6,6 +6,8 @@
 #include "WikiShortestPath.h"
 #include "../../core/Logger.h"
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 #include <cstdlib>
 #include <ctime>
 #include <mutex>
@@ -19,6 +21,8 @@ namespace {
 
 // IN句のチャンクサイズ。ベンチでは 512〜1024 で差がほぼ無かったため安全側の512に固定。
 constexpr size_t kLinkChunkSize = 512;
+constexpr size_t kDetailedChunkLogLimit = 3;
+constexpr long long kSlowLinkFetchChunkMs = 250;
 
 std::recursive_mutex g_sqliteMutex;
 
@@ -26,6 +30,35 @@ struct NodeInfo {
   int parent = -1;
   int depth = 0;
 };
+
+struct LinkFetchStats {
+  size_t requestedPages = 0;
+  size_t returnedRows = 0;
+  size_t parsedLinks = 0;
+  size_t rawBytes = 0;
+  size_t chunks = 0;
+};
+
+struct LinkFetchChunkStats {
+  size_t chunkIndex = 0;
+  size_t totalChunks = 0;
+  size_t requestedPages = 0;
+  size_t returnedRows = 0;
+  size_t parsedLinks = 0;
+  size_t rawBytes = 0;
+  long long prepareMs = 0;
+  long long stepParseMs = 0;
+  long long elapsedMs = 0;
+};
+
+/**
+ * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
+ */
+long long ElapsedMs(const std::chrono::steady_clock::time_point &startedAt) {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now() - startedAt)
+      .count();
+}
 
 std::vector<int> ParseLinks(const unsigned char *text) {
   std::vector<int> links;
@@ -58,42 +91,102 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
   if (pageIds.empty())
     return true;
 
-  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
-  size_t index = 0;
-  while (index < pageIds.size()) {
-    size_t count = std::min(kLinkChunkSize, pageIds.size() - index);
+  const auto fetchStartedAt = std::chrono::steady_clock::now();
+  LinkFetchStats stats;
+  stats.requestedPages = pageIds.size();
+  std::vector<LinkFetchChunkStats> chunkLogs;
 
-    std::string sql = "SELECT id, ";
-    sql += fieldName;
-    sql += " FROM links WHERE id IN (";
-    for (size_t i = 0; i < count; ++i) {
-      if (i > 0)
-        sql += ",";
-      sql += "?";
+  {
+    std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
+    size_t index = 0;
+    while (index < pageIds.size()) {
+      const auto chunkStartedAt = std::chrono::steady_clock::now();
+      size_t count = std::min(kLinkChunkSize, pageIds.size() - index);
+
+      std::string sql = "SELECT id, ";
+      sql += fieldName;
+      sql += " FROM links WHERE id IN (";
+      for (size_t i = 0; i < count; ++i) {
+        if (i > 0)
+          sql += ",";
+        sql += "?";
+      }
+      sql += ")";
+
+      sqlite3_stmt *stmt = nullptr;
+      const auto prepareStartedAt = std::chrono::steady_clock::now();
+      if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) !=
+          SQLITE_OK) {
+        LOG_ERROR("WikiShortestPath", "Failed to prepare link fetch SQL: {}",
+                  sqlite3_errmsg(db));
+        return false;
+      }
+      const long long prepareMs = ElapsedMs(prepareStartedAt);
+
+      for (size_t i = 0; i < count; ++i) {
+        sqlite3_bind_int(
+            stmt, static_cast<int>(i + 1),
+            pageIds[index + i]); // プレースホルダーのインデックスは1から開始
+      }
+
+      size_t chunkRows = 0;
+      size_t chunkLinks = 0;
+      size_t chunkBytes = 0;
+      const auto stepStartedAt = std::chrono::steady_clock::now();
+      while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int pageId = sqlite3_column_int(stmt, 0);
+        const unsigned char *raw = sqlite3_column_text(stmt, 1);
+        const size_t rawBytes =
+            raw ? std::strlen(reinterpret_cast<const char *>(raw)) : 0;
+        auto links = ParseLinks(raw);
+        chunkBytes += rawBytes;
+        chunkLinks += links.size();
+        outLinks[pageId] = std::move(links);
+        ++chunkRows;
+      }
+      const long long stepMs = ElapsedMs(stepStartedAt);
+
+      sqlite3_finalize(stmt);
+      ++stats.chunks;
+      stats.returnedRows += chunkRows;
+      stats.parsedLinks += chunkLinks;
+      stats.rawBytes += chunkBytes;
+
+      const long long chunkMs = ElapsedMs(chunkStartedAt);
+      if (stats.chunks <= kDetailedChunkLogLimit ||
+          chunkMs >= kSlowLinkFetchChunkMs) {
+        chunkLogs.push_back(LinkFetchChunkStats{
+            stats.chunks,
+            (pageIds.size() + kLinkChunkSize - 1) / kLinkChunkSize,
+            count,
+            chunkRows,
+            chunkLinks,
+            chunkBytes,
+            prepareMs,
+            stepMs,
+            chunkMs});
+      }
+
+      index += count;
     }
-    sql += ")";
-
-    sqlite3_stmt *stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-      LOG_ERROR("WikiShortestPath", "Failed to prepare link fetch SQL: {}",
-                sqlite3_errmsg(db));
-      return false;
-    }
-
-    for (size_t i = 0; i < count; ++i) {
-      sqlite3_bind_int(stmt, static_cast<int>(i + 1),
-                       pageIds[index + i]); // プレースホルダーのインデックスは1から開始
-    }
-
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-      int pageId = sqlite3_column_int(stmt, 0);
-      const unsigned char *raw = sqlite3_column_text(stmt, 1);
-      outLinks[pageId] = ParseLinks(raw);
-    }
-
-    sqlite3_finalize(stmt);
-    index += count;
   }
+
+  for (const auto &chunk : chunkLogs) {
+    LOG_INFO("WikiShortestPath",
+             "FetchLinks chunk field={} chunk={}/{} requested={} rows={} "
+             "links={} bytes={} prepare={}ms stepParse={}ms elapsed={}ms",
+             fieldName, chunk.chunkIndex, chunk.totalChunks,
+             chunk.requestedPages, chunk.returnedRows, chunk.parsedLinks,
+             chunk.rawBytes, chunk.prepareMs, chunk.stepParseMs,
+             chunk.elapsedMs);
+  }
+
+  LOG_INFO("WikiShortestPath",
+           "FetchLinks summary field={} requested={} rows={} links={} bytes={} "
+           "chunks={} elapsed={}ms",
+           fieldName, stats.requestedPages, stats.returnedRows,
+           stats.parsedLinks, stats.rawBytes, stats.chunks,
+           ElapsedMs(fetchStartedAt));
 
   return true;
 }
@@ -518,21 +611,44 @@ WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
 }
 
 std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
-    const std::vector<std::string> &sourceTitles, int targetId, int maxDepth) {
+    const std::vector<std::string> &sourceTitles, int targetId, int maxDepth,
+    std::atomic<size_t> *progressUnits, size_t progressBase) {
+  const auto computeStartedAt = std::chrono::steady_clock::now();
   std::unordered_map<std::string, int> distances;
   if (!m_db || targetId < 0 || sourceTitles.empty() || maxDepth < 0) {
+    LOG_WARN("WikiShortestPath",
+             "ComputeDistancesToTarget skipped: db={}, targetId={}, sources={}, maxDepth={}",
+             m_db ? "ready" : "null", targetId, sourceTitles.size(), maxDepth);
     return distances;
   }
 
+  LOG_INFO("WikiShortestPath",
+           "ComputeDistancesToTarget started: sources={}, targetId={}, maxDepth={}",
+           sourceTitles.size(), targetId, maxDepth);
+
+  const auto storeProgress = [&](size_t units) {
+    if (progressUnits) {
+      progressUnits->store(progressBase + units, std::memory_order_relaxed);
+    }
+  };
+
   std::unordered_map<int, std::vector<std::string>> titlesByPageId;
   std::unordered_set<int> unresolvedPageIds;
+  size_t resolvedTitleUnits = 0;
+  size_t missingPageIds = 0;
+  const auto resolveStartedAt = std::chrono::steady_clock::now();
   for (const auto &title : sourceTitles) {
     if (title.empty() || distances.find(title) != distances.end()) {
+      ++resolvedTitleUnits;
+      storeProgress(resolvedTitleUnits);
       continue;
     }
 
     int pageId = FetchPageId(title);
     if (pageId < 0) {
+      ++missingPageIds;
+      ++resolvedTitleUnits;
+      storeProgress(resolvedTitleUnits);
       continue;
     }
 
@@ -542,9 +658,20 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     } else {
       unresolvedPageIds.insert(pageId);
     }
+    ++resolvedTitleUnits;
+    storeProgress(resolvedTitleUnits);
   }
+  LOG_INFO("WikiShortestPath",
+           "ComputeDistancesToTarget title resolution: sources={} uniquePageIds={} "
+           "directHits={} unresolved={} missing={} elapsed={}ms",
+           sourceTitles.size(), titlesByPageId.size(), distances.size(),
+           unresolvedPageIds.size(), missingPageIds, ElapsedMs(resolveStartedAt));
 
   if (unresolvedPageIds.empty()) {
+    storeProgress(sourceTitles.size() + static_cast<size_t>(maxDepth));
+    LOG_INFO("WikiShortestPath",
+             "ComputeDistancesToTarget completed without BFS: resolved={} elapsed={}ms",
+             distances.size(), ElapsedMs(computeStartedAt));
     return distances;
   }
 
@@ -556,17 +683,28 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
                       !unresolvedPageIds.empty();
        ++depth) {
     std::unordered_map<int, std::vector<int>> linkMap;
+    const auto depthStartedAt = std::chrono::steady_clock::now();
+    const size_t frontierBefore = frontier.size();
+    const size_t unresolvedBefore = unresolvedPageIds.size();
+    const size_t resolvedBefore = distances.size();
+    const auto fetchStartedAt = std::chrono::steady_clock::now();
     if (!FetchLinks(m_db, frontier, "incoming_links", linkMap)) {
+      LOG_ERROR("WikiShortestPath",
+                "ComputeDistancesToTarget BFS failed: depth={} frontier={} elapsed={}ms",
+                depth, frontierBefore, ElapsedMs(depthStartedAt));
       return distances;
     }
+    const long long fetchMs = ElapsedMs(fetchStartedAt);
 
     std::vector<int> next;
+    size_t incomingEdges = 0;
     for (int pageId : frontier) {
       const auto linkIt = linkMap.find(pageId);
       if (linkIt == linkMap.end()) {
         continue;
       }
 
+      incomingEdges += linkIt->second.size();
       for (int incomingId : linkIt->second) {
         if (!visited.insert(incomingId).second) {
           continue;
@@ -585,12 +723,24 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     }
 
     frontier = std::move(next);
+    storeProgress(sourceTitles.size() + static_cast<size_t>(depth));
+    LOG_INFO("WikiShortestPath",
+             "ComputeDistancesToTarget depth={} frontier={} rows={} incomingEdges={} "
+             "next={} visited={} resolvedDelta={} resolved={} unresolvedDelta={} "
+             "unresolved={} fetch={}ms elapsed={}ms",
+             depth, frontierBefore, linkMap.size(), incomingEdges,
+             frontier.size(), visited.size(), distances.size() - resolvedBefore,
+             distances.size(), unresolvedBefore - unresolvedPageIds.size(),
+             unresolvedPageIds.size(), fetchMs, ElapsedMs(depthStartedAt));
   }
+
+  storeProgress(sourceTitles.size() + static_cast<size_t>(maxDepth));
 
   LOG_INFO("WikiShortestPath",
            "Computed target distances: sources={}, resolved={}, targetId={}, "
-           "maxDepth={}",
-           sourceTitles.size(), distances.size(), targetId, maxDepth);
+           "maxDepth={}, elapsed={}ms",
+           sourceTitles.size(), distances.size(), targetId, maxDepth,
+           ElapsedMs(computeStartedAt));
   return distances;
 }
 

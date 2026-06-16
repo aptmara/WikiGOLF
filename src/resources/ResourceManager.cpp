@@ -6,6 +6,7 @@
 #include "../graphics/MeshPrimitives.h"
 #include "../graphics/ObjLoader.h"
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <mfapi.h>
 #include <mfidl.h>
@@ -20,6 +21,19 @@
 #pragma comment(lib, "mfuuid.lib")
 
 namespace resources {
+
+namespace {
+
+/**
+ * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
+ */
+long long ElapsedMs(const std::chrono::steady_clock::time_point &startedAt) {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now() - startedAt)
+      .count();
+}
+
+} // namespace
 
 ResourceManager::ResourceManager(graphics::GraphicsDevice &device)
     : m_device(device),
@@ -37,7 +51,10 @@ ResourceManager::ResourceManager(graphics::GraphicsDevice &device)
 // 音声機能実装 (Media Foundation)
 
 AudioHandle ResourceManager::LoadAudio(const std::string &path) {
+  const auto startedAt = std::chrono::steady_clock::now();
   if (auto it = m_audioCache.find(path); it != m_audioCache.end()) {
+    LOG_DEBUG("Resource", "LoadAudio cache hit: {} ({} ms)", path,
+              ElapsedMs(startedAt));
     return it->second;
   }
 
@@ -45,7 +62,8 @@ AudioHandle ResourceManager::LoadAudio(const std::string &path) {
   static bool mfInitialized = false;
   if (!mfInitialized) {
     if (FAILED(MFStartup(MF_VERSION))) {
-      LOG_ERROR("Resource", "MFStartup failed");
+      LOG_ERROR("Resource", "MFStartup failed while loading {} ({} ms)", path,
+                ElapsedMs(startedAt));
       return {};
     }
     mfInitialized = true;
@@ -140,8 +158,8 @@ AudioHandle ResourceManager::LoadAudio(const std::string &path) {
     }
   }
 
-  LOG_INFO("Resource", "Loaded Audio (MF): {} ({} bytes)", path,
-           clip.buffer.size());
+  LOG_INFO("Resource", "Loaded Audio (MF): {} ({} bytes, {} ms)", path,
+           clip.buffer.size(), ElapsedMs(startedAt));
 
   auto handle = m_audioPool.Add(std::move(clip));
   m_audioCache[path] = handle;
@@ -168,7 +186,10 @@ audio::AudioClip *ResourceManager::GetAudio(AudioHandle handle) {
 
 Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
 ResourceManager::LoadTextureSRV(const std::string &path) {
+  const auto startedAt = std::chrono::steady_clock::now();
   if (auto it = m_textureCache.find(path); it != m_textureCache.end()) {
+    LOG_DEBUG("Resource", "LoadTexture cache hit: {} ({} ms)", path,
+              ElapsedMs(startedAt));
     return it->second;
   }
 
@@ -283,7 +304,8 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
   }
 
   m_textureCache[path] = srv;
-  LOG_INFO("Resource", "Loaded Texture: {} ({}x{})", path, width, height);
+  LOG_INFO("Resource", "Loaded Texture: {} ({}x{}, {} ms)", path, width,
+           height, ElapsedMs(startedAt));
   return srv;
 }
 
@@ -395,11 +417,14 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 }
 
 MeshHandle ResourceManager::LoadMesh(const std::string &path) {
+  const auto startedAt = std::chrono::steady_clock::now();
   LOG_DEBUG("Resource", "LoadMesh: START {}", path.c_str());
   // キャッシュヒット確認
   if (auto it = m_meshCache.find(path); it != m_meshCache.end()) {
     LOG_DEBUG("Resource", "LoadMesh: Cache hit for {}", path.c_str());
     if (m_meshPool.Get(it->second)) { // ハンドル有効性確認
+      LOG_DEBUG("Resource", "LoadMesh cache hit: {} ({} ms)", path,
+                ElapsedMs(startedAt));
       return it->second;
     }
     LOG_DEBUG("Resource", "LoadMesh: Cache handle invalid for {}", path.c_str());
@@ -476,8 +501,8 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
     if (loaded) {
       if (mesh.Create(m_device.GetDevice(), vertices, indices)) {
         success = true;
-        LOG_INFO("Resource", "Loaded Mesh: {} ({} vertices)", path.c_str(),
-                 vertices.size());
+        LOG_INFO("Resource", "Loaded Mesh: {} ({} vertices, {} ms)",
+                 path.c_str(), vertices.size(), ElapsedMs(startedAt));
       }
     }
   }
@@ -491,6 +516,13 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
 
   auto handle = m_meshPool.Add(std::move(mesh));
   m_meshCache[path] = handle;
+  if (success) {
+    LOG_DEBUG("Resource", "LoadMesh finished: {} ({} ms)", path,
+              ElapsedMs(startedAt));
+  } else {
+    LOG_WARN("Resource", "LoadMesh fallback finished: {} ({} ms)", path,
+             ElapsedMs(startedAt));
+  }
   return handle;
 }
 
@@ -519,7 +551,10 @@ MeshHandle ResourceManager::CreateDynamicMesh(
 ShaderHandle ResourceManager::LoadShader(const std::string &name,
                                          const std::wstring &vsPath,
                                          const std::wstring &psPath) {
+  const auto startedAt = std::chrono::steady_clock::now();
   if (auto it = m_shaderCache.find(name); it != m_shaderCache.end()) {
+    LOG_DEBUG("Resource", "LoadShader cache hit: {} ({} ms)", name,
+              ElapsedMs(startedAt));
     return it->second;
   }
 
@@ -555,6 +590,7 @@ ShaderHandle ResourceManager::LoadShader(const std::string &name,
 
   auto handle = m_shaderPool.Add(std::move(shader));
   m_shaderCache[name] = handle;
+  LOG_INFO("Resource", "Loaded Shader: {} ({} ms)", name, ElapsedMs(startedAt));
   return handle;
 }
 

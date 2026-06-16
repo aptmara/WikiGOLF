@@ -286,13 +286,16 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   if (!isUserOverride && m_shortestPath && m_shortestPath->IsAvailable() && !startPage.empty() &&
       !targetPage.empty()) {
+    constexpr int kStartPagePathCheckMaxDepth = 4;
     const int maxRetry = 5;
     for (int attempt = 0; attempt < maxRetry; ++attempt) {
       game::systems::ShortestPathResult pathResult;
       if (targetId != -1) {
-        pathResult = m_shortestPath->FindShortestPath(startPage, targetId, 6);
+        pathResult = m_shortestPath->FindShortestPath(
+            startPage, targetId, kStartPagePathCheckMaxDepth);
       } else {
-        pathResult = m_shortestPath->FindShortestPath(startPage, targetPage, 6);
+        pathResult = m_shortestPath->FindShortestPath(
+            startPage, targetPage, kStartPagePathCheckMaxDepth);
       }
 
       if (!pathResult.success) {
@@ -607,6 +610,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   auto *state = ctx.world.GetGlobal<game::components::GolfGameState>();
   auto *shot = ctx.world.GetGlobal<game::components::ShotState>();
   if (!state || !shot) return;
+
+  if (m_pageLoader) {
+      m_pageLoader->UpdateAsyncPathEvaluation(ctx);
+  }
 
   if (m_phase == ScenePhase::Transitioning && m_transitionController) {
       bool finished = m_transitionController->Update(ctx);

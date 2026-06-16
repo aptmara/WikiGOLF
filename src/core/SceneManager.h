@@ -6,6 +6,7 @@
 
 #include "Logger.h"
 #include "Scene.h"
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -62,6 +63,14 @@ public:
 private:
   enum class Op { None, Push, Pop, Change };
 
+  /// @brief シーン処理の経過時間をミリ秒で返します。 山内陽
+  static long long ElapsedMs(
+      const std::chrono::steady_clock::time_point &startedAt) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now() - startedAt)
+        .count();
+  }
+
   void ProcessPendingOp(GameContext &ctx) {
     if (m_pendingOp != Op::None) {
       LOG_INFO("SceneManager", "Total entities before op: {}", ctx.world.GetEntityCount());
@@ -70,7 +79,10 @@ private:
     case Op::Push:
       if (m_pendingScene) {
         LOG_INFO("SceneManager", "Push: {}", m_pendingScene->GetName());
+        const auto enterStartedAt = std::chrono::steady_clock::now();
         m_pendingScene->OnEnter(ctx);
+        LOG_INFO("SceneManager", "OnEnter finished: {} ({} ms)",
+                 m_pendingScene->GetName(), ElapsedMs(enterStartedAt));
         m_sceneStack.push_back(std::move(m_pendingScene));
       }
       break;
@@ -78,7 +90,11 @@ private:
     case Op::Pop:
       if (!m_sceneStack.empty()) {
         LOG_INFO("SceneManager", "Pop: {}", m_sceneStack.back()->GetName());
+        const std::string sceneName = m_sceneStack.back()->GetName();
+        const auto exitStartedAt = std::chrono::steady_clock::now();
         m_sceneStack.back()->OnExit(ctx);
+        LOG_INFO("SceneManager", "OnExit finished: {} ({} ms)", sceneName,
+                 ElapsedMs(exitStartedAt));
         m_sceneStack.pop_back();
       }
       break;
@@ -87,11 +103,18 @@ private:
       if (m_pendingScene) {
         if (!m_sceneStack.empty()) {
           LOG_INFO("SceneManager", "Exit: {}", m_sceneStack.back()->GetName());
+          const std::string sceneName = m_sceneStack.back()->GetName();
+          const auto exitStartedAt = std::chrono::steady_clock::now();
           m_sceneStack.back()->OnExit(ctx);
+          LOG_INFO("SceneManager", "OnExit finished: {} ({} ms)", sceneName,
+                   ElapsedMs(exitStartedAt));
           m_sceneStack.pop_back();
         }
         LOG_INFO("SceneManager", "Change to: {}", m_pendingScene->GetName());
+        const auto enterStartedAt = std::chrono::steady_clock::now();
         m_pendingScene->OnEnter(ctx);
+        LOG_INFO("SceneManager", "OnEnter finished: {} ({} ms)",
+                 m_pendingScene->GetName(), ElapsedMs(enterStartedAt));
         m_sceneStack.push_back(std::move(m_pendingScene));
       }
       break;

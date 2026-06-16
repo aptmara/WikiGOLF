@@ -11,7 +11,9 @@
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <future>
 #include <memory>
 #include <string>
@@ -134,6 +136,13 @@ public:
     bool StepBuildPageWithinFrameBudget(core::GameContext& ctx,
                                         std::chrono::milliseconds budget);
 
+    /**
+     * @brief 遅延中の経路評価が完了していれば反映します。 山内陽
+     * @param ctx ゲームコンテキスト
+     * @return 経路評価結果を反映した場合は true
+     */
+    bool UpdateAsyncPathEvaluation(core::GameContext& ctx);
+
     /// @brief 構築の進捗 (0.0 - 1.0)
     float GetBuildProgress() const { return m_buildProgress; }
 
@@ -229,6 +238,43 @@ private:
     };
 
     /**
+     * @brief ビルドステップ名をログ用に返します。 山内陽
+     */
+    static const char* BuildStepName(BuildStep step);
+
+    /**
+     * @brief ステップ変更時に前ステップ完了と次ステップ開始を記録します。 山内陽
+     */
+    void LogBuildStepTransition();
+
+    /**
+     * @brief 長時間継続しているステップの進捗を間隔を空けて記録します。 山内陽
+     */
+    void LogLongRunningBuildStep();
+
+    /**
+     * @brief 経路評価タスクを非同期で開始します。 山内陽
+     */
+    void StartAsyncPathEvaluation(int targetPageId);
+
+    /**
+     * @brief 完了済みの経路評価タスクを候補と既存ホールへ反映します。 山内陽
+     */
+    bool TryConsumePathEvaluation(core::GameContext& ctx, bool updateWorld);
+
+    /**
+     * @brief 既に生成済みのホール表示へ経路評価結果を反映します。 山内陽
+     */
+    void ApplyPathEvaluationToWorld(
+        core::GameContext& ctx,
+        const std::vector<HolePlacementCandidate>& evaluatedCandidates);
+
+    /**
+     * @brief 古い経路評価タスクをロード処理から切り離します。 山内陽
+     */
+    void RetireActivePathEvaluationTask();
+
+    /**
      * @brief リンク領域からホール候補を作ります。 山内陽
      */
     HolePlacementCandidate BuildHolePlacementCandidate(
@@ -267,8 +313,19 @@ private:
         float minDistance) const;
 
     BuildStep m_buildStep = BuildStep::None;
+    BuildStep m_loggedBuildStep = BuildStep::None;
     PageDataAsyncResult m_buildData;
     PageLoadResult m_buildResult;
+    uint64_t m_buildLoadId = 0;
+    inline static std::atomic<uint64_t> s_nextBuildLoadId{1};
+    std::chrono::steady_clock::time_point m_buildStartedAt =
+        std::chrono::steady_clock::time_point::min();
+    std::chrono::steady_clock::time_point m_stepStartedAt =
+        std::chrono::steady_clock::time_point::min();
+    std::chrono::steady_clock::time_point m_lastLongStepLogAt =
+        std::chrono::steady_clock::time_point::min();
+    std::chrono::steady_clock::time_point m_lastCreateHolesProgressLogAt =
+        std::chrono::steady_clock::time_point::min();
 
     ecs::Entity m_buildBall = UINT32_MAX;
     ecs::Entity m_buildCamera = UINT32_MAX;
@@ -282,6 +339,9 @@ private:
     std::vector<HolePlacementCandidate> m_buildMapHoleCandidates;
     std::unordered_map<std::string, int> m_pathHopCache;
     std::future<std::vector<HolePlacementCandidate>> m_pathEvaluationTask;
+    std::vector<std::future<std::vector<HolePlacementCandidate>>> m_retiredPathEvaluationTasks;
+    std::shared_ptr<std::atomic<size_t>> m_pathEvaluationProgress;
+    std::shared_ptr<std::atomic<size_t>> m_pathEvaluationTotal;
     bool m_pathEvaluationStarted = false;
 
     size_t m_nextHoleIndex = 0;

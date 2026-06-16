@@ -360,9 +360,9 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     mr.shader    = m_buildTerrainShader;
     mr.color     = {1.0f, 1.0f, 1.0f, 1.0f};
     mr.textureSRV   = m_buildAlbedoSRV;
-    mr.hasTexture   = true;
+    mr.hasTexture   = static_cast<bool>(m_buildAlbedoSRV);
     mr.normalMapSRV = m_buildNormalSRV;
-    mr.hasNormalMap = true;
+    mr.hasNormalMap = static_cast<bool>(m_buildNormalSRV);
     mr.isTransparent = false;
     mr.customFlags   = {2.0f, 0.0f, 0.0f, 0.0f};
 
@@ -727,9 +727,9 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     meshRenderer.shader = terrainShader;
     meshRenderer.color = {1.0f, 1.0f, 1.0f, 1.0f};
     meshRenderer.textureSRV = terrainAlbedoSRV;
-    meshRenderer.hasTexture = true;
+    meshRenderer.hasTexture = static_cast<bool>(terrainAlbedoSRV);
     meshRenderer.normalMapSRV = terrainNormalSRV;
-    meshRenderer.hasNormalMap = true;
+    meshRenderer.hasNormalMap = static_cast<bool>(terrainNormalSRV);
     meshRenderer.isTransparent = false;
     meshRenderer.customFlags = {2.0f, 0.0f, 0.0f, 0.0f}; // x:UVスケール、y:未使用
 
