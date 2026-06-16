@@ -260,8 +260,10 @@ private:
 
     /**
      * @brief 経路評価タスクを非同期で開始します。 山内陽
+     * @param targetPageId 目標ページIDです。山内陽
+     * @param maxDepth 探索する最大リンク深度です。山内陽
      */
-    void StartAsyncPathEvaluation(int targetPageId);
+    void StartAsyncPathEvaluation(int targetPageId, int maxDepth);
 
     /**
      * @brief 完了済みの経路評価タスクを候補と既存ホールへ反映します。 山内陽

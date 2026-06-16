@@ -57,6 +57,7 @@ constexpr float kMinLinkHoleDistance = 4.0f;
 constexpr float kMinMapIconDistance = 8.0f;
 constexpr size_t kMaxMapHoleIcons = 160;
 constexpr int kPathEvaluationMaxDepth = 4;
+constexpr int kLoadPathEvaluationMaxDepth = 2;
 constexpr auto kLongBuildStepLogInterval = std::chrono::seconds(2);
 constexpr float kTutorialFieldWidth = 96.0f;
 constexpr float kTutorialFieldDepth = 144.0f;
@@ -363,7 +364,7 @@ void WikiPageLoader::RetireActivePathEvaluationTask()
     m_retiredPathEvaluationTasks.push_back(std::move(m_pathEvaluationTask));
 }
 
-void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId)
+void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
 {
     if (m_pathEvaluationStarted) {
         return;
@@ -373,7 +374,7 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId)
     m_nextPathIndex = 0;
     m_pathEvaluationProgress = std::make_shared<std::atomic<size_t>>(0);
     m_pathEvaluationTotal = std::make_shared<std::atomic<size_t>>(
-        m_buildPathCandidates.size() + kPathEvaluationMaxDepth);
+        m_buildPathCandidates.size() + std::max(0, maxDepth));
 
     const uint64_t loadId = m_buildLoadId;
     auto candidates = m_buildPathCandidates;
@@ -382,17 +383,17 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId)
     m_pathEvaluationTask = std::async(
         std::launch::async,
         [candidates = std::move(candidates), targetPageId, progress,
-         totalUnits, loadId]() mutable {
+         totalUnits, loadId, maxDepth]() mutable {
             const auto taskStartedAt = std::chrono::steady_clock::now();
             LOG_INFO("WikiPageLoader",
-                     "Path evaluation task started: loadId={} candidates={} targetId={}",
-                     loadId, candidates.size(), targetPageId);
+                     "Path evaluation task started: loadId={} candidates={} targetId={} maxDepth={}",
+                     loadId, candidates.size(), targetPageId, maxDepth);
             if (targetPageId == -1 || candidates.empty()) {
                 progress->store(totalUnits->load(std::memory_order_relaxed),
                                 std::memory_order_relaxed);
                 LOG_WARN("WikiPageLoader",
-                         "Path evaluation task skipped: loadId={} candidates={} targetId={}",
-                         loadId, candidates.size(), targetPageId);
+                         "Path evaluation task skipped: loadId={} candidates={} targetId={} maxDepth={}",
+                         loadId, candidates.size(), targetPageId, maxDepth);
                 return candidates;
             }
 
@@ -433,7 +434,7 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId)
             }
 
             totalUnits->store(
-                candidates.size() + linkTargets.size() + kPathEvaluationMaxDepth,
+                candidates.size() + linkTargets.size() + std::max(0, maxDepth),
                 std::memory_order_relaxed);
             LOG_INFO("WikiPageLoader",
                      "Path evaluation targets prepared: loadId={} candidates={} unique={} "
@@ -443,12 +444,12 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId)
                      totalUnits->load(std::memory_order_relaxed));
             const auto distanceStartedAt = std::chrono::steady_clock::now();
             const auto distances = pathSystem.ComputeDistancesToTarget(
-                linkTargets, targetPageId, kPathEvaluationMaxDepth, progress.get(),
+                linkTargets, targetPageId, maxDepth, progress.get(),
                 candidates.size());
             LOG_INFO("WikiPageLoader",
                      "Path evaluation distance map ready: loadId={} uniqueTargets={} "
-                     "resolved={} elapsed={}ms",
-                     loadId, linkTargets.size(), distances.size(),
+                     "resolved={} maxDepth={} elapsed={}ms",
+                     loadId, linkTargets.size(), distances.size(), maxDepth,
                      ElapsedMs(distanceStartedAt));
             size_t assignedDistances = 0;
             for (auto& candidate : candidates) {
@@ -471,8 +472,8 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId)
         });
 
     LOG_INFO("WikiPageLoader",
-             "Path evaluation launched in background: loadId={} targets={}",
-             m_buildLoadId, m_buildPathCandidates.size());
+             "Path evaluation launched in background: loadId={} targets={} maxDepth={}",
+             m_buildLoadId, m_buildPathCandidates.size(), maxDepth);
 }
 
 bool WikiPageLoader::TryConsumePathEvaluation(core::GameContext& ctx,
@@ -990,7 +991,9 @@ bool WikiPageLoader::StepBuildPageWithinFrameBudget(
     core::GameContext& ctx, std::chrono::milliseconds budget)
 {
     m_buildDeadline = std::chrono::steady_clock::now() + budget;
-    TryConsumePathEvaluation(ctx, true);
+    if (m_buildStep != BuildStep::EvaluateHolePaths) {
+        TryConsumePathEvaluation(ctx, true);
+    }
 
     bool done = false;
     while (std::chrono::steady_clock::now() < m_buildDeadline) {
@@ -1019,7 +1022,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         return true;
     }
 
-    TryConsumePathEvaluation(ctx, false);
+    if (m_buildStep != BuildStep::EvaluateHolePaths) {
+        TryConsumePathEvaluation(ctx, false);
+    }
     LogBuildStepTransition();
 
     switch (m_buildStep) {
@@ -1333,13 +1338,14 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             m_buildPathCandidates = m_buildHoleCandidates;
             m_nextPathIndex = 0;
             m_pathEvaluationStarted = false;
-            StartAsyncPathEvaluation(state ? state->targetPageId : -1);
+            StartAsyncPathEvaluation(state ? state->targetPageId : -1,
+                                     kLoadPathEvaluationMaxDepth);
             m_nextMapIconIndex = 0;
-            m_buildStep = BuildStep::CreateMapIcons;
+            m_buildStep = BuildStep::EvaluateHolePaths;
             m_buildProgress = 0.88f;
             LOG_INFO("WikiPageLoader",
                      "Hole candidates staged: textureLinks={}, mapIcons={}, "
-                     "pathTargets={}/{} pathEvaluation=background",
+                     "pathTargets={}/{} pathEvaluation=load-depth-2",
                      gameplayLinks.size(), m_buildMapHoleCandidates.size(),
                      m_buildPathCandidates.size(), m_buildHoleCandidates.size());
         } else {
@@ -1352,10 +1358,24 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::EvaluateHolePaths:
     {
-        TryConsumePathEvaluation(ctx, false);
+        if (!TryConsumePathEvaluation(ctx, false)) {
+            if (m_pathEvaluationProgress && m_pathEvaluationTotal) {
+                const float doneUnits = static_cast<float>(
+                    m_pathEvaluationProgress->load(std::memory_order_relaxed));
+                const float totalUnits = std::max(
+                    1.0f,
+                    static_cast<float>(
+                        m_pathEvaluationTotal->load(std::memory_order_relaxed)));
+                m_buildProgress = 0.88f + 0.02f *
+                                             std::clamp(doneUnits / totalUnits,
+                                                        0.0f, 1.0f);
+            }
+            return false;
+        }
+        m_pathEvaluationStarted = false;
         m_nextMapIconIndex = 0;
         m_buildStep = BuildStep::CreateMapIcons;
-        m_buildProgress = 0.88f;
+        m_buildProgress = 0.90f;
         return false;
     }
 
@@ -1386,7 +1406,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         } else {
             float iconProgress =
                 (float)m_nextMapIconIndex / (float)m_buildMapHoleCandidates.size();
-            m_buildProgress = 0.88f + 0.02f * iconProgress;
+            m_buildProgress = 0.90f + 0.01f * iconProgress;
         }
         return false;
     }
@@ -1432,6 +1452,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                      m_wikiTexture ? m_wikiTexture->links.size() : 0,
                      m_buildHoleCandidates.size(), m_buildMapHoleCandidates.size(),
                      m_buildPathCandidates.size());
+            m_pathEvaluationStarted = false;
+            StartAsyncPathEvaluation(state ? state->targetPageId : -1,
+                                     kPathEvaluationMaxDepth);
             m_buildStep = BuildStep::SetupWind;
             m_buildProgress = 0.995f;
         } else {
