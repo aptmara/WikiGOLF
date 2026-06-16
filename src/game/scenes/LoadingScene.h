@@ -146,6 +146,7 @@ private:
 
   // 非同期ロード
   std::future<std::unique_ptr<game::components::WikiGlobalData>> m_loadTask;
+  std::unique_ptr<game::components::WikiGlobalData> m_loadedData;
   bool m_isLoading = false;
   bool m_loadCompleted = false;
   std::shared_ptr<std::atomic<float>> m_loadProgress;

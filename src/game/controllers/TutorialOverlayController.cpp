@@ -45,6 +45,10 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
     m_inputLocked         = false;
     m_eventCamLerpTimer   = 0.0f;
     m_eventCamDisplayTimer = 0.0f;
+    m_checkMarkEntity     = UINT32_MAX;
+    m_checkMarkShown      = false;
+    m_checkMarkTimer      = 0.0f;
+    m_stepClearPending    = false;
 
     // チュートリアル中はゲージ速度を下げて操作しやすくする
     auto* shotState = ctx.world.GetGlobal<components::ShotState>();
@@ -109,6 +113,12 @@ void TutorialOverlayController::Shutdown(core::GameContext& ctx) {
     LOG_INFO("TutorialOverlay", "Shutdown");
 
     m_inputLocked = false;
+
+    // Fix5: チェックマークエンティティが残っていれば破棄する
+    if (ctx.world.IsAlive(m_checkMarkEntity)) {
+        ctx.world.DestroyEntity(m_checkMarkEntity);
+        m_checkMarkEntity = UINT32_MAX;
+    }
 
     auto* shotState = ctx.world.GetGlobal<components::ShotState>();
     if (shotState) {
@@ -189,6 +199,20 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
     if (ctx.input.GetKeyDown(VK_RETURN)) {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
 
+        // チェックマーク演出中なら即度次ステップへ
+        if (m_stepClearPending) {
+            if (ctx.world.IsAlive(m_checkMarkEntity)) {
+                ctx.world.DestroyEntity(m_checkMarkEntity);
+                m_checkMarkEntity = UINT32_MAX;
+            }
+            m_stepClearPending = false;
+            m_checkMarkShown   = false;
+            NextStep(ctx);
+            m_initialCameraYaw = 0.0f;
+            m_initialClubIndex = -1;
+            return;
+        }
+
         // TerrainEvent スキップ時はカメラロック解除
         if (m_step == TutorialStep::TerrainEvent) {
             m_inputLocked         = false;
@@ -199,6 +223,25 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
         m_initialCameraYaw  = 0.0f;
         m_initialClubIndex  = -1;
         return;
+    }
+
+    // ステップクリア演出中（NextStep 待機）
+    if (m_stepClearPending) {
+        m_checkMarkTimer += ctx.dt;
+        UpdateStepClearAnim(ctx);
+
+        // CupIn は異なる待機時間（m_cupInWaitTimer で管理）
+        if (m_step != TutorialStep::CupIn && m_checkMarkTimer >= 0.9f) {
+            if (ctx.world.IsAlive(m_checkMarkEntity)) {
+                ctx.world.DestroyEntity(m_checkMarkEntity);
+                m_checkMarkEntity = UINT32_MAX;
+            }
+            m_stepClearPending = false;
+            m_checkMarkShown   = false;
+            NextStep(ctx);
+        }
+        // CupIn の終了判定は以下の CheckCompletion 内で行う
+        if (m_step != TutorialStep::CupIn) return;
     }
 
     // STEP 5 中はイベントカメラを更新する
@@ -227,7 +270,7 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
                 m_initialCameraYaw = cameraCtrl->GetYaw();
             }
             if (cameraCtrl && std::abs(cameraCtrl->GetYaw() - m_initialCameraYaw) > 0.5f) {
-                NextStep(ctx);
+                TriggerStepClear(ctx);
             }
             break;
 
@@ -237,20 +280,20 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
             }
             if (clubCtrl && clubCtrl->GetCurrentClubIndex() != m_initialClubIndex
                 && m_initialClubIndex != -1) {
-                NextStep(ctx);
+                TriggerStepClear(ctx);
             }
             break;
 
         case TutorialStep::Power:
             if (shotState && shotState->phase == components::ShotState::Phase::ImpactTiming) {
-                NextStep(ctx);
+                TriggerStepClear(ctx);
             }
             break;
 
         case TutorialStep::Impact:
             if (shotState && (shotState->phase == components::ShotState::Phase::Executing ||
                               shotState->phase == components::ShotState::Phase::ShowResult)) {
-                NextStep(ctx);
+                TriggerStepClear(ctx);
             }
             break;
 
@@ -258,6 +301,30 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
             if (!m_eventCamTargets.empty()) {
                 // === イベントカメラモード（targets が注入済み）===
                 if (!m_terrainEventStarted) {
+                    // Fix4: ショット直後にすぐ移行するとボールが飛行中なので
+                    //       ShotPhase が Idle かつボール速度が十分小さくなるまで待機する
+                    auto* shotState = ctx.world.GetGlobal<components::ShotState>();
+                    bool shotIdle = !shotState ||
+                                   shotState->phase == components::ShotState::Phase::Idle ||
+                                   shotState->phase == components::ShotState::Phase::ShowResult;
+
+                    bool ballStopped = true;
+                    auto* golfState = ctx.world.GetGlobal<components::GolfGameState>();
+                    if (golfState && golfState->ballEntity != UINT32_MAX) {
+                        auto* rb = ctx.world.Get<components::RigidBody>(golfState->ballEntity);
+                        if (rb) {
+                            float spd = rb->velocity.x * rb->velocity.x
+                                      + rb->velocity.y * rb->velocity.y
+                                      + rb->velocity.z * rb->velocity.z;
+                            ballStopped = (spd < 0.05f * 0.05f);
+                        }
+                    }
+
+                    if (!shotIdle || !ballStopped) {
+                        // まだ待機中 — UI はそのままで return
+                        break;
+                    }
+
                     m_terrainEventStarted  = true;
                     m_inputLocked          = true;
                     m_terrainCardIndex     = 0;
@@ -276,8 +343,9 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
                 if (m_eventCamDisplayTimer <= 0.0f) {
                     m_terrainCardIndex++;
                     if (m_terrainCardIndex >= m_eventCamTargets.size()) {
-                        // 全地形を表示した → 次のステップへ
-                        NextStep(ctx);
+                        // 全地形を表示した → 次のステップへ（チェックマーク付き）
+                        m_inputLocked = false;
+                        TriggerStepClear(ctx);
                     } else {
                         // 次の地形へ：現在位置からラープ開始
                         m_eventCamDisplayTimer = 4.0f;
@@ -306,7 +374,7 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
                         m_terrainCardTimer = 4.0f;
                         m_terrainCardIndex++;
                         if (m_terrainCardIndex >= m_terrainCards.size()) {
-                            NextStep(ctx);
+                            TriggerStepClear(ctx);
                         } else {
                             UpdateUI(ctx);
                         }
@@ -320,8 +388,25 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
             auto* golfState = ctx.world.GetGlobal<components::GolfGameState>();
             if (golfState && golfState->gameCleared) {
                 m_cupInWaitTimer += ctx.dt;
+
+                // クリア確定時にチェックマーク演出を開始（未開始のときのみ）
+                if (!m_stepClearPending) {
+                    TriggerStepClear(ctx);
+                    m_stepClearPending = false; // CupIn は襲時間を別管理するのでフラグを戻す
+                    m_checkMarkShown = true;    // 再度生成しないよう
+                }
+
+                // チェックマークアニメーション更新は UpdateStepClearAnim に委譲（タイマーは m_checkMarkTimer）
+                m_checkMarkTimer += ctx.dt;
+                UpdateStepClearAnim(ctx);
+
                 UpdateUI(ctx);
                 if (m_cupInWaitTimer >= 4.0f) {
+                    // チェックマークエンティティを破棄してから次ステップへ
+                    if (ctx.world.IsAlive(m_checkMarkEntity)) {
+                        ctx.world.DestroyEntity(m_checkMarkEntity);
+                        m_checkMarkEntity = UINT32_MAX;
+                    }
                     NextStep(ctx);
                 }
             }
@@ -432,6 +517,88 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
     if (ctx.world.IsAlive(m_overlayTextEntity)) {
         ctx.world.Get<components::UIText>(m_overlayTextEntity)->text = text;
     }
+}
+
+// -------------------------------------------------------
+// TriggerStepClear（ステップ完了チェックマーク開始）
+// -------------------------------------------------------
+/**
+ * @brief ステップ完了時にチェックマーク演出を開始する。
+ * @details チェックマーク UIImage を生成し m_stepClearPending = true にする。
+ *          呼び出し元は NextStep を直接呼ばずこの関数を使う。
+ */
+void TutorialOverlayController::TriggerStepClear(core::GameContext& ctx) {
+    // 既存のチェックマークがあれば破棄
+    if (ctx.world.IsAlive(m_checkMarkEntity)) {
+        ctx.world.DestroyEntity(m_checkMarkEntity);
+    }
+
+    m_checkMarkEntity  = ctx.world.CreateEntity();
+    m_checkMarkTimer   = 0.0f;
+    m_stepClearPending = true;
+
+    auto& img       = ctx.world.Add<components::UIImage>(m_checkMarkEntity);
+    img.texturePath = "mark_check.png";
+    // チュートリアルオーバーレイBG 中央（x=640, y=150）に配置
+    // BG は x=240, y=80, w=800, h=140 → 中心 (640, 150)
+    img.x       = 640.0f;
+    img.y       = 80.0f;  // sz=0 の初期値; UpdateStepClearAnim で sz を足して補正
+    img.width   = 0.0f;
+    img.height  = 0.0f;
+    img.alpha   = 1.0f;
+    img.visible = true;
+    img.layer   = 210;
+}
+
+// -------------------------------------------------------
+// UpdateStepClearAnim（チェックマークアニメーション更新）
+// -------------------------------------------------------
+/**
+ * @brief チェックマーク UIImage のサイズ・位置・透明度を毎フレーム更新する。
+ * @details タイマー m_checkMarkTimer を参照する（更新は呼び出し元が行う）。
+ *          CupIn 用に 4 秒表示・フェードアウトにも対応。
+ *          通常ステップ用（0.9 秒）はフェードなし（破棄で消す）。
+ */
+void TutorialOverlayController::UpdateStepClearAnim(core::GameContext& ctx) {
+    if (!ctx.world.IsAlive(m_checkMarkEntity)) return;
+    auto* img = ctx.world.Get<components::UIImage>(m_checkMarkEntity);
+    if (!img) return;
+
+    // アニメーションパラメータ
+    constexpr float kExpandEnd = 0.30f;  // 0 → 0.30s: ease-out 拡大
+    constexpr float kShrinkEnd = 0.50f;  // 0.30 → 0.50s: ease-in 縮小
+    constexpr float kMaxSize   = 200.0f;
+    constexpr float kFinalSize = 150.0f;
+    // CupIn 専用フェードアウト開始タイミング（4s 待機の最後 0.5s）
+    constexpr float kFadeStart = 3.5f;
+    constexpr float kFadeTotal = 4.0f;
+
+    float sz    = kFinalSize;
+    float alpha = 1.0f;
+
+    if (m_checkMarkTimer < kExpandEnd) {
+        // ease-out 拡大（0 → kMaxSize）
+        float t = m_checkMarkTimer / kExpandEnd;
+        t  = 1.0f - (1.0f - t) * (1.0f - t);
+        sz = kMaxSize * t;
+    } else if (m_checkMarkTimer < kShrinkEnd) {
+        // ease-in 縮小（kMaxSize → kFinalSize）
+        float t = (m_checkMarkTimer - kExpandEnd) / (kShrinkEnd - kExpandEnd);
+        sz = kMaxSize - (kMaxSize - kFinalSize) * t;
+    } else if (m_step == TutorialStep::CupIn && m_checkMarkTimer >= kFadeStart) {
+        // CupIn のみ: フェードアウト
+        float remain = kFadeTotal - m_checkMarkTimer;
+        alpha = std::max(0.0f, remain / 0.5f);
+    }
+
+    // オーバーレイBG 中央（640, 150）を基準にセンタリング
+    img->width  = sz;
+    img->height = sz;
+    img->alpha  = alpha;
+    img->x      = 640.0f - sz * 0.5f;
+    img->y      = 150.0f - sz * 0.5f;  // 150 = BG(y=80) + BG_h(140)/2
+
+    if (alpha <= 0.0f) img->visible = false;
 }
 
 } // namespace game::controllers

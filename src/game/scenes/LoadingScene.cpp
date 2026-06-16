@@ -81,6 +81,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_forceFinishTimer = 0.0f;
   m_isLoading = false;
   m_loadCompleted = false;
+  m_loadedData.reset();
   m_uiProgress = 0.0f;
   m_explosionTimer = 0.0f;
   m_exploded = false;
@@ -888,17 +889,22 @@ void LoadingScene::UpdateFade(core::GameContext &ctx, float dt) {
   if (m_fadeAlpha >= 1.0f) {
     m_fadeAlpha = 1.0f;
 
-    // ロード結果を取得してグローバルにセット
-    if (m_loadTask.valid()) {
-      try {
-        auto data = m_loadTask.get();
-        LOG_INFO("LoadingScene", "Async load completed. Start: {}, Target: {}",
-                 data->startPage, data->targetPage);
-        ctx.world.SetGlobal(std::move(*data));
-      } catch (const std::exception &e) {
-        LOG_ERROR("LoadingScene", "Load task failed: {}", e.what());
+    if (!m_loadCompleted || !m_loadedData) {
+      static auto s_lastWaitLogAt = std::chrono::steady_clock::time_point::min();
+      const auto now = std::chrono::steady_clock::now();
+      if (s_lastWaitLogAt == std::chrono::steady_clock::time_point::min() ||
+          now - s_lastWaitLogAt >= std::chrono::seconds(1)) {
+        LOG_INFO("LoadingScene",
+                 "Fade complete, waiting for async load without blocking render thread");
+        s_lastWaitLogAt = now;
       }
+      return;
     }
+
+    LOG_INFO("LoadingScene", "Async load completed. Start: {}, Target: {}",
+             m_loadedData->startPage, m_loadedData->targetPage);
+    ctx.world.SetGlobal(std::move(*m_loadedData));
+    m_loadedData.reset();
 
     // 次のシーンへ遷移
     if (ctx.sceneManager && m_nextSceneFactory) {
@@ -1074,12 +1080,23 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
   if (m_isLoading && m_loadTask.valid()) {
     auto status = m_loadTask.wait_for(std::chrono::milliseconds(0));
     if (status == std::future_status::ready) {
-      m_loadCompleted = true;
-      m_isLoading = false;
-      if (m_loadProgress) {
-        m_loadProgress->store(1.0f, std::memory_order_relaxed);
+      try {
+        m_loadedData = m_loadTask.get();
+        m_loadCompleted = static_cast<bool>(m_loadedData);
+        if (m_loadProgress) {
+          m_loadProgress->store(1.0f, std::memory_order_relaxed);
+        }
+        LOG_INFO("LoadingScene", "Asset Load Completed!");
+      } catch (const std::exception &e) {
+        m_loadedData = std::make_unique<game::components::WikiGlobalData>();
+        m_loadedData->startPage = "ゴルフ";
+        m_loadedData->targetPage = "日本";
+        m_loadedData->targetPageId = -1;
+        m_loadedData->isUserOverride = false;
+        m_loadCompleted = true;
+        LOG_ERROR("LoadingScene", "Load task failed: {}", e.what());
       }
-      LOG_INFO("LoadingScene", "Asset Load Completed!");
+      m_isLoading = false;
     }
   }
 
@@ -1090,10 +1107,11 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
   // タイムアウト安全装置
   if (m_spawnedCount >= TOTAL_BALLS) {
     m_forceFinishTimer += dt;
-    if (m_forceFinishTimer > 4.0f) { // タイムアウトを少し延長
-      triggerFade = true;
-      if (!m_fadeStarted) {
-        LOG_INFO("LoadingScene", "Force finish triggered due to timeout");
+    if (m_forceFinishTimer > 4.0f && !m_loadCompleted) {
+      if (!m_fadeStarted && !m_fadeLogged) {
+        LOG_INFO("LoadingScene",
+                 "Visual load finished; waiting for async data before fade");
+        m_fadeLogged = true;
       }
     }
   }

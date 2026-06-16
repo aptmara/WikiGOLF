@@ -60,6 +60,14 @@ public:
                    const std::string& linkTarget, bool isTargetHole,
                    bool isPlayableHole = true, int hopsToTarget = -1);
 
+  /**
+   * @brief 経路評価後のホールアイコン情報を更新します。山内陽
+   * @details 物理ホール生成後に距離計算が完了するため、マップ表示も後追いで同期します。
+   */
+  void UpdateHoleIconEvaluation(const std::string& linkTarget,
+                                bool isPlayableHole,
+                                int hopsToTarget);
+
   /// @brief マップビュー状態のトグル
   void ToggleMapView(core::GameContext &ctx, ecs::Entity skyboxEntity);
 
@@ -132,6 +140,7 @@ private:
   struct MapHoleIcon {
     ecs::Entity iconEntity;
     DirectX::XMFLOAT2 worldPos;
+    std::string linkTarget;
     bool isTarget;
     bool isPlayable;
     int hopsToTarget;

@@ -360,9 +360,6 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
                                     const std::string& linkTarget,
                                     bool isTargetHole, bool isPlayableHole,
                                     int hopsToTarget) {
-  (void)linkTarget;
-  (void)hopsToTarget;
-
   auto iconEntity = ctx.world.CreateEntity();
   auto &ui = ctx.world.Add<UIImage>(iconEntity);
   
@@ -375,8 +372,28 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
                                             : game::ui::kLayerMarker);
   ui.visible = false;
   
-  m_mapHoleIcons.push_back(
-      {iconEntity, {x, z}, isTargetHole, isPlayableHole, hopsToTarget});
+  MapHoleIcon mapIcon{};
+  mapIcon.iconEntity = iconEntity;
+  mapIcon.worldPos = {x, z};
+  mapIcon.linkTarget = linkTarget;
+  mapIcon.isTarget = isTargetHole;
+  mapIcon.isPlayable = isPlayableHole;
+  mapIcon.hopsToTarget = hopsToTarget;
+  m_mapHoleIcons.push_back(mapIcon);
+}
+
+/**
+ * @brief 経路評価後のホールアイコン情報を更新します。山内陽
+ */
+void MinimapController::UpdateHoleIconEvaluation(
+    const std::string& linkTarget, bool isPlayableHole, int hopsToTarget) {
+  for (auto& icon : m_mapHoleIcons) {
+    if (icon.linkTarget != linkTarget) {
+      continue;
+    }
+    icon.isPlayable = isPlayableHole;
+    icon.hopsToTarget = hopsToTarget;
+  }
 }
 
 /**

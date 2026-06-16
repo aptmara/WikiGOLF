@@ -74,6 +74,8 @@ WikiGolfScene::~WikiGolfScene() = default;
 void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("WikiGolf", "OnEnter");
 
+  m_tutorialCupInFired = false;
+
   m_screenFade.Initialize(ctx);
   m_screenFade.FadeIn(1.5f, game::utils::FadeType::HexagonWipe,
                       {1.0f, 1.0f, 1.0f}); // 白で明ける
@@ -511,6 +513,7 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   state->moveCount++;
   state->shotCount = 0;
   state->canShoot = true;
+  m_tutorialCupInFired = false;
 
   if (shot) {
     shot->Reset();
@@ -559,6 +562,11 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
  * @brief シーンを抜ける際の後処理を行います。
  */
 void WikiGolfScene::OnExit(core::GameContext &ctx) {
+  // Fix3: シーン離脱時にゲーム中BGMを停止する（タイトルへ戻った際の鳴り続け防止）
+  if (ctx.audio) {
+    ctx.audio->StopBGM();
+  }
+
   if (m_tutorialOverlay) {
     m_tutorialOverlay->Shutdown(ctx);
     m_tutorialOverlay.reset();
@@ -1081,6 +1089,10 @@ void WikiGolfScene::Render(core::GameContext &ctx) {
  * @return 遷移が発生した場合はtrue
  */
 bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
+  // Fix2: チュートリアル中にカップイン音SEが毎フレーム連打されるのを防ぐ。
+  // gameCleared セット後はオーバーレイが Done になるまでこの関数をスキップする。
+  if (m_isTutorial && m_tutorialCupInFired) return false;
+
   auto *rb = ctx.world.Get<RigidBody>(m_ballEntity);
   auto *t = ctx.world.Get<Transform>(m_ballEntity);
   if (!rb || !t)
@@ -1186,7 +1198,9 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         }
 
         // チュートリアル中はゴール検知をオーバーレイに委ねてリザルトへは進まない
+        // Fix2: フラグをセットして以降のカップイン判定をスキップする
         if (m_isTutorial) {
+          m_tutorialCupInFired = true;
           return true;
         }
 
@@ -1200,6 +1214,20 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
 
         if (ctx.sceneManager) {
           ctx.sceneManager->ChangeScene(std::make_unique<ResultScene>(data));
+        }
+        return true;
+      }
+
+      // Fix1: チュートリアル中は非ターゲットホールへのカップインで次ページへ遷移しない。
+      // ボールをティー位置にリセットして続行させる。
+      if (m_isTutorial) {
+        LOG_INFO("WikiGolf", "[Tutorial] Non-target hole cupin. Resetting ball.");
+        if (auto *ballT = ctx.world.Get<Transform>(m_ballEntity)) {
+          ballT->position = {0.0f, 0.022f, -32.0f};
+        }
+        if (auto *ballRb = ctx.world.Get<RigidBody>(m_ballEntity)) {
+          ballRb->velocity = {0.0f, 0.0f, 0.0f};
+          ballRb->angularVelocity = {0.0f, 0.0f, 0.0f};
         }
         return true;
       }

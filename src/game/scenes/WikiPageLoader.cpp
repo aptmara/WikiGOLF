@@ -552,6 +552,10 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
                 }
             }
             updatedHoles[static_cast<uint32_t>(e)] = hole.hopsToTarget;
+            if (m_buildMinimap) {
+                m_buildMinimap->UpdateHoleIconEvaluation(
+                    hole.linkTarget, true, hole.hopsToTarget);
+            }
         });
 
     ctx.world.Query<HoleFlag>().Each([&](ecs::Entity e, HoleFlag& flag) {
@@ -1453,18 +1457,13 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         state->currentPage = m_buildData.pageName;
         state->pathHistory.push_back(m_buildData.pageName);
 
-        // Par 計算
-        int calculatedPar = -1;
-        if (m_shortestPath) {
-            game::systems::ShortestPathResult r;
-            if (state->targetPageId != -1)
-                r = m_shortestPath->FindShortestPath(m_buildData.pageName, state->targetPageId, 20);
-            else
-                r = m_shortestPath->FindShortestPath(m_buildData.pageName, state->targetPage, 20);
-            if (r.success) calculatedPar = r.degrees;
-        }
-        state->par = (calculatedPar > 0) ? calculatedPar : (int)m_buildValidLinks.size() / 2 + 2;
-        m_buildResult.calculatedPar = calculatedPar;
+        /**
+         * @brief 99%付近で描画スレッドを止めないため、Parは即時計算可能な値だけで決定します。山内陽
+         * @details 最短パスDB探索はロード初期化とホール距離評価の非同期処理に寄せています。
+         */
+        state->par = static_cast<int>(m_buildValidLinks.size()) / 2 + 2;
+        m_buildResult.calculatedPar = -1;
+        TryConsumePathEvaluation(ctx, true);
 
         m_buildStep = BuildStep::Finish;
         m_buildProgress = 0.998f;

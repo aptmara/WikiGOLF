@@ -82,6 +82,10 @@ private:
                          ClubController* clubCtrl,
                          ShotController* shotCtrl,
                          MinimapController* minimapCtrl);
+    /// @brief ステップ完了演出を開始する（チェックマーク表示→NextStep）
+    void TriggerStepClear(core::GameContext& ctx);
+    /// @brief チェックマークアニメーションを毎フレーム更新する
+    void UpdateStepClearAnim(core::GameContext& ctx);
 
     TutorialStep m_step = TutorialStep::Camera;
     
@@ -106,6 +110,12 @@ private:
     float m_eventCamDisplayTimer     = 0.0f;         ///< 表示残り秒数
     float m_cupInWaitTimer           = 0.0f;         ///< カップイン後の待機時間
     bool  m_inputLocked              = false;        ///< STEP 5 中のみ true
+
+    // --- ステップクリア演出 ---
+    ecs::Entity m_checkMarkEntity  = UINT32_MAX; ///< mark_check.png 表示用エンティティ
+    bool        m_checkMarkShown   = false;      ///< チェックマーク生成済みフラグ
+    float       m_checkMarkTimer   = 0.0f;       ///< 生成後の経過時間
+    bool        m_stepClearPending = false;      ///< NextStep 直前のアニメーション待機
 };
 
 } // namespace game::controllers

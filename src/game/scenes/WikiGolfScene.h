@@ -134,6 +134,10 @@ private:
   float m_hudUpdateTimer = 0.0f;     ///< HUD静的表示の更新間引きタイマーです。山内陽
   float m_minimapUpdateTimer = 0.0f; ///< ミニマップ描画の更新間引きタイマーです。山内陽
   bool m_prevTutorialInputLocked = false; ///< チュートリアル演出入力ロックの解除検知用です。山内陽
+  /// @brief チュートリアル中にカップイン SE が既に再生済みかどうか。
+  /// @details 毎フレーム CheckCupIn が走るためボールがカップに留まり続けると連打される。
+  ///          このフラグで1回だけ処理させる。
+  bool m_tutorialCupInFired = false;
 
   /// @brief ページ読み込み（WikiPageLoader へ委譲）
   

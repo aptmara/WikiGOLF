@@ -118,8 +118,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ctx.audio = &audioSystem;
   ctx.textRenderer = &textRenderer;
 
-  // フォントロード（必要なら）
-  // textRenderer.LoadFont("Default", "C:\\Windows\\Fonts\\msgothic.ttc");
+  // 同梱日本語フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
+  if (!textRenderer.LoadFont("Mamelon 5 Hi-Regular",
+                             "Assets/Fonts/Mamelon-5-Hi-Regular.otf")) {
+    LOG_WARN("Main", "Bundled HUD font load failed. Falling back to system font.");
+  }
 
   // システムインスタンス
   game::systems::UIButtonSystem uiButtonSystem;
@@ -196,7 +199,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   textRenderer.Shutdown();
   graphics.Shutdown();
+  audioSystem.Shutdown();
   core::Logger::Instance().Shutdown();
+
+  CoUninitialize();
 
   return (int)msg.wParam;
 }
