@@ -680,8 +680,33 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
     // クリック判定 (Pressed 状態の瞬間をトリガーとする)
     if (btn.state == components::ButtonState::Pressed && ctx.input.GetMouseButtonDown(0)) {
       if (btn.action == "new_game") {
-        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
-        newGame = true;
+        static bool s_connectionTested = false;
+        static bool s_connectionSuccess = false;
+        
+        if (!s_connectionTested) {
+            LOG_INFO("TitleScene", "Testing Wikipedia connection...");
+            game::systems::WikiClient client;
+            std::string res = client.FetchRandomPageTitle();
+            s_connectionSuccess = (res != "Error" && !res.empty());
+            s_connectionTested = true;
+            if (s_connectionSuccess) {
+                LOG_INFO("TitleScene", "Wikipedia connection test passed. Title: {}", res);
+            } else {
+                LOG_WARN("TitleScene", "Wikipedia connection test failed.");
+            }
+        }
+
+        if (!s_connectionSuccess) {
+            if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
+            auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
+            if (ptxt) {
+                ptxt->text = L"Connection Failed\n\nWikiへの接続に失敗しました";
+            }
+            m_popupTimer = 2.0f;
+        } else {
+            if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
+            newGame = true;
+        }
       } else if (btn.action == "tutorial") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
         startTutorial = true;
