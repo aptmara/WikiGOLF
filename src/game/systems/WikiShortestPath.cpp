@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include <functional>
 #include <mutex>
 #include <queue>
 #include <sqlite3.h>
@@ -23,6 +24,7 @@ namespace {
 constexpr size_t kLinkChunkSize = 512;
 constexpr size_t kDetailedChunkLogLimit = 3;
 constexpr long long kSlowLinkFetchChunkMs = 250;
+constexpr size_t kPathEvaluationDepthProgressUnits = 100;
 
 std::recursive_mutex g_sqliteMutex;
 
@@ -87,7 +89,9 @@ std::vector<int> ParseLinks(const unsigned char *text) {
 
 bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
                 const char *fieldName,
-                std::unordered_map<int, std::vector<int>> &outLinks) {
+                std::unordered_map<int, std::vector<int>> &outLinks,
+                const std::function<void(size_t, size_t)> &onChunkDone =
+                    nullptr) {
   if (pageIds.empty())
     return true;
 
@@ -95,6 +99,7 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
   LinkFetchStats stats;
   stats.requestedPages = pageIds.size();
   std::vector<LinkFetchChunkStats> chunkLogs;
+  const size_t totalChunks = (pageIds.size() + kLinkChunkSize - 1) / kLinkChunkSize;
 
   {
     std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
@@ -151,13 +156,16 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
       stats.returnedRows += chunkRows;
       stats.parsedLinks += chunkLinks;
       stats.rawBytes += chunkBytes;
+      if (onChunkDone) {
+        onChunkDone(stats.chunks, totalChunks);
+      }
 
       const long long chunkMs = ElapsedMs(chunkStartedAt);
       if (stats.chunks <= kDetailedChunkLogLimit ||
           chunkMs >= kSlowLinkFetchChunkMs) {
         chunkLogs.push_back(LinkFetchChunkStats{
             stats.chunks,
-            (pageIds.size() + kLinkChunkSize - 1) / kLinkChunkSize,
+            totalChunks,
             count,
             chunkRows,
             chunkLinks,
@@ -785,7 +793,9 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
            unresolvedPageIds.size(), missingPageIds, ElapsedMs(resolveStartedAt));
 
   if (unresolvedPageIds.empty()) {
-    storeProgress(sourceTitles.size() + static_cast<size_t>(maxDepth));
+    storeProgress(sourceTitles.size() +
+                  static_cast<size_t>(maxDepth) *
+                      kPathEvaluationDepthProgressUnits);
     LOG_INFO("WikiShortestPath",
              "ComputeDistancesToTarget completed without BFS: resolved={} elapsed={}ms",
              distances.size(), ElapsedMs(computeStartedAt));
@@ -805,7 +815,22 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     const size_t unresolvedBefore = unresolvedPageIds.size();
     const size_t resolvedBefore = distances.size();
     const auto fetchStartedAt = std::chrono::steady_clock::now();
-    if (!FetchLinks(m_db, frontier, "incoming_links", linkMap)) {
+    const size_t depthBase =
+        sourceTitles.size() +
+        static_cast<size_t>(depth - 1) * kPathEvaluationDepthProgressUnits;
+    if (!FetchLinks(
+            m_db, frontier, "incoming_links", linkMap,
+            [&](size_t processedChunks, size_t totalChunks) {
+              if (totalChunks == 0) {
+                return;
+              }
+              const size_t depthUnits =
+                  (processedChunks * kPathEvaluationDepthProgressUnits) /
+                  totalChunks;
+              storeProgress(depthBase +
+                            std::min(depthUnits,
+                                     kPathEvaluationDepthProgressUnits));
+            })) {
       LOG_ERROR("WikiShortestPath",
                 "ComputeDistancesToTarget BFS failed: depth={} frontier={} elapsed={}ms",
                 depth, frontierBefore, ElapsedMs(depthStartedAt));
@@ -843,7 +868,8 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     }
 
     frontier = std::move(next);
-    storeProgress(sourceTitles.size() + static_cast<size_t>(depth));
+    storeProgress(sourceTitles.size() + static_cast<size_t>(depth) *
+                                            kPathEvaluationDepthProgressUnits);
     LOG_INFO("WikiShortestPath",
              "ComputeDistancesToTarget depth={} frontier={} rows={} incomingEdges={} "
              "next={} visited={} resolvedDelta={} resolved={} unresolvedDelta={} "
@@ -854,7 +880,8 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
              unresolvedPageIds.size(), fetchMs, ElapsedMs(depthStartedAt));
   }
 
-  storeProgress(sourceTitles.size() + static_cast<size_t>(maxDepth));
+  storeProgress(sourceTitles.size() + static_cast<size_t>(maxDepth) *
+                                          kPathEvaluationDepthProgressUnits);
 
   LOG_INFO("WikiShortestPath",
            "Computed target distances: sources={}, resolved={}, targetId={}, "

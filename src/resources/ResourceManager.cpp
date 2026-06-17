@@ -53,8 +53,8 @@ ResourceManager::ResourceManager(graphics::GraphicsDevice &device)
 AudioHandle ResourceManager::LoadAudio(const std::string &path) {
   const auto startedAt = std::chrono::steady_clock::now();
   if (auto it = m_audioCache.find(path); it != m_audioCache.end()) {
-    LOG_DEBUG("Resource", "LoadAudio cache hit: {} ({} ms)", path,
-              ElapsedMs(startedAt));
+    // LOG_DEBUG("Resource", "LoadAudio cache hit: {} ({} ms)", path,
+    //           ElapsedMs(startedAt));
     return it->second;
   }
 
@@ -188,8 +188,8 @@ Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
 ResourceManager::LoadTextureSRV(const std::string &path) {
   const auto startedAt = std::chrono::steady_clock::now();
   if (auto it = m_textureCache.find(path); it != m_textureCache.end()) {
-    LOG_DEBUG("Resource", "LoadTexture cache hit: {} ({} ms)", path,
-              ElapsedMs(startedAt));
+    // LOG_DEBUG("Resource", "LoadTexture cache hit: {} ({} ms)", path,
+    //           ElapsedMs(startedAt));
     return it->second;
   }
 
@@ -418,19 +418,19 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 
 MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   const auto startedAt = std::chrono::steady_clock::now();
-  LOG_DEBUG("Resource", "LoadMesh: START {}", path.c_str());
+  // LOG_DEBUG("Resource", "LoadMesh: START {}", path.c_str());
   // キャッシュヒット確認
   if (auto it = m_meshCache.find(path); it != m_meshCache.end()) {
-    LOG_DEBUG("Resource", "LoadMesh: Cache hit for {}", path.c_str());
+    // LOG_DEBUG("Resource", "LoadMesh: Cache hit for {}", path.c_str());
     if (m_meshPool.Get(it->second)) { // ハンドル有効性確認
-      LOG_DEBUG("Resource", "LoadMesh cache hit: {} ({} ms)", path,
-                ElapsedMs(startedAt));
+      // LOG_DEBUG("Resource", "LoadMesh cache hit: {} ({} ms)", path,
+      //           ElapsedMs(startedAt));
       return it->second;
     }
-    LOG_DEBUG("Resource", "LoadMesh: Cache handle invalid for {}", path.c_str());
+    // LOG_DEBUG("Resource", "LoadMesh: Cache handle invalid for {}", path.c_str());
   }
 
-  LOG_DEBUG("Resource", "LoadMesh: Creating new mesh for {}", path.c_str());
+  // LOG_DEBUG("Resource", "LoadMesh: Creating new mesh for {}", path.c_str());
   graphics::Mesh mesh;
   bool success = false;
 
@@ -460,7 +460,7 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
     mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
     success = true;
   } else {
-    LOG_DEBUG("Resource", "LoadMesh: Loading from file {}", path.c_str());
+    // LOG_DEBUG("Resource", "LoadMesh: Loading from file {}", path.c_str());
     // ファイル拡張子を判定してローダーを選択
     std::vector<graphics::Vertex> vertices;
     std::vector<uint32_t> indices;
@@ -517,8 +517,8 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   auto handle = m_meshPool.Add(std::move(mesh));
   m_meshCache[path] = handle;
   if (success) {
-    LOG_DEBUG("Resource", "LoadMesh finished: {} ({} ms)", path,
-              ElapsedMs(startedAt));
+    // LOG_DEBUG("Resource", "LoadMesh finished: {} ({} ms)", path,
+    //           ElapsedMs(startedAt));
   } else {
     LOG_WARN("Resource", "LoadMesh fallback finished: {} ({} ms)", path,
              ElapsedMs(startedAt));
@@ -553,8 +553,8 @@ ShaderHandle ResourceManager::LoadShader(const std::string &name,
                                          const std::wstring &psPath) {
   const auto startedAt = std::chrono::steady_clock::now();
   if (auto it = m_shaderCache.find(name); it != m_shaderCache.end()) {
-    LOG_DEBUG("Resource", "LoadShader cache hit: {} ({} ms)", name,
-              ElapsedMs(startedAt));
+    // LOG_DEBUG("Resource", "LoadShader cache hit: {} ({} ms)", name,
+    //           ElapsedMs(startedAt));
     return it->second;
   }
 

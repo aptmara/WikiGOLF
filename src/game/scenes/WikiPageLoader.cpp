@@ -59,6 +59,7 @@ constexpr float kMinMapIconDistance = 8.0f;
 constexpr size_t kMaxMapHoleIcons = 160;
 constexpr int kPathEvaluationMaxDepth = 4;
 constexpr int kLoadPathEvaluationMaxDepth = 2;
+constexpr size_t kPathEvaluationDepthProgressUnits = 100;
 constexpr auto kLongBuildStepLogInterval = std::chrono::seconds(2);
 constexpr float kTutorialFieldWidth = 96.0f;
 constexpr float kTutorialFieldDepth = 144.0f;
@@ -375,7 +376,8 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
     m_nextPathIndex = 0;
     m_pathEvaluationProgress = std::make_shared<std::atomic<size_t>>(0);
     m_pathEvaluationTotal = std::make_shared<std::atomic<size_t>>(
-        m_buildPathCandidates.size() + std::max(0, maxDepth));
+        m_buildPathCandidates.size() +
+        std::max(0, maxDepth) * kPathEvaluationDepthProgressUnits);
     m_pathEvaluationPartialMutex = std::make_shared<std::mutex>();
     m_pathEvaluationPartialResults =
         std::make_shared<std::vector<HolePlacementCandidate>>();
@@ -450,7 +452,8 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
             }
 
             totalUnits->store(
-                candidates.size() + linkTargets.size() + std::max(0, maxDepth),
+                candidates.size() + linkTargets.size() +
+                    std::max(0, maxDepth) * kPathEvaluationDepthProgressUnits,
                 std::memory_order_relaxed);
             LOG_INFO("WikiPageLoader",
                      "Path evaluation targets prepared: loadId={} candidates={} unique={} "
@@ -1456,7 +1459,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                     1.0f,
                     static_cast<float>(
                         m_pathEvaluationTotal->load(std::memory_order_relaxed)));
-                m_buildProgress = 0.88f + 0.02f *
+                m_buildProgress = 0.88f + 0.08f *
                                              std::clamp(doneUnits / totalUnits,
                                                         0.0f, 1.0f);
             }
@@ -1471,7 +1474,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         m_pathEvaluationStarted = false;
         m_nextMapIconIndex = 0;
         m_buildStep = BuildStep::CreateMapIcons;
-        m_buildProgress = 0.90f;
+        m_buildProgress = 0.96f;
         return false;
     }
 
@@ -1502,7 +1505,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         } else {
             float iconProgress =
                 (float)m_nextMapIconIndex / (float)m_buildMapHoleCandidates.size();
-            m_buildProgress = 0.90f + 0.01f * iconProgress;
+            m_buildProgress = 0.96f + 0.01f * iconProgress;
         }
         return false;
     }
@@ -1556,7 +1559,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         } else {
             float holeProgress =
                 (float)m_nextHoleIndex / (float)m_buildHoleCandidates.size();
-            m_buildProgress = 0.90f + 0.095f * holeProgress;
+            m_buildProgress = 0.97f + 0.025f * holeProgress;
         }
         return false;
     }

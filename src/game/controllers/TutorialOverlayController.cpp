@@ -45,6 +45,7 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
     m_inputLocked         = false;
     m_eventCamLerpTimer   = 0.0f;
     m_eventCamDisplayTimer = 0.0f;
+    m_cupInWaitTimer      = 0.0f;
     m_checkMarkEntity     = UINT32_MAX;
     m_checkMarkShown      = false;
     m_checkMarkTimer      = 0.0f;
@@ -136,12 +137,14 @@ void TutorialOverlayController::Shutdown(core::GameContext& ctx) {
 // -------------------------------------------------------
 void TutorialOverlayController::SetEventCameraTargets(
     ecs::Entity cameraEntity,
-    std::vector<EventCameraTarget> targets)
+    std::vector<EventCameraTarget> terrainTargets,
+    std::vector<EventCameraTarget> flagTargets)
 {
-    m_cameraEntity    = cameraEntity;
-    m_eventCamTargets = std::move(targets);
-    LOG_INFO("TutorialOverlay", "EventCamera targets set: {}",
-             m_eventCamTargets.size());
+    m_cameraEntity          = cameraEntity;
+    m_eventCamTargets       = std::move(terrainTargets);
+    m_flagEventCamTargets   = std::move(flagTargets);
+    LOG_INFO("TutorialOverlay", "EventCamera targets set: terrain={}, flag={}",
+             m_eventCamTargets.size(), m_flagEventCamTargets.size());
 }
 
 // -------------------------------------------------------
@@ -149,12 +152,13 @@ void TutorialOverlayController::SetEventCameraTargets(
 // -------------------------------------------------------
 void TutorialOverlayController::UpdateEventCamera(core::GameContext& ctx) {
     if (m_cameraEntity == UINT32_MAX) return;
-    if (m_terrainCardIndex >= m_eventCamTargets.size()) return;
+    const auto& targets = GetActiveEventCameraTargets();
+    if (m_terrainCardIndex >= targets.size()) return;
 
     auto* camTr = ctx.world.Get<components::Transform>(m_cameraEntity);
     if (!camTr) return;
 
-    const auto& target = m_eventCamTargets[m_terrainCardIndex];
+    const auto& target = targets[m_terrainCardIndex];
 
     // ラープ進捗（1.5倍速 → 約0.67秒で完了）
     m_eventCamLerpTimer = std::min(m_eventCamLerpTimer + ctx.dt * 1.5f, 1.0f);
@@ -186,6 +190,24 @@ void TutorialOverlayController::UpdateEventCamera(core::GameContext& ctx) {
 }
 
 // -------------------------------------------------------
+// IsInputLocked
+// -------------------------------------------------------
+/**
+ * @brief チュートリアル演出による入力ロック状態を返します。
+ * @return イベントカメラ説明または説明間のチェック演出中ならtrueです。
+ * @author 山内陽
+ */
+bool TutorialOverlayController::IsInputLocked() const {
+    if (m_inputLocked) return true;
+    if (m_step == TutorialStep::FlagEvent && !m_flagEventCamTargets.empty()) {
+        return true;
+    }
+    return m_stepClearPending &&
+           (m_step == TutorialStep::TerrainEvent ||
+            m_step == TutorialStep::FlagEvent);
+}
+
+// -------------------------------------------------------
 // Update（毎フレーム）
 // -------------------------------------------------------
 void TutorialOverlayController::Update(core::GameContext& ctx, 
@@ -213,8 +235,9 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
             return;
         }
 
-        // TerrainEvent スキップ時はカメラロック解除
-        if (m_step == TutorialStep::TerrainEvent) {
+        // イベントカメラ説明スキップ時はカメラロック解除
+        if (m_step == TutorialStep::TerrainEvent ||
+            m_step == TutorialStep::FlagEvent) {
             m_inputLocked         = false;
             m_terrainEventStarted = false;
         }
@@ -244,10 +267,11 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
         if (m_step != TutorialStep::CupIn) return;
     }
 
-    // STEP 5 中はイベントカメラを更新する
-    if (m_step == TutorialStep::TerrainEvent &&
+    // イベントカメラ説明中はカメラを更新する
+    if ((m_step == TutorialStep::TerrainEvent ||
+         m_step == TutorialStep::FlagEvent) &&
         m_terrainEventStarted &&
-        !m_eventCamTargets.empty()) {
+        !GetActiveEventCameraTargets().empty()) {
         UpdateEventCamera(ctx);
     }
 
@@ -384,15 +408,54 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
             break;
         }
 
+        case TutorialStep::FlagEvent: {
+            if (m_flagEventCamTargets.empty()) {
+                TriggerStepClear(ctx);
+                break;
+            }
+
+            if (!m_terrainEventStarted) {
+                m_terrainEventStarted  = true;
+                m_inputLocked          = true;
+                m_terrainCardIndex     = 0;
+                m_eventCamDisplayTimer = 4.0f;
+                m_eventCamLerpTimer    = 0.0f;
+
+                if (m_cameraEntity != UINT32_MAX) {
+                    auto* camTr = ctx.world.Get<components::Transform>(m_cameraEntity);
+                    if (camTr) m_eventCamFromPos = camTr->position;
+                }
+                UpdateUI(ctx);
+            }
+
+            m_eventCamDisplayTimer -= ctx.dt;
+            if (m_eventCamDisplayTimer <= 0.0f) {
+                m_terrainCardIndex++;
+                if (m_terrainCardIndex >= m_flagEventCamTargets.size()) {
+                    m_inputLocked = false;
+                    TriggerStepClear(ctx);
+                } else {
+                    m_eventCamDisplayTimer = 4.0f;
+                    if (m_cameraEntity != UINT32_MAX) {
+                        auto* camTr = ctx.world.Get<components::Transform>(m_cameraEntity);
+                        if (camTr) m_eventCamFromPos = camTr->position;
+                    }
+                    m_eventCamLerpTimer = 0.0f;
+                    UpdateUI(ctx);
+                }
+            }
+            break;
+        }
+
         case TutorialStep::CupIn: {
             auto* golfState = ctx.world.GetGlobal<components::GolfGameState>();
             if (golfState && golfState->gameCleared) {
                 m_cupInWaitTimer += ctx.dt;
 
-                // クリア確定時にチェックマーク演出を開始（未開始のときのみ）
-                if (!m_stepClearPending) {
+                // クリア確定時にチェックマーク演出を開始（未生成のときのみ）
+                if (!m_checkMarkShown) {
                     TriggerStepClear(ctx);
-                    m_stepClearPending = false; // CupIn は襲時間を別管理するのでフラグを戻す
+                    m_stepClearPending = false; // CupIn は表示時間を別管理するのでフラグを戻す
                     m_checkMarkShown = true;    // 再度生成しないよう
                 }
 
@@ -444,8 +507,20 @@ void TutorialOverlayController::NextStep(core::GameContext& ctx) {
         }
     }
 
+    if (m_step == TutorialStep::FlagEvent) {
+        m_inputLocked = false;
+    }
+
     int next = static_cast<int>(m_step) + 1;
     m_step   = static_cast<TutorialStep>(next);
+
+    if (m_step == TutorialStep::TerrainEvent ||
+        m_step == TutorialStep::FlagEvent) {
+        m_terrainEventStarted = false;
+        m_terrainCardIndex = 0;
+        m_eventCamDisplayTimer = 0.0f;
+        m_eventCamLerpTimer = 0.0f;
+    }
 
     if (m_step == TutorialStep::Camera) m_initialCameraYaw  = 0.0f;
     if (m_step == TutorialStep::Club)   m_initialClubIndex  = -1;
@@ -501,12 +576,25 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
                 }
             }
             break;
+        case TutorialStep::FlagEvent:
+            if (!m_flagEventCamTargets.empty()) {
+                if (m_terrainEventStarted &&
+                    m_terrainCardIndex < m_flagEventCamTargets.size()) {
+                    auto& t = m_flagEventCamTargets[m_terrainCardIndex];
+                    text = L"【STEP 6】" + t.name + L"\n" + t.desc;
+                } else {
+                    text = L"【STEP 6】旗の色と意味について";
+                }
+            } else {
+                text = L"【STEP 6】旗の色と意味について";
+            }
+            break;
         case TutorialStep::CupIn: {
             auto* golfState = ctx.world.GetGlobal<components::GolfGameState>();
             if (golfState && golfState->gameCleared) {
                 text = L"【TUTORIAL CLEAR!!】\nチュートリアル完了です！\n(まもなくタイトルへ戻ります)";
             } else {
-                text = L"【STEP 6】旗の位置を確認し、\nカップインを目指しましょう！";
+                text = L"【STEP 7】旗の位置を確認し、\nカップインを目指しましょう！";
             }
             break;
         }
@@ -517,6 +605,26 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
     if (ctx.world.IsAlive(m_overlayTextEntity)) {
         ctx.world.Get<components::UIText>(m_overlayTextEntity)->text = text;
     }
+}
+
+// -------------------------------------------------------
+// GetActiveEventCameraTargets
+// -------------------------------------------------------
+/**
+ * @brief 現在ステップのイベントカメラターゲット一覧を返します。
+ * @return 地形説明中は地形ターゲット、旗説明中は旗ターゲット、それ以外は空配列です。
+ * @author 山内陽
+ */
+const std::vector<TutorialOverlayController::EventCameraTarget>&
+TutorialOverlayController::GetActiveEventCameraTargets() const {
+    static const std::vector<EventCameraTarget> kEmptyTargets;
+    if (m_step == TutorialStep::TerrainEvent) {
+        return m_eventCamTargets;
+    }
+    if (m_step == TutorialStep::FlagEvent) {
+        return m_flagEventCamTargets;
+    }
+    return kEmptyTargets;
 }
 
 // -------------------------------------------------------

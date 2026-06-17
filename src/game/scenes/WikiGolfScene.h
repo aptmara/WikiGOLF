@@ -66,6 +66,12 @@ private:
   /// @brief フィールド（床・壁）作成
   void CreateField(core::GameContext &ctx);
 
+  /// @brief チュートリアルの旗色解説用に、一時的な実旗モデルを配置します。山内陽
+  void CreateTutorialFlagSamples(core::GameContext &ctx);
+
+  /// @brief チュートリアルの旗色解説用に配置した一時旗モデルを破棄します。山内陽
+  void ClearTutorialFlagSamples(core::GameContext &ctx);
+
   /// @brief ページ遷移（値渡し：ホール削除後も安全に使用するため）
   void TransitionToPage(core::GameContext &ctx, const std::string &pageName);
 
@@ -134,6 +140,7 @@ private:
   float m_hudUpdateTimer = 0.0f;     ///< HUD静的表示の更新間引きタイマーです。山内陽
   float m_minimapUpdateTimer = 0.0f; ///< ミニマップ描画の更新間引きタイマーです。山内陽
   bool m_prevTutorialInputLocked = false; ///< チュートリアル演出入力ロックの解除検知用です。山内陽
+  std::vector<ecs::Entity> m_tutorialFlagSampleEntities; ///< 旗色解説用の一時旗モデルです。山内陽
   /// @brief チュートリアル中にカップイン SE が既に再生済みかどうか。
   /// @details 毎フレーム CheckCupIn が走るためボールがカップに留まり続けると連打される。
   ///          このフラグで1回だけ処理させる。

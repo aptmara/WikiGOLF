@@ -21,10 +21,10 @@ void Input::Initialize() {
 
 void Input::Update() {
   // デバッグログ（マウスボタン状態）
-  if (m_mouseButtonsDown[0])
-    LOG_DEBUG("Input", "LMB Down");
-  if (m_mouseButtonsDown[1])
-    LOG_DEBUG("Input", "RMB Down");
+  // if (m_mouseButtonsDown[0])
+  //   LOG_DEBUG("Input", "LMB Down");
+  // if (m_mouseButtonsDown[1])
+  //   LOG_DEBUG("Input", "RMB Down");
 
   // イベントフラグをリセット（次フレームの前に）
   m_keysDown.fill(false);

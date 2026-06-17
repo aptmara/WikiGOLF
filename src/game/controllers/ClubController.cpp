@@ -62,8 +62,9 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   }
 
   const float clubOffsetX = -0.8f;
-  const float clubOffsetY = 0.3f;
+  const float clubOffsetY = 0.6f;
   const float clubOffsetZ = -0.3f;
+  const float minClubModelY = ballTr->position.y + 0.12f;
 
   float yaw = std::atan2(shotDirection.x, shotDirection.z);
 
@@ -96,6 +97,11 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   }
 
   case ShotState::Phase::Executing: {
+    if (m_clubAnimPhase == ClubAnimPhase::Finished) {
+      clubMr->isVisible = false;
+      break;
+    }
+
     clubMr->isVisible = true;
 
     if (m_clubAnimPhase != ClubAnimPhase::Downswing &&
@@ -121,7 +127,7 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
 
       if (m_clubAnimTimer > 1.0f) {
         clubMr->isVisible = false;
-        m_clubAnimPhase = ClubAnimPhase::Idle;
+        m_clubAnimPhase = ClubAnimPhase::Finished;
       }
     }
     break;
@@ -133,7 +139,7 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
       m_clubSwingAngle += (0.0f - m_clubSwingAngle) * 3.0f * dt;
       if (m_clubAnimTimer > 1.0f) {
         clubMr->isVisible = false;
-        m_clubAnimPhase = ClubAnimPhase::Idle;
+        m_clubAnimPhase = ClubAnimPhase::Finished;
       }
     } else {
       clubMr->isVisible = false;
@@ -145,7 +151,7 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
     break;
   }
 
-  float pitchRad = XMConvertToRadians(m_clubSwingAngle);
+  float pitchRad = -XMConvertToRadians(m_clubSwingAngle);
   XMVECTOR q = XMQuaternionRotationRollPitchYaw(pitchRad, yaw, 0);
   XMStoreFloat4(&clubTr->rotation, q);
 
@@ -155,7 +161,10 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   gripOffset = XMVector3Rotate(gripOffset, q);
 
   XMVECTOR headPos = XMVectorSubtract(clubBasePos, gripOffset);
-  XMStoreFloat3(&clubTr->position, headPos);
+  XMFLOAT3 modelPos;
+  XMStoreFloat3(&modelPos, headPos);
+  modelPos.y = std::max(modelPos.y, minClubModelY);
+  clubTr->position = modelPos;
 }
 
 const ClubController::Club &ClubController::GetCurrentClub() const {

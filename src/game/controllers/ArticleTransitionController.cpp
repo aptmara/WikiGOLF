@@ -91,6 +91,7 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
     m_transitionStartedAt = std::chrono::steady_clock::now();
     m_fetchStartedAt = std::chrono::steady_clock::time_point::min();
     m_buildStartedAt = std::chrono::steady_clock::time_point::min();
+    m_displayProgress = 0.0f;
 
     LOG_INFO("Transition", "StartTransition page='{}'", m_targetPage);
 
@@ -342,7 +343,9 @@ void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
         progress = 1.0f;
     }
 
-    int percent = static_cast<int>(progress * 100.0f);
+    m_displayProgress = std::max(m_displayProgress,
+                                 std::clamp(progress, 0.0f, 1.0f));
+    int percent = static_cast<int>(m_displayProgress * 100.0f);
 
     if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
         text->text = L"Loading... " + std::to_wstring(percent) + L"%";

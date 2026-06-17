@@ -23,6 +23,7 @@ enum class TutorialStep {
     Power,
     Impact,
     TerrainEvent,
+    FlagEvent,
     CupIn,
     Done
 };
@@ -41,13 +42,13 @@ public:
     ~TutorialOverlayController() = default;
 
     // -------------------------------------------------------
-    // イベントカメラターゲット（STEP 5 の地形フォーカス用）
+    // イベントカメラターゲット（地形・旗フォーカス用）
     // -------------------------------------------------------
     struct EventCameraTarget {
         DirectX::XMFLOAT3 camPos;   ///< イベントカメラ位置
-        DirectX::XMFLOAT3 focusPos; ///< 注視点（地形エリア中心）
-        std::wstring name;          ///< 地形名（UI表示用）
-        std::wstring desc;          ///< 地形説明（UI表示用）
+        DirectX::XMFLOAT3 focusPos; ///< 注視点（説明対象の中心）
+        std::wstring name;          ///< 説明対象名（UI表示用）
+        std::wstring desc;          ///< 説明文（UI表示用）
     };
 
     void Initialize(core::GameContext& ctx);
@@ -63,13 +64,14 @@ public:
     // -------------------------------------------------------
     // イベントカメラ設定
     // -------------------------------------------------------
-    /// @brief STEP 5 のイベントカメラターゲットと使用カメラEntityを設定する。
+    /// @brief STEP 5/6 のイベントカメラターゲットと使用カメラEntityを設定する。
     /// @details 本体共通チュートリアルでは、地形注視点を安全に抽出できるまで未設定の旧動作を使う。
     void SetEventCameraTargets(ecs::Entity cameraEntity,
-                               std::vector<EventCameraTarget> targets);
+                               std::vector<EventCameraTarget> terrainTargets,
+                               std::vector<EventCameraTarget> flagTargets = {});
 
-    /// @brief STEP 5（TerrainEvent）の間は入力をロックする。
-    bool IsInputLocked() const { return m_inputLocked; }
+    /// @brief イベントカメラ説明中は入力をロックする。
+    bool IsInputLocked() const;
 
     /// @brief イベントカメラを毎フレーム更新する。
     void UpdateEventCamera(core::GameContext& ctx);
@@ -82,6 +84,8 @@ private:
                          ClubController* clubCtrl,
                          ShotController* shotCtrl,
                          MinimapController* minimapCtrl);
+    /// @brief 現在のイベントカメラ説明で使うターゲット一覧を返します。山内陽
+    const std::vector<EventCameraTarget>& GetActiveEventCameraTargets() const;
     /// @brief ステップ完了演出を開始する（チェックマーク表示→NextStep）
     void TriggerStepClear(core::GameContext& ctx);
     /// @brief チェックマークアニメーションを毎フレーム更新する
@@ -103,7 +107,8 @@ private:
     std::vector<TerrainCard> m_terrainCards;
 
     // --- イベントカメラ ---
-    std::vector<EventCameraTarget> m_eventCamTargets; ///< 設定済みならイベントカメラモード
+    std::vector<EventCameraTarget> m_eventCamTargets;     ///< 地形説明用イベントカメラターゲット
+    std::vector<EventCameraTarget> m_flagEventCamTargets; ///< 旗説明用イベントカメラターゲット
     ecs::Entity m_cameraEntity       = UINT32_MAX;   ///< 操作対象カメラEntity
     DirectX::XMFLOAT3 m_eventCamFromPos = {};        ///< ラープ開始位置
     float m_eventCamLerpTimer        = 0.0f;         ///< 0→1 でラープ完了

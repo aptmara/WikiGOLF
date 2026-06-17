@@ -31,13 +31,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
 
   switch (message) {
   case WM_LBUTTONDOWN:
-    LOG_DEBUG("WndProc", "WM_LBUTTONDOWN");
+    // LOG_DEBUG("WndProc", "WM_LBUTTONDOWN");
     break;
   case WM_RBUTTONDOWN:
-    LOG_DEBUG("WndProc", "WM_RBUTTONDOWN");
+    // LOG_DEBUG("WndProc", "WM_RBUTTONDOWN");
     break;
   case WM_KEYDOWN:
-    LOG_DEBUG("WndProc", "WM_KEYDOWN: {}", wParam);
+    // LOG_DEBUG("WndProc", "WM_KEYDOWN: {}", wParam);
     break;
   case WM_DESTROY:
     PostQuitMessage(0);

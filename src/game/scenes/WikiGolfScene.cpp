@@ -75,6 +75,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("WikiGolf", "OnEnter");
 
   m_tutorialCupInFired = false;
+  m_tutorialFlagSampleEntities.clear();
 
   m_screenFade.Initialize(ctx);
   m_screenFade.FadeIn(1.5f, game::utils::FadeType::HexagonWipe,
@@ -459,6 +460,63 @@ void WikiGolfScene::CreateField(core::GameContext &ctx) {
 }
 
 /**
+ * @brief チュートリアルの旗色解説用に、一時的な実旗モデルを配置します。
+ * @details ホールやコライダーは付けず、描画専用にしてショット判定へ干渉させません。
+ * @author 山内陽
+ */
+void WikiGolfScene::CreateTutorialFlagSamples(core::GameContext &ctx) {
+  ClearTutorialFlagSamples(ctx);
+
+  struct FlagSample {
+    DirectX::XMFLOAT3 position;
+    DirectX::XMFLOAT4 color;
+  };
+
+  const FlagSample samples[] = {
+      {{-37.5f, 0.0f, 30.0f}, {1.0f, 0.2f, 0.2f, 1.0f}},   // 目的地
+      {{-22.5f, 0.0f, 30.0f}, {1.0f, 0.85f, 0.0f, 1.0f}},  // 1リンク
+      {{-7.5f, 0.0f, 30.0f}, {1.0f, 0.6f, 0.2f, 1.0f}},    // 2リンク
+      {{7.5f, 0.0f, 30.0f}, {0.95f, 0.95f, 0.95f, 1.0f}},  // 3〜5リンク
+      {{22.5f, 0.0f, 30.0f}, {0.6f, 0.6f, 0.6f, 1.0f}},    // 6リンク以上
+      {{37.5f, 0.0f, 30.0f}, {0.25f, 0.65f, 1.0f, 1.0f}},  // 未解析
+  };
+
+  m_tutorialFlagSampleEntities.reserve(sizeof(samples) / sizeof(samples[0]));
+  for (const auto &sample : samples) {
+    float terrainH = 0.0f;
+    if (m_terrainSystem) {
+      terrainH = m_terrainSystem->GetHeight(sample.position.x, sample.position.z);
+    }
+
+    auto entity = CreateEntity(ctx.world);
+    auto &tr = ctx.world.Add<Transform>(entity);
+    tr.position = {sample.position.x, terrainH + 0.15f, sample.position.z};
+    tr.scale = {1.35f, 1.35f, 1.35f};
+
+    auto &mr = ctx.world.Add<MeshRenderer>(entity);
+    mr.mesh = ctx.resource.LoadMesh("Assets/models/flag.obj");
+    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                        L"Assets/shaders/BasicPS.hlsl");
+    mr.color = sample.color;
+
+    m_tutorialFlagSampleEntities.push_back(entity);
+  }
+}
+
+/**
+ * @brief チュートリアルの旗色解説用に配置した一時旗モデルを破棄します。
+ * @author 山内陽
+ */
+void WikiGolfScene::ClearTutorialFlagSamples(core::GameContext &ctx) {
+  for (auto entity : m_tutorialFlagSampleEntities) {
+    if (ctx.world.IsAlive(entity)) {
+      ctx.world.DestroyEntity(entity);
+    }
+  }
+  m_tutorialFlagSampleEntities.clear();
+}
+
+/**
  * @brief ボールをスポーンします。
  */
 void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
@@ -589,6 +647,8 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
     m_minimapController->ClearHoleIcons(ctx);
   }
 
+  ClearTutorialFlagSamples(ctx);
+
   m_screenFade.Shutdown(ctx);
 
   // 全エンティティの強制クリーンアップ（このシーンで作成されたもの以外も含む）
@@ -653,6 +713,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (m_isTutorial && !m_tutorialOverlay) {
               m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
               m_tutorialOverlay->Initialize(ctx);
+              CreateTutorialFlagSamples(ctx);
 
               std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> targets = {
                   { {0.0f, 15.0f, -25.0f}, {0.0f, 0.0f, -10.0f}, L"Fairway (フェアウェイ)", L"ボールが転がりやすい標準的な地形です。" },
@@ -661,7 +722,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   { {0.0f, 15.0f, 37.0f}, {0.0f, 0.0f, 52.0f}, L"Green (グリーン)", L"カップ周りの滑らかな地形です。よく転がります。" },
                   { {-24.0f, 15.0f, 5.0f}, {-24.0f, 0.0f, 20.0f}, L"OB / Water / Lava", L"水や溶岩などの危険エリア。入るとペナルティで1打戻されます。" }
               };
-              m_tutorialOverlay->SetEventCameraTargets(m_cameraEntity, std::move(targets));
+              std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> flagTargets = {
+                  { {-37.5f, 10.0f, 18.0f}, {-37.5f, 1.4f, 30.0f}, L"赤い旗 / 目的地", L"赤はターゲット記事へのホールです。ここに入れるとチュートリアルクリアです。" },
+                  { {-15.0f, 11.0f, 16.0f}, {-15.0f, 1.4f, 30.0f}, L"黄・橙の旗", L"黄は目的地まで1リンク、橙は2リンク先のホールです。近道候補になります。" },
+                  { {15.0f, 11.0f, 16.0f}, {15.0f, 1.4f, 30.0f}, L"白・灰・青の旗", L"白は3〜5リンク、灰は6リンク以上、青は距離が未解析です。赤に近い色ほど有利です。" }
+              };
+              m_tutorialOverlay->SetEventCameraTargets(m_cameraEntity,
+                                                       std::move(targets),
+                                                       std::move(flagTargets));
           }
       }
       return;

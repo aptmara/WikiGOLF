@@ -63,7 +63,8 @@ private:
     Idle,
     Backswing,
     Downswing,
-    FollowThrough
+    FollowThrough,
+    Finished
   };
 
   void InitializeClubs(core::GameContext &ctx);

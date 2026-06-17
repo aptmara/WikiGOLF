@@ -8,6 +8,7 @@
 #include "../../ecs/Entity.h"
 #include "../../graphics/TextStyle.h"
 #include <DirectXMath.h>
+#include <atomic>
 #include <vector>
 #include <string>
 #include <future>
@@ -79,6 +80,14 @@ private:
   std::unique_ptr<graphics::VideoPlayer> m_videoPlayer;
   std::future<void> m_startupLoadTask;
   bool m_startupLoadCompleted = false;
+
+  struct StartConnectionState {
+    std::atomic_bool completed = false;
+    std::string title;
+  };
+  std::shared_ptr<StartConnectionState> m_startConnectionState;
+  bool m_startConnectionChecking = false; ///< 通常スタート前の接続確認中かどうか
+  float m_startConnectionElapsed = 0.0f;  ///< 通常スタート接続確認の経過秒数
 
   void FinalizeStartupLoad(core::GameContext &ctx);
   void StopIntroAudio(core::GameContext &ctx);
