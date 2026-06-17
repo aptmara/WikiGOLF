@@ -309,6 +309,17 @@ private:
         const std::vector<HolePlacementCandidate>& evaluatedCandidates);
 
     /**
+     * @brief 現在の経路評価候補から最短ホップ数を取得します。 山内陽
+     */
+    int FindMinResolvedHopsToTarget() const;
+
+    /**
+     * @brief 経路評価結果を元に Par を再計算します。 山内陽
+     */
+    void RefreshParFromPathEvaluation(core::GameContext& ctx,
+                                      bool allowFallback);
+
+    /**
      * @brief 候補のリンク距離を評価します。 山内陽
      */
     void EvaluateCandidatePath(core::GameContext& ctx,

@@ -25,6 +25,7 @@
 #include "../controllers/MinimapController.h"
 #include "../systems/ParticleSystem.h"
 #include "../systems/WikiClient.h"
+#include "../utils/ParRules.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -539,6 +540,7 @@ bool WikiPageLoader::TryConsumePathEvaluation(core::GameContext& ctx,
     }
     if (updateWorld) {
         ApplyPathEvaluationToWorld(ctx, m_buildPathCandidates);
+        RefreshParFromPathEvaluation(ctx, false);
     }
     LOG_INFO("WikiPageLoader",
              "Path evaluation consumed: loadId={} evaluated={} updateWorld={}",
@@ -586,6 +588,7 @@ size_t WikiPageLoader::ConsumePartialPathEvaluation(core::GameContext& ctx,
     }
     if (updateWorld) {
         ApplyPathEvaluationToWorld(ctx, partial);
+        RefreshParFromPathEvaluation(ctx, false);
     }
     LOG_INFO("WikiPageLoader",
              "Path evaluation partial consumed: loadId={} count={} updateWorld={}",
@@ -998,9 +1001,10 @@ PageLoadResult WikiPageLoader::BuildPageSync(
                                                       state->targetPage, 20);
             if (r.success) calculatedPar = r.degrees;
         }
-        int par = (calculatedPar > 0)
-                      ? calculatedPar
-                      : (int)validLinks.size() / 2 + 2;
+        int par = (calculatedPar >= 0)
+                      ? std::max(1, calculatedPar)
+                      : game::utils::CalculateWikiGolfPar(
+                            -1, validLinks.size());
         state->par = par;
         result.calculatedPar = calculatedPar;
     }
@@ -1576,9 +1580,8 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
          * @brief 99%付近で描画スレッドを止めないため、Parは即時計算可能な値だけで決定します。山内陽
          * @details 最短パスDB探索はロード初期化とホール距離評価の非同期処理に寄せています。
          */
-        state->par = static_cast<int>(m_buildValidLinks.size()) / 2 + 2;
-        m_buildResult.calculatedPar = -1;
         TryConsumePathEvaluation(ctx, true);
+        RefreshParFromPathEvaluation(ctx, true);
 
         m_buildStep = BuildStep::Finish;
         m_buildProgress = 0.998f;
@@ -1818,6 +1821,46 @@ void WikiPageLoader::ApplyPathEvaluationResults(
             }
         }
     }
+}
+
+int WikiPageLoader::FindMinResolvedHopsToTarget() const
+{
+    int minResolvedHops = -1;
+    for (const auto& candidate : m_buildPathCandidates) {
+        const int hops = candidate.isTarget ? 0 : candidate.hopsToTarget;
+        if (hops < 0) {
+            continue;
+        }
+        minResolvedHops =
+            (minResolvedHops < 0) ? hops : std::min(minResolvedHops, hops);
+    }
+    return minResolvedHops;
+}
+
+void WikiPageLoader::RefreshParFromPathEvaluation(core::GameContext& ctx,
+                                                  bool allowFallback)
+{
+    auto* state = ctx.world.GetGlobal<GolfGameState>();
+    if (!state) {
+        return;
+    }
+
+    const int minResolvedHops = FindMinResolvedHopsToTarget();
+    if (minResolvedHops < 0 && !allowFallback) {
+        return;
+    }
+
+    const int par = game::utils::CalculateWikiGolfPar(
+        minResolvedHops, m_buildValidLinks.size());
+    if (state->par != par) {
+        LOG_INFO("WikiPageLoader",
+                 "Par refreshed: loadId={} old={} new={} minHops={} links={}",
+                 m_buildLoadId, state->par, par, minResolvedHops,
+                 m_buildValidLinks.size());
+    }
+    state->par = par;
+    m_buildResult.calculatedPar =
+        (minResolvedHops >= 0) ? std::max(1, minResolvedHops + 1) : -1;
 }
 
 /**

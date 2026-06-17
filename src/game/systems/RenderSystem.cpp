@@ -167,7 +167,11 @@ void RenderSystem(core::GameContext &ctx) {
       const float dy = t.position.y - camPos.y;
       const float dz = t.position.z - camPos.z;
       const float distSq = dx * dx + dy * dy + dz * dz;
-      if (distSq > 220.0f * 220.0f && !world.Has<components::HoleFlag>(e)) {
+      const bool keepsReadableOverlay =
+          world.Has<components::TerrainObject>(e) &&
+          r.blendMode == components::BlendMode::Multiply;
+      if (distSq > 220.0f * 220.0f &&
+          !world.Has<components::HoleFlag>(e) && !keepsReadableOverlay) {
         ++stats.transparentDistanceSkipped;
         return;
       }

@@ -567,13 +567,13 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
           iconUI->y = mapBounds.y + v * mapBounds.height - iconUI->height * 0.5f;
           iconUI->alpha = icon.isTarget ? 1.0f
                                         : (icon.isPlayable ? 0.72f : 0.18f);
-          iconUI->visible = markerSurfaceVisible && (m_isMapView || icon.isPlayable);
+          iconUI->visible = markerSurfaceVisible && !m_isMapView && icon.isPlayable;
 
           if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {
             if (auto *flagTxt = ctx.world.Get<UIText>(m_minimapFlagMarkerEntity)) {
               flagTxt->x = mapBounds.x + u * mapBounds.width - 8.0f;
               flagTxt->y = mapBounds.y + v * mapBounds.height - 12.0f;
-              flagTxt->visible = m_isMapView;
+              flagTxt->visible = !m_isMapView && markerSurfaceVisible;
 
               float flagPulse = 1.0f + 0.16f * std::sin(m_markerPulseTimer * 2.8f);
               flagTxt->style.fontSize = game::ui::kMinimapMarkerSize * flagPulse;
