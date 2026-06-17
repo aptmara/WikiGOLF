@@ -1437,7 +1437,14 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::EvaluateHolePaths:
     {
-        if (!TryConsumePathEvaluation(ctx, false)) {
+        // future が既に別コードパス（StepBuildPageWithinFrameBudget 先頭の
+        // TryConsumePathEvaluation 呼び出し）で消費済みの場合、
+        // !valid() のまま永遠に return false するバグを防ぐ。
+        // m_pathEvaluationStarted で「開始済みかつ消費済み」を完了扱いにする。
+        const bool alreadyConsumed =
+            m_pathEvaluationStarted && !m_pathEvaluationTask.valid();
+
+        if (!alreadyConsumed && !TryConsumePathEvaluation(ctx, false)) {
             if (m_pathEvaluationProgress && m_pathEvaluationTotal) {
                 const float doneUnits = static_cast<float>(
                     m_pathEvaluationProgress->load(std::memory_order_relaxed));
@@ -1450,6 +1457,12 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                                                         0.0f, 1.0f);
             }
             return false;
+        }
+        if (alreadyConsumed) {
+            LOG_INFO("WikiPageLoader",
+                     "BuildPage loadId={} EvaluateHolePaths: task already consumed "
+                     "by pre-step poll, skipping wait",
+                     m_buildLoadId);
         }
         m_pathEvaluationStarted = false;
         m_nextMapIconIndex = 0;

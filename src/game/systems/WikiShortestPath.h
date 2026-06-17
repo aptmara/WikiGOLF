@@ -110,6 +110,22 @@ private:
   /// @brief タイトルからページIDを取得
   int FetchPageId(const std::string &title);
 
+  /**
+   * @brief 複数の正規化タイトルをバッチSQLで一括解決します。 山内陽
+   *
+   * IN句にまとめて kLinkChunkSize 件ずつ SELECT するため、
+   * 1件ずつ FetchPageId を呼ぶより大幅に高速です。
+   * チャンクが1件完了するたびに onChunkDone(処理済み件数, 全件数) を呼びます。
+   * @param normalizedTitles スペースをアンダースコアに変換済みのタイトル列
+   * @param onChunkDone チャンク完了ごとに呼ぶ進捗コールバック（nullptr可）
+   * @return 正規化タイトル → ページID のマップ（未登録は含めない）
+   */
+  std::unordered_map<std::string, int>
+  FetchPageIdsBatch(
+      const std::vector<std::string> &normalizedTitles,
+      const std::function<void(size_t processed, size_t total)> &onChunkDone =
+          nullptr);
+
   /// @brief ページIDからタイトルを取得
   std::string FetchPageTitle(int pageId);
 

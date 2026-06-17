@@ -317,6 +317,82 @@ int WikiShortestPath::FetchPageId(const std::string &title) {
   return pageId;
 }
 
+std::unordered_map<std::string, int>
+WikiShortestPath::FetchPageIdsBatch(
+    const std::vector<std::string>& normalizedTitles,
+    const std::function<void(size_t processed, size_t total)>& onChunkDone) {
+  std::unordered_map<std::string, int> result;
+  if (!m_db || normalizedTitles.empty()) {
+    return result;
+  }
+
+  result.reserve(normalizedTitles.size());
+  const auto batchStartedAt = std::chrono::steady_clock::now();
+
+  std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
+
+  size_t index = 0;
+  size_t totalHits = 0;
+  while (index < normalizedTitles.size()) {
+    const size_t count =
+        std::min(kLinkChunkSize, normalizedTitles.size() - index);
+
+    // IN句で複数タイトルを一括検索します。
+    // COLLATE NOCASE は FetchPageId の既存挙動と合わせています。
+    std::string sql =
+        "SELECT id, title FROM pages WHERE title COLLATE NOCASE IN (";
+    for (size_t i = 0; i < count; ++i) {
+      if (i > 0) sql += ",";
+      sql += "?";
+    }
+    sql += ")";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql.c_str(), -1, &stmt, nullptr) !=
+        SQLITE_OK) {
+      LOG_ERROR("WikiShortestPath",
+                "FetchPageIdsBatch prepare failed chunk={}/{}: {}",
+                index / kLinkChunkSize + 1,
+                (normalizedTitles.size() + kLinkChunkSize - 1) / kLinkChunkSize,
+                sqlite3_errmsg(m_db));
+      return result;
+    }
+
+    // バインドするタイトル文字列は sqlite3_finalize まで生存します。
+    for (size_t i = 0; i < count; ++i) {
+      sqlite3_bind_text(
+          stmt, static_cast<int>(i + 1),
+          normalizedTitles[index + i].c_str(), -1, SQLITE_STATIC);
+    }
+
+    size_t chunkHits = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+      const int pageId = sqlite3_column_int(stmt, 0);
+      const char* storedTitle =
+          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+      if (storedTitle) {
+        result[storedTitle] = pageId;
+        ++chunkHits;
+      }
+    }
+    sqlite3_finalize(stmt);
+    totalHits += chunkHits;
+    index += count;
+
+    // チャンク完了ごとに進捗を報告します。
+    // 呼び出し元の ComputeDistancesToTarget が storeProgress を更新します。
+    if (onChunkDone) {
+      onChunkDone(index, normalizedTitles.size());
+    }
+  }
+
+  LOG_INFO("WikiShortestPath",
+           "FetchPageIdsBatch: requested={} found={} elapsed={}ms",
+           normalizedTitles.size(), totalHits,
+           ElapsedMs(batchStartedAt));
+  return result;
+}
+
 std::string WikiShortestPath::FetchPageTitle(int pageId) {
   if (!m_db)
     return "";
@@ -635,36 +711,73 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
 
   std::unordered_map<int, std::vector<std::string>> titlesByPageId;
   std::unordered_set<int> unresolvedPageIds;
-  size_t resolvedTitleUnits = 0;
   size_t missingPageIds = 0;
   const auto resolveStartedAt = std::chrono::steady_clock::now();
-  for (const auto &title : sourceTitles) {
+
+  // --- バッチタイトル解決 ---
+  // 1件ずつ FetchPageId を呼ぶ代わりに IN句バッチクエリで一括解決します。
+  // FetchLinks と同じ kLinkChunkSize（512件）のチャンク方式を採用します。
+
+  // スペース→アンダースコア正規化と重複排除を行います。
+  // normalizedToOriginals: 正規化タイトル → 元タイトル列
+  std::unordered_map<std::string, std::vector<std::string>> normalizedToOriginals;
+  std::vector<std::string> uniqueNormalized;
+  uniqueNormalized.reserve(sourceTitles.size());
+
+  for (const auto& title : sourceTitles) {
     if (title.empty() || distances.find(title) != distances.end()) {
-      ++resolvedTitleUnits;
-      storeProgress(resolvedTitleUnits);
-      continue;
+      continue; // 解決済み・空はスキップ
     }
-
-    int pageId = FetchPageId(title);
-    if (pageId < 0) {
-      ++missingPageIds;
-      ++resolvedTitleUnits;
-      storeProgress(resolvedTitleUnits);
-      continue;
+    std::string normalized = title;
+    std::replace(normalized.begin(), normalized.end(), ' ', '_');
+    if (normalizedToOriginals.find(normalized) == normalizedToOriginals.end()) {
+      uniqueNormalized.push_back(normalized);
     }
-
-    titlesByPageId[pageId].push_back(title);
-    if (pageId == targetId) {
-      distances[title] = 0;
-      if (onResolved) {
-        onResolved(title, 0);
-      }
-    } else {
-      unresolvedPageIds.insert(pageId);
-    }
-    ++resolvedTitleUnits;
-    storeProgress(resolvedTitleUnits);
+    normalizedToOriginals[normalized].push_back(title);
   }
+
+  // バッチSQLでページIDを一括取得します。
+  // チャンク完了コールバック内で storeProgress を呼び、
+  // 1チャンク処理ごとに進捗バーが連続的に動くようにします。
+  const size_t srcSize = sourceTitles.size();
+  const auto batchIdMap = FetchPageIdsBatch(
+      uniqueNormalized,
+      [&](size_t processed, size_t total) {
+        // バッチ内の処理済み割合を sourceTitles.size() 分にスケールして報告します。
+        const size_t units =
+            total > 0 ? (processed * srcSize + total - 1) / total : srcSize;
+        storeProgress(units);
+      });
+
+  // バッチ結果を titlesByPageId / distances / unresolvedPageIds に展開します。
+  for (const auto& [normalizedTitle, pageId] : batchIdMap) {
+    const auto origIt = normalizedToOriginals.find(normalizedTitle);
+    if (origIt == normalizedToOriginals.end()) {
+      continue; // DB側タイトルとクエリタイトルが異なるケース（通常は発生しない）
+    }
+    for (const auto& origTitle : origIt->second) {
+      titlesByPageId[pageId].push_back(origTitle);
+      if (pageId == targetId) {
+        distances[origTitle] = 0;
+        if (onResolved) {
+          onResolved(origTitle, 0);
+        }
+      } else {
+        unresolvedPageIds.insert(pageId);
+      }
+    }
+    normalizedToOriginals.erase(origIt); // 解決済みを除去してmissing集計に使います
+  }
+
+  // batchIdMap に含まれなかったタイトルは DB 未登録です。
+  for (const auto& [_, originals] : normalizedToOriginals) {
+    missingPageIds += originals.size();
+  }
+
+  // ビッグバンプ起笪にコールバックで progress が未更新のままの場合は、
+  // バッチ完了後に srcSize まで確実に更新します。
+  storeProgress(srcSize);
+
   LOG_INFO("WikiShortestPath",
            "ComputeDistancesToTarget title resolution: sources={} uniquePageIds={} "
            "directHits={} unresolved={} missing={} elapsed={}ms",
