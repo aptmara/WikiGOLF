@@ -35,6 +35,7 @@ public:
 
 private:
   std::vector<ecs::Entity> m_dots;
+  ecs::Entity m_landingEntity = UINT32_MAX; ///< 着地点マーカーエンティティ
 };
 
 } // namespace game::controllers

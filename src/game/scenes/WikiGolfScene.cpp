@@ -157,16 +157,26 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   auto &at = ctx.world.Add<Transform>(m_arrowEntity);
   at.scale = {0.0f, 0.0f, 0.0f};
 
-  m_guideArrowEntity = CreateEntity(ctx.world);
-  auto &gat = ctx.world.Add<Transform>(m_guideArrowEntity);
-  gat.scale = {0.15f, 0.1f, 2.0f};
+  // 方向ガイドセグメント（流れる矢印）の作成
+  // kGuideSegCount 個の cube を前方に並べ、アニメーションで流れるように見せる
+  static constexpr int kGuideSegCount = 7;
+  m_guideSegments.clear();
+  m_guideSegments.reserve(kGuideSegCount);
+  for (int gi = 0; gi < kGuideSegCount; ++gi) {
+    auto ge = CreateEntity(ctx.world);
+    auto &gt_ = ctx.world.Add<Transform>(ge);
+    gt_.scale = {0.12f, 0.12f, 0.45f};
 
-  auto &gamr = ctx.world.Add<MeshRenderer>(m_guideArrowEntity);
-  gamr.mesh = ctx.resource.LoadMesh("builtin/cube");
-  gamr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
-  gamr.color = {0.3f, 0.8f, 1.0f, 0.6f};
-  gamr.isTransparent = true;
-  gamr.isVisible = false;
+    auto &gmr = ctx.world.Add<game::components::MeshRenderer>(ge);
+    gmr.mesh   = ctx.resource.LoadMesh("builtin/cube");
+    gmr.shader = ctx.resource.LoadShader("Basic",
+                   L"Assets/shaders/BasicVS.hlsl",
+                   L"Assets/shaders/BasicPS.hlsl");
+    gmr.color = {0.55f, 0.90f, 1.00f, 0.60f}; // 初期色はアニメーションで上書きされる
+    gmr.isTransparent = true;
+    gmr.isVisible = false;
+    m_guideSegments.push_back(ge);
+  }
 
   auto &amr = ctx.world.Add<MeshRenderer>(m_arrowEntity);
   amr.mesh = ctx.resource.LoadMesh("builtin/cube");
@@ -437,9 +447,9 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
       // ロード中は地球儀のみ表示するためHUD/ミニマップを非表示
       if (m_hud) m_hud->SetVisible(ctx, false);
       if (m_minimapController) m_minimapController->SetVisible(ctx, false);
-      // ガイド矢印を非表示
-      if (ctx.world.IsAlive(m_guideArrowEntity)) {
-          if (auto* mr = ctx.world.Get<MeshRenderer>(m_guideArrowEntity)) mr->isVisible = false;
+      // 方向ガイドセグメントを非表示
+      for (auto segE : m_guideSegments) {
+        if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
       }
       m_transitionController->StartTransition(ctx, startPage, m_pageLoader.get(), m_ballEntity, m_cameraEntity, m_skyboxEntity, m_minimapController.get());
   }
@@ -598,9 +608,9 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
     // ロード中は地球儀のみ表示するためHUD/ミニマップを非表示
     if (m_hud) m_hud->SetVisible(ctx, false);
     if (m_minimapController) m_minimapController->SetVisible(ctx, false);
-    // ガイド矢印を非表示
-    if (ctx.world.IsAlive(m_guideArrowEntity)) {
-        if (auto* mr = ctx.world.Get<MeshRenderer>(m_guideArrowEntity)) mr->isVisible = false;
+    // 方向ガイドセグメントを非表示
+    for (auto segE : m_guideSegments) {
+      if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
     }
     m_transitionController->StartTransition(ctx, pageName, m_pageLoader.get(),
                                             m_ballEntity, m_cameraEntity,
@@ -1026,23 +1036,80 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       m_trajectoryPredictor->Hide(ctx);
   }
 
-  // ガイド矢印
-  if (m_guideArrowEntity != UINT32_MAX) {
-      auto* guideMR = ctx.world.Get<game::components::MeshRenderer>(m_guideArrowEntity);
-      auto* guideT = ctx.world.Get<game::components::Transform>(m_guideArrowEntity);
-      auto* ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
-      if (guideMR && guideT && ballT) {
-          if (shot->phase == game::components::ShotState::Phase::Idle &&
-              state->canShoot && !tutorialInputLocked && !isMapView) {
-              guideMR->isVisible = true;
-              guideT->position = ballT->position;
-              DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
-              float yaw = std::atan2(shotDir.x, shotDir.z);
-              DirectX::XMStoreFloat4(&guideT->rotation, DirectX::XMQuaternionRotationRollPitchYaw(0, yaw, 0));
-          } else {
-              guideMR->isVisible = false;
-          }
+  // 方向ガイド（流れる矢印アニメーション）
+  {
+    const bool showGuide = !m_guideSegments.empty() &&
+                           (shot->phase == game::components::ShotState::Phase::Idle) &&
+                           state->canShoot && !tutorialInputLocked && !isMapView;
+
+    auto* ballT2 = ctx.world.Get<game::components::Transform>(m_ballEntity);
+    if (showGuide && ballT2) {
+      m_guideAnimTimer += dt;
+
+      DirectX::XMFLOAT3 shotDir = m_cameraController
+          ? m_cameraController->GetShotDirection()
+          : DirectX::XMFLOAT3{0, 0, 1};
+      float yaw = std::atan2(shotDir.x, shotDir.z);
+      DirectX::XMVECTOR qRot = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
+
+      // 各セグメントをボール前方に等間隔で並べ、色・サイズをグラデーション
+      const int nSeg = static_cast<int>(m_guideSegments.size());
+      const float kSpacing   = 1.05f; // セグメント間隔
+      const float kScrollSpd = 2.0f;  // スクロール速度
+      // アニメーションフェーズ: 0→1 で先頭に向かってスクロール
+      float phase = std::fmod(m_guideAnimTimer * kScrollSpd, 1.0f);
+
+      for (int si = 0; si < nSeg; ++si) {
+        auto* segMR = ctx.world.Get<game::components::MeshRenderer>(m_guideSegments[si]);
+        auto* segT  = ctx.world.Get<game::components::Transform>(m_guideSegments[si]);
+        if (!segMR || !segT) continue;
+
+        // 正規化比率：先端(si=0)＝0, 末尾＝1
+        float nt = (nSeg > 1) ? (float)si / (float)(nSeg - 1) : 0.0f;
+
+        // スクロールオフセット: 各セグメントが時間経過で前方に流れる
+        float scrolledNt = std::fmod(nt + phase, 1.0f);
+        float dist = 0.6f + scrolledNt * (kSpacing * (float)(nSeg - 1));
+
+        // 送り先位置: ボールせから前方 dist m
+        DirectX::XMVECTOR fwd = DirectX::XMVectorSet(shotDir.x, 0, shotDir.z, 0);
+        DirectX::XMVECTOR segPosV = DirectX::XMVectorAdd(
+            DirectX::XMLoadFloat3(&ballT2->position),
+            DirectX::XMVectorScale(fwd, dist));
+        DirectX::XMFLOAT3 segPos;
+        DirectX::XMStoreFloat3(&segPos, segPosV);
+        // 地面に少し浮かせる
+        if (m_terrainSystem) {
+          segPos.y = m_terrainSystem->GetHeight(segPos.x, segPos.z) + 0.12f;
+        } else {
+          segPos.y = ballT2->position.y + 0.12f;
+        }
+        segT->position = segPos;
+        DirectX::XMStoreFloat4(&segT->rotation, qRot);
+
+        // 先端大く(1.6x)→末尾小さく(0.5x)
+        float thick = 0.18f + (0.06f - 0.18f) * nt;
+        // 先端のセグメントをヒシ形に見せる（scaleXを幅広に）
+        float xScale = thick * (1.0f + (1.0f - nt) * 0.8f);
+        segT->scale = {xScale, thick, 0.50f};
+
+        // 色: 先端白/水色 → 末尾シアン/透明
+        // scrolledNtが0に近いほど「新生」部分なので明るく、大きく表示
+        float alpha = 0.85f - scrolledNt * 0.75f;
+        float r = 0.50f + (1.00f - 0.50f) * (1.0f - scrolledNt);
+        float g = 0.85f + (1.00f - 0.85f) * (1.0f - scrolledNt);
+        float b = 1.00f;
+        segMR->color = {r, g, b, alpha};
+        segMR->isVisible = (alpha > 0.02f);
       }
+    } else {
+      // 非表示時は全セグメントを隠す
+      for (auto segE : m_guideSegments) {
+        if (auto* segMR = ctx.world.Get<game::components::MeshRenderer>(segE)) {
+          segMR->isVisible = false;
+        }
+      }
+    }
   }
 
   // HUD 更新

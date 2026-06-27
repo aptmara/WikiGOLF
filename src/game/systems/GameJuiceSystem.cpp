@@ -25,6 +25,68 @@ namespace game::systems {
 using namespace DirectX;
 using namespace game::components;
 
+/**
+ * @brief 0.0〜1.0の乱数を返します。
+ */
+static float Rand01() { return static_cast<float>(rand() % 100) / 100.0f; }
+
+/**
+ * @brief -0.5〜0.5の乱数を返します。
+ */
+static float RandCentered() { return Rand01() - 0.5f; }
+
+/**
+ * @brief 始点から終点へ向かうなめらかな減衰率を返します。
+ */
+static float SmoothFade(float value, float start, float end) {
+  float t = std::clamp((value - start) / (end - start), 0.0f, 1.0f);
+  return t * t * (3.0f - 2.0f * t);
+}
+
+/**
+ * @brief 色を指定倍率で明るくします。
+ */
+static XMFLOAT4 ScaleColor(const XMFLOAT3 &color, float brightness,
+                           float alpha = 1.0f) {
+  return {color.x * brightness, color.y * brightness, color.z * brightness,
+          alpha};
+}
+
+/**
+ * @brief カップイン祝祭粒子用の色を返します。
+ */
+static XMFLOAT3 CupInSparkleColor(int index) {
+  static const XMFLOAT3 kPalette[] = {
+      {1.0f, 0.78f, 0.16f}, {1.0f, 0.94f, 0.45f},
+      {1.0f, 1.0f, 0.82f},  {1.0f, 0.62f, 0.08f},
+      {0.55f, 0.9f, 1.0f},  {1.0f, 0.86f, 0.24f},
+  };
+  return kPalette[index % (sizeof(kPalette) / sizeof(kPalette[0]))];
+}
+
+/**
+ * @brief ショット判定に対応した発光色を返します。
+ */
+static XMFLOAT3 ShotJudgeColor(GameJuiceSystem::JudgeType judge, int index) {
+  switch (judge) {
+  case GameJuiceSystem::JudgeType::Special: {
+    static const XMFLOAT3 kSpecial[] = {
+        {1.0f, 0.92f, 0.28f}, {0.45f, 0.95f, 1.0f},
+        {1.0f, 0.55f, 1.0f},  {0.85f, 1.0f, 0.45f},
+    };
+    return kSpecial[index % (sizeof(kSpecial) / sizeof(kSpecial[0]))];
+  }
+  case GameJuiceSystem::JudgeType::Great:
+    return {1.0f, 0.82f, 0.18f};
+  case GameJuiceSystem::JudgeType::Nice:
+    return {0.35f, 0.78f, 1.0f};
+  case GameJuiceSystem::JudgeType::Miss:
+    return {1.0f, 0.28f, 0.10f};
+  default:
+    return {1.0f, 0.86f, 0.42f};
+  }
+}
+
 void GameJuiceSystem::Initialize(core::GameContext &ctx) {
   LOG_INFO("GameJuice", "Initializing Game Juice System...");
 
@@ -396,10 +458,13 @@ void GameJuiceSystem::CreateImpactParticleEntities(core::GameContext &ctx) {
     mr.color = {1.0f, 0.8f, 0.2f, 1.0f}; // 黄金色
     mr.isVisible = false;
     mr.isTransparent = true;
+    mr.blendMode = BlendMode::Alpha;
+    mr.customFlags = {0, 0, 0, 0};
 
     ImpactParticle particle;
     particle.entity = e;
     particle.lifetime = 0.0f;
+    particle.kind = ImpactParticleKind::Burst;
     m_impactParticles.push_back(particle);
   }
 }
@@ -451,7 +516,7 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
   float baseSpeed = (8.0f + power * 15.0f) * speedMultiplier;
   float spreadFactor = 1.0f + power * 0.5f;
 
-  for (int i = 0; i < kImpactParticleCount; ++i) {
+  for (int i = 0; i < kImpactBurstCount; ++i) {
     auto &p = m_impactParticles[i];
 
     // === 多層構造の爆発エフェクト ===
@@ -460,7 +525,7 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
     float layerSpeed = baseSpeed * (1.0f - layerOffset * 0.3f);
 
     // 放射状に速度を設定（スパイラル風）
-    float baseAngle = (float)i / (float)kImpactParticleCount * XM_2PI;
+    float baseAngle = (float)i / (float)kImpactBurstCount * XM_2PI;
     float spiralOffset = (float)layer * 0.3f;
     float angle = baseAngle + spiralOffset;
 
@@ -505,6 +570,11 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
     if (mr) {
       mr->isVisible = true;
+      mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+      mr->blendMode = BlendMode::Alpha;
+      mr->customFlags = {0, 0, 0, 0};
+      p.kind = ImpactParticleKind::Burst;
+      p.angularVelocity = {0, 0, 0};
 
       float r, g, b;
 
@@ -564,6 +634,120 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
   }
 }
 
+void GameJuiceSystem::TriggerShotEffect(core::GameContext &ctx,
+                                        const DirectX::XMFLOAT3 &position,
+                                        const DirectX::XMFLOAT3 &direction,
+                                        float power, JudgeType judge) {
+  XMVECTOR dirVec = XMLoadFloat3(&direction);
+  if (XMVectorGetX(XMVector3LengthSq(dirVec)) < 0.0001f) {
+    dirVec = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+  }
+  dirVec = XMVector3Normalize(XMVectorSetY(dirVec, 0.0f));
+  XMFLOAT3 dir;
+  XMStoreFloat3(&dir, dirVec);
+
+  XMVECTOR rightVec =
+      XMVector3Normalize(XMVector3Cross(XMVectorSet(0, 1, 0, 0), dirVec));
+  XMFLOAT3 right;
+  XMStoreFloat3(&right, rightVec);
+
+  float quality = 0.85f;
+  if (judge == JudgeType::Special) {
+    quality = 1.55f;
+    TriggerHitStop(0.07f, 0.0f);
+    TriggerCameraShake(0.32f, 0.22f);
+  } else if (judge == JudgeType::Great) {
+    quality = 1.25f;
+    TriggerHitStop(0.045f, 0.0f);
+    TriggerCameraShake(0.22f, 0.18f);
+  } else if (judge == JudgeType::Nice) {
+    quality = 0.95f;
+    TriggerCameraShake(0.14f, 0.14f);
+  } else if (judge == JudgeType::Miss) {
+    quality = 0.62f;
+    TriggerCameraShake(0.18f, 0.16f);
+  }
+
+  const int count = std::min(kImpactBurstCount, 34);
+  const float power01 = std::clamp(power, 0.0f, 1.0f);
+  for (int i = 0; i < count; ++i) {
+    auto &p = m_impactParticles[i];
+    auto *t = ctx.world.Get<Transform>(p.entity);
+    auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
+    if (!t || !mr) {
+      continue;
+    }
+
+    const int layer = i % 5;
+    const float side = RandCentered();
+    const float forward = 0.12f + Rand01() * 0.34f;
+    t->position = position;
+    t->position.x += right.x * side * 0.72f + dir.x * forward;
+    t->position.y += 0.05f + Rand01() * 0.16f;
+    t->position.z += right.z * side * 0.72f + dir.z * forward;
+
+    XMVECTOR rot = XMQuaternionRotationRollPitchYaw(Rand01() * XM_2PI,
+                                                    Rand01() * XM_2PI,
+                                                    Rand01() * XM_2PI);
+    XMStoreFloat4(&t->rotation, rot);
+
+    XMFLOAT3 tint = ShotJudgeColor(judge, i);
+    const bool isMiss = judge == JudgeType::Miss;
+    const bool isSpark =
+        judge == JudgeType::Special || judge == JudgeType::Great;
+
+    if (layer == 0 && isSpark) {
+      p.kind = ImpactParticleKind::ShotRing;
+      mr->mesh = ctx.resource.LoadMesh("builtin/quad");
+      mr->blendMode = BlendMode::Add;
+      mr->customFlags = {0.0f, 1.0f, 0.0f, 0.0f};
+      p.baseScale = 0.32f + power01 * 0.26f + quality * 0.08f;
+      p.maxLifetime = 0.38f + quality * 0.12f;
+      p.baseColor = ScaleColor(tint, 2.4f + quality * 0.8f, 0.92f);
+      p.velocity = {dir.x * (2.0f + quality * 2.2f),
+                    0.25f + quality * 0.42f,
+                    dir.z * (2.0f + quality * 2.2f)};
+      p.angularVelocity = {0.0f, 10.0f + Rand01() * 8.0f, 0.0f};
+    } else if (layer <= 2 && !isMiss) {
+      p.kind = ImpactParticleKind::ShotSpark;
+      mr->mesh = ctx.resource.LoadMesh("builtin/quad");
+      mr->blendMode = BlendMode::Add;
+      mr->customFlags = {0.0f, 1.0f, 0.0f, 0.0f};
+      p.baseScale = 0.08f + power01 * 0.07f + Rand01() * 0.04f;
+      p.maxLifetime = 0.42f + Rand01() * 0.22f + quality * 0.12f;
+      p.baseColor = ScaleColor(tint, 2.0f + quality * 1.1f, 0.95f);
+      float speed = 3.8f + power01 * 4.5f + quality * 2.2f;
+      p.velocity = {dir.x * speed + right.x * side * 5.2f,
+                    0.7f + Rand01() * 1.4f + quality * 0.35f,
+                    dir.z * speed + right.z * side * 5.2f};
+      p.angularVelocity = {RandCentered() * 8.0f, RandCentered() * 12.0f,
+                           RandCentered() * 8.0f};
+    } else {
+      p.kind = ImpactParticleKind::ShotDust;
+      mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+      mr->blendMode = BlendMode::Alpha;
+      mr->customFlags = {1.0f, isMiss ? 1.0f : 0.0f, 0.0f, 0.0f};
+      p.baseScale =
+          (isMiss ? 0.22f : 0.14f) + power01 * 0.08f + Rand01() * 0.06f;
+      p.maxLifetime = (isMiss ? 0.75f : 0.52f) + Rand01() * 0.24f;
+      p.baseColor = isMiss ? XMFLOAT4{0.72f, 0.46f, 0.30f, 0.9f}
+                           : XMFLOAT4{0.86f, 0.78f, 0.54f, 0.72f};
+      float speed = 1.4f + power01 * 2.0f;
+      p.velocity = {-dir.x * speed + right.x * side * 2.8f,
+                    0.35f + Rand01() * 0.8f,
+                    -dir.z * speed + right.z * side * 2.8f};
+      p.angularVelocity = {RandCentered() * 4.0f, RandCentered() * 4.0f,
+                           RandCentered() * 4.0f};
+    }
+
+    p.lifetime = p.maxLifetime;
+    t->scale = {p.baseScale, p.baseScale, p.baseScale};
+    mr->color = p.baseColor;
+    mr->isTransparent = true;
+    mr->isVisible = true;
+  }
+}
+
 void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
   const float gravity = 15.0f;
 
@@ -573,10 +757,35 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
 
     p.lifetime -= ctx.dt;
 
+    float particleGravity = gravity;
+    float drag = 0.98f;
+    if (p.kind == ImpactParticleKind::Star) {
+      particleGravity = 4.0f;
+      drag = 0.985f;
+    } else if (p.kind == ImpactParticleKind::Sparkle) {
+      particleGravity = 2.0f;
+      drag = 0.975f;
+    } else if (p.kind == ImpactParticleKind::Glint) {
+      particleGravity = 0.0f;
+      drag = 0.965f;
+    } else if (p.kind == ImpactParticleKind::Confetti) {
+      particleGravity = 7.5f;
+      drag = 0.99f;
+    } else if (p.kind == ImpactParticleKind::ShotSpark) {
+      particleGravity = 6.0f;
+      drag = 0.965f;
+    } else if (p.kind == ImpactParticleKind::ShotDust) {
+      particleGravity = 3.2f;
+      drag = 0.94f;
+    } else if (p.kind == ImpactParticleKind::ShotRing) {
+      particleGravity = 0.0f;
+      drag = 0.955f;
+    }
+
     // 物理更新
-    p.velocity.y -= gravity * ctx.dt;
-    p.velocity.x *= 0.98f; // 空気抵抗
-    p.velocity.z *= 0.98f;
+    p.velocity.y -= particleGravity * ctx.dt;
+    p.velocity.x *= drag; // 空気抵抗
+    p.velocity.z *= drag;
 
     auto *t = ctx.world.Get<Transform>(p.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
@@ -588,14 +797,71 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
 
       // 縮小しながらフェードアウト
       float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
-      float scale = p.baseScale * std::pow(lifeRatio, 0.5f);
-      t->scale = {scale, scale, scale};
+      float progress = 1.0f - lifeRatio;
+      if (p.kind == ImpactParticleKind::Star) {
+        float pulse = 0.86f + std::sin(progress * XM_2PI * 3.0f) * 0.14f;
+        float scale = p.baseScale * pulse * (0.35f + lifeRatio * 0.85f);
+        t->scale = {scale, scale, scale * 0.18f};
+      } else if (p.kind == ImpactParticleKind::Sparkle) {
+        float scale = p.baseScale * (0.15f + lifeRatio * 1.15f);
+        t->scale = {scale * 0.35f, scale * 2.2f, scale * 0.35f};
+      } else if (p.kind == ImpactParticleKind::Glint) {
+        float flare = std::sin(std::clamp(progress * 1.4f, 0.0f, 1.0f) * XM_PI);
+        float scale = p.baseScale * (0.4f + flare * 1.25f);
+        t->scale = {scale * 2.8f, scale * 0.18f, scale * 2.8f};
+      } else if (p.kind == ImpactParticleKind::Confetti) {
+        float scale = p.baseScale * std::pow(lifeRatio, 0.35f);
+        t->scale = {scale * 1.55f, scale * 0.22f, scale * 0.95f};
+      } else if (p.kind == ImpactParticleKind::ShotSpark) {
+        float scale = p.baseScale * (0.25f + lifeRatio * 1.05f);
+        t->scale = {scale * 0.32f, scale * 1.9f, scale * 0.32f};
+      } else if (p.kind == ImpactParticleKind::ShotDust) {
+        float scale = p.baseScale * (1.0f + progress * 2.35f);
+        t->scale = {scale * 1.2f, scale * 0.5f, scale * 1.2f};
+      } else if (p.kind == ImpactParticleKind::ShotRing) {
+        float flare = std::sin(std::clamp(progress * 1.35f, 0.0f, 1.0f) * XM_PI);
+        float scale = p.baseScale * (0.45f + progress * 3.2f + flare * 0.45f);
+        t->scale = {scale * 2.2f, scale * 0.08f, scale * 2.2f};
+      } else {
+        float scale = p.baseScale * std::pow(lifeRatio, 0.5f);
+        t->scale = {scale, scale, scale};
+      }
+
+      XMVECTOR rot = XMLoadFloat4(&t->rotation);
+      XMVECTOR angVel = XMLoadFloat3(&p.angularVelocity);
+      XMVECTOR deltaRot = XMQuaternionRotationRollPitchYaw(
+          angVel.m128_f32[0] * ctx.dt, angVel.m128_f32[1] * ctx.dt,
+          angVel.m128_f32[2] * ctx.dt);
+      rot = XMQuaternionMultiply(rot, deltaRot);
+      XMStoreFloat4(&t->rotation, rot);
     }
 
     if (mr) {
       float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
+      float progress = 1.0f - lifeRatio;
       mr->color = p.baseColor;
-      mr->color.w = lifeRatio; // アルファ減衰
+      if (p.kind == ImpactParticleKind::Star) {
+        float twinkle = 0.78f + std::sin(progress * XM_2PI * 5.0f) * 0.22f;
+        mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.45f) * twinkle;
+      } else if (p.kind == ImpactParticleKind::Sparkle) {
+        mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.85f);
+      } else if (p.kind == ImpactParticleKind::Glint) {
+        float flare = std::sin(std::clamp(progress * 1.4f, 0.0f, 1.0f) * XM_PI);
+        mr->color.w = p.baseColor.w * flare * std::pow(lifeRatio, 0.35f);
+      } else if (p.kind == ImpactParticleKind::Confetti) {
+        mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.7f);
+      } else if (p.kind == ImpactParticleKind::ShotSpark) {
+        float twinkle = 0.78f + std::sin(progress * XM_2PI * 6.0f) * 0.22f;
+        mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.72f) * twinkle;
+      } else if (p.kind == ImpactParticleKind::ShotDust) {
+        float hold = 1.0f - SmoothFade(progress, 0.5f, 1.0f);
+        mr->color.w = p.baseColor.w * std::clamp(hold, 0.0f, 1.0f);
+      } else if (p.kind == ImpactParticleKind::ShotRing) {
+        float flare = std::sin(std::clamp(progress * 1.35f, 0.0f, 1.0f) * XM_PI);
+        mr->color.w = p.baseColor.w * flare * std::pow(lifeRatio, 0.45f);
+      } else {
+        mr->color.w = lifeRatio; // アルファ減衰
+      }
 
       if (p.lifetime <= 0.0f) {
         mr->isVisible = false;
@@ -653,8 +919,10 @@ void GameJuiceSystem::TriggerMaterialEffect(
         // 砂煙
         p.isDust = true;
         mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
-        mr->color = {0.85f, 0.75f, 0.55f, 0.7f};
+        p.baseColor = {0.88f, 0.78f, 0.55f, 0.92f};
+        mr->color = p.baseColor;
         mr->customFlags.x = 1.0f;
+        mr->customFlags.y = 0.0f;
         p.baseScale = 0.24f + strength * 0.25f;
         t->scale = {p.baseScale, p.baseScale, p.baseScale};
         p.lifetime *= 1.4f;
@@ -672,18 +940,20 @@ void GameJuiceSystem::TriggerMaterialEffect(
         p.isDust = false;
         mr->mesh = ctx.resource.LoadMesh("builtin/cube");
         mr->customFlags.x = 0.0f;
+        mr->customFlags.y = 0.0f;
 
         if (material == game::components::TerrainMaterial::Rough) {
-          mr->color = {0.15f, 0.45f, 0.15f, 1.0f}; // 濃い緑
+          p.baseColor = {0.12f, 0.38f, 0.10f, 1.0f}; // 濃い緑
           float sizeJitter = 0.7f + ((float)(rand() % 100) / 100.0f) * 0.6f;
           p.baseScale = (0.1f + strength * 0.15f) * sizeJitter;
         } else if (material == game::components::TerrainMaterial::Green) {
-          mr->color = {0.2f, 0.8f, 0.3f, 1.0f};   // 鮮やか
+          p.baseColor = {0.18f, 0.78f, 0.28f, 1.0f}; // 鮮やか
           p.baseScale = 0.05f + strength * 0.05f; // 小さい
         } else {
-          mr->color = {0.25f, 0.6f, 0.2f, 1.0f}; // 普通
+          p.baseColor = {0.25f, 0.58f, 0.18f, 1.0f}; // 普通
           p.baseScale = 0.08f + strength * 0.1f;
         }
+        mr->color = p.baseColor;
 
         t->scale = {p.baseScale * 1.5f, p.baseScale * 0.1f, p.baseScale * 1.5f};
 
@@ -701,8 +971,10 @@ void GameJuiceSystem::TriggerMaterialEffect(
         // 岩など（汎用拡散）
         p.isDust = true; // 簡略化のためDust扱い
         mr->mesh = ctx.resource.LoadMesh("builtin/cube"); // 岩片
-        mr->color = {0.5f, 0.5f, 0.5f, 1.0f};
+        p.baseColor = {0.5f, 0.5f, 0.5f, 1.0f};
+        mr->color = p.baseColor;
         mr->customFlags.x = 0.0f;
+        mr->customFlags.y = 0.0f;
         p.baseScale = 0.05f + strength * 0.1f;
         t->scale = {p.baseScale, p.baseScale, p.baseScale};
         break;
@@ -770,8 +1042,10 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
 
   m_envEmitTimer += ctx.dt;
   // 速度が速いほどたくさん出す
+  const float speed01 =
+      std::clamp(state->currentBallSpeed / 28.0f, 0.0f, 1.0f);
   float interval =
-      0.08f / (std::max<float>(1.0f, state->currentBallSpeed * 0.16f));
+      0.07f / (std::max<float>(1.0f, state->currentBallSpeed * 0.2f));
 
   if (m_envEmitTimer >= interval) {
     m_envEmitTimer = 0.0f;
@@ -781,13 +1055,21 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
       return;
 
     // 放出量
-    int count = (state->currentMaterial == TerrainMaterial::Bunker) ? 2 : 1;
+    int count = 1;
+    if (state->currentMaterial == TerrainMaterial::Bunker) {
+      count = 2 + static_cast<int>(speed01 * 2.0f);
+    } else if (state->currentMaterial == TerrainMaterial::Rough ||
+               state->currentMaterial == TerrainMaterial::Fairway) {
+      count = 1 + static_cast<int>(speed01 * 1.8f);
+    } else if (state->currentMaterial == TerrainMaterial::Green) {
+      count = state->currentBallSpeed > 2.5f ? 1 : 0;
+    }
 
     for (int k = 0; k < count; ++k) {
       auto &p = m_envParticles[m_envWriteIndex];
       m_envWriteIndex = (m_envWriteIndex + 1) % kEnvParticleCount;
 
-      p.lifetime = 0.8f + ((float)(rand() % 100) / 100.0f) * 0.4f;
+      p.lifetime = 0.75f + Rand01() * 0.45f;
       p.maxLifetime = p.lifetime;
 
       auto *t = ctx.world.Get<Transform>(p.entity);
@@ -799,31 +1081,37 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
         t->position.y += 0.05f;
 
         mr->isVisible = true;
+        mr->isTransparent = true;
+        mr->blendMode = BlendMode::Alpha;
+        mr->customFlags = {0.0f, 0.0f, 0.0f, 0.0f};
 
         // マテリアル別の設定
         switch (state->currentMaterial) {
         case TerrainMaterial::Bunker: {
-          // 砂煙: 球体、薄茶色、上昇・拡散
+          // 砂煙: 芯を残した濃い砂粒、上昇・拡散
           p.isDust = true;
           mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
-          mr->color = {0.85f, 0.75f, 0.55f, 0.6f}; // サンドベージュ
-          mr->customFlags.x = 1.0f;                // isDustフラグをシェーダーへ
-          p.baseScale = 0.18f + ((float)(rand() % 100) / 100.0f) * 0.14f;
+          float warmth = Rand01() * 0.08f;
+          p.baseColor = {0.78f + warmth, 0.66f + warmth * 0.7f,
+                         0.43f + warmth * 0.4f, 0.88f};
+          mr->color = p.baseColor;
+          mr->customFlags.x = 1.0f; // isDustフラグをシェーダーへ
+          mr->customFlags.y = 1.0f; // 濃い芯を持つ転がり砂煙
+          p.baseScale = 0.22f + Rand01() * 0.16f + speed01 * 0.10f;
           t->scale = {p.baseScale, p.baseScale, p.baseScale};
-          p.lifetime *= 1.4f;
+          p.lifetime *= 1.55f;
           p.maxLifetime = p.lifetime;
 
           // 進行方向の逆にふわっと広がる
           auto *rb = ctx.world.Get<RigidBody>(targetEntity);
           XMVECTOR v = rb ? XMLoadFloat3(&rb->velocity) : XMVectorZero();
-          v = XMVectorScale(v, -0.3f); // 速度の3割で逆走
+          v = XMVectorScale(v, -0.22f - speed01 * 0.12f);
 
-          float spread = 0.5f;
+          float spread = 0.7f + speed01 * 0.45f;
           XMStoreFloat3(&p.velocity, v);
-          p.velocity.x += ((float)(rand() % 100) / 100.0f - 0.5f) * spread;
-          p.velocity.y +=
-              0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f; // 少し浮く
-          p.velocity.z += ((float)(rand() % 100) / 100.0f - 0.5f) * spread;
+          p.velocity.x += RandCentered() * spread;
+          p.velocity.y += 0.45f + Rand01() * 0.65f + speed01 * 0.25f;
+          p.velocity.z += RandCentered() * spread;
           p.velocity.x *= 0.65f;
           p.velocity.z *= 0.65f;
           p.velocity.y *= 0.9f;
@@ -837,33 +1125,56 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           p.isDust = false;
           mr->mesh = ctx.resource.LoadMesh("builtin/cube");
           mr->customFlags.x = 0.0f; // 芝は通常の四角
+          mr->customFlags.y = 0.0f;
           if (state->currentMaterial == TerrainMaterial::Rough) {
-            mr->color = {0.1f, 0.4f, 0.1f, 1.0f}; // 深緑
+            p.baseColor = {0.08f, 0.34f + Rand01() * 0.08f, 0.08f, 1.0f};
           } else {
-            mr->color = {0.3f, 0.7f, 0.2f, 1.0f}; // 明るい緑
+            p.baseColor = {0.22f, 0.56f + Rand01() * 0.14f, 0.14f, 1.0f};
           }
-          p.baseScale = 0.05f + ((float)(rand() % 100) / 100.0f) * 0.05f;
-          float sizeJitter =
-              0.6f + ((float)(rand() % 100) / 100.0f) * 0.8f;
+          mr->color = p.baseColor;
+          p.baseScale = 0.055f + Rand01() * 0.055f + speed01 * 0.025f;
+          float sizeJitter = 0.65f + Rand01() * 0.75f;
           p.baseScale *= sizeJitter;
           // 板状にする
-          t->scale = {p.baseScale * 2.0f, p.baseScale * 0.2f,
-                      p.baseScale * 1.5f};
+          t->scale = {p.baseScale * (2.2f + Rand01() * 0.7f),
+                      p.baseScale * 0.16f,
+                      p.baseScale * (1.3f + Rand01() * 0.5f)};
 
           // 四方に弾ける
-          float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
-          float speed = 2.5f + ((float)(rand() % 100) / 100.0f) * 3.5f;
+          float angle = Rand01() * XM_2PI;
+          float speed = 2.2f + Rand01() * 3.0f + speed01 * 2.0f;
           p.velocity.x = std::cos(angle) * speed;
-          p.velocity.y = 1.0f + ((float)(rand() % 100) / 100.0f) * 2.0f;
+          p.velocity.y = 0.8f + Rand01() * 1.6f + speed01 * 0.6f;
           p.velocity.z = std::sin(angle) * speed;
 
-          float angScale = 35.0f;
-          p.angularVelocity.x =
-              ((float)(rand() % 100) / 100.0f - 0.5f) * angScale;
-          p.angularVelocity.y =
-              ((float)(rand() % 100) / 100.0f - 0.5f) * angScale;
-          p.angularVelocity.z =
-              ((float)(rand() % 100) / 100.0f - 0.5f) * angScale;
+          float angScale = 38.0f + speed01 * 18.0f;
+          p.angularVelocity.x = RandCentered() * angScale;
+          p.angularVelocity.y = RandCentered() * angScale;
+          p.angularVelocity.z = RandCentered() * angScale;
+          break;
+        }
+        case TerrainMaterial::Green: {
+          // グリーン: 細かい削れ粉だけを控えめに出す
+          p.isDust = false;
+          mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+          p.baseColor = {0.28f, 0.72f, 0.26f, 0.95f};
+          mr->color = p.baseColor;
+          mr->customFlags.x = 0.0f;
+          mr->customFlags.y = 0.0f;
+          p.baseScale = 0.035f + Rand01() * 0.025f;
+          t->scale = {p.baseScale * 2.0f, p.baseScale * 0.12f,
+                      p.baseScale * 1.4f};
+
+          float angle = Rand01() * XM_2PI;
+          float speed = 1.2f + Rand01() * 1.5f + speed01;
+          p.velocity.x = std::cos(angle) * speed;
+          p.velocity.y = 0.35f + Rand01() * 0.55f;
+          p.velocity.z = std::sin(angle) * speed;
+
+          float angScale = 24.0f;
+          p.angularVelocity.x = RandCentered() * angScale;
+          p.angularVelocity.y = RandCentered() * angScale;
+          p.angularVelocity.z = RandCentered() * angScale;
           break;
         }
         default:
@@ -904,7 +1215,7 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
 
         // 拡大フェード
         float progress = 1.0f - (p.lifetime / p.maxLifetime);
-        float scale = p.baseScale * (1.0f + progress * 3.0f);
+        float scale = p.baseScale * (1.0f + progress * 2.45f);
         t->scale = {scale, scale, scale};
       } else {
         // 芝片: 物理、回転
@@ -934,7 +1245,14 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
 
     if (mr) {
       float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
-      mr->color.w = lifeRatio; // アルファ減衰
+      mr->color = p.baseColor;
+      if (p.isDust) {
+        float progress = 1.0f - lifeRatio;
+        float alphaHold = 1.0f - SmoothFade(progress, 0.58f, 1.0f);
+        mr->color.w = p.baseColor.w * std::clamp(alphaHold, 0.0f, 1.0f);
+      } else {
+        mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.55f);
+      }
 
       if (p.lifetime <= 0.0f) {
         mr->isVisible = false;
@@ -947,38 +1265,84 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
 void GameJuiceSystem::TriggerConfetti(core::GameContext &ctx,
                                       const DirectX::XMFLOAT3 &position,
                                       float burstPower) {
-  static const DirectX::XMFLOAT3 palette[] = {
-      {1.2f, 0.3f, 0.35f}, {0.3f, 1.1f, 0.5f}, {0.35f, 0.6f, 1.2f},
-      {1.0f, 0.9f, 0.35f}, {1.1f, 0.45f, 1.1f}};
+  const int startIndex = kImpactBurstCount;
+  const int count = kImpactParticleCount - startIndex;
 
-  int count = std::min(kImpactParticleCount, 60);
   for (int i = 0; i < count; ++i) {
-    auto &p = m_impactParticles[i];
+    auto &p = m_impactParticles[startIndex + i];
     auto *t = ctx.world.Get<Transform>(p.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
     if (!t || !mr)
       continue;
 
-    float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
-    float speed = (2.5f + burstPower * 3.0f) *
-                  (0.6f + ((float)(rand() % 100) / 100.0f) * 0.6f);
-    float up = 2.0f + burstPower * 2.0f;
-    p.velocity.x = std::cos(angle) * speed;
-    p.velocity.z = std::sin(angle) * speed;
-    p.velocity.y = up * (0.7f + ((float)(rand() % 100) / 100.0f) * 0.6f);
-
-    p.maxLifetime = 0.9f + ((float)(rand() % 100) / 100.0f) * 0.4f;
-    p.lifetime = p.maxLifetime;
+    float angle = Rand01() * XM_2PI;
+    float ring = 0.18f + Rand01() * 0.42f;
+    float radialSpeed = (2.0f + burstPower * 4.2f) * (0.7f + Rand01() * 0.65f);
+    float up = 1.8f + burstPower * 3.2f;
 
     t->position = position;
-    t->position.y += 0.2f;
+    t->position.x += std::cos(angle) * ring;
+    t->position.y += 0.25f + Rand01() * 0.45f;
+    t->position.z += std::sin(angle) * ring;
 
-    float scale = 0.08f + burstPower * 0.05f;
-    t->scale = {scale, scale * 0.4f, scale};
-    p.baseScale = scale;
+    XMVECTOR rot = XMQuaternionRotationRollPitchYaw(Rand01() * XM_2PI,
+                                                    Rand01() * XM_2PI,
+                                                    Rand01() * XM_2PI);
+    XMStoreFloat4(&t->rotation, rot);
 
-    DirectX::XMFLOAT3 tint = palette[i % (sizeof(palette) / sizeof(palette[0]))];
-    p.baseColor = {tint.x, tint.y, tint.z, 1.0f};
+    p.velocity.x = std::cos(angle) * radialSpeed;
+    p.velocity.z = std::sin(angle) * radialSpeed;
+    p.velocity.y = up * (0.55f + Rand01() * 0.8f);
+    p.angularVelocity = {RandCentered() * 12.0f, RandCentered() * 16.0f,
+                         RandCentered() * 14.0f};
+
+    const int layer = i % 6;
+    if (layer == 0) {
+      p.kind = ImpactParticleKind::Glint;
+      mr->mesh = ctx.resource.LoadMesh("builtin/quad");
+      mr->blendMode = BlendMode::Add;
+      mr->customFlags = {0.0f, 1.0f, 0.0f, 0.0f};
+      p.maxLifetime = 0.45f + Rand01() * 0.18f;
+      p.baseScale = 0.55f + burstPower * 0.28f + Rand01() * 0.18f;
+      p.baseColor = {2.8f, 2.35f, 1.05f, 0.95f};
+      p.velocity.x *= 0.35f;
+      p.velocity.z *= 0.35f;
+      p.velocity.y *= 0.25f;
+    } else if (layer == 1 || layer == 2) {
+      p.kind = ImpactParticleKind::Star;
+      mr->mesh = ctx.resource.LoadMesh("builtin/quad");
+      mr->blendMode = BlendMode::Add;
+      mr->customFlags = {0.0f, 1.0f, 0.0f, 0.0f};
+      p.maxLifetime = 1.05f + Rand01() * 0.75f;
+      p.baseScale = 0.18f + burstPower * 0.08f + Rand01() * 0.12f;
+      p.baseColor = ScaleColor(CupInSparkleColor(i), 1.65f + Rand01() * 0.75f,
+                               1.0f);
+      p.velocity.x *= 0.72f;
+      p.velocity.z *= 0.72f;
+      p.velocity.y *= 0.78f;
+    } else if (layer == 3 || layer == 4) {
+      p.kind = ImpactParticleKind::Sparkle;
+      mr->mesh = ctx.resource.LoadMesh("builtin/quad");
+      mr->blendMode = BlendMode::Add;
+      mr->customFlags = {0.0f, 1.0f, 0.0f, 0.0f};
+      p.maxLifetime = 0.65f + Rand01() * 0.55f;
+      p.baseScale = 0.08f + burstPower * 0.035f + Rand01() * 0.055f;
+      p.baseColor = {2.4f, 2.1f, 0.85f, 0.9f};
+      p.velocity.x *= 1.12f;
+      p.velocity.z *= 1.12f;
+      p.velocity.y *= 1.05f;
+    } else {
+      p.kind = ImpactParticleKind::Confetti;
+      mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+      mr->blendMode = BlendMode::Alpha;
+      mr->customFlags = {0.0f, 0.0f, 0.0f, 0.0f};
+      p.maxLifetime = 1.1f + Rand01() * 0.55f;
+      p.baseScale = 0.08f + burstPower * 0.05f + Rand01() * 0.04f;
+      p.baseColor = ScaleColor(CupInSparkleColor(i + 3), 1.05f, 1.0f);
+    }
+
+    p.lifetime = p.maxLifetime;
+    t->scale = {p.baseScale, p.baseScale, p.baseScale};
     mr->color = p.baseColor;
     mr->isTransparent = true;
     mr->isVisible = true;

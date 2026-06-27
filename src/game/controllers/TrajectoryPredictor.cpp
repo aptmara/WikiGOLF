@@ -34,6 +34,19 @@ void TrajectoryPredictor::Initialize(core::GameContext &ctx, size_t dotCount) {
 
     m_dots.push_back(e);
   }
+
+  // 着地点マーカーエンティティの作成
+  m_landingEntity = ctx.world.CreateEntity();
+  auto &lt = ctx.world.Add<Transform>(m_landingEntity);
+  lt.scale = {0.45f, 0.08f, 0.45f}; // 扁平な円盤形
+
+  auto &lmr = ctx.world.Add<MeshRenderer>(m_landingEntity);
+  lmr.mesh = ctx.resource.LoadMesh("builtin/cube");
+  lmr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                       L"Assets/shaders/BasicPS.hlsl");
+  lmr.color = {1.0f, 1.0f, 1.0f, 0.75f};
+  lmr.isTransparent = true;
+  lmr.isVisible = false;
 }
 
 void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
@@ -60,12 +73,16 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
   }
 
   // powerRatio == 0 の通常時は仮のパワー比率 (0.65) で軌道を描画する
-  // 通常時はドットを薄い黄色、ショット準備中は明るい黄色で区別する
   const bool isIdlePreview = (params.powerRatio <= 0.0f);
   const float effectivePowerRatio = isIdlePreview ? 0.65f : params.powerRatio;
-  const XMFLOAT4 dotColor = isIdlePreview
-      ? XMFLOAT4{1.0f, 1.0f, 0.0f, 0.35f}   // 通常時: 薄い黄色
-      : XMFLOAT4{1.0f, 0.95f, 0.0f, 0.90f}; // ショット時: 明るい黄色
+  // グラデーションの基準色（先端と末尾）
+  // 先端: 白がかった水色 末尾: 黄色》透明
+  const XMFLOAT4 colorHead = isIdlePreview
+      ? XMFLOAT4{0.55f, 0.90f, 1.00f, 0.70f}  // アイドル: 清澄なシアン
+      : XMFLOAT4{1.00f, 1.00f, 0.85f, 1.00f}; // ショット: 白熱光
+  const XMFLOAT4 colorTail = isIdlePreview
+      ? XMFLOAT4{0.20f, 0.75f, 1.00f, 0.00f}  // アイドル: 透明へフェード
+      : XMFLOAT4{1.00f, 0.40f, 0.05f, 0.00f}; // ショット: オレンジ》透明
 
   float initialSpeed = params.maxPower * effectivePowerRatio;
   XMVECTOR dirXZ = XMLoadFloat3(&params.shotDirection);
@@ -141,8 +158,21 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
       continue;
     }
 
-    // ドット色を設定
-    mr->color = dotColor;
+    // 先端(i=0)から末尾に向かって色・透明度・太さをグラデーションさせる
+    const float nt = (m_dots.size() > 1)
+        ? static_cast<float>(i) / static_cast<float>(m_dots.size() - 1)
+        : 0.0f;
+    XMFLOAT4 blendedColor;
+    blendedColor.x = colorHead.x + (colorTail.x - colorHead.x) * nt;
+    blendedColor.y = colorHead.y + (colorTail.y - colorHead.y) * nt;
+    blendedColor.z = colorHead.z + (colorTail.z - colorHead.z) * nt;
+    blendedColor.w = colorHead.w + (colorTail.w - colorHead.w) * nt;
+    mr->color = blendedColor;
+
+    // 先端太く(1.8x)→末尾細く(0.5x)の変型スケール
+    const float baseThicknessMin = params.isMapView ? 0.12f : 0.06f;
+    const float baseThicknessMax = params.isMapView ? 0.36f : 0.22f;
+    const float thicknessForDot  = baseThicknessMax + (baseThicknessMin - baseThicknessMax) * nt;
 
     XMVECTOR currentPos = prevPos;
 
@@ -282,6 +312,23 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     bool isOnGround = XMVectorGetY(currentPos) <= currentGroundY + 0.01f;
     if (finalSpeed < 0.008f && isOnGround) {
       mr->isVisible = false;
+      // 着地点マーカーをこの位置に表示
+      if (m_landingEntity != UINT32_MAX) {
+        auto *lmr = ctx.world.Get<MeshRenderer>(m_landingEntity);
+        auto *lt  = ctx.world.Get<Transform>(m_landingEntity);
+        if (lmr && lt) {
+          XMFLOAT3 lp;
+          XMStoreFloat3(&lp, currentPos);
+          lp.y = currentGroundY + 0.05f; // 地面に蛻りつく変位
+          lt->position = lp;
+          lt->scale = {0.55f, 0.08f, 0.55f};
+          // アイドル時は点滅する白円、ショット時は黄オレンジ
+          lmr->color = isIdlePreview
+              ? XMFLOAT4{0.85f, 0.97f, 1.00f, 0.70f}
+              : XMFLOAT4{1.00f, 0.80f, 0.10f, 0.90f};
+          lmr->isVisible = true;
+        }
+      }
       for (size_t j = i + 1; j < m_dots.size(); ++j) {
         auto *remainMR = ctx.world.Get<MeshRenderer>(m_dots[j]);
         if (remainMR) {
@@ -311,11 +358,7 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
 
     XMStoreFloat3(&t->position, midPoint);
 
-    float baseThickness = 0.15f;
-    if (params.isMapView) {
-      baseThickness *= 2.0f;
-    }
-    t->scale = {baseThickness, baseThickness, length};
+    t->scale = {thicknessForDot, thicknessForDot, length};
 
     XMVECTOR dir = XMVector3Normalize(segmentVec);
     XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -343,6 +386,13 @@ void TrajectoryPredictor::Hide(core::GameContext &ctx) {
     auto *mr = ctx.world.Get<MeshRenderer>(e);
     if (mr) {
       mr->isVisible = false;
+    }
+  }
+  // 着地点マーカーも非表示
+  if (m_landingEntity != UINT32_MAX) {
+    auto *lmr = ctx.world.Get<MeshRenderer>(m_landingEntity);
+    if (lmr) {
+      lmr->isVisible = false;
     }
   }
 }

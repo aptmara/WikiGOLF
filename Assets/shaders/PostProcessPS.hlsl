@@ -21,7 +21,7 @@ cbuffer PostProcessConstants : register(b1) {
   float4 colorTint;     // RGB + brightness
   float4 colorParams;   // saturation, contrast, 0, 0
   float4 vignetteParams;// intensity, radius, softness, 0
-  float4 timeParams;    // time, 0, 0, 0
+  float4 timeParams;    // time, bloomIntensity, bloomThreshold, bloomSpread
 };
 
 // 彩度調整
@@ -33,6 +33,13 @@ float3 AdjustSaturation(float3 color, float saturation) {
 // コントラスト調整
 float3 AdjustContrast(float3 color, float contrast) {
   return (color - 0.5) * contrast + 0.5;
+}
+
+// ブルーム用の明るい色抽出
+float3 ExtractBloom(float3 color, float threshold) {
+  float brightness = max(color.r, max(color.g, color.b));
+  float amount = saturate((brightness - threshold) / max(1.0 - threshold, 0.001));
+  return color * amount;
 }
 
 // ビネット効果
@@ -69,6 +76,27 @@ float4 main(PSInput input) : SV_TARGET {
   
   // コントラスト
   color = AdjustContrast(color, colorParams.y);
+
+  // === 簡易ブルーム ===
+  float bloomIntensity = timeParams.y;
+  if (bloomIntensity > 0.001) {
+    float threshold = timeParams.z;
+    float spread = max(timeParams.w, 0.1);
+    float2 texel = max(abs(ddx(uv)) + abs(ddy(uv)),
+                       float2(1.0 / 4096.0, 1.0 / 4096.0)) * spread;
+
+    float3 bloom = ExtractBloom(sceneColor.rgb, threshold) * 0.32;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2( 1,  0)).rgb, threshold) * 0.14;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2(-1,  0)).rgb, threshold) * 0.14;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2( 0,  1)).rgb, threshold) * 0.14;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2( 0, -1)).rgb, threshold) * 0.14;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2( 2,  2)).rgb, threshold) * 0.06;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2(-2,  2)).rgb, threshold) * 0.06;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2( 2, -2)).rgb, threshold) * 0.06;
+    bloom += ExtractBloom(sceneTexture.Sample(samplerState, uv + texel * float2(-2, -2)).rgb, threshold) * 0.06;
+
+    color += bloom * bloomIntensity;
+  }
   
   // === ビネット ===
   float vignette = ComputeVignette(uv, vignetteParams.x, vignetteParams.y, vignetteParams.z);

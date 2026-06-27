@@ -32,8 +32,8 @@ struct PostProcessConstants {
   // ビネット
   XMFLOAT4 vignetteParams; // intensity, radius, softness, 0
 
-  // 時間・その他
-  XMFLOAT4 timeParams; // time, 0, 0, 0
+  // 時間・ブルーム
+  XMFLOAT4 timeParams; // time, bloomIntensity, bloomThreshold, bloomSpread
 };
 
 /**
@@ -150,7 +150,11 @@ public:
       vignetteIntensity = std::max(0.2f, vignetteIntensity * 0.7f);
     }
     m_constants.vignetteParams = {vignetteIntensity, 0.7f, 0.5f, 0};
-    m_constants.timeParams = {time, 0, 0, 0};
+    float bloomIntensity = m_constants.timeParams.y;
+    float bloomThreshold = m_constants.timeParams.z;
+    float bloomSpread = m_constants.timeParams.w;
+    m_constants.timeParams = {time, bloomIntensity, bloomThreshold,
+                              bloomSpread};
   }
 
   /**
@@ -162,7 +166,7 @@ public:
     m_constants.colorTint = {1.0f, 1.0f, 1.0f, 1.0f};
     m_constants.colorParams = {1.0f, 1.0f, 0, 0};
     m_constants.vignetteParams = {0.25f, 0.7f, 0.5f, 0};
-    m_constants.timeParams = {0, 0, 0, 0};
+    m_constants.timeParams = {0, 0, 0.72f, 1.0f};
   }
 
   /**
@@ -188,6 +192,19 @@ public:
   void SetVignette(float intensity, float radius = 0.7f,
                    float softness = 0.5f) {
     m_constants.vignetteParams = {intensity, radius, softness, 0};
+  }
+
+  /**
+   * @brief ブルーム風の発光にじみを設定します。
+   * @param intensity 発光にじみの強さ
+   * @param threshold 抽出しきい値
+   * @param spread サンプル範囲倍率
+   */
+  void SetBloom(float intensity, float threshold = 0.72f,
+                float spread = 1.0f) {
+    m_constants.timeParams.y = std::max(0.0f, intensity);
+    m_constants.timeParams.z = std::clamp(threshold, 0.0f, 1.0f);
+    m_constants.timeParams.w = std::max(0.1f, spread);
   }
 
   /**

@@ -111,7 +111,7 @@ void RenderSystem(core::GameContext &ctx) {
     device->CreateBlendState(&blendDesc, &newState.multiplyBlendState);
 
     // 加算ブレンド
-    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
     device->CreateBlendState(&blendDesc, &newState.addBlendState);
 

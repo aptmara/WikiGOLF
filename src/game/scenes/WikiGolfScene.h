@@ -29,6 +29,7 @@
 #include "../systems/WikiTerrainSystem.h"
 #include "../utils/MapViewState.h"
 #include "../utils/ScreenFade.h"
+#include "ResultScene.h"
 #include <DirectXMath.h>
 #include <memory>
 #include <string>
@@ -82,8 +83,9 @@ private:
   ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;
   ecs::Entity m_cameraEntity = UINT32_MAX;
-  ecs::Entity m_arrowEntity = UINT32_MAX; // 矢印表示用（パワーチャージ時）
-  ecs::Entity m_guideArrowEntity = UINT32_MAX; // 方向ガイド（アイドル時常時表示）
+  ecs::Entity m_arrowEntity = UINT32_MAX;         ///< 矢印表示用（パワーチャージ時）
+  std::vector<ecs::Entity> m_guideSegments;       ///< 方向ガイドセグメント（アイドル時流れる矢印）
+  float m_guideAnimTimer = 0.0f;                  ///< 方向ガイドアニメーションタイマー
   ecs::Entity m_clubModelEntity = UINT32_MAX;
   
   std::unique_ptr<game::controllers::CameraController>    m_cameraController;
@@ -139,6 +141,20 @@ private:
   float m_terrainDisplayTimer = 0.0f;
   float m_hudUpdateTimer = 0.0f;     ///< HUD静的表示の更新間引きタイマーです。山内陽
   float m_minimapUpdateTimer = 0.0f; ///< ミニマップ描画の更新間引きタイマーです。山内陽
+  float m_cupInBloomTimer = 0.0f;    ///< カップイン発光演出の残り時間です。山内陽
+  float m_cupInBloomDuration = 0.0f; ///< カップイン発光演出の全体時間です。山内陽
+  float m_shotBloomTimer = 0.0f;     ///< ショット発光演出の残り時間です。山内陽
+  float m_shotBloomDuration = 0.0f;  ///< ショット発光演出の全体時間です。山内陽
+  float m_shotBloomIntensity = 0.0f; ///< ショット発光演出の強さです。山内陽
+  ecs::Entity m_cupInGlowHoleEntity = UINT32_MAX; ///< 発光中のホールです。山内陽
+  ecs::Entity m_cupInGlowFlagEntity = UINT32_MAX; ///< 発光中の旗です。山内陽
+  ecs::Entity m_cupInGlowPillarEntity = UINT32_MAX; ///< 発光中の光柱です。山内陽
+  DirectX::XMFLOAT4 m_cupInGlowHoleBaseColor = {1, 1, 1, 1}; ///< ホール元色です。山内陽
+  DirectX::XMFLOAT4 m_cupInGlowFlagBaseColor = {1, 1, 1, 1}; ///< 旗元色です。山内陽
+  DirectX::XMFLOAT4 m_cupInGlowPillarBaseColor = {1, 1, 1, 1}; ///< 光柱元色です。山内陽
+  bool m_pendingResultTransition = false; ///< リザルト遷移待ち中かどうかです。山内陽
+  float m_pendingResultTimer = 0.0f; ///< リザルト遷移までの演出待機時間です。山内陽
+  ResultData m_pendingResultData{}; ///< 遅延遷移で渡すリザルト情報です。山内陽
   bool m_prevTutorialInputLocked = false; ///< チュートリアル演出入力ロックの解除検知用です。山内陽
   std::vector<ecs::Entity> m_tutorialFlagSampleEntities; ///< 旗色解説用の一時旗モデルです。山内陽
   /// @brief チュートリアル中にカップイン SE が既に再生済みかどうか。

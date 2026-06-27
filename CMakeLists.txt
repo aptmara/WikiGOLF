@@ -60,24 +60,28 @@ add_custom_command(TARGET DX_GAME POST_BUILD
     COMMENT "Deploying assets to output directory..."
 )
 
-add_executable(SkyboxGen tools/SkyboxGen.cpp src/graphics/SkyboxTextureGenerator.cpp)
-target_precompile_headers(SkyboxGen PRIVATE src/pch.h)
-target_include_directories(SkyboxGen PRIVATE src)
-target_link_libraries(SkyboxGen
-    d3d11
-    dxguid
-    windowscodecs
-)
-if(MSVC)
-    target_compile_definitions(SkyboxGen PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
-                                                     -DWIN32_LEAN_AND_MEAN)
-    target_compile_options(SkyboxGen PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/tools/SkyboxGen.cpp")
+    add_executable(SkyboxGen tools/SkyboxGen.cpp src/graphics/SkyboxTextureGenerator.cpp)
+    target_precompile_headers(SkyboxGen PRIVATE src/pch.h)
+    target_include_directories(SkyboxGen PRIVATE src)
+    target_link_libraries(SkyboxGen
+        d3d11
+        dxguid
+        windowscodecs
+    )
+    if(MSVC)
+        target_compile_definitions(SkyboxGen PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                         -DWIN32_LEAN_AND_MEAN)
+        target_compile_options(SkyboxGen PRIVATE /utf-8 /Zc:__cplusplus)
+    endif()
 
-add_custom_command(TARGET SkyboxGen POST_BUILD
-    COMMAND SkyboxGen "${CMAKE_SOURCE_DIR}/Assets/textures/runtime_skybox"
-    COMMENT "Generating Skybox textures..."
-)
+    add_custom_command(TARGET SkyboxGen POST_BUILD
+        COMMAND SkyboxGen "${CMAKE_SOURCE_DIR}/Assets/textures/runtime_skybox"
+        COMMENT "Generating Skybox textures..."
+    )
+else()
+    message(WARNING "tools/SkyboxGen.cpp not found; skipping SkyboxGen target.")
+endif()
 
 # シンプルなユニットテスト（CupIn判定）
 add_executable(test_cupin_utils test_cupin_utils.cpp)

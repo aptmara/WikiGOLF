@@ -94,6 +94,17 @@ public:
                            const DirectX::XMFLOAT3 &position, float power,
                            JudgeType judge = JudgeType::None);
 
+  /// @brief ショット時の精度別パーティクルを発火
+  /// @param ctx ゲームコンテキスト
+  /// @param position 発生位置
+  /// @param direction ショット方向
+  /// @param power ショットの強さ
+  /// @param judge 判定タイプ
+  void TriggerShotEffect(core::GameContext &ctx,
+                         const DirectX::XMFLOAT3 &position,
+                         const DirectX::XMFLOAT3 &direction, float power,
+                         JudgeType judge);
+
   // === マテリアルエフェクト ===
 
   /// @brief マテリアルに応じたエフェクト発火
@@ -111,7 +122,7 @@ public:
                            const DirectX::XMFLOAT3 &position,
                            float baseRadius, float strength);
 
-  /// @brief カップインなど祝祭時の紙吹雪
+  /// @brief カップインなど祝祭時の星・紙吹雪・きらめきを発火
   void TriggerConfetti(core::GameContext &ctx,
                        const DirectX::XMFLOAT3 &position, float burstPower);
 
@@ -154,16 +165,30 @@ private:
   static constexpr float kTrailUpdateInterval = 0.025f; ///< 軌跡更新間隔です。山内陽
 
   // --- インパクトエフェクト ---
+  enum class ImpactParticleKind {
+    Burst,
+    Confetti,
+    Star,
+    Sparkle,
+    Glint,
+    ShotSpark,
+    ShotDust,
+    ShotRing
+  };
+
   struct ImpactParticle {
     ecs::Entity entity = UINT32_MAX;
     DirectX::XMFLOAT3 velocity = {0, 0, 0};
+    DirectX::XMFLOAT3 angularVelocity = {0, 0, 0};
     float lifetime = 0.0f;
     float maxLifetime = 1.0f;
     float baseScale = 0.1f;
     DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
+    ImpactParticleKind kind = ImpactParticleKind::Burst;
   };
   std::vector<ImpactParticle> m_impactParticles;
-  static constexpr int kImpactParticleCount = 48; ///< インパクト粒子数です。山内陽
+  static constexpr int kImpactBurstCount = 48; ///< インパクト粒子数です。山内陽
+  static constexpr int kImpactParticleCount = 96; ///< 祝祭を含む粒子数です。山内陽
 
   // --- 環境エフェクト（転がり・スライド） ---
   struct EnvironmentParticle {
@@ -173,12 +198,13 @@ private:
     float lifetime = 0.0f;
     float maxLifetime = 1.0f;
     float baseScale = 0.1f;
+    DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
     bool isDust = false; // 砂煙(Sphere)か芝片(Cube/Sheet)か
   };
   std::vector<EnvironmentParticle> m_envParticles;
   int m_envWriteIndex = 0;
   float m_envEmitTimer = 0.0f;
-  static constexpr int kEnvParticleCount = 64; ///< 環境粒子数です。山内陽
+  static constexpr int kEnvParticleCount = 96; ///< 環境粒子数です。山内陽
 
   // --- リップルエフェクト ---
   struct Ripple {
