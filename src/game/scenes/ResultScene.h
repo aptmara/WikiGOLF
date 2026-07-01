@@ -71,16 +71,37 @@ private:
   };
   std::vector<RingObject> m_rings;
 
-  // パーティクル関連
-  struct Particle {
+  // 花火用の構造体
+  struct HanabiSpark {
     ecs::Entity entity;
-    DirectX::XMFLOAT3 velocity;
+    DirectX::XMFLOAT3 pos;
+    DirectX::XMFLOAT3 vel;
+    DirectX::XMFLOAT4 color;
+    float age;
     float lifeTime;
-    float maxLife;
-    bool isConfetti; // 紙吹雪かどうかのフラグ
+    float size;
+    float drag;
   };
-  std::vector<Particle> m_particles;
-  float m_particleTimer = 0.0f;
+
+  struct HanabiShell {
+    enum class Phase { Ascending, FlashFrame, Burst, Fading };
+    Phase phase = Phase::Ascending;
+    DirectX::XMFLOAT3 pos;
+    DirectX::XMFLOAT3 vel;
+    float age = 0.0f;
+    float lifeTime = 0.0f;
+    float flashRadius = 0.0f;
+  };
+
+  std::vector<HanabiShell> m_shells;
+  std::vector<HanabiSpark> m_sparks;
+  
+  float m_cameraShake = 0.0f;
+  float m_volleyTimer = 1.0f;
+  float m_volleyInterval = 4.0f;
+  int m_shellsPerVolley = 3;
+
+  void LaunchVolley();
 
   // 豪華なUI要素
   struct UIElement {

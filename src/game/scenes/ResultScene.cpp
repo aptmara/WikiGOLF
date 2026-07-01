@@ -1,4 +1,4 @@
-#define NOMINMAX
+﻿#define NOMINMAX
 #include "ResultScene.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
@@ -42,13 +42,14 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
            m_data.targetPage, m_data.shotCount);
 
   m_time = 0.0f;
-  m_particleTimer = 0.0f;
+  m_volleyTimer = 1.0f;
   m_scoreDisplayValue = 0.0f;
   m_isScoreCountFinished = false;
 
   m_uiElements.clear();
   m_rings.clear();
-  m_particles.clear();
+  m_shells.clear();
+  m_sparks.clear();
 
   // マウスカーソルの設定を行います。
   ctx.input.SetMouseCursorVisible(true);
@@ -77,6 +78,13 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
   m_time += ctx.dt;
 
   // カメラを地球儀の周囲で回転させます。
+  // Update Camera shake
+  if (m_cameraShake > 0.0f) {
+      m_cameraShake -= ctx.dt * 2.0f;
+      if (m_cameraShake < 0.0f) m_cameraShake = 0.0f;
+  }
+
+  // カメラが地球儀の周りを公転します。
   if (ctx.world.IsAlive(m_cameraEntity)) {
     auto *camTr = ctx.world.Get<Transform>(m_cameraEntity);
     if (camTr) {
@@ -85,10 +93,20 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
       float angle = m_time * orbitSpeed;
       float height = 4.0f + std::cos(m_time * 0.3f) * 0.5f;
 
-      camTr->position = {
+      DirectX::XMFLOAT3 basePos = {
           std::sin(angle) * radius, height,
           std::cos(angle) * -radius
       };
+      
+      // Apply shake to camera position
+      if (m_cameraShake > 0.0f) {
+          float intensity = m_cameraShake * 0.5f;
+          basePos.x += (static_cast<float>(rand() % 100) / 100.0f - 0.5f) * intensity;
+          basePos.y += (static_cast<float>(rand() % 100) / 100.0f - 0.5f) * intensity;
+          basePos.z += (static_cast<float>(rand() % 100) / 100.0f - 0.5f) * intensity;
+      }
+      
+      camTr->position = basePos;
 
       // 注視点の設定とカメラの姿勢更新を行います。
       XMVECTOR eye = XMLoadFloat3(&camTr->position);
@@ -229,76 +247,236 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
     t->scale = {scaleBase, 1.0f, scaleBase};
   }
 
-  // パーティクルのタイマー更新を行います。
-  m_particleTimer += ctx.dt;
-  if (m_particleTimer > 0.05f) {
-    m_particleTimer = 0.0f;
-
-    // 紙吹雪を生成します。
-    {
-      LOG_DEBUG("ResultScene", "UpdateVisuals: Creating confetti entity");
-      auto e = CreateEntity(ctx.world);
-      auto &t = ctx.world.Add<Transform>(e);
-      float x = (static_cast<float>(rand() % 200) / 10.0f) - 10.0f;
-      float z = (static_cast<float>(rand() % 200) / 10.0f) - 10.0f;
-      t.position = {x, 15.0f, z};
-      t.scale = {0.15f, 0.15f, 0.15f};
-
-      LOG_DEBUG("ResultScene", "UpdateVisuals: Adding MeshRenderer");
-      auto &mr = ctx.world.Add<MeshRenderer>(e);
-      LOG_DEBUG("ResultScene", "UpdateVisuals: Loading cube mesh");
-      mr.mesh = ctx.resource.LoadMesh("builtin/cube");
-      LOG_DEBUG("ResultScene", "UpdateVisuals: Loading confetti shader");
-      mr.shader =
-          ctx.resource.LoadShader("Confetti", L"Assets/shaders/BasicVS.hlsl",
-                                  L"Assets/shaders/TransitionPS.hlsl");
-      LOG_DEBUG("ResultScene", "UpdateVisuals: Confetti creation done");
-
-      // ランダムな配色を設定します。
-      int type = rand() % 3;
-      if (type == 0)
-        mr.color = {1.0f, 0.8f, 0.2f, 1.0f};
-      else if (type == 1)
-        mr.color = {0.9f, 0.9f, 0.95f, 1.0f};
-      else
-        mr.color = {0.0f, 0.8f, 1.0f, 1.0f};
-      mr.isVisible = true;
-
-      Particle p;
-      p.entity = e;
-      p.isConfetti = true;
-      p.lifeTime = 0.0f;
-      p.maxLife = 5.0f;
-      p.velocity = {0.0f, -2.0f - (float)(rand() % 10) / 10.0f, 0.0f};
-      m_particles.push_back(p);
-    }
+  // --- Firework ECS Integration ---
+  m_volleyTimer -= ctx.dt;
+  if (m_volleyTimer <= 0.0f) {
+      m_volleyTimer = m_volleyInterval + (static_cast<float>(rand() % 200) / 100.0f - 1.0f);
+      LaunchVolley();
   }
 
-  // 各パーティクルを更新および寿命管理します。
-  for (auto it = m_particles.begin(); it != m_particles.end();) {
-    auto &p = *it;
-    p.lifeTime += ctx.dt;
-    if (p.lifeTime >= p.maxLife || !ctx.world.IsAlive(p.entity)) {
-      ctx.world.DestroyEntity(p.entity);
-      it = m_particles.erase(it);
-      continue;
-    }
+  std::vector<HanabiSpark> newTrails;
 
-    auto *t = ctx.world.Get<Transform>(p.entity);
-    if (t) {
-      t->position.x += p.velocity.x * ctx.dt;
-      t->position.y += p.velocity.y * ctx.dt;
-      t->position.z += p.velocity.z * ctx.dt;
+  // Update Shells
+  for (auto it = m_shells.begin(); it != m_shells.end(); ) {
+      auto& sh = *it;
+      sh.age += ctx.dt;
+      
+      if (sh.phase == HanabiShell::Phase::Ascending) {
+          sh.vel.y -= 9.8f * ctx.dt;
+          sh.vel.x *= 1.0f - (0.5f * ctx.dt);
+          sh.vel.z *= 1.0f - (0.5f * ctx.dt);
+          sh.pos.x += sh.vel.x * ctx.dt;
+          sh.pos.y += sh.vel.y * ctx.dt;
+          sh.pos.z += sh.vel.z * ctx.dt;
+          
+          // Spawn shell ascending trail
+          if (rand() % 2 == 0) {
+              HanabiSpark trail;
+              trail.pos = sh.pos;
+              trail.vel = {
+                  (static_cast<float>(rand() % 20) / 10.0f - 1.0f) * 0.5f,
+                  -2.0f,
+                  (static_cast<float>(rand() % 20) / 10.0f - 1.0f) * 0.5f
+              };
+              trail.color = { 2.5f, 1.8f, 0.5f, 1.0f }; // Glowing gold
+              trail.age = 0.0f;
+              trail.lifeTime = 0.4f + (static_cast<float>(rand() % 20) / 100.0f);
+              trail.size = 0.15f + (static_cast<float>(rand() % 10) / 100.0f);
+              trail.drag = 0.95f;
+              
+              trail.entity = CreateEntity(ctx.world);
+              auto& t = ctx.world.Add<Transform>(trail.entity);
+              t.position = trail.pos;
+              t.scale = { trail.size, trail.size, trail.size };
+              
+              auto& mr = ctx.world.Add<MeshRenderer>(trail.entity);
+              mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
+              mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
+              mr.color = trail.color;
+              mr.isTransparent = true;
+              mr.blendMode = components::BlendMode::Add;
+              mr.isVisible = true;
 
-      // 紙吹雪をひらひらと回転させます。
-      if (p.isConfetti) {
-        XMVECTOR q = XMQuaternionRotationRollPitchYaw(p.lifeTime * 2.0f,
-                                                      p.lifeTime, 0.0f);
-        XMStoreFloat4(&t->rotation, q);
-        t->position.x += std::sin(p.lifeTime * 3.0f) * 1.0f * ctx.dt;
+              newTrails.push_back(trail);
+          }
+
+          if (sh.vel.y < 0.0f) {
+              sh.phase = HanabiShell::Phase::FlashFrame;
+              sh.age = 0.0f;
+              sh.flashRadius = 1.0f;
+              // Camera shake on burst!
+              m_cameraShake = 1.0f;
+
+              // Spawn ECS sparks (Organic Flash Core)
+              int coreSparks = 40 + (rand() % 20);
+              for (int i = 0; i < coreSparks; ++i) {
+                  float theta = (static_cast<float>(rand() % 628) / 100.0f);
+                  float phi = acosf((static_cast<float>(rand() % 200) / 100.0f) - 1.0f);
+                  float spd = 2.0f + (static_cast<float>(rand() % 130) / 10.0f); // 2~15
+                  
+                  HanabiSpark sp;
+                  sp.pos = sh.pos;
+                  sp.vel = {
+                      sinf(phi) * cosf(theta) * spd,
+                      sinf(phi) * sinf(theta) * spd,
+                      cosf(phi) * spd
+                  };
+                  sp.color = { 3.0f, 3.0f, 2.5f, 1.0f }; // HDR Bloom overdrive
+                  sp.age = 0.0f;
+                  sp.lifeTime = 0.15f + (static_cast<float>(rand() % 10) / 100.0f);
+                  sp.size = 0.4f + (static_cast<float>(rand() % 30) / 100.0f);
+                  sp.drag = 0.85f;
+                  
+                  // ECS Entity
+                  sp.entity = CreateEntity(ctx.world);
+                  auto& t = ctx.world.Add<Transform>(sp.entity);
+                  t.position = sp.pos;
+                  t.scale = { sp.size, sp.size, sp.size };
+                  
+                  auto& mr = ctx.world.Add<MeshRenderer>(sp.entity);
+                  mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
+                  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
+                  mr.color = sp.color;
+                  mr.isTransparent = true;
+                  mr.blendMode = components::BlendMode::Add;
+                  mr.isVisible = true;
+
+                  m_sparks.push_back(sp);
+              }
+              
+              // Outer Sparks
+              int outerSparks = 180 + (rand() % 80);
+              DirectX::XMFLOAT4 shellColor;
+              int type = rand() % 5;
+              if(type == 0) shellColor = {3.0f, 0.5f, 0.5f, 1.0f};
+              else if(type == 1) shellColor = {0.5f, 3.0f, 0.5f, 1.0f};
+              else if(type == 2) shellColor = {0.5f, 0.5f, 3.0f, 1.0f};
+              else if(type == 3) shellColor = {3.0f, 2.0f, 0.5f, 1.0f};
+              else shellColor = {0.5f, 3.0f, 3.0f, 1.0f};
+
+              for (int i = 0; i < outerSparks; ++i) {
+                  float theta = (static_cast<float>(rand() % 628) / 100.0f);
+                  float phi = acosf((static_cast<float>(rand() % 200) / 100.0f) - 1.0f);
+                  float spd = 4.0f + (static_cast<float>(rand() % 200) / 10.0f); // 4~24
+                  
+                  HanabiSpark sp;
+                  sp.pos = sh.pos;
+                  sp.vel = {
+                      sinf(phi) * cosf(theta) * spd,
+                      sinf(phi) * sinf(theta) * spd,
+                      cosf(phi) * spd
+                  };
+                  sp.color = shellColor;
+                  sp.age = 0.0f;
+                  sp.lifeTime = 1.5f + (static_cast<float>(rand() % 100) / 100.0f);
+                  sp.size = 0.12f + (static_cast<float>(rand() % 12) / 100.0f);
+                  sp.drag = 0.96f;
+                  
+                  // ECS Entity
+                  sp.entity = CreateEntity(ctx.world);
+                  auto& t = ctx.world.Add<Transform>(sp.entity);
+                  t.position = sp.pos;
+                  t.scale = { sp.size, sp.size, sp.size };
+                  
+                  auto& mr = ctx.world.Add<MeshRenderer>(sp.entity);
+                  mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
+                  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
+                  mr.color = sp.color;
+                  mr.isTransparent = true;
+                  mr.blendMode = components::BlendMode::Add;
+                  mr.isVisible = true;
+
+                  m_sparks.push_back(sp);
+              }
+          }
+          ++it;
+      } else if (sh.phase == HanabiShell::Phase::FlashFrame) {
+          sh.phase = HanabiShell::Phase::Burst;
+          ++it;
+      } else if (sh.phase == HanabiShell::Phase::Burst) {
+          sh.phase = HanabiShell::Phase::Fading;
+          sh.age = 0.0f;
+          sh.lifeTime = 3.0f; // Track when to remove shell object
+          ++it;
+      } else if (sh.phase == HanabiShell::Phase::Fading) {
+          if (sh.age >= sh.lifeTime) {
+              it = m_shells.erase(it);
+          } else {
+              ++it;
+          }
       }
-    }
-    ++it;
+  }
+
+  // Update Sparks & spawn active trails
+  for (auto it = m_sparks.begin(); it != m_sparks.end(); ) {
+      auto& sp = *it;
+      sp.age += ctx.dt;
+      
+      if (sp.age >= sp.lifeTime || !ctx.world.IsAlive(sp.entity)) {
+          if(ctx.world.IsAlive(sp.entity)) ctx.world.DestroyEntity(sp.entity);
+          it = m_sparks.erase(it);
+          continue;
+      }
+      
+      // Spawn trail particle behind the spark if it's moving fast
+      if (sp.drag < 0.99f && sp.age < sp.lifeTime * 0.7f && (rand() % 4 == 0)) {
+          HanabiSpark trail;
+          trail.pos = sp.pos;
+          trail.vel = {
+              sp.vel.x * 0.1f,
+              sp.vel.y * 0.1f,
+              sp.vel.z * 0.1f
+          };
+          trail.color = sp.color;
+          trail.color.w = sp.color.w * 0.6f;
+          trail.age = 0.0f;
+          trail.lifeTime = 0.15f + (static_cast<float>(rand() % 10) / 100.0f);
+          trail.size = sp.size * 0.6f;
+          trail.drag = 0.99f; // static trail, slowly fading
+          
+          trail.entity = CreateEntity(ctx.world);
+          auto& t = ctx.world.Add<Transform>(trail.entity);
+          t.position = trail.pos;
+          t.scale = { trail.size, trail.size, trail.size };
+          
+          auto& mr = ctx.world.Add<MeshRenderer>(trail.entity);
+          mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
+          mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
+          mr.color = trail.color;
+          mr.isTransparent = true;
+          mr.blendMode = components::BlendMode::Add;
+          mr.isVisible = true;
+
+          newTrails.push_back(trail);
+      }
+
+      sp.vel.y -= 9.8f * ctx.dt * 0.5f; // reduced gravity for sparks
+      sp.vel.x *= (1.0f - (1.0f - sp.drag) * ctx.dt * 60.0f);
+      sp.vel.y *= (1.0f - (1.0f - sp.drag) * ctx.dt * 60.0f);
+      sp.vel.z *= (1.0f - (1.0f - sp.drag) * ctx.dt * 60.0f);
+      
+      sp.pos.x += sp.vel.x * ctx.dt;
+      sp.pos.y += sp.vel.y * ctx.dt;
+      sp.pos.z += sp.vel.z * ctx.dt;
+
+      // Sync with ECS
+      auto* t = ctx.world.Get<Transform>(sp.entity);
+      if (t) {
+          t->position = sp.pos;
+      }
+      
+      auto* mr = ctx.world.Get<MeshRenderer>(sp.entity);
+      if (mr) {
+          float fade = 1.0f - (sp.age / sp.lifeTime);
+          mr->color.w = fade; // Fade alpha
+      }
+      
+      ++it;
+  }
+
+  // Insert new trails into m_sparks vector
+  if (!newTrails.empty()) {
+      m_sparks.insert(m_sparks.end(), newTrails.begin(), newTrails.end());
   }
 }
 
@@ -555,13 +733,33 @@ void ResultScene::OnExit(core::GameContext &ctx) {
   }
   m_rings.clear();
 
-  for (const auto &p : m_particles) {
-    if (ctx.world.IsAlive(p.entity))
-      ctx.world.DestroyEntity(p.entity);
+  for (const auto &sp : m_sparks) {
+    if (ctx.world.IsAlive(sp.entity))
+      ctx.world.DestroyEntity(sp.entity);
   }
-  m_particles.clear();
+  m_sparks.clear();
+  m_shells.clear();
 
   LOG_INFO("ResultScene", "OnExit: Cleanup complete");
+}
+
+void ResultScene::LaunchVolley() {
+    for (int i = 0; i < m_shellsPerVolley; ++i) {
+        HanabiShell shell;
+        shell.pos = {
+            (static_cast<float>(rand() % 200) / 10.0f) - 10.0f,
+            0.0f,
+            (static_cast<float>(rand() % 200) / 10.0f) - 10.0f
+        };
+        
+        // Launch up
+        shell.vel = {
+            (static_cast<float>(rand() % 40) / 10.0f) - 2.0f,
+            5.0f + (static_cast<float>(rand() % 40) / 10.0f),
+            (static_cast<float>(rand() % 40) / 10.0f) - 2.0f
+        };
+        m_shells.push_back(shell);
+    }
 }
 
 /**
@@ -573,3 +771,4 @@ void ResultScene::Render(core::GameContext &ctx) {
 }
 
 } // namespace game::scenes
+

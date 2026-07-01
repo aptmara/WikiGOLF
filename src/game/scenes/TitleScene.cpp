@@ -1,3 +1,4 @@
+#include "ResultScene.h"
 #include "TitleScene.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
@@ -608,6 +609,23 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
  * @brief シーンの毎フレーム更新処理を行います。
  */
 void TitleScene::OnUpdate(core::GameContext &ctx) {
+  // Cheat code to force transition to ResultScene
+  if (ctx.input.GetKey(VK_CONTROL) &&
+      ctx.input.GetKey('Z') &&
+      ctx.input.GetKey('X') &&
+      ctx.input.GetKey('C') &&
+      ctx.input.GetKey('V'))
+  {
+      ResultData debugData;
+      debugData.targetPage = "Debug forced transition page";
+      debugData.shotCount = 5;
+      debugData.par = 4;
+      debugData.pathHistory = { "TitleScene", "CheatJumper" };
+      debugData.isNewRecord = true;
+      ctx.sceneManager->ChangeScene(std::make_unique<ResultScene>(debugData));
+      return;
+  }
+
   if (m_state == TitleState::IntroVideo) {
     if (m_videoPlayer) {
       m_videoPlayer->Update(ctx.graphics.GetContext(), ctx.dt);
