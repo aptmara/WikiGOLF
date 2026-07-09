@@ -47,6 +47,7 @@ public:
   /**
    * @brief データベース初期化
    * @param dbPath SQLiteデータベースパス
+   * @param cachePopularPages 旧キャッシュを作成するか
    * @return 成功ならtrue
    */
   bool Initialize(const std::string &dbPath, bool cachePopularPages = true);

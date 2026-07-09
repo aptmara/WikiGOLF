@@ -14,6 +14,7 @@
 #include "src/game/systems/UIImageRenderSystem.h"
 #include "src/game/systems/UIRenderSystem.h"
 #include "src/graphics/GraphicsDevice.h"
+#include "src/core/Profiler.h"
 #include "src/graphics/TextRenderer.h"
 #include "src/resources/ResourceManager.h"
 #include <Windows.h>
@@ -61,8 +62,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   wc.lpszClassName = L"DX_GAME_WINDOW";
   RegisterClassEx(&wc);
 
-  // ウィンドウサイズを計算（クライアント領域を1280x720確保するため）
-  RECT rc = {0, 0, 1280, 720};
+  // ウィンドウサイズを計算（クライアント領域を1920x1080確保するため）
+  RECT rc = {0, 0, 1920, 1080};
   AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
 
   // ウィンドウ作成
@@ -87,7 +88,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   // システム初期化
   graphics::GraphicsDevice graphics;
-  if (!graphics.Initialize(hWnd, 1280, 720)) {
+  if (!graphics.Initialize(hWnd, 1920, 1080)) {
     return -1;
   }
 
@@ -95,6 +96,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ecs::World world;
   core::Input input;
   input.Initialize();
+  input.SetResolution(1920, 1080);
   g_Input = &input;
 
   // ログシステム初期化
@@ -159,41 +161,55 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       ctx.dt = dt;
       ctx.time += dt;
 
-      // UI更新 (Logic)
-      uiButtonSystem(ctx);
+      PROFILE_SCOPE("MainLoop");
 
-      // シーン更新 (Game Logic + Physics)
-      sceneManager.Update(ctx);
+      {
+          PROFILE_SCOPE("LogicUpdate");
+          // UI更新 (Logic)
+          uiButtonSystem(ctx);
 
-      // オーディオ更新
-      audioSystem.Update(ctx);
+          // シーン更新 (Game Logic + Physics)
+          sceneManager.Update(ctx);
 
-      // 描画開始
-      // LOG_DEBUG("Main", "Frame Begin");
-      graphics.BeginFrame();
+          // オーディオ更新
+          audioSystem.Update(ctx);
+      }
 
-      // スカイボックス描画 (背景)
-      game::systems::SkyboxRenderSystem(ctx);
+      {
+          PROFILE_SCOPE("Render_Total");
+          
+          {
+              PROFILE_SCOPE("BeginFrame");
+              graphics.BeginFrame();
+          }
 
-      // 3Dシーン描画
-      game::systems::RenderSystem(ctx);
+          {
+              PROFILE_SCOPE("Render_3D");
+              game::systems::SkyboxRenderSystem(ctx);
+              game::systems::RenderSystem(ctx);
+          }
 
-      // UI描画
-      uiRenderSystem(ctx);
-      uiImageRenderSystem(ctx);
-      uiBarGaugeRenderSystem(ctx); // 追加
-      uiButtonRenderSystem(ctx);
+          {
+              PROFILE_SCOPE("Render_UI");
+              uiRenderSystem(ctx);
+              uiImageRenderSystem(ctx);
+              uiBarGaugeRenderSystem(ctx); // 追加
+              uiButtonRenderSystem(ctx);
+              sceneManager.Render(ctx);
+          }
 
-      // シーン固有描画 (ScreenFadeなど最前面)
-      sceneManager.Render(ctx);
-
-      // 描画終了
-      graphics.EndFrame();
-      // LOG_DEBUG("Main", "Frame End");
+          {
+              PROFILE_SCOPE("EndFrame");
+              graphics.EndFrame();
+          }
+      }
 
       // 入力状態更新（次フレームのためにフラグクリア）
       // Logic処理の後、描画の後に行う
       input.Update();
+
+      // パフォーマンスレポート出力 (1秒毎)
+      core::Profiler::Instance().ReportAndReset(dt);
     }
   }
 

@@ -806,8 +806,8 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
         float scale = p.baseScale * (0.15f + lifeRatio * 1.15f);
         t->scale = {scale * 0.35f, scale * 2.2f, scale * 0.35f};
       } else if (p.kind == ImpactParticleKind::Glint) {
-        float flare = std::sin(std::clamp(progress * 1.4f, 0.0f, 1.0f) * XM_PI);
-        float scale = p.baseScale * (0.4f + flare * 1.25f);
+        float pulse = std::sin(std::clamp(progress * 1.4f, 0.0f, 1.0f) * XM_PI);
+        float scale = p.baseScale * (0.4f + pulse * 1.25f);
         t->scale = {scale * 2.8f, scale * 0.18f, scale * 2.8f};
       } else if (p.kind == ImpactParticleKind::Confetti) {
         float scale = p.baseScale * std::pow(lifeRatio, 0.35f);
@@ -819,8 +819,8 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
         float scale = p.baseScale * (1.0f + progress * 2.35f);
         t->scale = {scale * 1.2f, scale * 0.5f, scale * 1.2f};
       } else if (p.kind == ImpactParticleKind::ShotRing) {
-        float flare = std::sin(std::clamp(progress * 1.35f, 0.0f, 1.0f) * XM_PI);
-        float scale = p.baseScale * (0.45f + progress * 3.2f + flare * 0.45f);
+        float pulse = std::sin(std::clamp(progress * 1.35f, 0.0f, 1.0f) * XM_PI);
+        float scale = p.baseScale * (0.45f + progress * 3.2f + pulse * 0.45f);
         t->scale = {scale * 2.2f, scale * 0.08f, scale * 2.2f};
       } else {
         float scale = p.baseScale * std::pow(lifeRatio, 0.5f);
@@ -846,8 +846,8 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
       } else if (p.kind == ImpactParticleKind::Sparkle) {
         mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.85f);
       } else if (p.kind == ImpactParticleKind::Glint) {
-        float flare = std::sin(std::clamp(progress * 1.4f, 0.0f, 1.0f) * XM_PI);
-        mr->color.w = p.baseColor.w * flare * std::pow(lifeRatio, 0.35f);
+        float pulse = std::sin(std::clamp(progress * 1.4f, 0.0f, 1.0f) * XM_PI);
+        mr->color.w = p.baseColor.w * pulse * std::pow(lifeRatio, 0.35f);
       } else if (p.kind == ImpactParticleKind::Confetti) {
         mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.7f);
       } else if (p.kind == ImpactParticleKind::ShotSpark) {
@@ -857,8 +857,8 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
         float hold = 1.0f - SmoothFade(progress, 0.5f, 1.0f);
         mr->color.w = p.baseColor.w * std::clamp(hold, 0.0f, 1.0f);
       } else if (p.kind == ImpactParticleKind::ShotRing) {
-        float flare = std::sin(std::clamp(progress * 1.35f, 0.0f, 1.0f) * XM_PI);
-        mr->color.w = p.baseColor.w * flare * std::pow(lifeRatio, 0.45f);
+        float pulse = std::sin(std::clamp(progress * 1.35f, 0.0f, 1.0f) * XM_PI);
+        mr->color.w = p.baseColor.w * pulse * std::pow(lifeRatio, 0.45f);
       } else {
         mr->color.w = lifeRatio; // アルファ減衰
       }

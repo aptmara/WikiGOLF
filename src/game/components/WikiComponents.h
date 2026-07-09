@@ -292,13 +292,30 @@ struct GolfHole {
   int hopsToTarget = -1;     ///< ターゲットまでのリンク数 (-1=未計算)
   uint32_t labelEntity = 0;  ///< ★ラベルUIエンティティ
   uint32_t pillarEntity = 0; ///< 光柱エンティティ
+  uint32_t flagPoleEntity = 0;  ///< プロシージャル旗のポールエンティティ
+  uint32_t flagClothEntity = 0; ///< プロシージャル旗布エンティティ
+  std::vector<uint32_t> flagEntities; ///< 旗を構成する全エンティティ
+  std::vector<uint32_t> particleEntities; ///< 旗周辺の常時粒子エンティティ
 };
 
 /**
  * @brief ホールの旗モデル用タグ
  */
 struct HoleFlag {
+  enum class Kind {
+    Cloth,    ///< なびく旗布
+    Particle, ///< 旗周辺の常時粒子
+    Accent    ///< 色だけ追従する旗装飾
+  };
+
   uint32_t holeEntity = 0; ///< 紐づくホールエンティティ
+  Kind kind = Kind::Cloth; ///< 旗関連エンティティ種別
+  float phase = 0.0f;      ///< なびき位相
+  float amplitude = 1.0f;  ///< なびき振幅
+  float colorFactor = 1.0f; ///< 評価色へ追従する際の明度倍率
+  float yawOffset = 0.0f;  ///< 旗ごとの初期向き補正
+  DirectX::XMFLOAT3 basePosition = {0, 0, 0}; ///< 旗布の基準位置
+  DirectX::XMFLOAT3 baseScale = {1, 1, 1};    ///< 旗布の基準スケール
 };
 
 /**

@@ -543,7 +543,7 @@ MeshHandle ResourceManager::CreateDynamicMesh(
   auto handle = m_meshPool.Add(std::move(mesh));
   m_meshCache[name] = handle;
 
-  LOG_INFO("Resource", "Created dynamic mesh: {} ({} vertices)", name,
+  LOG_DEBUG("Resource", "Created dynamic mesh: {} ({} vertices)", name,
            vertices.size());
   return handle;
 }
@@ -592,6 +592,13 @@ ShaderHandle ResourceManager::LoadShader(const std::string &name,
   m_shaderCache[name] = handle;
   LOG_INFO("Resource", "Loaded Shader: {} ({} ms)", name, ElapsedMs(startedAt));
   return handle;
+}
+
+ShaderHandle ResourceManager::FindShader(const std::string &name) const {
+  if (auto it = m_shaderCache.find(name); it != m_shaderCache.end()) {
+    return it->second;
+  }
+  return {};
 }
 
 void ResourceManager::Clear() {

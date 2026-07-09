@@ -1,15 +1,23 @@
 /**
  * @file BasicVS.hlsl
- * @brief 基本頂点シェーダー
+ * @brief 基本頂点シェーダー（インスタンシング対応）
  */
 
 cbuffer ConstantBuffer : register(b0) {
-    matrix World;
+    matrix World_unused;
     matrix View;
     matrix Projection;
-    float4 MaterialColor;
-    float4 MaterialFlags; // x: hasDiffuse, y: hasNormalMap
+    float4 MaterialColor_unused;
+    float4 MaterialFlags_unused;
 };
+
+struct InstanceData {
+    matrix World;
+    float4 Color;
+    float4 Flags;
+};
+
+StructuredBuffer<InstanceData> g_instances : register(t15);
 
 struct VS_INPUT {
     float3 position : POSITION;
@@ -18,6 +26,7 @@ struct VS_INPUT {
     float4 color : COLOR;
     float3 tangent : TANGENT;
     float3 bitangent : BINORMAL;
+    uint instanceID : SV_InstanceID;
 };
 
 struct VS_OUTPUT {
@@ -28,28 +37,31 @@ struct VS_OUTPUT {
     float3 tangent : TANGENT;
     float3 bitangent : BINORMAL;
     float2 worldXZ : TEXCOORD1;
+    float4 materialFlags : TEXCOORD4;
 };
 
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
     
-    float4 worldPos = mul(float4(input.position, 1.0f), World);
+    InstanceData inst = g_instances[input.instanceID];
+    
+    float4 worldPos = mul(float4(input.position, 1.0f), inst.World);
     float4 viewPos = mul(worldPos, View);
     output.position = mul(viewPos, Projection);
     
-    float3x3 world3x3 = (float3x3)World;
+    float3x3 world3x3 = (float3x3)inst.World;
     output.normal = mul(input.normal, world3x3);
     output.tangent = mul(input.tangent, world3x3);
     output.bitangent = mul(input.bitangent, world3x3);
     output.texCoord = input.texCoord;
-    // 頂点カラーが未設定(0)の場合でも材質色をそのまま反映するが、
-    // 有効な頂点カラーがあればそれを優先する
+    
     float4 vcolor = (input.color.a <= 0.0001f && all(input.color.rgb == 0)) ?
                     float4(1,1,1,1) : input.color;
-    output.color = vcolor * MaterialColor;
+    output.color = vcolor * inst.Color;
 
-    // ワールドXZを渡してPSでプロシージャル模様に使う
     output.worldXZ = worldPos.xz;
+    output.materialFlags = inst.Flags;
+    output.materialFlags.w = inst.Color.a; // パラメータ引き渡し用の元のマテリアルアルファ
     
     return output;
 }

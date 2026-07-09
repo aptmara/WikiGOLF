@@ -1,4 +1,5 @@
 #include "../../core/GameContext.h"
+#include "../../graphics/GraphicsDevice.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
@@ -70,7 +71,7 @@ void WikiPinballScene::OnEnter(core::GameContext &ctx) {
 
   auto &camComp = ctx.world.Add<Camera>(cam);
   camComp.fov = 45.0f;
-  camComp.aspectRatio = 1280.0f / 720.0f;
+  camComp.aspectRatio = ctx.graphics.GetAspectRatio();
   camComp.nearZ = 0.1f;
   camComp.farZ = 100.0f;
 

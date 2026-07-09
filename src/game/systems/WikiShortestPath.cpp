@@ -180,7 +180,7 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
   }
 
   for (const auto &chunk : chunkLogs) {
-    LOG_INFO("WikiShortestPath",
+    LOG_DEBUG("WikiShortestPath",
              "FetchLinks chunk field={} chunk={}/{} requested={} rows={} "
              "links={} bytes={} prepare={}ms stepParse={}ms elapsed={}ms",
              fieldName, chunk.chunkIndex, chunk.totalChunks,
@@ -189,7 +189,7 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
              chunk.elapsedMs);
   }
 
-  LOG_INFO("WikiShortestPath",
+  LOG_DEBUG("WikiShortestPath",
            "FetchLinks summary field={} requested={} rows={} links={} bytes={} "
            "chunks={} elapsed={}ms",
            fieldName, stats.requestedPages, stats.returnedRows,
@@ -244,16 +244,52 @@ bool WikiShortestPath::Initialize(const std::string &dbPath,
   }
   m_popularPageIds.clear();
 
-  int rc =
-      sqlite3_open_v2(dbPath.c_str(), &m_db, SQLITE_OPEN_READONLY, nullptr);
-  if (rc != SQLITE_OK) {
-    LOG_ERROR("WikiShortestPath", "DB open failed: {}", sqlite3_errmsg(m_db));
-    sqlite3_close(m_db);
-    m_db = nullptr;
+  std::string targetPath = dbPath;
+  int rc = sqlite3_open_v2(targetPath.c_str(), &m_db, SQLITE_OPEN_READONLY, nullptr);
+  
+  bool isValid = false;
+  if (rc == SQLITE_OK && m_db) {
+    sqlite3_stmt *checkStmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, "SELECT name FROM sqlite_master WHERE type='table' AND name='pages';", -1, &checkStmt, nullptr) == SQLITE_OK) {
+      if (sqlite3_step(checkStmt) == SQLITE_ROW) {
+        isValid = true;
+      }
+      sqlite3_finalize(checkStmt);
+    }
+  }
+
+  if (!isValid) {
+    if (m_db) {
+      sqlite3_close(m_db);
+      m_db = nullptr;
+    }
+    size_t pos = targetPath.find("jawiki_sdow.sqlite");
+    if (pos != std::string::npos) {
+      targetPath.replace(pos, 18, "jawiki_sdow-001.sqlite");
+      LOG_INFO("WikiShortestPath", "Attempting fallback database: {}", targetPath);
+      rc = sqlite3_open_v2(targetPath.c_str(), &m_db, SQLITE_OPEN_READONLY, nullptr);
+      if (rc == SQLITE_OK && m_db) {
+        sqlite3_stmt *checkStmt = nullptr;
+        if (sqlite3_prepare_v2(m_db, "SELECT name FROM sqlite_master WHERE type='table' AND name='pages';", -1, &checkStmt, nullptr) == SQLITE_OK) {
+          if (sqlite3_step(checkStmt) == SQLITE_ROW) {
+            isValid = true;
+          }
+          sqlite3_finalize(checkStmt);
+        }
+      }
+    }
+  }
+
+  if (!isValid || rc != SQLITE_OK || !m_db) {
+    LOG_ERROR("WikiShortestPath", "DB open failed or invalid schema for path: {}", targetPath);
+    if (m_db) {
+      sqlite3_close(m_db);
+      m_db = nullptr;
+    }
     return false;
   }
 
-  LOG_INFO("WikiShortestPath", "Database initialized: {}", dbPath);
+  LOG_INFO("WikiShortestPath", "Database initialized: {}", targetPath);
 
   if (!cachePopularPages) {
     return true;

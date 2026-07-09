@@ -67,8 +67,12 @@ void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
   // --- マウス移動 ---
   case WM_MOUSEMOVE:
-    m_mousePosition.x = GET_X_LPARAM(lParam);
-    m_mousePosition.y = GET_Y_LPARAM(lParam);
+    {
+      int rawX = GET_X_LPARAM(lParam);
+      int rawY = GET_Y_LPARAM(lParam);
+      m_mousePosition.x = static_cast<int>(rawX * (1280.0f / m_windowWidth));
+      m_mousePosition.y = static_cast<int>(rawY * (720.0f / m_windowHeight));
+    }
     break;
 
   // --- マウスボタン ---
@@ -171,8 +175,8 @@ void Input::SetMouseCursorLocked(bool locked) {
         SetCursorPos(centerX, centerY);
 
         // マウス位置も中央に更新（デルタ計算のため）
-        m_mousePosition.x = (clientRect.right - clientRect.left) / 2;
-        m_mousePosition.y = (clientRect.bottom - clientRect.top) / 2;
+        m_mousePosition.x = static_cast<int>(((clientRect.right - clientRect.left) / 2) * (1280.0f / m_windowWidth));
+        m_mousePosition.y = static_cast<int>(((clientRect.bottom - clientRect.top) / 2) * (720.0f / m_windowHeight));
       }
     }
     return;
@@ -204,8 +208,8 @@ void Input::SetMouseCursorLocked(bool locked) {
       SetCursorPos(centerX, centerY);
 
       // マウス位置も中央に初期化
-      m_mousePosition.x = (clientRect.right - clientRect.left) / 2;
-      m_mousePosition.y = (clientRect.bottom - clientRect.top) / 2;
+      m_mousePosition.x = static_cast<int>(((clientRect.right - clientRect.left) / 2) * (1280.0f / m_windowWidth));
+      m_mousePosition.y = static_cast<int>(((clientRect.bottom - clientRect.top) / 2) * (720.0f / m_windowHeight));
     }
 
     // カーソルを非表示

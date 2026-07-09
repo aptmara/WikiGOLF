@@ -11,6 +11,12 @@ public:
   /// @brief 初期化
   void Initialize();
 
+  /// @brief ウィンドウの解像度を設定
+  void SetResolution(int width, int height) {
+    m_windowWidth = width;
+    m_windowHeight = height;
+  }
+
   /// @brief フレームごとの更新処理（イベントフラグをリセット）
   void Update();
 
@@ -81,6 +87,9 @@ private:
   // カーソル状態管理
   bool m_cursorVisible = true;
   bool m_cursorLocked = false;
+
+  int m_windowWidth = 1280;
+  int m_windowHeight = 720;
 };
 
 } // namespace core

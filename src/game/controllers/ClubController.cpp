@@ -198,14 +198,14 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   m_clubUIEntities.clear();
   m_clubNameEntities.clear();
 
-  m_availableClubs.push_back({"ドライバー", 65.0f, 12.0f, "Assets/textures/Club_01_1W_Driver.png", 3.0f, "1W", "Driver"});
-  m_availableClubs.push_back({"3W", 58.0f, 14.0f, "Assets/textures/Club_02_3W_Wood.png", 2.5f, "3W", "Wood"});
-  m_availableClubs.push_back({"5W", 52.0f, 16.0f, "Assets/textures/Club_03_5W_Wood.png", 2.0f, "5W", "Wood"});
-  m_availableClubs.push_back({"5I", 46.0f, 20.0f, "Assets/textures/Club_04_5I_Iron.png", 1.5f, "5I", "Iron"});
-  m_availableClubs.push_back({"7I", 40.0f, 24.0f, "Assets/textures/Club_05_7I_Iron.png", 1.2f, "7I", "Iron"});
-  m_availableClubs.push_back({"9I", 34.0f, 28.0f, "Assets/textures/Club_06_9I_Iron.png", 1.0f, "9I", "Iron"});
-  m_availableClubs.push_back({"PW", 28.0f, 32.0f, "Assets/textures/Club_07_PW_PitchingWedge.png", 1.5f, "PW", "Wedge"});
-  m_availableClubs.push_back({"SW", 22.0f, 38.0f, "Assets/textures/Club_08_SW_SandWedge.png", 2.5f, "SW", "Wedge"});
+  m_availableClubs.push_back({"ドライバー", 130.0f, 12.0f, "Assets/textures/Club_01_1W_Driver.png", 3.0f, "1W", "Driver"});
+  m_availableClubs.push_back({"3W", 115.0f, 14.0f, "Assets/textures/Club_02_3W_Wood.png", 2.5f, "3W", "Wood"});
+  m_availableClubs.push_back({"5W", 100.0f, 16.0f, "Assets/textures/Club_03_5W_Wood.png", 2.0f, "5W", "Wood"});
+  m_availableClubs.push_back({"5I", 85.0f, 20.0f, "Assets/textures/Club_04_5I_Iron.png", 1.5f, "5I", "Iron"});
+  m_availableClubs.push_back({"7I", 70.0f, 24.0f, "Assets/textures/Club_05_7I_Iron.png", 1.2f, "7I", "Iron"});
+  m_availableClubs.push_back({"9I", 55.0f, 28.0f, "Assets/textures/Club_06_9I_Iron.png", 1.0f, "9I", "Iron"});
+  m_availableClubs.push_back({"PW", 40.0f, 32.0f, "Assets/textures/Club_07_PW_PitchingWedge.png", 1.5f, "PW", "Wedge"});
+  m_availableClubs.push_back({"SW", 25.0f, 38.0f, "Assets/textures/Club_08_SW_SandWedge.png", 2.5f, "SW", "Wedge"});
   m_availableClubs.push_back({"パター", 10.0f, 0.0f, "Assets/textures/Club_09_PT_Putter.png", 1.0f, "PT", "Putter"});
 
   m_currentClubIndex = 0;

@@ -79,8 +79,8 @@ public:
                   const TextStyle &style);
 
   /// @brief 画面サイズ取得
-  float GetWidth() const { return m_width; }
-  float GetHeight() const { return m_height; }
+  float GetWidth() const { return kVirtualWidth; }
+  float GetHeight() const { return kVirtualHeight; }
 
   /// @brief 有効かどうか
   bool IsValid() const { return m_d2dContext != nullptr; }
@@ -104,8 +104,12 @@ private:
   FontManager m_fontManager;
   BrushCache m_brushCache;
 
+  static constexpr float kVirtualWidth = 1280.0f;
+  static constexpr float kVirtualHeight = 720.0f;
+
   float m_width = 0.0f;
   float m_height = 0.0f;
+  int m_drawRefCount = 0;
 };
 
 } // namespace graphics

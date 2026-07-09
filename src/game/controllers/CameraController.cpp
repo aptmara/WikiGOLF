@@ -135,9 +135,12 @@ void CameraController::OnShotStart(core::GameContext &ctx, float power) {
 
 void CameraController::ProcessInput(core::GameContext &ctx,
                                      int mouseX, int mouseY) {
-  // 中ボタンドラッグで視点回転（非マップビュー・非ショット中）
+  // 中ボタンドラッグ、またはアイドル中の右ボタンドラッグで視点回転
+  auto *shotState = ctx.world.GetGlobal<components::ShotState>();
+  bool isIdle = (!shotState || shotState->phase == components::ShotState::Phase::Idle);
+  bool canRotate = ctx.input.GetMouseButton(2) || (ctx.input.GetMouseButton(1) && isIdle);
 
-  if (ctx.input.GetMouseButton(2)) {
+  if (canRotate) {
     int deltaX = mouseX - m_prevMouseX;
     int deltaY = mouseY - m_prevMouseY;
 
@@ -154,7 +157,7 @@ void CameraController::ProcessInput(core::GameContext &ctx,
 
   // ホイールでズーム
   float wheel = ctx.input.GetMouseScrollDelta();
-  if (wheel != 0.0f && !ctx.input.GetMouseButton(2)) {
+  if (wheel != 0.0f && !canRotate) {
     const float fieldScale = m_cfg.fieldScale;
     m_cameraDistance -= wheel * 2.0f * fieldScale;
     m_cameraDistance  = std::clamp(m_cameraDistance,

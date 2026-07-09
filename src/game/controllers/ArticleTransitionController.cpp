@@ -74,6 +74,12 @@ void ArticleTransitionController::Cleanup(core::GameContext& ctx) {
 }
 
 void ArticleTransitionController::StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap) {
+    auto* state = ctx.world.GetGlobal<components::GolfGameState>();
+    m_previousPage = state ? state->currentPage : "";
+    m_hasError = false;
+    m_errorTimer = 0.0f;
+    m_errorMsg = L"";
+
     m_targetBall = ball;
     m_targetCam = cam;
     m_targetSky = sky;
@@ -256,22 +262,58 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                     m_loadCompleted = true;
                     // 同期処理ではなく、インクリメンタル構築を開始する
                     auto asyncData = m_loadTask.get();
-                    LOG_INFO("Transition",
-                             "Async fetch complete page='{}' elapsed={}ms "
-                             "total={}ms links={} extractBytes={} categories={}",
-                             m_targetPage, ElapsedMs(m_fetchStartedAt),
-                             ElapsedMs(m_transitionStartedAt),
-                             asyncData.allLinks.size(),
-                             asyncData.articleText.size(),
-                             asyncData.pageCategories.size());
-                    if (m_pageLoader) {
-                        LOG_INFO("Transition", "Async fetch complete. Starting incremental build...");
-                        m_buildStartedAt = std::chrono::steady_clock::now();
-                        m_pageLoader->BeginBuildPage(ctx, std::move(asyncData), m_targetBall, m_targetCam, m_targetSky, m_minimap);
-                        m_phase = Phase::Building;
+                    bool hasError = !asyncData.hasData || asyncData.allLinks.empty() || asyncData.articleText.empty();
+
+                    if (hasError) {
+                        LOG_WARN("Transition", "Failed to transition to '{}': No links or load error. Returning to '{}'", m_targetPage, m_previousPage);
+                        m_hasError = true;
+                        m_errorTimer = 0.0f;
+                        m_errorMsg = L"「" + core::ToWString(m_targetPage) + L"」にはリンクがないか、読込エラーです。\n前のページ「" + core::ToWString(m_previousPage) + L"」に戻ります...";
+
+                        // 次にロードするターゲットを前のページに変更
+                        m_targetPage = m_previousPage;
+
+                        // 前のページのロードタスクを開始
+                        if (m_pageLoader) {
+                            auto pageLoaderPtr = m_pageLoader;
+                            std::string page = m_targetPage;
+                            m_fetchStartedAt = std::chrono::steady_clock::now();
+                            m_loadTask = std::async(std::launch::async, [pageLoaderPtr, page]() {
+                                return pageLoaderPtr->FetchPageDataAsync(page);
+                            });
+                            m_loadCompleted = false; // 再度ロード待ちにする
+                        }
+
+                        m_phase = Phase::ErrorWait;
                     } else {
-                        m_phase = Phase::FadeOut;
+                        LOG_INFO("Transition",
+                                 "Async fetch complete page='{}' elapsed={}ms "
+                                 "total={}ms links={} extractBytes={} categories={}",
+                                 m_targetPage, ElapsedMs(m_fetchStartedAt),
+                                 ElapsedMs(m_transitionStartedAt),
+                                 asyncData.allLinks.size(),
+                                 asyncData.articleText.size(),
+                                 asyncData.pageCategories.size());
+                        if (m_pageLoader) {
+                            LOG_INFO("Transition", "Async fetch complete. Starting incremental build...");
+                            m_buildStartedAt = std::chrono::steady_clock::now();
+                            m_pageLoader->BeginBuildPage(ctx, std::move(asyncData), m_targetBall, m_targetCam, m_targetSky, m_minimap);
+                            m_phase = Phase::Building;
+                        } else {
+                            m_phase = Phase::FadeOut;
+                        }
                     }
+                }
+            }
+            break;
+
+        case Phase::ErrorWait:
+            m_errorTimer += dt;
+            if (m_errorTimer >= 4.0f) { // 4秒間表示
+                m_phase = Phase::Loading;
+                m_hasError = false;
+                if (auto* text = ctx.world.Get<components::UIText>(m_textEntity)) {
+                    text->text = L"Traveling to " + core::ToWString(m_targetPage) + L"...";
                 }
             }
             break;
@@ -329,34 +371,51 @@ void ArticleTransitionController::UpdateAnimation(core::GameContext& ctx, float 
 }
 
 void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
-    float progress = 0.0f;
-    if (m_phase == Phase::FadeIn) {
-        progress = 0.0f;
-    } else if (m_phase == Phase::Loading) {
-        // 通信待ちは最大 20% とする
-        progress = std::clamp(m_stateTimer / 5.0f, 0.0f, 0.2f);
-    } else if (m_phase == Phase::Building) {
-        // 構築進捗は 20% ~ 100%
-        float buildProgress = m_pageLoader ? m_pageLoader->GetBuildProgress() : 0.0f;
-        progress = 0.2f + 0.8f * buildProgress;
+    if (m_hasError) {
+        if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
+            text->text = m_errorMsg;
+            auto style = m_progressStyle;
+            style.fontSize = 20.0f;
+            style.color = {1.0f, 0.35f, 0.35f, m_fadeAlpha}; // 赤色で強調
+            text->style = style;
+        }
+        if (auto* text = ctx.world.Get<components::UIText>(m_textEntity)) {
+            text->text = L"エラーが発生しました";
+            auto style = m_primaryStyle;
+            style.color = {1.0f, 0.35f, 0.35f, m_fadeAlpha};
+            text->style = style;
+        }
     } else {
-        progress = 1.0f;
-    }
+        float progress = 0.0f;
+        if (m_phase == Phase::FadeIn) {
+            progress = 0.0f;
+        } else if (m_phase == Phase::Loading) {
+            // 通信待ちは最大 20% とする
+            progress = std::clamp(m_stateTimer / 5.0f, 0.0f, 0.2f);
+        } else if (m_phase == Phase::Building) {
+            // 構築進捗は 20% ~ 100%
+            float buildProgress = m_pageLoader ? m_pageLoader->GetBuildProgress() : 0.0f;
+            progress = 0.2f + 0.8f * buildProgress;
+        } else {
+            progress = 1.0f;
+        }
 
-    m_displayProgress = std::max(m_displayProgress,
-                                 std::clamp(progress, 0.0f, 1.0f));
-    int percent = static_cast<int>(m_displayProgress * 100.0f);
+        m_displayProgress = std::max(m_displayProgress,
+                                     std::clamp(progress, 0.0f, 1.0f));
+        int percent = static_cast<int>(m_displayProgress * 100.0f);
 
-    if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
-        text->text = L"Loading... " + std::to_wstring(percent) + L"%";
-        auto style = m_progressStyle;
-        style.color.w = m_fadeAlpha;
-        text->style = style;
-    }
-    if (auto* text = ctx.world.Get<components::UIText>(m_textEntity)) {
-        auto style = m_primaryStyle;
-        style.color.w = m_fadeAlpha;
-        text->style = style;
+        if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
+            text->text = L"Loading... " + std::to_wstring(percent) + L"%";
+            auto style = m_progressStyle;
+            style.color.w = m_fadeAlpha;
+            text->style = style;
+        }
+        if (auto* text = ctx.world.Get<components::UIText>(m_textEntity)) {
+            text->text = L"Traveling to " + core::ToWString(m_targetPage) + L"...";
+            auto style = m_primaryStyle;
+            style.color.w = m_fadeAlpha;
+            text->style = style;
+        }
     }
 
     const std::array<std::wstring, 60> tips = {

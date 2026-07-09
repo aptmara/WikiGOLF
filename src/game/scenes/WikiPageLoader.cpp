@@ -10,6 +10,7 @@
 // GraphicsDevice の完全定義を先に確保する（GameContext.h が前方宣言のみのため）
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
+#include "../../core/Profiler.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
@@ -22,6 +23,7 @@
 #include "../components/Transform.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../utils/ProceduralFlag.h"
 #include "../controllers/MinimapController.h"
 #include "../systems/ParticleSystem.h"
 #include "../systems/WikiClient.h"
@@ -417,7 +419,7 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
 
             game::systems::WikiShortestPath pathSystem;
             const auto dbStartedAt = std::chrono::steady_clock::now();
-            if (!pathSystem.Initialize("Assets/data/jawiki_sdow.sqlite",
+            if (!pathSystem.Initialize("Assets/data/jawiki_sdow-001.sqlite",
                                        false)) {
                 progress->store(totalUnits->load(std::memory_order_relaxed),
                                 std::memory_order_relaxed);
@@ -593,7 +595,7 @@ size_t WikiPageLoader::ConsumePartialPathEvaluation(core::GameContext& ctx,
         ApplyPathEvaluationToWorld(ctx, partial);
         RefreshParFromPathEvaluation(ctx, false);
     }
-    LOG_INFO("WikiPageLoader",
+    LOG_DEBUG("WikiPageLoader",
              "Path evaluation partial consumed: loadId={} count={} updateWorld={}",
              m_buildLoadId, partial.size(), updateWorld ? "true" : "false");
     return partial.size();
@@ -655,7 +657,7 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
         }
     });
 
-    LOG_INFO("WikiPageLoader",
+    LOG_DEBUG("WikiPageLoader",
              "Path evaluation applied to world: loadId={} holes={}",
              m_buildLoadId, updatedHoles.size());
 }
@@ -1113,6 +1115,8 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
     }
     LogBuildStepTransition();
 
+    PROFILE_SCOPE(std::string("BuildStep_") + BuildStepName(m_buildStep));
+
     switch (m_buildStep) {
     case BuildStep::ClearOldHoles:
     {
@@ -1404,7 +1408,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
         const auto& gameplayLinks =
             m_buildGameplayLinks.empty() ? m_wikiTexture->links : m_buildGameplayLinks;
-        constexpr size_t kHoleEvaluationsPerFrame = 2;
+        constexpr size_t kHoleEvaluationsPerFrame = 1000;
         for (size_t i = 0; i < kHoleEvaluationsPerFrame &&
                            m_nextHoleIndex < gameplayLinks.size();
              ++i, ++m_nextHoleIndex) {
@@ -1644,22 +1648,23 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     h.isTarget   = isTargetHole;
     h.hopsToTarget = hopsToTarget;
 
-    // 旗モデルを生成
-    auto flagE  = ctx.world.CreateEntity();
-    auto& flagT = ctx.world.Add<Transform>(flagE);
-    flagT.position = {x, terrainH + 0.15f, z};
-    flagT.scale    = {1.2f, 1.2f, 1.2f};
+    // 目的地、または1〜2ホップの近いホールのみプロシージャル旗を生成する（ドローコール削減とFPS向上のため）
+    if (isTargetHole || (hopsToTarget >= 1 && hopsToTarget <= 2)) {
+        game::utils::ProceduralFlagOptions options;
+        options.holeEntity = static_cast<uint32_t>(e);
+        options.large = isTargetHole;
+        options.createParticles = (isTargetHole || hopsToTarget == 1);
+        options.animationWeight = isTargetHole ? 1.0f : 0.72f;
 
-    auto& flagMr = ctx.world.Add<MeshRenderer>(flagE);
-    flagMr.mesh   = ctx.resource.LoadMesh("Assets/models/flag.obj");
-    flagMr.shader = ctx.resource.LoadShader(
-        "Basic", L"Assets/shaders/BasicVS.hlsl",
-        L"Assets/shaders/BasicPS.hlsl");
+        auto flagColor = GetHoleColor(isTargetHole, hopsToTarget);
+        auto flagResult = game::utils::CreateProceduralFlag(
+            ctx, {x, terrainH + 0.05f, z}, flagColor, options);
 
-    flagMr.color = GetHoleColor(isTargetHole, hopsToTarget);
-
-    auto& flagTag = ctx.world.Add<HoleFlag>(flagE);
-    flagTag.holeEntity = e;
+        // 生成されたすべてのパーティクルエンティティをホールのリストに追加
+        for (auto flagEntity : flagResult.particleEntities) {
+            h.particleEntities.push_back(static_cast<uint32_t>(flagEntity));
+        }
+    }
 
     // ラベルを生成
     auto labelE  = ctx.world.CreateEntity();

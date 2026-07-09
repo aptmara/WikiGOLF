@@ -58,3 +58,5 @@ tools/
 
 # --- Explicitly Include ---
 !CMakeLists.txt
+!Assets/data/*.sqlite
+Assets/data/jawiki_sdow-001.sqlite

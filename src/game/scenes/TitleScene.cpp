@@ -1030,6 +1030,17 @@ void TitleScene::SetCourseSelectVisible(core::GameContext& ctx, bool visible) {
  * @brief コース選択UIの毎フレーム更新処理を行います。
  */
 void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
+  if (ctx.input.GetKeyDown(VK_ESCAPE)) {
+    if (ctx.audio) {
+      ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
+    }
+    SetCourseSelectVisible(ctx, false);
+    SetMainMenuVisible(ctx, true);
+    m_state = TitleState::MainMenu;
+    m_focusIndex = 0;
+    return;
+  }
+
   // フォーカス切り替え（マウスクリック）
   if (ctx.input.GetMouseButtonDown(0)) {
     auto mousePos = ctx.input.GetMousePosition();

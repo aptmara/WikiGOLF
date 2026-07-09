@@ -1,42 +1,38 @@
 #pragma once
 /**
  * @file PauseScene.h
- * @brief ポーズシーン（ゲーム上にオーバーレイ）
+ * @brief ゲームプレイ上に重ねるポーズシーンです。
  */
 
-#include "../../core/Scene.h"
 #include "../../core/GameContext.h"
-#include "../components/UIText.h"
-#include "../components/UIButton.h"
+#include "../../core/Scene.h"
+#include <functional>
 
 namespace game::scenes {
 
+/**
+ * @brief インゲーム用のポーズメニューです。
+ */
 class PauseScene : public core::Scene {
 public:
-    const char* GetName() const override { return "PauseScene"; }
+  using ActionCallback = std::function<void(core::GameContext&)>;
 
-    void OnEnter(core::GameContext& ctx) override {
-        // ポーズタイトル
-        auto titleEntity = CreateEntity(ctx.world);
-        auto& title = ctx.world.Add<components::UIText>(titleEntity);
-        title.text = L"一時停止";
-        title.x = 640.0f - 100.0f;
-        title.y = 200.0f;
-        title.style.fontSize = 48.0f;
-        title.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
-        title.style.hasShadow = true;
-        title.layer = 100;
+  PauseScene(bool canReturnToPreviousPage,
+             ActionCallback returnToPreviousPage);
 
-        // 再開ボタン
-        auto resumeEntity = CreateEntity(ctx.world);
-        ctx.world.Add<components::UIButton>(resumeEntity) = 
-            components::UIButton::Create(L"再開", "resume_game", 540.0f, 320.0f, 200.0f, 60.0f);
+  const char* GetName() const override { return "PauseScene"; }
 
-        // タイトルに戻るボタン
-        auto titleBtnEntity = CreateEntity(ctx.world);
-        ctx.world.Add<components::UIButton>(titleBtnEntity) = 
-            components::UIButton::Create(L"タイトルへ", "goto_title", 540.0f, 420.0f, 200.0f, 60.0f);
-    }
+  void OnEnter(core::GameContext& ctx) override;
+  void OnUpdate(core::GameContext& ctx) override;
+
+private:
+  /// @brief ボタン見出しを生成します。
+  void CreateButton(core::GameContext& ctx, const std::wstring& label,
+                    const std::string& action, float x, float y, float width,
+                    bool enabled);
+
+  bool m_canReturnToPreviousPage = false;
+  ActionCallback m_returnToPreviousPage;
 };
 
 } // namespace game::scenes

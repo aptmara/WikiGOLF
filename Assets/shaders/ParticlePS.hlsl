@@ -10,11 +10,11 @@ Texture2D diffuseTexture : register(t0);
 SamplerState texSampler : register(s0);
 
 cbuffer ConstantBuffer : register(b0) {
-    matrix World;
-    matrix View;
-    matrix Projection;
-    float4 MaterialColor;
-    float4 MaterialFlags; // x: hasDiffuse, z: isDust, w: denseCore/star
+    matrix World_unused;
+    matrix View_unused;
+    matrix Projection_unused;
+    float4 MaterialColor_unused;
+    float4 MaterialFlags_unused;
 };
 
 struct PS_INPUT {
@@ -22,6 +22,7 @@ struct PS_INPUT {
     float3 normal : NORMAL;
     float2 texCoord : TEXCOORD;
     float4 color : COLOR;
+    float4 materialFlags : TEXCOORD4;
 };
 
 float4 main(PS_INPUT input) : SV_TARGET {
@@ -40,15 +41,15 @@ float4 main(PS_INPUT input) : SV_TARGET {
 
     // バンカー砂煙などの「塊」感を出すための調整
     // RenderSystemにより、customFlags.x は MaterialFlags.z に渡される
-    if (MaterialFlags.z > 0.5) { 
+    if (input.materialFlags.z > 0.5) { 
         float core = pow(saturate(1.0 - d * 0.78), 1.35);
         float fleck = frac(sin(dot(input.texCoord * 38.0, float2(12.9898, 78.233))) * 43758.5453);
         float grain = lerp(0.82, 1.16, fleck);
         alpha = saturate(max(alpha * 1.55, core * 0.68) * grain);
-        if (MaterialFlags.w > 0.5) {
+        if (input.materialFlags.w > 0.5) {
             alpha = saturate(max(alpha, core * 0.82));
         }
-    } else if (MaterialFlags.w > 0.5) {
+    } else if (input.materialFlags.w > 0.5) {
         float2 p = abs(centerDist * 2.0);
         float diamond = saturate(1.0 - (p.x + p.y));
         float cross = saturate(1.0 - min(p.x, p.y) * 5.2) * saturate(1.0 - max(p.x, p.y) * 1.1);

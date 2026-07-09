@@ -463,7 +463,7 @@ void WikiGolfHUD::InitializeShotButton(core::GameContext& ctx) {
 void WikiGolfHUD::InitializeControlHint(core::GameContext& ctx) {
     auto e = ctx.world.CreateEntity();
     auto& t = ctx.world.Add<game::components::UIText>(e);
-    t.text  = L"[Q/E] クラブ切替\n[マウス] カメラ\n[M] マップ\n[Space/Click] ショット";
+    t.text  = L"[Q/E] クラブ切替\n[右/中ドラッグ] カメラ\n[M] マップ\n[Space/Click] ショット";
     t.x     = game::ui::kControlHintX;
     t.y     = game::ui::kControlHintY - 60.0f; // adjust Y to fit 4 lines
     t.width = game::ui::kControlHintW;

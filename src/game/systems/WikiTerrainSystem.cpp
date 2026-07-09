@@ -15,6 +15,8 @@
 #include "../components/WikiComponents.h"
 #include "TerrainGenerator.h"
 #include "WikiClient.h"
+#include "core/Profiler.h"
+#include <DirectXMath.h>
 #include "../../graphics/TangentGenerator.h"
 #include <algorithm> // 最大値計算用
 #include <random>    // 乱数生成用
@@ -191,6 +193,7 @@ void WikiTerrainSystem::BeginBuildField(
  */
 bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 {
+  PROFILE_SCOPE("StepBuildField");
   switch (m_buildPhase) {
 
   // 非同期待ち

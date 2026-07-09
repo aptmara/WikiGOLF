@@ -11,6 +11,7 @@
 #include <chrono>
 #include <d3d11.h>
 #include <wrl/client.h>
+#include <unordered_map>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -34,6 +35,9 @@ struct RenderState {
   ComPtr<ID3D11BlendState> alphaBlendState;
   ComPtr<ID3D11BlendState> multiplyBlendState;
   ComPtr<ID3D11BlendState> addBlendState;
+  ComPtr<ID3D11Buffer> instancedBuffer;
+  ComPtr<ID3D11ShaderResourceView> instancedSRV;
+  size_t instancedBufferSize = 0;
 };
 
 /**
@@ -124,6 +128,14 @@ void RenderSystem(core::GameContext &ctx) {
   XMMATRIX proj = XMMatrixIdentity();
   XMFLOAT4 camPos = {0, 0, 0, 1};
 
+  float speedFactor = 0.0f;
+  float windYaw = 0.0f;
+  auto *golfState = world.GetGlobal<components::GolfGameState>();
+  if (golfState) {
+    speedFactor = std::clamp(golfState->windSpeed / 12.0f, 0.0f, 1.0f);
+    windYaw = std::atan2(golfState->windDirection.y, golfState->windDirection.x);
+  }
+
   bool cameraFound = false;
   world.Query<components::Transform, components::Camera>().Each(
       [&](ecs::Entity, components::Transform &t, components::Camera &c) {
@@ -146,142 +158,311 @@ void RenderSystem(core::GameContext &ctx) {
   view = XMMatrixTranspose(view);
   proj = XMMatrixTranspose(proj);
 
-  // レンダリングループ
-  context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
-  context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
+  // インスタンス化対応シェーダーのハンドル取得
+  auto basicHandle = ctx.resource.FindShader("Basic");
+  auto particleHandle = ctx.resource.FindShader("Particle");
 
-  auto DrawRenderer = [&](ecs::Entity e, components::Transform &t,
-                          components::MeshRenderer &r) {
-    ++stats.candidates;
-    if (!r.isVisible) {
-      ++stats.invisibleSkipped;
-      return;
-    }
-    ++stats.visibleCandidates;
-    if (r.isTransparent) {
-      if (r.color.w <= 0.01f) {
-        ++stats.alphaSkipped;
-        return;
-      }
-      const float dx = t.position.x - camPos.x;
-      const float dy = t.position.y - camPos.y;
-      const float dz = t.position.z - camPos.z;
-      const float distSq = dx * dx + dy * dy + dz * dz;
-      const bool keepsReadableOverlay =
-          world.Has<components::TerrainObject>(e) &&
-          r.blendMode == components::BlendMode::Multiply;
-      if (distSq > 220.0f * 220.0f &&
-          !world.Has<components::HoleFlag>(e) && !keepsReadableOverlay) {
-        ++stats.transparentDistanceSkipped;
-        return;
-      }
-    }
+  // インスタンス構造体の定義
+  struct InstanceData {
+    XMFLOAT4X4 world;
+    XMFLOAT4 color;
+    XMFLOAT4 flags;
+  };
 
-    auto *mesh = ctx.resource.GetMesh(r.mesh);
-    auto *shader = ctx.resource.GetShader(r.shader);
+  // バケットキーの定義
+  struct RenderKey {
+    resources::MeshHandle mesh;
+    resources::ShaderHandle shader;
+    ID3D11ShaderResourceView *textureSRV = nullptr;
+    ID3D11ShaderResourceView *normalMapSRV = nullptr;
+    components::BlendMode blendMode;
+    bool isTransparent;
 
-    if (mesh && shader) {
-      ++stats.drawn;
-      if (r.isTransparent) {
-        ++stats.transparentDrawn;
-      } else {
-        ++stats.opaqueDrawn;
-      }
-      if (r.hasTexture && r.textureSRV) {
-        ++stats.texturedDrawn;
-      }
-      if (r.hasNormalMap && r.normalMapSRV) {
-        ++stats.normalMappedDrawn;
-      }
-      if (world.Has<components::TerrainObject>(e)) {
-        ++stats.terrainDrawn;
-      }
-      if (world.Has<components::HoleFlag>(e)) {
-        ++stats.holeFlagDrawn;
-      }
-
-      // ブレンドステート設定
-      if (r.blendMode == components::BlendMode::Alpha) {
-        context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
-                                 0xFFFFFFFF);
-      } else if (r.blendMode == components::BlendMode::Multiply) {
-        context->OMSetBlendState(state->multiplyBlendState.Get(), nullptr,
-                                 0xFFFFFFFF);
-      } else if (r.blendMode == components::BlendMode::Add) {
-        context->OMSetBlendState(state->addBlendState.Get(), nullptr,
-                                 0xFFFFFFFF);
-      } else if (r.isTransparent) {
-        context->OMSetBlendState(state->alphaBlendState.Get(), nullptr,
-                                 0xFFFFFFFF);
-      } else {
-        context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
-      }
-
-      shader->Bind(context);
-
-      // 定数バッファ更新
-      D3D11_MAPPED_SUBRESOURCE mapped;
-      if (SUCCEEDED(context->Map(state->cBuffer.Get(), 0,
-                                 D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-        VSConstants *constants = static_cast<VSConstants *>(mapped.pData);
-        constants->world = XMMatrixTranspose(t.GetWorldMatrix());
-        constants->view = view;
-        constants->projection = proj;
-        constants->materialColor = r.color;
-        const bool hasDiffuse = r.hasTexture && r.textureSRV;
-        const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
-        float diffFlag = 0.0f;
-        if (hasDiffuse) diffFlag = 1.0f;
-        float normFlag = 0.0f;
-        if (hasNormal) normFlag = 1.0f;
-        constants->materialFlags = {diffFlag,
-                                    normFlag, r.customFlags.x,
-                                    r.customFlags.y};
-        constants->lightDir = {0.5f, -1.0f, 0.5f, 0.0f};
-        constants->cameraPos = camPos;
-        context->Unmap(state->cBuffer.Get(), 0);
-      }
-
-      // テクスチャバインド
-      ID3D11ShaderResourceView *nullSRV = nullptr;
-      if (r.hasTexture && r.textureSRV) {
-        context->PSSetShaderResources(0, 1, r.textureSRV.GetAddressOf());
-      } else {
-        context->PSSetShaderResources(0, 1, &nullSRV);
-      }
-
-      // 法線マップのバインド
-      if (r.hasNormalMap && r.normalMapSRV) {
-        context->PSSetShaderResources(1, 1, r.normalMapSRV.GetAddressOf());
-      } else {
-        context->PSSetShaderResources(1, 1, &nullSRV);
-      }
-
-      context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
-      mesh->Bind(context);
-      mesh->Draw(context);
-    } else {
-      ++stats.missingResourceSkipped;
+    bool operator==(const RenderKey &o) const {
+      return mesh == o.mesh && shader == o.shader &&
+             textureSRV == o.textureSRV && normalMapSRV == o.normalMapSRV &&
+             blendMode == o.blendMode && isTransparent == o.isTransparent;
     }
   };
 
-  // 不透明パス
+  // ハッシュ関数の定義
+  struct RenderKeyHash {
+    size_t operator()(const RenderKey &k) const {
+      size_t h = 17;
+      h = h * 31 + k.mesh.index;
+      h = h * 31 + k.mesh.generation;
+      h = h * 31 + k.shader.index;
+      h = h * 31 + k.shader.generation;
+      h = h * 31 + reinterpret_cast<size_t>(k.textureSRV);
+      h = h * 31 + reinterpret_cast<size_t>(k.normalMapSRV);
+      h = h * 31 + static_cast<size_t>(k.blendMode);
+      h = h * 31 + (k.isTransparent ? 1 : 0);
+      return h;
+    }
+  };
+
+  struct RenderInstance {
+    ecs::Entity entity;
+    XMMATRIX worldMatrix;
+    XMFLOAT4 color;
+    XMFLOAT4 flags;
+  };
+
+  std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> opaqueBuckets;
+  std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> transparentBuckets;
+
+  // 構造化バッファの生成・リサイズ関数
+  auto checkInstancedBuffer = [&](size_t requiredCount) {
+    if (requiredCount <= state->instancedBufferSize && state->instancedBuffer) {
+      return;
+    }
+    size_t newSize = state->instancedBufferSize == 0 ? 8192 : state->instancedBufferSize * 2;
+    while (newSize < requiredCount) {
+      newSize *= 2;
+    }
+    
+    D3D11_BUFFER_DESC desc = {};
+    desc.ByteWidth = static_cast<UINT>(sizeof(InstanceData) * newSize);
+    desc.Usage = D3D11_USAGE_DYNAMIC;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    desc.StructureByteStride = sizeof(InstanceData);
+
+    ComPtr<ID3D11Buffer> newBuffer;
+    HRESULT hr = device->CreateBuffer(&desc, nullptr, &newBuffer);
+    if (FAILED(hr)) {
+      LOG_ERROR("RenderSystem", "Failed to create structured buffer (size={})", newSize);
+      return;
+    }
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+    srvDesc.Buffer.FirstElement = 0;
+    srvDesc.Buffer.NumElements = static_cast<UINT>(newSize);
+
+    ComPtr<ID3D11ShaderResourceView> newSRV;
+    hr = device->CreateShaderResourceView(newBuffer.Get(), &srvDesc, &newSRV);
+    if (FAILED(hr)) {
+      LOG_ERROR("RenderSystem", "Failed to create SRV for structured buffer");
+      return;
+    }
+
+    state->instancedBuffer = newBuffer;
+    state->instancedSRV = newSRV;
+    state->instancedBufferSize = newSize;
+  };
+
+  // 全オブジェクトをクエリしてバケットに分類
   world.Query<components::Transform, components::MeshRenderer>().Each(
-      [&](ecs::Entity e, components::Transform &t,
-          components::MeshRenderer &r) {
-        if (!r.isTransparent) {
-          DrawRenderer(e, t, r);
+      [&](ecs::Entity e, components::Transform &t, components::MeshRenderer &r) {
+        ++stats.candidates;
+        if (!r.isVisible) {
+          ++stats.invisibleSkipped;
+          return;
+        }
+        ++stats.visibleCandidates;
+
+        if (r.isTransparent) {
+          if (r.color.w <= 0.01f) {
+            ++stats.alphaSkipped;
+            return;
+          }
+          const float dx = t.position.x - camPos.x;
+          const float dy = t.position.y - camPos.y;
+          const float dz = t.position.z - camPos.z;
+          const float distSq = dx * dx + dy * dy + dz * dz;
+          const bool keepsReadableOverlay =
+              world.Has<components::TerrainObject>(e) &&
+              r.blendMode == components::BlendMode::Multiply;
+          if (distSq > 220.0f * 220.0f &&
+              !world.Has<components::HoleFlag>(e) && !keepsReadableOverlay) {
+            ++stats.transparentDistanceSkipped;
+            return;
+          }
+        }
+
+        RenderKey key;
+        key.mesh = r.mesh;
+        key.shader = r.shader;
+        key.textureSRV = r.textureSRV.Get();
+        key.normalMapSRV = r.normalMapSRV.Get();
+        key.blendMode = r.blendMode;
+        key.isTransparent = r.isTransparent;
+
+        RenderInstance inst;
+        inst.entity = e;
+        inst.worldMatrix = t.GetWorldMatrix();
+        inst.color = r.color;
+
+        const bool hasDiffuse = r.hasTexture && r.textureSRV;
+        const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
+        float diffFlag = hasDiffuse ? 1.0f : 0.0f;
+        float normFlag = hasNormal ? 1.0f : 0.0f;
+
+        if (world.Has<components::HoleFlag>(e)) {
+          const auto *flag = world.Get<components::HoleFlag>(e);
+          inst.flags = XMFLOAT4(
+              flag->phase,
+              flag->amplitude,
+              speedFactor,
+              windYaw + flag->yawOffset
+          );
+        } else {
+          inst.flags = XMFLOAT4(
+              diffFlag,
+              normFlag,
+              r.customFlags.x,
+              r.customFlags.y
+          );
+        }
+
+        if (r.isTransparent) {
+          transparentBuckets[key].push_back(inst);
+        } else {
+          opaqueBuckets[key].push_back(inst);
         }
       });
 
-  // 半透明パス
-  world.Query<components::Transform, components::MeshRenderer>().Each(
-      [&](ecs::Entity e, components::Transform &t,
-          components::MeshRenderer &r) {
-        if (r.isTransparent) {
-          DrawRenderer(e, t, r);
+  // バケットごとの描画関数
+  auto DrawBucket = [&](const RenderKey &key, const std::vector<RenderInstance> &instances) {
+    if (instances.empty()) return;
+
+    auto *mesh = ctx.resource.GetMesh(key.mesh);
+    auto *shader = ctx.resource.GetShader(key.shader);
+
+    if (!mesh || !shader) {
+      stats.missingResourceSkipped += instances.size();
+      return;
+    }
+
+    // ブレンドステート設定
+    if (key.blendMode == components::BlendMode::Alpha) {
+      context->OMSetBlendState(state->alphaBlendState.Get(), nullptr, 0xFFFFFFFF);
+    } else if (key.blendMode == components::BlendMode::Multiply) {
+      context->OMSetBlendState(state->multiplyBlendState.Get(), nullptr, 0xFFFFFFFF);
+    } else if (key.blendMode == components::BlendMode::Add) {
+      context->OMSetBlendState(state->addBlendState.Get(), nullptr, 0xFFFFFFFF);
+    } else if (key.isTransparent) {
+      context->OMSetBlendState(state->alphaBlendState.Get(), nullptr, 0xFFFFFFFF);
+    } else {
+      context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+    }
+
+    shader->Bind(context);
+
+    // テクスチャバインド
+    ID3D11ShaderResourceView *nullSRV = nullptr;
+    if (key.textureSRV) {
+      context->PSSetShaderResources(0, 1, &key.textureSRV);
+    } else {
+      context->PSSetShaderResources(0, 1, &nullSRV);
+    }
+
+    // 法線マップのバインド
+    if (key.normalMapSRV) {
+      context->PSSetShaderResources(1, 1, &key.normalMapSRV);
+    } else {
+      context->PSSetShaderResources(1, 1, &nullSRV);
+    }
+
+    context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
+    mesh->Bind(context);
+
+    const bool supportsInstancing = (key.shader == basicHandle || key.shader == particleHandle);
+
+    if (supportsInstancing) {
+      checkInstancedBuffer(instances.size());
+
+      D3D11_MAPPED_SUBRESOURCE mappedInst;
+      if (SUCCEEDED(context->Map(state->instancedBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedInst))) {
+        InstanceData *dest = static_cast<InstanceData *>(mappedInst.pData);
+        for (size_t i = 0; i < instances.size(); ++i) {
+          XMStoreFloat4x4(&dest[i].world, XMMatrixTranspose(instances[i].worldMatrix));
+          dest[i].color = instances[i].color;
+          dest[i].flags = instances[i].flags;
         }
-      });
+        context->Unmap(state->instancedBuffer.Get(), 0);
+      }
+
+      // 定数バッファのバインド（カメラView/Proj情報のみ）
+      D3D11_MAPPED_SUBRESOURCE mappedCB;
+      if (SUCCEEDED(context->Map(state->cBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedCB))) {
+        VSConstants *constants = static_cast<VSConstants *>(mappedCB.pData);
+        constants->view = view;
+        constants->projection = proj;
+        constants->lightDir = XMFLOAT4(0.5f, -1.0f, 0.5f, ctx.time);
+        constants->cameraPos = camPos;
+        constants->world = XMMatrixIdentity();
+        constants->materialColor = XMFLOAT4(1, 1, 1, 1);
+        constants->materialFlags = XMFLOAT4(0, 0, 0, 0);
+        context->Unmap(state->cBuffer.Get(), 0);
+      }
+      context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
+      context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
+
+      // 構造化バッファをVSのt15スロットにバインド
+      context->VSSetShaderResources(15, 1, state->instancedSRV.GetAddressOf());
+
+      // インスタンス化描画！
+      context->DrawIndexedInstanced(mesh->GetIndexCount(), static_cast<UINT>(instances.size()), 0, 0, 0);
+
+      // 解除
+      ID3D11ShaderResourceView *nullVSs[1] = {nullptr};
+      context->VSSetShaderResources(15, 1, nullVSs);
+
+      // 統計情報更新
+      stats.drawn += instances.size();
+      for (const auto &inst : instances) {
+        if (key.isTransparent) ++stats.transparentDrawn;
+        else ++stats.opaqueDrawn;
+        if (key.textureSRV) ++stats.texturedDrawn;
+        if (key.normalMapSRV) ++stats.normalMappedDrawn;
+        if (world.Has<components::TerrainObject>(inst.entity)) ++stats.terrainDrawn;
+        if (world.Has<components::HoleFlag>(inst.entity)) ++stats.holeFlagDrawn;
+      }
+    } else {
+      // インスタンス非対応：従来の通常描画
+      context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
+      context->PSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
+
+      for (const auto &inst : instances) {
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        if (SUCCEEDED(context->Map(state->cBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+          VSConstants *constants = static_cast<VSConstants *>(mapped.pData);
+          constants->world = XMMatrixTranspose(inst.worldMatrix);
+          constants->view = view;
+          constants->projection = proj;
+          constants->materialColor = inst.color;
+          constants->materialFlags = inst.flags;
+          constants->lightDir = XMFLOAT4(0.5f, -1.0f, 0.5f, ctx.time);
+          constants->cameraPos = camPos;
+          context->Unmap(state->cBuffer.Get(), 0);
+        }
+
+        mesh->Draw(context);
+
+        ++stats.drawn;
+        if (key.isTransparent) ++stats.transparentDrawn;
+        else ++stats.opaqueDrawn;
+        if (key.textureSRV) ++stats.texturedDrawn;
+        if (key.normalMapSRV) ++stats.normalMappedDrawn;
+        if (world.Has<components::TerrainObject>(inst.entity)) ++stats.terrainDrawn;
+        if (world.Has<components::HoleFlag>(inst.entity)) ++stats.holeFlagDrawn;
+      }
+    }
+  };
+
+  // 不透明描画実行
+  for (const auto &pair : opaqueBuckets) {
+    DrawBucket(pair.first, pair.second);
+  }
+
+  // 半透明描画実行
+  for (const auto &pair : transparentBuckets) {
+    DrawBucket(pair.first, pair.second);
+  }
 
   context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
 

@@ -31,6 +31,12 @@ public:
     m_pendingScene = std::move(scene);
   }
 
+  /// @brief シーンスタック全体を破棄して新しいシーンへ遷移
+  void ResetToScene(std::unique_ptr<Scene> scene) {
+    m_pendingOp = Op::Reset;
+    m_pendingScene = std::move(scene);
+  }
+
   /// @brief 現在のシーンを取得
   Scene *Current() {
     return m_sceneStack.empty() ? nullptr : m_sceneStack.back().get();
@@ -61,7 +67,7 @@ public:
   bool IsEmpty() const { return m_sceneStack.empty(); }
 
 private:
-  enum class Op { None, Push, Pop, Change };
+  enum class Op { None, Push, Pop, Change, Reset };
 
   /// @brief シーン処理の経過時間をミリ秒で返します。 山内陽
   static long long ElapsedMs(
@@ -111,6 +117,27 @@ private:
           m_sceneStack.pop_back();
         }
         LOG_INFO("SceneManager", "Change to: {}", m_pendingScene->GetName());
+        const auto enterStartedAt = std::chrono::steady_clock::now();
+        m_pendingScene->OnEnter(ctx);
+        LOG_INFO("SceneManager", "OnEnter finished: {} ({} ms)",
+                 m_pendingScene->GetName(), ElapsedMs(enterStartedAt));
+        m_sceneStack.push_back(std::move(m_pendingScene));
+      }
+      break;
+
+    case Op::Reset:
+      if (m_pendingScene) {
+        while (!m_sceneStack.empty()) {
+          LOG_INFO("SceneManager", "Reset exit: {}",
+                   m_sceneStack.back()->GetName());
+          const std::string sceneName = m_sceneStack.back()->GetName();
+          const auto exitStartedAt = std::chrono::steady_clock::now();
+          m_sceneStack.back()->OnExit(ctx);
+          LOG_INFO("SceneManager", "OnExit finished: {} ({} ms)", sceneName,
+                   ElapsedMs(exitStartedAt));
+          m_sceneStack.pop_back();
+        }
+        LOG_INFO("SceneManager", "Reset to: {}", m_pendingScene->GetName());
         const auto enterStartedAt = std::chrono::steady_clock::now();
         m_pendingScene->OnEnter(ctx);
         LOG_INFO("SceneManager", "OnEnter finished: {} ({} ms)",

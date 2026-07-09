@@ -132,7 +132,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     const auto dbStartedAt = std::chrono::steady_clock::now();
     data->pathSystem = std::make_unique<game::systems::WikiShortestPath>();
     bool dbLoaded =
-        data->pathSystem->Initialize("Assets/data/jawiki_sdow.sqlite");
+        data->pathSystem->Initialize("Assets/data/jawiki_sdow-001.sqlite");
     setProgress(0.3f);
     LOG_INFO("LoadingScene", "AsyncLoad dbInitialize loaded={} elapsed={}ms",
              dbLoaded ? "true" : "false", ElapsedMs(dbStartedAt));
@@ -177,14 +177,16 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     logStage("start-page-ready", 0.45f);
 
     // 人気記事からターゲット選定
+    constexpr int kTargetMinIncomingLinks = 10000;
+    constexpr int kFallbackTargetMinIncomingLinks = 5000;
     if (data->targetPage.empty() && dbLoaded && data->pathSystem->IsAvailable()) {
       const auto targetStartedAt = std::chrono::steady_clock::now();
-      auto result = data->pathSystem->FetchPopularPageTitle(100);
+      auto result = data->pathSystem->FetchPopularPageTitle(kTargetMinIncomingLinks);
       data->targetPage = result.first;
       data->targetPageId = result.second;
       setProgress(0.7f);
       if (data->targetPage.empty()) {
-        result = data->pathSystem->FetchPopularPageTitle(50);
+        result = data->pathSystem->FetchPopularPageTitle(kFallbackTargetMinIncomingLinks);
         data->targetPage = result.first;
         data->targetPageId = result.second;
       }

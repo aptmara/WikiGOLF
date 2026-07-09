@@ -44,6 +44,9 @@ public:
   ShaderHandle LoadShader(const std::string &name, const std::wstring &vsPath,
                           const std::wstring &psPath);
 
+  /// @brief キャッシュされているシェーダーを取得（存在しない場合は無効ハンドルを返す）
+  ShaderHandle FindShader(const std::string &name) const;
+
   /// @brief シェーダーを取得
   graphics::Shader *GetShader(ShaderHandle handle);
 

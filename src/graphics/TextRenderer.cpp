@@ -158,12 +158,26 @@ void TextRenderer::Shutdown() {
 
 void TextRenderer::BeginDraw() {
   if (m_d2dContext) {
-    m_d2dContext->BeginDraw();
+    if (m_drawRefCount == 0) {
+      m_d2dContext->BeginDraw();
+      D2D1::Matrix3x2F scaleMatrix = D2D1::Matrix3x2F::Scale(
+          m_width / kVirtualWidth, m_height / kVirtualHeight);
+      m_d2dContext->SetTransform(scaleMatrix);
+    }
+    m_drawRefCount++;
   }
 }
 
 void TextRenderer::EndDraw() {
   if (m_d2dContext) {
+    m_drawRefCount--;
+    if (m_drawRefCount > 0) {
+      return;
+    }
+    if (m_drawRefCount < 0) {
+      m_drawRefCount = 0;
+    }
+
     // LOG_DEBUG("TextRenderer", "EndDraw: Flashing D2D...");
     HRESULT hr = m_d2dContext->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET) {
@@ -302,12 +316,14 @@ void TextRenderer::RenderImage(const std::string &filePath,
   }
 
   // 回転変換
+  D2D1::Matrix3x2F scaleMatrix = D2D1::Matrix3x2F::Scale(
+      m_width / kVirtualWidth, m_height / kVirtualHeight);
   if (rotation != 0.0f) {
     float centerX = destRect.left + (destRect.right - destRect.left) * 0.5f;
     float centerY = destRect.top + (destRect.bottom - destRect.top) * 0.5f;
     D2D1::Matrix3x2F rotMatrix =
         D2D1::Matrix3x2F::Rotation(rotation, D2D1::Point2F(centerX, centerY));
-    m_d2dContext->SetTransform(rotMatrix);
+    m_d2dContext->SetTransform(rotMatrix * scaleMatrix);
   }
 
   // 描画
@@ -316,7 +332,7 @@ void TextRenderer::RenderImage(const std::string &filePath,
 
   // 変換リセット
   if (rotation != 0.0f) {
-    m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
+    m_d2dContext->SetTransform(scaleMatrix);
   }
 }
 
@@ -348,12 +364,14 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
   }
 
   // 回転変換
+  D2D1::Matrix3x2F scaleMatrix = D2D1::Matrix3x2F::Scale(
+      m_width / kVirtualWidth, m_height / kVirtualHeight);
   if (rotation != 0.0f) {
     float centerX = destRect.left + (destRect.right - destRect.left) * 0.5f;
     float centerY = destRect.top + (destRect.bottom - destRect.top) * 0.5f;
     D2D1::Matrix3x2F rotMatrix =
         D2D1::Matrix3x2F::Rotation(rotation, D2D1::Point2F(centerX, centerY));
-    m_d2dContext->SetTransform(rotMatrix);
+    m_d2dContext->SetTransform(rotMatrix * scaleMatrix);
   }
 
   // 描画
@@ -362,7 +380,7 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
 
   // 変換リセット
   if (rotation != 0.0f) {
-    m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
+    m_d2dContext->SetTransform(scaleMatrix);
   }
 }
 

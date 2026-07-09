@@ -24,6 +24,9 @@
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
 #include "../utils/JudgeFeedback.h"
+#include "../utils/PageHistoryUtils.h"
+#include "../utils/ProceduralFlag.h"
+#include "PauseScene.h"
 #include "CupInUtils.h"
 #include "ResultScene.h"
 #include "TitleScene.h"
@@ -55,7 +58,7 @@ void PreloadGameplayResources(core::GameContext& ctx) {
   ctx.resource.LoadMesh("builtin/cube");
   ctx.resource.LoadMesh("builtin/sphere");
   ctx.resource.LoadMesh("builtin/cylinder");
-  ctx.resource.LoadMesh("Assets/models/flag.obj");
+  ctx.resource.LoadMesh("builtin/quad");
   ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                           L"Assets/shaders/BasicPS.hlsl");
   ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
@@ -149,7 +152,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   auto &camComp = ctx.world.Add<Camera>(m_cameraEntity);
   camComp.fov = XMConvertToRadians(60.0f);
-  camComp.aspectRatio = 1280.0f / 720.0f;
+  camComp.aspectRatio = ctx.graphics.GetAspectRatio();
   camComp.nearZ = 0.1f;
   camComp.farZ = 750.0f;
 
@@ -231,6 +234,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   std::string targetPage;
   int targetId = -1;
   bool isUserOverride = false;
+  constexpr int kTargetMinIncomingLinks = 10000;
+  constexpr int kFallbackTargetMinIncomingLinks = 5000;
 
   game::components::WikiGlobalData *preloadedData =
       ctx.world.GetGlobal<game::components::WikiGlobalData>();
@@ -271,19 +276,21 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
     if (!m_shortestPath) {
       m_shortestPath = std::make_unique<game::systems::WikiShortestPath>();
-      if (!m_shortestPath->Initialize("Assets/data/jawiki_sdow.sqlite")) {
+      if (!m_shortestPath->Initialize("Assets/data/jawiki_sdow-001.sqlite")) {
         LOG_WARN("WikiGolf", "SDOW DB not found for target selection");
         m_shortestPath.reset();
       }
     }
 
     if (m_shortestPath && m_shortestPath->IsAvailable()) {
-      auto result = m_shortestPath->FetchPopularPageTitle(100);
+      auto result =
+          m_shortestPath->FetchPopularPageTitle(kTargetMinIncomingLinks);
       targetPage = result.first;
       targetId = result.second;
 
       if (targetPage.empty()) {
-        result = m_shortestPath->FetchPopularPageTitle(50);
+        result = m_shortestPath->FetchPopularPageTitle(
+            kFallbackTargetMinIncomingLinks);
         targetPage = result.first;
         targetId = result.second;
       }
@@ -345,9 +352,11 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
                "{}/{})",
                pathResult.degrees, attempt + 1, maxRetry);
 
-      auto newTarget = m_shortestPath->FetchPopularPageTitle(100);
+      auto newTarget =
+          m_shortestPath->FetchPopularPageTitle(kTargetMinIncomingLinks);
       if (newTarget.first.empty()) {
-        newTarget = m_shortestPath->FetchPopularPageTitle(50);
+        newTarget = m_shortestPath->FetchPopularPageTitle(
+            kFallbackTargetMinIncomingLinks);
       }
 
       if (newTarget.first.empty()) {
@@ -458,6 +467,15 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 }
 
 /**
+ * @brief プロシージャル旗のなびきと旗粒子を更新します。
+ * @author 山内陽
+ */
+void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
+                                                float dt) {
+  m_flagEffectTimer += dt;
+}
+
+/**
  * @brief フィールド（床・壁）を作成します。
  */
 void WikiGolfScene::CreateField(core::GameContext &ctx) {
@@ -491,25 +509,26 @@ void WikiGolfScene::CreateTutorialFlagSamples(core::GameContext &ctx) {
       {{37.5f, 0.0f, 30.0f}, {0.25f, 0.65f, 1.0f, 1.0f}},  // 未解析
   };
 
-  m_tutorialFlagSampleEntities.reserve(sizeof(samples) / sizeof(samples[0]));
-  for (const auto &sample : samples) {
+  constexpr size_t sampleCount = sizeof(samples) / sizeof(samples[0]);
+  m_tutorialFlagSampleEntities.reserve(sampleCount * 10);
+  for (size_t i = 0; i < sampleCount; ++i) {
+    const auto &sample = samples[i];
     float terrainH = 0.0f;
     if (m_terrainSystem) {
       terrainH = m_terrainSystem->GetHeight(sample.position.x, sample.position.z);
     }
 
-    auto entity = CreateEntity(ctx.world);
-    auto &tr = ctx.world.Add<Transform>(entity);
-    tr.position = {sample.position.x, terrainH + 0.15f, sample.position.z};
-    tr.scale = {1.35f, 1.35f, 1.35f};
-
-    auto &mr = ctx.world.Add<MeshRenderer>(entity);
-    mr.mesh = ctx.resource.LoadMesh("Assets/models/flag.obj");
-    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                        L"Assets/shaders/BasicPS.hlsl");
-    mr.color = sample.color;
-
-    m_tutorialFlagSampleEntities.push_back(entity);
+    game::utils::ProceduralFlagOptions options;
+    options.holeEntity = UINT32_MAX;
+    options.large = (i == 0);
+    options.createParticles = (i <= 1);
+    options.animationWeight = (i == 0) ? 1.0f : 0.72f;
+    auto result = game::utils::CreateProceduralFlag(
+        ctx, {sample.position.x, terrainH + 0.05f, sample.position.z},
+        sample.color, options);
+    for (auto entity : result.allEntities) {
+      m_tutorialFlagSampleEntities.push_back(entity);
+    }
   }
 }
 
@@ -624,6 +643,50 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   if (ctx.audio) {
     ctx.audio->PlaySE(ctx, "se_warp.mp3");
   }
+}
+
+bool WikiGolfScene::CanReturnToPreviousPage(core::GameContext &ctx) const {
+  if (m_isTutorial || m_phase != ScenePhase::Playing) {
+    return false;
+  }
+
+  const auto* state = ctx.world.GetGlobal<GolfGameState>();
+  const auto* shot = ctx.world.GetGlobal<ShotState>();
+  return state && shot &&
+         shot->phase == ShotState::Phase::Idle &&
+         state->pathHistory.size() >= 2;
+}
+
+bool WikiGolfScene::ReturnToPreviousPage(core::GameContext &ctx) {
+  if (!CanReturnToPreviousPage(ctx)) {
+    return false;
+  }
+
+  auto* state = ctx.world.GetGlobal<GolfGameState>();
+  if (!state) {
+    return false;
+  }
+
+  const auto previousPage =
+      game::utils::ConsumePreviousPage(state->pathHistory);
+  if (!previousPage.has_value()) {
+    return false;
+  }
+
+  LOG_INFO("WikiGolf", "Returning to previous page: {}",
+           previousPage.value());
+  TransitionToPage(ctx, previousPage.value());
+  return true;
+}
+
+void WikiGolfScene::OpenPauseScene(core::GameContext &ctx) {
+  if (!ctx.sceneManager || m_phase != ScenePhase::Playing) {
+    return;
+  }
+
+  ctx.sceneManager->PushScene(std::make_unique<PauseScene>(
+      CanReturnToPreviousPage(ctx),
+      [this](core::GameContext& innerCtx) { this->ReturnToPreviousPage(innerCtx); }));
 }
 
 /**
@@ -769,6 +832,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // マップビュー更新
   bool isMapView = false;
+  bool wasMapView = m_minimapController && m_minimapController->IsMapView();
   if (m_minimapController && !tutorialInputLocked) {
       float fieldW = m_pageLoader ? m_pageLoader->GetFieldWidth() : 80.0f;
       float fieldD = m_pageLoader ? m_pageLoader->GetFieldDepth() : 120.0f;
@@ -785,6 +849,19 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           m_minimapController->UpdateMapCamera(ctx, fieldW, fieldD);
       }
       isMapView = m_minimapController->IsMapView();
+  }
+
+  const bool escapeHandledByMapView =
+      wasMapView && ctx.input.GetKeyDown(VK_ESCAPE);
+  if (!tutorialInputLocked && !escapeHandledByMapView &&
+      ctx.input.GetKeyDown(VK_ESCAPE)) {
+    OpenPauseScene(ctx);
+    return;
+  }
+
+  if (!tutorialInputLocked && !isMapView && ctx.input.GetKeyDown(VK_BACK) &&
+      ReturnToPreviousPage(ctx)) {
+    return;
   }
 
   if (m_prevTutorialInputLocked && !tutorialInputLocked && m_cameraController) {
@@ -1176,6 +1253,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   if (m_gameJuice) {
       m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
+  UpdateProceduralFlagEffects(ctx, dt);
 
   // 地形判定UIの更新
   if (m_terrainDisplayTimer > 0.0f) {

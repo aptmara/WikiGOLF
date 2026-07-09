@@ -8,11 +8,11 @@ Texture2D normalTexture : register(t1);
 SamplerState texSampler : register(s0);
 
 cbuffer ConstantBuffer : register(b0) {
-    matrix World;
-    matrix View;
-    matrix Projection;
-    float4 MaterialColor;
-    float4 MaterialFlags; // x: hasDiffuse, y: hasNormalMap
+    matrix World_unused;
+    matrix View_unused;
+    matrix Projection_unused;
+    float4 MaterialColor_unused;
+    float4 MaterialFlags_unused;
 };
 
 // シンプルな擬似ノイズ
@@ -53,22 +53,23 @@ struct PS_INPUT {
     float3 tangent : TANGENT;
     float3 bitangent : BINORMAL;
     float2 worldXZ : TEXCOORD1;
+    float4 materialFlags : TEXCOORD4;
 };
 
 float4 main(PS_INPUT input) : SV_TARGET {
-    float hasDiffuse = MaterialFlags.x;
-    float hasNormalMap = MaterialFlags.y;
+    float hasDiffuse = input.materialFlags.x;
+    float hasNormalMap = input.materialFlags.y;
 
     // テクスチャサンプリング
     // マテリアルカラーを乗算
-    float4 baseColor = input.color * MaterialColor;
+    float4 baseColor = input.color;
 
     // UVスケール (MaterialFlags.z = customFlags.x) を適用。未設定時は 1.0f
-    float uvScale = max(MaterialFlags.z, 1.0f);
+    float uvScale = max(input.materialFlags.z, 1.0f);
     float2 uv = input.texCoord * uvScale;
 
     // 頂点アルファはマテリアルIDとして使っているので、色のアルファからは取り除く
-    baseColor.a = MaterialColor.a;
+    baseColor.a = input.materialFlags.w;
 
     if (hasDiffuse > 0.5f) {
         float4 texColor = diffuseTexture.Sample(texSampler, uv);

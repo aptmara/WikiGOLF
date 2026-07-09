@@ -14,6 +14,23 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.h")
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
 target_precompile_headers(DX_GAME PRIVATE src/pch.h)
 
+# データベースの分割ファイルを自動的に結合するターゲット
+if(WIN32)
+    add_custom_command(
+        OUTPUT "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001.sqlite"
+        COMMAND cmd /c copy /b jawiki_sdow-001_part1.sqlite+jawiki_sdow-001_part2.sqlite+jawiki_sdow-001_part3.sqlite jawiki_sdow-001.sqlite
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Assets/data"
+        DEPENDS "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001_part1.sqlite"
+                "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001_part2.sqlite"
+                "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001_part3.sqlite"
+        COMMENT "Combining database part files into jawiki_sdow-001.sqlite..."
+    )
+    add_custom_target(combine_db ALL
+        DEPENDS "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001.sqlite"
+    )
+    add_dependencies(DX_GAME combine_db)
+endif()
+
 # インクルードディレクトリの設定
 target_include_directories(DX_GAME PRIVATE 
     src 
@@ -206,6 +223,17 @@ if(MSVC)
     target_compile_options(test_par_rules PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME par_rules COMMAND test_par_rules)
+
+add_executable(test_page_history_utils test_page_history_utils.cpp
+                                       src/game/utils/PageHistoryUtils.cpp)
+target_precompile_headers(test_page_history_utils PRIVATE src/pch.h)
+target_include_directories(test_page_history_utils PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_page_history_utils PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                               -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_page_history_utils PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME page_history_utils COMMAND test_page_history_utils)
 
 add_executable(test_terrain_generation test_terrain_generation.cpp
                                        src/game/systems/TerrainGenerator.cpp

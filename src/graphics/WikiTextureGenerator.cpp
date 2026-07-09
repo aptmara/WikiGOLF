@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file WikiTextureGenerator.cpp
  * @brief Wikipedia記事テキストからD3D11チ（��スチャを生成する実装
  */
@@ -186,13 +186,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
   state.totalHeight =
       std::max(height, static_cast<uint32_t>(std::ceil(totalHeightFloat)));
 
-  float contentWidth =
-      state.textMetrics.widthIncludingTrailingWhitespace + state.marginX * 2;
-  state.actualWidth =
-      std::max(512u, static_cast<uint32_t>(std::ceil(contentWidth)));
-  state.actualWidth = std::min(state.actualWidth, width);
-  if (state.actualWidth % 2 != 0)
-    state.actualWidth++;
+  state.actualWidth = width;
 
   state.result.width = state.actualWidth;
   state.result.height = state.totalHeight;

@@ -686,10 +686,10 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         continue;
       }
 
-      // 速度クランプ
+      // 速度クランプ（ドライバー飛距離3倍化に伴い上限を拡張。山内陽）
       float speed = SafeLength(vel);
-      if (speed > 100.0f) {
-        vel = XMVectorScale(SafeNormalize(vel), 100.0f);
+      if (speed > 300.0f) {
+        vel = XMVectorScale(SafeNormalize(vel), 300.0f);
       }
 
       // 加速度計算

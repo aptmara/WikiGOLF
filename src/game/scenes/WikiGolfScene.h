@@ -28,6 +28,7 @@
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
 #include "../utils/MapViewState.h"
+#include "../utils/PageHistoryUtils.h"
 #include "../utils/ScreenFade.h"
 #include "ResultScene.h"
 #include <DirectXMath.h>
@@ -76,9 +77,21 @@ private:
   /// @brief ページ遷移（値渡し：ホール削除後も安全に使用するため）
   void TransitionToPage(core::GameContext &ctx, const std::string &pageName);
 
+  /// @brief 1 つ前の訪問ページへ戻ります。
+  bool ReturnToPreviousPage(core::GameContext &ctx);
+
+  /// @brief 現在の状態で前ページへ戻れるか判定します。
+  bool CanReturnToPreviousPage(core::GameContext &ctx) const;
+
+  /// @brief ポーズメニューを開きます。
+  void OpenPauseScene(core::GameContext &ctx);
+
   /// @brief カップイン判定（ボールがホール内で静止したか）
   /// @return 遷移が発生した場合はtrue
   bool CheckCupIn(core::GameContext &ctx);
+
+  /// @brief プロシージャル旗のなびきと旗粒子を更新します。山内陽
+  void UpdateProceduralFlagEffects(core::GameContext &ctx, float dt);
 
   ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;
@@ -141,6 +154,7 @@ private:
   float m_terrainDisplayTimer = 0.0f;
   float m_hudUpdateTimer = 0.0f;     ///< HUD静的表示の更新間引きタイマーです。山内陽
   float m_minimapUpdateTimer = 0.0f; ///< ミニマップ描画の更新間引きタイマーです。山内陽
+  float m_flagEffectTimer = 0.0f;    ///< 旗なびき・粒子演出の時間です。山内陽
   float m_cupInBloomTimer = 0.0f;    ///< カップイン発光演出の残り時間です。山内陽
   float m_cupInBloomDuration = 0.0f; ///< カップイン発光演出の全体時間です。山内陽
   float m_shotBloomTimer = 0.0f;     ///< ショット発光演出の残り時間です。山内陽

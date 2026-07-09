@@ -50,6 +50,7 @@ private:
     enum class Phase {
         FadeIn,
         Loading,
+        ErrorWait,
         Building,
         FadeOut
     };
@@ -63,6 +64,7 @@ private:
     std::optional<scenes::PageDataAsyncResult> m_pendingPageData;
     scenes::WikiPageLoader* m_pageLoader = nullptr;
     std::string m_targetPage;
+    std::string m_previousPage; // 遷移元のページ名
     ecs::Entity m_targetBall;
     ecs::Entity m_targetCam;
     ecs::Entity m_targetSky;
@@ -100,6 +102,10 @@ private:
 
     float m_tipTimer = 0.0f;
     size_t m_tipIndex = 0;
+
+    bool m_hasError = false;
+    float m_errorTimer = 0.0f;
+    std::wstring m_errorMsg;
 };
 
 } // namespace game::controllers
