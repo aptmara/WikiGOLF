@@ -342,6 +342,10 @@ int WikiShortestPath::FetchPageId(const std::string &title) {
   // スペースをアンダースコアに変換
   std::string normalized = title;
   std::replace(normalized.begin(), normalized.end(), ' ', '_');
+  // DB内のタイトルは末尾の')'が削除されているため、検索時も末尾の')'を取り除く
+  if (!normalized.empty() && normalized.back() == ')') {
+    normalized.pop_back();
+  }
 
   const char *sql = "SELECT id FROM pages WHERE title = ? COLLATE NOCASE";
   sqlite3_stmt *stmt;
@@ -350,7 +354,7 @@ int WikiShortestPath::FetchPageId(const std::string &title) {
     return -1;
   }
 
-  sqlite3_bind_text(stmt, 1, normalized.c_str(), -1, SQLITE_STATIC);
+  sqlite3_bind_text(stmt, 1, normalized.c_str(), -1, SQLITE_TRANSIENT);
 
   int pageId = -1;
   if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -403,10 +407,24 @@ WikiShortestPath::FetchPageIdsBatch(
     }
 
     // バインドするタイトル文字列は sqlite3_finalize まで生存します。
+    std::unordered_map<std::string, std::string> dbToOriginal;
+    std::vector<std::string> chunkTitles;
+    chunkTitles.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      std::string orig = normalizedTitles[index + i];
+      std::string dbTitle = orig;
+      // DB内のタイトルは末尾の')'が削除されているため、検索時も末尾の')'を取り除く
+      if (!dbTitle.empty() && dbTitle.back() == ')') {
+        dbTitle.pop_back();
+      }
+      chunkTitles.push_back(dbTitle);
+      dbToOriginal[dbTitle] = orig;
+    }
+
     for (size_t i = 0; i < count; ++i) {
       sqlite3_bind_text(
           stmt, static_cast<int>(i + 1),
-          normalizedTitles[index + i].c_str(), -1, SQLITE_STATIC);
+          chunkTitles[i].c_str(), -1, SQLITE_STATIC);
     }
 
     size_t chunkHits = 0;
@@ -415,7 +433,13 @@ WikiShortestPath::FetchPageIdsBatch(
       const char* storedTitle =
           reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
       if (storedTitle) {
-        result[storedTitle] = pageId;
+        std::string sTitle = storedTitle;
+        auto it = dbToOriginal.find(sTitle);
+        if (it != dbToOriginal.end()) {
+          result[it->second] = pageId;
+        } else {
+          result[sTitle] = pageId;
+        }
         ++chunkHits;
       }
     }
@@ -458,6 +482,10 @@ std::string WikiShortestPath::FetchPageTitle(int pageId) {
       title = text;
       // アンダースコアをスペースに変換
       std::replace(title.begin(), title.end(), '_', ' ');
+      // DB内のタイトルは末尾の')'が削除されているため、'('があって')'がない場合は復元する
+      if (title.find('(') != std::string::npos && title.find(')') == std::string::npos) {
+        title += ')';
+      }
     }
   }
 
@@ -956,6 +984,21 @@ WikiShortestPath::FetchPopularPageTitle(int minIncomingLinks) {
       std::string suffix = title.substr(title.size() - 3);
       if (suffix == "年" || suffix == "月" || suffix == "日")
         isIgnored = true;
+    }
+
+    // メタページ、曖昧さ回避、テンプレート、特定のシステムページの除外
+    if (title.find("曖昧さ回避") != std::string::npos ||
+        title.find("分類学") != std::string::npos ||
+        title.find("ウェイバックマシン") != std::string::npos) {
+      isIgnored = true;
+    }
+    if (title.find("プロジェクト:") != std::string::npos ||
+        title.find("Wikipedia:") != std::string::npos ||
+        title.find("Help:") != std::string::npos ||
+        title.find("Template:") != std::string::npos ||
+        title.find("Category:") != std::string::npos ||
+        title.find("Portal:") != std::string::npos) {
+      isIgnored = true;
     }
 
     if (!isIgnored) {
