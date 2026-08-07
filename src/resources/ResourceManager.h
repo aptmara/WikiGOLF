@@ -37,6 +37,9 @@ public:
                                const std::vector<graphics::Vertex> &vertices,
                                const std::vector<uint32_t> &indices);
 
+  /// @brief キャッシュ済みメッシュを取得（存在しない場合は無効ハンドル）
+  MeshHandle FindMesh(const std::string &name) const;
+
   /// @brief メッシュを取得（レンダリングループ用）
   graphics::Mesh *GetMesh(MeshHandle handle);
 

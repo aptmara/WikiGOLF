@@ -1,5 +1,6 @@
 #include "RenderSystem.h"
 #include "../../core/Logger.h"
+#include "../../core/Profiler.h"
 #include "../../ecs/World.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../resources/ResourceManager.h"
@@ -7,6 +8,7 @@
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
+#include <DirectXCollision.h>
 #include <DirectXMath.h>
 #include <chrono>
 #include <d3d11.h>
@@ -56,10 +58,16 @@ struct RenderFrameStats {
   size_t invisibleSkipped = 0;
   size_t alphaSkipped = 0;
   size_t transparentDistanceSkipped = 0;
+  size_t lodDistanceSkipped = 0;
+  size_t frustumSkipped = 0;
   size_t missingResourceSkipped = 0;
+  size_t drawCalls = 0;
+  size_t instancedDrawCalls = 0;
+  size_t nonInstancedDrawCalls = 0;
 };
 
 void RenderSystem(core::GameContext &ctx) {
+  PROFILE_SCOPE("RenderSystem.Total");
   static auto s_lastStatsLogAt = std::chrono::steady_clock::time_point::min();
   static auto s_lastSlowStatsLogAt =
       std::chrono::steady_clock::time_point::min();
@@ -154,6 +162,13 @@ void RenderSystem(core::GameContext &ctx) {
     proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, 16.0f / 9.0f, 0.01f, 100.0f);
   }
 
+  DirectX::BoundingFrustum viewFrustum;
+  DirectX::BoundingFrustum worldFrustum;
+  DirectX::BoundingFrustum::CreateFromMatrix(viewFrustum, proj);
+  XMVECTOR inverseViewDeterminant;
+  const XMMATRIX inverseView = XMMatrixInverse(&inverseViewDeterminant, view);
+  viewFrustum.Transform(worldFrustum, inverseView);
+
   // 転置（HLSLは列優先）
   view = XMMatrixTranspose(view);
   proj = XMMatrixTranspose(proj);
@@ -161,6 +176,7 @@ void RenderSystem(core::GameContext &ctx) {
   // インスタンス化対応シェーダーのハンドル取得
   auto basicHandle = ctx.resource.FindShader("Basic");
   auto particleHandle = ctx.resource.FindShader("Particle");
+  auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
 
   // インスタンス構造体の定義
   struct InstanceData {
@@ -255,7 +271,9 @@ void RenderSystem(core::GameContext &ctx) {
   };
 
   // 全オブジェクトをクエリしてバケットに分類
-  world.Query<components::Transform, components::MeshRenderer>().Each(
+  {
+    PROFILE_SCOPE("RenderSystem.CollectAndBucket");
+    world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t, components::MeshRenderer &r) {
         ++stats.candidates;
         if (!r.isVisible) {
@@ -264,15 +282,36 @@ void RenderSystem(core::GameContext &ctx) {
         }
         ++stats.visibleCandidates;
 
+        const float dx = t.position.x - camPos.x;
+        const float dy = t.position.y - camPos.y;
+        const float dz = t.position.z - camPos.z;
+        const float distSq = dx * dx + dy * dy + dz * dz;
+
+        if (r.maxDrawDistance > 0.0f &&
+            distSq > r.maxDrawDistance * r.maxDrawDistance) {
+          ++stats.lodDistanceSkipped;
+          return;
+        }
+
+        auto *candidateMesh = ctx.resource.GetMesh(r.mesh);
+        if (!candidateMesh || !candidateMesh->IsValid()) {
+          ++stats.missingResourceSkipped;
+          return;
+        }
+
+        DirectX::BoundingSphere worldBounds;
+        candidateMesh->GetBounds().Transform(worldBounds, t.GetWorldMatrix());
+        worldBounds.Radius *= std::max(1.0f, r.boundsScale);
+        if (worldFrustum.Contains(worldBounds) == DirectX::DISJOINT) {
+          ++stats.frustumSkipped;
+          return;
+        }
+
         if (r.isTransparent) {
           if (r.color.w <= 0.01f) {
             ++stats.alphaSkipped;
             return;
           }
-          const float dx = t.position.x - camPos.x;
-          const float dy = t.position.y - camPos.y;
-          const float dz = t.position.z - camPos.z;
-          const float distSq = dx * dx + dy * dy + dz * dz;
           const bool keepsReadableOverlay =
               world.Has<components::TerrainObject>(e) &&
               r.blendMode == components::BlendMode::Multiply;
@@ -324,6 +363,7 @@ void RenderSystem(core::GameContext &ctx) {
           opaqueBuckets[key].push_back(inst);
         }
       });
+  }
 
   // バケットごとの描画関数
   auto DrawBucket = [&](const RenderKey &key, const std::vector<RenderInstance> &instances) {
@@ -370,7 +410,9 @@ void RenderSystem(core::GameContext &ctx) {
     context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
     mesh->Bind(context);
 
-    const bool supportsInstancing = (key.shader == basicHandle || key.shader == particleHandle);
+    const bool supportsInstancing =
+        (key.shader == basicHandle || key.shader == particleHandle ||
+         key.shader == flagClothHandle);
 
     if (supportsInstancing) {
       checkInstancedBuffer(instances.size());
@@ -407,6 +449,8 @@ void RenderSystem(core::GameContext &ctx) {
 
       // インスタンス化描画！
       context->DrawIndexedInstanced(mesh->GetIndexCount(), static_cast<UINT>(instances.size()), 0, 0, 0);
+      ++stats.drawCalls;
+      ++stats.instancedDrawCalls;
 
       // 解除
       ID3D11ShaderResourceView *nullVSs[1] = {nullptr};
@@ -442,6 +486,8 @@ void RenderSystem(core::GameContext &ctx) {
         }
 
         mesh->Draw(context);
+        ++stats.drawCalls;
+        ++stats.nonInstancedDrawCalls;
 
         ++stats.drawn;
         if (key.isTransparent) ++stats.transparentDrawn;
@@ -454,17 +500,44 @@ void RenderSystem(core::GameContext &ctx) {
     }
   };
 
-  // 不透明描画実行
-  for (const auto &pair : opaqueBuckets) {
-    DrawBucket(pair.first, pair.second);
-  }
+  {
+    PROFILE_SCOPE("RenderSystem.SubmitDraws");
+    // 不透明描画実行
+    for (const auto &pair : opaqueBuckets) {
+      DrawBucket(pair.first, pair.second);
+    }
 
-  // 半透明描画実行
-  for (const auto &pair : transparentBuckets) {
-    DrawBucket(pair.first, pair.second);
+    // 半透明描画実行
+    for (const auto &pair : transparentBuckets) {
+      DrawBucket(pair.first, pair.second);
+    }
   }
 
   context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+
+  auto &profiler = core::Profiler::Instance();
+  profiler.SetCounter("Render.Candidates", static_cast<double>(stats.candidates));
+  profiler.SetCounter("Render.VisibleCandidates",
+                      static_cast<double>(stats.visibleCandidates));
+  profiler.SetCounter("Render.DrawnInstances", static_cast<double>(stats.drawn));
+  profiler.SetCounter("Render.DrawCalls", static_cast<double>(stats.drawCalls));
+  profiler.SetCounter("Render.InstancedDrawCalls",
+                      static_cast<double>(stats.instancedDrawCalls));
+  profiler.SetCounter("Render.NonInstancedDrawCalls",
+                      static_cast<double>(stats.nonInstancedDrawCalls));
+  profiler.SetCounter("Render.OpaqueBuckets",
+                      static_cast<double>(opaqueBuckets.size()));
+  profiler.SetCounter("Render.TransparentBuckets",
+                      static_cast<double>(transparentBuckets.size()));
+  profiler.SetCounter("Render.HoleFlags", static_cast<double>(stats.holeFlagDrawn));
+  profiler.SetCounter("Render.SkippedInvisible",
+                      static_cast<double>(stats.invisibleSkipped));
+  profiler.SetCounter("Render.SkippedTransparentDistance",
+                      static_cast<double>(stats.transparentDistanceSkipped));
+  profiler.SetCounter("Render.SkippedLodDistance",
+                      static_cast<double>(stats.lodDistanceSkipped));
+  profiler.SetCounter("Render.SkippedFrustum",
+                      static_cast<double>(stats.frustumSkipped));
 
   const auto now = std::chrono::steady_clock::now();
   const auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -482,13 +555,15 @@ void RenderSystem(core::GameContext &ctx) {
              "Render stats frame={} elapsed={:.3f}ms candidates={} visible={} "
              "drawn={} opaque={} transparent={} textured={} normalMapped={} "
              "terrain={} holeFlags={} skippedInvisible={} skippedAlpha={} "
-             "skippedTransparentDistance={} skippedMissingResource={}",
+             "skippedTransparentDistance={} skippedLodDistance={} "
+             "skippedFrustum={} skippedMissingResource={}",
              s_frameIndex, static_cast<double>(elapsedUs) / 1000.0,
              stats.candidates, stats.visibleCandidates, stats.drawn,
              stats.opaqueDrawn, stats.transparentDrawn, stats.texturedDrawn,
              stats.normalMappedDrawn, stats.terrainDrawn, stats.holeFlagDrawn,
              stats.invisibleSkipped, stats.alphaSkipped,
-             stats.transparentDistanceSkipped, stats.missingResourceSkipped);
+             stats.transparentDistanceSkipped, stats.lodDistanceSkipped,
+             stats.frustumSkipped, stats.missingResourceSkipped);
     s_lastStatsLogAt = now;
     if (isSlowFrame) {
       s_lastSlowStatsLogAt = now;

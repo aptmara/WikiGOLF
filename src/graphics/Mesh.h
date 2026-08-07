@@ -5,6 +5,7 @@
  */
 
 #include <DirectXMath.h>
+#include <DirectXCollision.h>
 #include <cstdint>
 #include <d3d11.h>
 #include <vector>
@@ -46,12 +47,16 @@ public:
   /// @brief インデックス数
   uint32_t GetIndexCount() const { return m_indexCount; }
 
+  /// @brief フラスタムカリング用のローカル境界球
+  const DirectX::BoundingSphere &GetBounds() const { return m_bounds; }
+
 private:
   ComPtr<ID3D11Buffer> m_vertexBuffer;
   ComPtr<ID3D11Buffer> m_indexBuffer;
   uint32_t m_indexCount = 0;
   uint32_t m_stride = sizeof(Vertex);
   uint32_t m_offset = 0;
+  DirectX::BoundingSphere m_bounds;
 };
 
 } // namespace graphics

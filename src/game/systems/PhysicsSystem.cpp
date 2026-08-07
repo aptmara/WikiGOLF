@@ -10,6 +10,7 @@
 #include "../../audio/AudioSystem.h" // 効果音再生用
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
+#include "../../core/Profiler.h"
 #include "../../ecs/World.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
@@ -426,23 +427,27 @@ struct HoleSpatialGrid {
 
 struct StaticBodySpatialGrid {
   float cellSize = 8.0f;
-  const std::vector<BodyInfo> *bodies = nullptr;
+  std::vector<ecs::Entity> bodies;
   std::unordered_map<int64_t, std::vector<uint32_t>> cells;
 
-  void Build(const std::vector<BodyInfo> &source) {
-    bodies = &source;
+  void Build(ecs::World &world, const std::vector<ecs::Entity> &source) {
+    bodies = source;
     cells.clear();
     cells.reserve(source.size() * 2 + 1);
     for (uint32_t i = 0; i < static_cast<uint32_t>(source.size()); ++i) {
-      const BodyInfo &body = source[i];
-      if (!body.t || !body.c || body.c->type != ColliderType::Box)
+      auto *transform = world.Get<Transform>(source[i]);
+      auto *rigidBody = world.Get<RigidBody>(source[i]);
+      auto *collider = world.Get<Collider>(source[i]);
+      if (!transform || !rigidBody || !rigidBody->isStatic || !collider ||
+          collider->type != ColliderType::Box) {
         continue;
-      float halfX = std::abs(body.c->size.x * body.t->scale.x);
-      float halfZ = std::abs(body.c->size.z * body.t->scale.z);
-      int minX = GridCoord(body.t->position.x - halfX, cellSize);
-      int maxX = GridCoord(body.t->position.x + halfX, cellSize);
-      int minZ = GridCoord(body.t->position.z - halfZ, cellSize);
-      int maxZ = GridCoord(body.t->position.z + halfZ, cellSize);
+      }
+      float halfX = std::abs(collider->size.x * transform->scale.x);
+      float halfZ = std::abs(collider->size.z * transform->scale.z);
+      int minX = GridCoord(transform->position.x - halfX, cellSize);
+      int maxX = GridCoord(transform->position.x + halfX, cellSize);
+      int minZ = GridCoord(transform->position.z - halfZ, cellSize);
+      int maxZ = GridCoord(transform->position.z + halfZ, cellSize);
       for (int cz = minZ; cz <= maxZ; ++cz) {
         for (int cx = minX; cx <= maxX; ++cx) {
           cells[MakeGridKey(cx, cz)].push_back(i);
@@ -453,8 +458,6 @@ struct StaticBodySpatialGrid {
 
   template <typename Func>
   void Query(float x, float z, float radius, Func &&func) const {
-    if (!bodies)
-      return;
     std::vector<uint32_t> emitted;
     int minX = GridCoord(x - radius, cellSize);
     int maxX = GridCoord(x + radius, cellSize);
@@ -471,11 +474,22 @@ struct StaticBodySpatialGrid {
             continue;
           }
           emitted.push_back(index);
-          func((*bodies)[index]);
+          func(bodies[index]);
         }
       }
     }
   }
+};
+
+struct PhysicsSpatialCache {
+  const TerrainData *terrainIdentity = nullptr;
+  std::string pageIdentity;
+  size_t holeCount = (std::numeric_limits<size_t>::max)();
+  ecs::Entity firstHole = ecs::NULL_ENTITY;
+  ecs::Entity lastHole = ecs::NULL_ENTITY;
+  HoleSpatialGrid holeGrid;
+  StaticBodySpatialGrid staticBodyGrid;
+  float maxHoleQueryRange = 0.5f;
 };
 
 struct PhysicsPerfStats {
@@ -501,6 +515,7 @@ static float GetJitterFromTable(uint32_t &cursor, float amplitude) {
 // ========================================
 
 void PhysicsSystem(core::GameContext &ctx, float dt) {
+  PROFILE_SCOPE("Physics.Update");
   // DTキャップ（ラグスパイク対策）
   float clampedDt = std::min(dt, 0.033f); // 最大30FPS分
 
@@ -528,50 +543,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         }
       });
 
-  // ホール情報収集
-  std::vector<HoleInfo> holes;
-  holes.reserve(64);
-  float maxHoleQueryRange = 0.5f;
-  ctx.world.Query<Transform, GolfHole>().Each(
-      [&](ecs::Entity e, Transform &t, GolfHole &h) {
-        HoleInfo info;
-        info.entity = e;
-        info.position = XMLoadFloat3(&t.position);
-        info.positionFloat = t.position;
-        info.radius = h.radius;
-        info.gravity = h.gravity;
-        info.suctionRange = h.radius * 2.5f;
-        maxHoleQueryRange = std::max(maxHoleQueryRange, info.suctionRange);
-        holes.push_back(info);
-      });
-  HoleSpatialGrid holeGrid;
-  holeGrid.Build(holes);
-
   // ゲーム状態
   auto *golfState = ctx.world.GetGlobal<GolfGameState>();
   ecs::Entity ballEntity = 0xFFFFFFFF;
   if (golfState) {
     ballEntity = static_cast<ecs::Entity>(golfState->ballEntity);
   }
-
-  // ボディリストはサブステップ中に構成が変わらないため、フレーム先頭で一度だけ収集します。
-  std::vector<BodyInfo> dynamicBodies;
-  std::vector<BodyInfo> staticBodies;
-  dynamicBodies.reserve(8);
-  staticBodies.reserve(128);
-  ctx.world.Query<Transform, RigidBody, Collider>().Each(
-      [&](ecs::Entity e, Transform &t, RigidBody &rb, Collider &c) {
-        BodyInfo info = {e, &t, &rb, &c};
-        if (!rb.isStatic) {
-          dynamicBodies.push_back(info);
-        }
-        if (rb.isStatic) {
-          staticBodies.push_back(info);
-        }
-      });
-
-  StaticBodySpatialGrid staticBodyGrid;
-  staticBodyGrid.Build(staticBodies);
 
   bool skipPhysics = false;
   if (golfState && golfState->canShoot) {
@@ -592,6 +569,98 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
   }
   float subDt = subSteps > 0 ? clampedDt / static_cast<float>(subSteps) : 0.0f;
   PhysicsPerfStats perfStats;
+  bool spatialCacheRebuilt = false;
+
+  auto *spatialCache = ctx.world.GetGlobal<PhysicsSpatialCache>();
+  if (!spatialCache) {
+    ctx.world.SetGlobal(PhysicsSpatialCache{});
+    spatialCache = ctx.world.GetGlobal<PhysicsSpatialCache>();
+  }
+
+  if (subSteps > 0 && spatialCache) {
+    const size_t holeCount = golfState ? golfState->holes.size() : 0;
+    const ecs::Entity firstHole =
+        holeCount > 0 ? static_cast<ecs::Entity>(golfState->holes.front())
+                      : ecs::NULL_ENTITY;
+    const ecs::Entity lastHole =
+        holeCount > 0 ? static_cast<ecs::Entity>(golfState->holes.back())
+                      : ecs::NULL_ENTITY;
+    const std::string pageIdentity = golfState ? golfState->currentPage : "";
+    const bool needsRebuild =
+        !golfState || spatialCache->terrainIdentity != terrainData ||
+        spatialCache->pageIdentity != pageIdentity ||
+        spatialCache->holeCount != holeCount ||
+        spatialCache->firstHole != firstHole || spatialCache->lastHole != lastHole;
+
+    if (needsRebuild) {
+      std::vector<HoleInfo> holes;
+      holes.reserve(holeCount > 0 ? holeCount : 64);
+      float maxHoleQueryRange = 0.5f;
+      auto appendHole = [&](ecs::Entity e, Transform &t, GolfHole &h) {
+        HoleInfo info;
+        info.entity = e;
+        info.position = XMLoadFloat3(&t.position);
+        info.positionFloat = t.position;
+        info.radius = h.radius;
+        info.gravity = h.gravity;
+        info.suctionRange = h.radius * 2.5f;
+        maxHoleQueryRange = std::max(maxHoleQueryRange, info.suctionRange);
+        holes.push_back(info);
+      };
+      if (golfState) {
+        for (uint32_t id : golfState->holes) {
+          const ecs::Entity e = static_cast<ecs::Entity>(id);
+          auto *t = ctx.world.Get<Transform>(e);
+          auto *h = ctx.world.Get<GolfHole>(e);
+          if (t && h) {
+            appendHole(e, *t, *h);
+          }
+        }
+      } else {
+        ctx.world.Query<Transform, GolfHole>().Each(appendHole);
+      }
+
+      std::vector<ecs::Entity> staticEntities;
+      staticEntities.reserve(128);
+      ctx.world.Query<Transform, RigidBody, Collider>().Each(
+          [&](ecs::Entity e, Transform &, RigidBody &rb, Collider &) {
+            if (rb.isStatic) {
+              staticEntities.push_back(e);
+            }
+          });
+
+      spatialCache->holeGrid.Build(holes);
+      spatialCache->staticBodyGrid.Build(ctx.world, staticEntities);
+      spatialCache->maxHoleQueryRange = maxHoleQueryRange;
+      spatialCache->terrainIdentity = terrainData;
+      spatialCache->pageIdentity = pageIdentity;
+      spatialCache->holeCount = holeCount;
+      spatialCache->firstHole = firstHole;
+      spatialCache->lastHole = lastHole;
+      spatialCacheRebuilt = true;
+    }
+  }
+
+  HoleSpatialGrid emptyHoleGrid;
+  StaticBodySpatialGrid emptyStaticBodyGrid;
+  const HoleSpatialGrid &holeGrid =
+      spatialCache ? spatialCache->holeGrid : emptyHoleGrid;
+  const StaticBodySpatialGrid &staticBodyGrid =
+      spatialCache ? spatialCache->staticBodyGrid : emptyStaticBodyGrid;
+  const float maxHoleQueryRange =
+      spatialCache ? spatialCache->maxHoleQueryRange : 0.5f;
+
+  // 動的ボディだけをサブステップ開始前に一度収集します。
+  std::vector<BodyInfo> dynamicBodies;
+  dynamicBodies.reserve(8);
+  if (subSteps > 0) {
+    ctx.world.Query<Transform, RigidBody, Collider>().Each(
+        [&](ecs::Entity e, Transform &t, RigidBody &rb, Collider &c) {
+          if (!rb.isStatic) {
+            dynamicBodies.push_back({e, &t, &rb, &c});
+          }
+        });
+  }
   static uint32_t jitterCursor = 0;
   static float rollingAudioTimer = 0.0f;
   static float holeSlowMotionCooldown = 0.0f;
@@ -992,6 +1061,15 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         acc = XMVectorAdd(acc, dragAcc);
       }
 
+      // 風をボールにのみ適用する。TrajectoryPredictor::Predict の予測式と
+      // 同じ計算式に揃え、狙い線と実際の飛球のズレを解消する。
+      if (golfState && body.entity == ballEntity && golfState->windSpeed > 0.0f) {
+        float windForce = golfState->windSpeed * 0.1f;
+        XMVECTOR windVec = XMVectorSet(golfState->windDirection.x, 0,
+                                        golfState->windDirection.y, 0);
+        acc = XMVectorAdd(acc, XMVectorScale(windVec, windForce));
+      }
+
       // オイラー積分 (復活)
       vel = XMVectorAdd(vel, XMVectorScale(acc, subDt));
       pos = XMVectorAdd(pos, XMVectorScale(vel, subDt));
@@ -1061,29 +1139,40 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       if (dyn.c->type != ColliderType::Sphere)
         continue;
 
-      const float queryRadius = std::max(12.0f, dyn.c->radius + staticBodyGrid.cellSize);
-      staticBodyGrid.Query(dyn.t->position.x, dyn.t->position.z, queryRadius,
-                           [&](const BodyInfo &other) {
-        ++perfStats.staticCandidates;
-        if (other.c->type != ColliderType::Box)
-          return;
+      const float horizontalSpeed = std::sqrt(
+          dyn.rb->velocity.x * dyn.rb->velocity.x +
+          dyn.rb->velocity.z * dyn.rb->velocity.z);
+      const float travelDistance = horizontalSpeed * subDt;
+      const float queryRadius = dyn.c->radius + travelDistance * 0.5f + 0.25f;
+      const float queryX = dyn.t->position.x - dyn.rb->velocity.x * subDt * 0.5f;
+      const float queryZ = dyn.t->position.z - dyn.rb->velocity.z * subDt * 0.5f;
+      staticBodyGrid.Query(queryX, queryZ, queryRadius,
+                           [&](ecs::Entity otherEntity) {
+         ++perfStats.staticCandidates;
+         auto *otherT = ctx.world.Get<Transform>(otherEntity);
+         auto *otherRb = ctx.world.Get<RigidBody>(otherEntity);
+         auto *otherC = ctx.world.Get<Collider>(otherEntity);
+         if (!otherT || !otherRb || !otherRb->isStatic || !otherC ||
+             otherC->type != ColliderType::Box) {
+           return;
+         }
 
-        XMVECTOR normal;
-        float depth;
-        XMFLOAT3 scaledSize = {other.c->size.x * other.t->scale.x,
-                               other.c->size.y * other.t->scale.y,
-                               other.c->size.z * other.t->scale.z};
+         XMVECTOR normal;
+         float depth;
+         XMFLOAT3 scaledSize = {otherC->size.x * otherT->scale.x,
+                                otherC->size.y * otherT->scale.y,
+                                otherC->size.z * otherT->scale.z};
 
-          ++perfStats.staticChecks;
-        if (CheckSphereOBB(dyn.t->position, dyn.c->radius, other.t->position,
-                           scaledSize, other.t->rotation, normal, depth)) {
-          // ホールはトリガーのみ
-          if (ctx.world.Has<GolfHole>(other.entity)) {
-            events->events.push_back({dyn.entity, other.entity});
-            return;
-          }
+         ++perfStats.staticChecks;
+         if (CheckSphereOBB(dyn.t->position, dyn.c->radius, otherT->position,
+                            scaledSize, otherT->rotation, normal, depth)) {
+           // ホールはトリガーのみ
+           if (ctx.world.Has<GolfHole>(otherEntity)) {
+             events->events.push_back({dyn.entity, otherEntity});
+             return;
+           }
 
-          events->events.push_back({dyn.entity, other.entity});
+           events->events.push_back({dyn.entity, otherEntity});
 
           // 押し出し
           XMVECTOR pos = XMLoadFloat3(&dyn.t->position);
@@ -1094,10 +1183,10 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           XMVECTOR vel = XMLoadFloat3(&dyn.rb->velocity);
           float vn = XMVectorGetX(XMVector3Dot(vel, normal));
           if (vn < 0.0f) {
-            float jitter = GetJitterFromTable(jitterCursor, 0.2f);
-            float bounce =
-                std::max(0.0f, (dyn.rb->restitution + other.rb->restitution) *
-                                   0.5f * jitter);
+             float jitter = GetJitterFromTable(jitterCursor, 0.2f);
+             float bounce =
+                 std::max(0.0f, (dyn.rb->restitution + otherRb->restitution) *
+                                    0.5f * jitter);
             vel = XMVectorSubtract(vel,
                                    XMVectorScale(normal, vn * (1.0f + bounce)));
             XMStoreFloat3(&dyn.rb->velocity, vel);
@@ -1106,6 +1195,19 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       });
     }
   }
+
+  auto &profiler = core::Profiler::Instance();
+  profiler.SetCounter("Physics.SubSteps", static_cast<double>(subSteps));
+  profiler.SetCounter("Physics.TerrainSamples",
+                      static_cast<double>(perfStats.terrainSamples));
+  profiler.SetCounter("Physics.HoleCandidates",
+                      static_cast<double>(perfStats.holeCandidates));
+  profiler.SetCounter("Physics.StaticCandidates",
+                      static_cast<double>(perfStats.staticCandidates));
+  profiler.SetCounter("Physics.StaticChecks",
+                      static_cast<double>(perfStats.staticChecks));
+  profiler.SetCounter("Physics.SpatialCacheRebuilt",
+                      spatialCacheRebuilt ? 1.0 : 0.0);
 
   // デバッグログ出力
 #ifndef NDEBUG

@@ -4,14 +4,22 @@
  */
 
 cbuffer ConstantBuffer : register(b0) {
-    matrix World;
+    matrix World_unused;
     matrix View;
     matrix Projection;
-    float4 MaterialColor;
-    float4 MaterialFlags; // z: timePhase, w: amplitude
+    float4 MaterialColor_unused;
+    float4 MaterialFlags_unused;
     float4 LightDir;
     float4 CameraPos;
 };
+
+struct InstanceData {
+    matrix World;
+    float4 Color;
+    float4 Flags;
+};
+
+StructuredBuffer<InstanceData> g_instances : register(t15);
 
 struct VS_INPUT {
     float3 position : POSITION;
@@ -20,6 +28,7 @@ struct VS_INPUT {
     float4 color : COLOR;
     float3 tangent : TANGENT;
     float3 bitangent : BINORMAL;
+    uint instanceID : SV_InstanceID;
 };
 
 struct VS_OUTPUT {
@@ -31,15 +40,16 @@ struct VS_OUTPUT {
 
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
+    InstanceData inst = g_instances[input.instanceID];
 
     float u = saturate(input.texCoord.x);
     float v = input.texCoord.y;
 
     float globalTime = LightDir.w;
-    float phase = MaterialFlags.x;
-    float amplitude = max(MaterialFlags.y, 0.05f);
-    float speedFactor = MaterialFlags.z;
-    float yaw = MaterialFlags.w;
+    float phase = inst.Flags.x;
+    float amplitude = max(inst.Flags.y, 0.05f);
+    float speedFactor = inst.Flags.z;
+    float yaw = inst.Flags.w;
 
     float timePhase = globalTime * (1.9f + speedFactor * 4.6f) + phase;
     float windAmplitude = amplitude * (0.65f + speedFactor * 1.45f);
@@ -75,13 +85,13 @@ VS_OUTPUT main(VS_INPUT input) {
     rotatedNormal.x = localNormal.x * cosYaw - localNormal.z * sinYaw;
     rotatedNormal.z = localNormal.x * sinYaw + localNormal.z * cosYaw;
 
-    float4 worldPos = mul(float4(rotatedPos, 1.0f), World);
+    float4 worldPos = mul(float4(rotatedPos, 1.0f), inst.World);
     output.position = mul(mul(worldPos, View), Projection);
 
-    float3x3 world3x3 = (float3x3)World;
+    float3x3 world3x3 = (float3x3)inst.World;
     output.normal = normalize(mul(rotatedNormal, world3x3));
     output.texCoord = input.texCoord;
-    output.color = input.color * MaterialColor;
+    output.color = input.color * inst.Color;
 
     return output;
 }

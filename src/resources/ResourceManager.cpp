@@ -548,6 +548,13 @@ MeshHandle ResourceManager::CreateDynamicMesh(
   return handle;
 }
 
+MeshHandle ResourceManager::FindMesh(const std::string &name) const {
+  if (auto it = m_meshCache.find(name); it != m_meshCache.end()) {
+    return it->second;
+  }
+  return MeshHandle::Invalid();
+}
+
 ShaderHandle ResourceManager::LoadShader(const std::string &name,
                                          const std::wstring &vsPath,
                                          const std::wstring &psPath) {

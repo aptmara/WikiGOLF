@@ -70,8 +70,13 @@ void AddClothVertex(std::vector<graphics::Vertex> &vertices, float u, float v,
 /**
  * @brief GPU変形用の一枚旗布メッシュを生成します。
  */
-resources::MeshHandle CreateFlagClothMesh(core::GameContext &ctx,
-                                          ecs::Entity ownerEntity) {
+resources::MeshHandle GetOrCreateFlagClothMesh(core::GameContext &ctx) {
+  constexpr const char *kSharedMeshName = "ProceduralFlagClothGpu_Shared";
+  const auto cached = ctx.resource.FindMesh(kSharedMeshName);
+  if (cached.IsValid()) {
+    return cached;
+  }
+
   std::vector<graphics::Vertex> vertices;
   std::vector<uint32_t> indices;
   vertices.reserve(static_cast<size_t>(kClothColumns + 1) *
@@ -139,9 +144,7 @@ resources::MeshHandle CreateFlagClothMesh(core::GameContext &ctx,
     addEdgeQuad(right0, right1, backOffset + right0, backOffset + right1);
   }
 
-  const std::string meshName =
-      "ProceduralFlagClothGpu_" + std::to_string(ownerEntity);
-  return ctx.resource.CreateDynamicMesh(meshName, vertices, indices);
+  return ctx.resource.CreateDynamicMesh(kSharedMeshName, vertices, indices);
 }
 
 } // namespace
@@ -174,6 +177,7 @@ ProceduralFlagResult CreateProceduralFlag(
   poleMr.mesh = ctx.resource.LoadMesh("builtin/cube");
   poleMr.shader = basicShader;
   poleMr.color = {0.16f, 0.15f, 0.13f, 1.0f};
+  poleMr.maxDrawDistance = options.large ? 0.0f : 220.0f;
   
   auto &poleFlag = ctx.world.Add<HoleFlag>(poleEntity);
   poleFlag.holeEntity = options.holeEntity;
@@ -193,6 +197,7 @@ ProceduralFlagResult CreateProceduralFlag(
   capMr.mesh = ctx.resource.LoadMesh("builtin/sphere");
   capMr.shader = basicShader;
   capMr.color = Darken(color, 0.85f, 1.0f);
+  capMr.maxDrawDistance = options.large ? 0.0f : 80.0f;
   auto &capFlag = ctx.world.Add<HoleFlag>(capEntity);
   capFlag.holeEntity = options.holeEntity;
   capFlag.kind = HoleFlag::Kind::Accent;
@@ -205,11 +210,13 @@ ProceduralFlagResult CreateProceduralFlag(
   clothT.position = {basePosition.x, clothY, basePosition.z};
   clothT.scale = {size, size, size};
   auto &clothMr = ctx.world.Add<MeshRenderer>(clothEntity);
-  clothMr.mesh = CreateFlagClothMesh(ctx, clothEntity);
+  clothMr.mesh = GetOrCreateFlagClothMesh(ctx);
   clothMr.shader = ctx.resource.LoadShader("FlagCloth",
                                            L"Assets/shaders/FlagVS.hlsl",
                                            L"Assets/shaders/FlagPS.hlsl");
   clothMr.color = color;
+  clothMr.maxDrawDistance = options.large ? 0.0f : 160.0f;
+  clothMr.boundsScale = 1.35f;
 
   auto &clothFlag = ctx.world.Add<HoleFlag>(clothEntity);
   clothFlag.holeEntity = options.holeEntity;
@@ -229,6 +236,7 @@ ProceduralFlagResult CreateProceduralFlag(
   seamMr.mesh = ctx.resource.LoadMesh("builtin/cube");
   seamMr.shader = basicShader;
   seamMr.color = Darken(color, 0.62f, 1.0f);
+  seamMr.maxDrawDistance = options.large ? 0.0f : 80.0f;
   auto &seamFlag = ctx.world.Add<HoleFlag>(seamEntity);
   seamFlag.holeEntity = options.holeEntity;
   seamFlag.kind = HoleFlag::Kind::Accent;
@@ -254,6 +262,7 @@ ProceduralFlagResult CreateProceduralFlag(
       particleMr.isTransparent = true;
       particleMr.blendMode = BlendMode::Add;
       particleMr.customFlags = {0.0f, 1.0f, 0.0f, 0.0f};
+      particleMr.maxDrawDistance = options.large ? 0.0f : 60.0f;
 
       auto &flag = ctx.world.Add<HoleFlag>(particleEntity);
       flag.holeEntity = options.holeEntity;

@@ -146,6 +146,7 @@ private:
     int     tileResZ = 0;
     float   vStart   = 0.0f;
     float   vEnd     = 0.0f;
+    float   maxHeight = 0.0f; ///< タイル内の頂点最大Y（ミニマップオーバーレイの平面高さ算出用）
   };
   std::vector<TileMeshCache> m_tileMeshCaches;
 

@@ -1423,6 +1423,8 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
         if (gameplayLinks.empty() ||
             m_nextHoleIndex >= gameplayLinks.size()) {
+            m_buildHoleCandidates =
+                FilterHoleCandidatesByMinDistance(m_buildHoleCandidates);
             m_buildMapHoleCandidates =
                 SelectMapHoleIconCandidates(m_buildHoleCandidates);
             m_buildPathCandidates = m_buildHoleCandidates;
@@ -1640,6 +1642,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
         "Basic", L"Assets/shaders/BasicVS.hlsl",
         L"Assets/shaders/BasicPS.hlsl");
     mr.color = GetHoleBodyColor(isTargetHole, hopsToTarget);
+    mr.maxDrawDistance = isTargetHole ? 0.0f : 220.0f;
 
     auto& h      = ctx.world.Add<GolfHole>(e);
     h.radius     = 2.0f;
@@ -1802,6 +1805,50 @@ WikiPageLoader::SelectMapHoleIconCandidates(
 }
 
 /**
+ * @brief 物理ホール候補を最小間隔で間引きます。 R-06対応。
+ * @details ミニマップ用のSelectMapHoleIconCandidatesと同じ選抜ロジックを、
+ *          実際に物理ホールとして生成する候補集合そのものへ適用する。
+ *          target候補は間引き対象から常に除外する。
+ */
+std::vector<WikiPageLoader::HolePlacementCandidate>
+WikiPageLoader::FilterHoleCandidatesByMinDistance(
+    const std::vector<HolePlacementCandidate>& candidates) const
+{
+    std::vector<HolePlacementCandidate> sorted = candidates;
+    std::stable_sort(sorted.begin(), sorted.end(),
+        [](const HolePlacementCandidate& lhs,
+           const HolePlacementCandidate& rhs) {
+            if (lhs.isTarget != rhs.isTarget) {
+                return lhs.isTarget;
+            }
+            return lhs.originalIndex < rhs.originalIndex;
+        });
+
+    std::vector<HolePlacementCandidate> selected;
+    selected.reserve(sorted.size());
+    for (const auto& candidate : sorted) {
+        if (candidate.isTarget ||
+            IsFarEnoughFromSelected(selected, candidate, kMinLinkHoleDistance)) {
+            selected.push_back(candidate);
+        }
+    }
+
+    std::sort(selected.begin(), selected.end(),
+        [](const HolePlacementCandidate& lhs,
+           const HolePlacementCandidate& rhs) {
+            return lhs.originalIndex < rhs.originalIndex;
+        });
+
+    if (selected.size() != candidates.size()) {
+        LOG_INFO("WikiPageLoader",
+                 "Physical hole candidates filtered by min distance: "
+                 "candidates={}, selected={}, minDistance={:.1f}",
+                 candidates.size(), selected.size(), kMinLinkHoleDistance);
+    }
+    return selected;
+}
+
+/**
  * @brief 経路評価結果を全ホール候補とマップ候補へ反映します。 山内陽
  */
 void WikiPageLoader::ApplyPathEvaluationResults(
@@ -1934,6 +1981,7 @@ void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
             BuildHolePlacementCandidate(gameplayLinks[i], i));
     }
 
+    candidates = FilterHoleCandidatesByMinDistance(candidates);
     m_buildMapHoleCandidates = SelectMapHoleIconCandidates(candidates);
     m_buildHoleCandidates = candidates;
     m_buildPathCandidates = m_buildHoleCandidates;

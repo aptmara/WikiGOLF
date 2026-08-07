@@ -19,6 +19,7 @@
 #include <DirectXMath.h>
 #include "../../graphics/TangentGenerator.h"
 #include <algorithm> // 最大値計算用
+#include <cmath>     // std::lround
 #include <random>    // 乱数生成用
 
 namespace game::systems {
@@ -30,6 +31,95 @@ namespace {
 
 constexpr float kTerrainOverlayHeightOffset = 0.02f;
 constexpr float kTerrainOverlayAlpha = 0.34f;
+
+// ミニマップ(256x256)向けに積極的に間引いた地形タイルの分割数。
+// フル解像度(最大64x256)に対し十分小さく、俯瞰視点では見分けがつかない。
+constexpr int kMinimapTileGridRes = 8;
+
+/// @brief フル解像度のタイル頂点グリッドから、ミニマップ専用の間引きグリッドを生成する
+/// @details 世界座標のタイル被覆範囲・頂点カラーは維持しつつ、ミニマップシェーダーが
+///          使用しない法線/接線の計算は省略する（既定値を詰めるだけ）。
+std::vector<graphics::Vertex> BuildMinimapTerrainGrid(
+    const std::vector<graphics::Vertex> &src, int srcResX, int srcResZ,
+    std::vector<uint32_t> &outIndices) {
+  const int decX = (std::max)(2, (std::min)(srcResX, kMinimapTileGridRes));
+  const int decZ = (std::max)(2, (std::min)(srcResZ, kMinimapTileGridRes));
+
+  std::vector<graphics::Vertex> out;
+  out.reserve(static_cast<size_t>(decX) * decZ);
+  for (int z = 0; z < decZ; ++z) {
+    int srcZ = static_cast<int>(std::lround(
+        (float)z * (float)(srcResZ - 1) / (float)(decZ - 1)));
+    srcZ = std::clamp(srcZ, 0, srcResZ - 1);
+    for (int x = 0; x < decX; ++x) {
+      int srcX = static_cast<int>(std::lround(
+          (float)x * (float)(srcResX - 1) / (float)(decX - 1)));
+      srcX = std::clamp(srcX, 0, srcResX - 1);
+
+      graphics::Vertex v = src[srcZ * srcResX + srcX];
+      v.normal = {0.0f, 1.0f, 0.0f};
+      v.tangent = {1.0f, 0.0f, 0.0f};
+      v.bitangent = {0.0f, 0.0f, 1.0f};
+      out.push_back(v);
+    }
+  }
+
+  outIndices.clear();
+  outIndices.reserve(static_cast<size_t>(decX - 1) * (decZ - 1) * 6);
+  for (int z = 0; z < decZ - 1; ++z) {
+    for (int x = 0; x < decX - 1; ++x) {
+      uint32_t i0 = static_cast<uint32_t>(z * decX + x);
+      uint32_t i1 = static_cast<uint32_t>(z * decX + (x + 1));
+      uint32_t i2 = static_cast<uint32_t>((z + 1) * decX + x);
+      uint32_t i3 = static_cast<uint32_t>((z + 1) * decX + (x + 1));
+      outIndices.insert(outIndices.end(), {i0, i1, i2, i2, i1, i3});
+    }
+  }
+  return out;
+}
+
+/// @brief 記事オーバーレイタイル用の、最小限の平面2三角形ミニマップメッシュを生成する
+/// @details タイルのワールドX/Z範囲を覆う単一平面。UVは0..1、Yは指定の固定高さ。
+///          本描画用メッシュ（地形追従・高解像度）とは別物として扱う。
+std::vector<graphics::Vertex> BuildMinimapOverlayQuad(float fieldWidth,
+                                                       float zTop,
+                                                       float zBottom,
+                                                       float flatY,
+                                                       std::vector<uint32_t> &outIndices) {
+  const float halfW = fieldWidth * 0.5f;
+  auto makeVert = [](float x, float y, float z, float u, float v) {
+    graphics::Vertex vert;
+    vert.position = {x, y, z};
+    vert.normal = {0.0f, 1.0f, 0.0f};
+    vert.texCoord = {u, v};
+    vert.color = {1.0f, 1.0f, 1.0f, 1.0f};
+    vert.tangent = {1.0f, 0.0f, 0.0f};
+    vert.bitangent = {0.0f, 0.0f, 1.0f};
+    return vert;
+  };
+
+  std::vector<graphics::Vertex> out;
+  out.reserve(4);
+  out.push_back(makeVert(-halfW, flatY, zTop, 0.0f, 0.0f));    // 左上
+  out.push_back(makeVert(halfW, flatY, zTop, 1.0f, 0.0f));     // 右上
+  out.push_back(makeVert(-halfW, flatY, zBottom, 0.0f, 1.0f)); // 左下
+  out.push_back(makeVert(halfW, flatY, zBottom, 1.0f, 1.0f));  // 右下
+
+  outIndices = {0, 1, 2, 2, 1, 3};
+  return out;
+}
+
+float ComputeMaxVertexHeight(const std::vector<graphics::Vertex> &vertices) {
+  float maxY = 0.0f;
+  bool first = true;
+  for (const auto &v : vertices) {
+    if (first || v.position.y > maxY) {
+      maxY = v.position.y;
+      first = false;
+    }
+  }
+  return maxY;
+}
 
 int DetermineBiomeFromCategories(const std::vector<std::string> &categories,
                                  const std::string &pageTitle) {
@@ -373,18 +463,31 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     mr.hasNormalMap = static_cast<bool>(m_buildNormalSRV);
     mr.isTransparent = false;
     mr.customFlags   = {2.0f, 0.0f, 0.0f, 0.0f};
+    mr.minimapMode   = game::components::MinimapRenderMode::VertexColor;
+
+    // ミニマップ専用の間引き済みメッシュ（本描画用のフル解像度メッシュとは別物）
+    {
+      std::vector<uint32_t> minimapIndices;
+      std::vector<graphics::Vertex> minimapVerts =
+          BuildMinimapTerrainGrid(vertices, resX, tileResZ, minimapIndices);
+      auto minimapHandle = ctx.resource.CreateDynamicMesh(
+          "TerrainTileMinimap_" + std::to_string(tile.offsetY), minimapVerts,
+          minimapIndices);
+      mr.minimapMesh = minimapHandle;
+    }
 
     m_entities.push_back(e);
     ctx.world.Add<game::components::TerrainObject>(e);
 
     // Overlay用にキャッシュ保存
     TileMeshCache cache;
-    cache.vertices = vertices;
-    cache.indices  = indices;
-    cache.resX     = resX;
-    cache.tileResZ = tileResZ;
-    cache.vStart   = vStart;
-    cache.vEnd     = vEnd;
+    cache.vertices  = vertices;
+    cache.indices   = indices;
+    cache.resX      = resX;
+    cache.tileResZ  = tileResZ;
+    cache.vStart    = vStart;
+    cache.vEnd      = vEnd;
+    cache.maxHeight = ComputeMaxVertexHeight(vertices);
     m_tileMeshCaches.push_back(std::move(cache));
 
     float tileProgress = (float)(m_buildTileIndex + 1) / (float)(std::max<size_t>(1, m_buildTiles.size()));
@@ -441,6 +544,21 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     ovMr.isTransparent = true;
     ovMr.blendMode   = game::components::BlendMode::Multiply;
     ovMr.customFlags = {1.0f, 0.0f, 1.0f, 0.0f};
+    ovMr.minimapMode = game::components::MinimapRenderMode::Textured;
+
+    // ミニマップ専用の平面2三角形メッシュ（本描画用の地形追従メッシュとは別物）
+    {
+      const float zTop = m_buildFieldDepth * (0.5f - cache.vStart);
+      const float zBottom = m_buildFieldDepth * (0.5f - cache.vEnd);
+      const float flatY = cache.maxHeight + kTerrainOverlayHeightOffset;
+      std::vector<uint32_t> minimapOvIndices;
+      std::vector<graphics::Vertex> minimapOvVerts = BuildMinimapOverlayQuad(
+          m_buildFieldWidth, zTop, zBottom, flatY, minimapOvIndices);
+      auto minimapOvHandle = ctx.resource.CreateDynamicMesh(
+          "TerrainTileOverlayMinimap_" + std::to_string(tile.offsetY),
+          minimapOvVerts, minimapOvIndices);
+      ovMr.minimapMesh = minimapOvHandle;
+    }
 
     m_entities.push_back(ovE);
     ctx.world.Add<game::components::TerrainObject>(ovE);
@@ -745,6 +863,20 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     meshRenderer.hasNormalMap = static_cast<bool>(terrainNormalSRV);
     meshRenderer.isTransparent = false;
     meshRenderer.customFlags = {2.0f, 0.0f, 0.0f, 0.0f}; // x:UVスケール、y:未使用
+    meshRenderer.minimapMode = MinimapRenderMode::VertexColor;
+
+    // ミニマップ専用の間引き済みメッシュ（本描画用のフル解像度メッシュとは別物）
+    float tileMaxHeight = 0.0f;
+    {
+      std::vector<uint32_t> minimapIndices;
+      std::vector<graphics::Vertex> minimapVerts =
+          BuildMinimapTerrainGrid(vertices, resX, tileResZ, minimapIndices);
+      resources::MeshHandle minimapHandle = ctx.resource.CreateDynamicMesh(
+          "TerrainTileMinimap_" + std::to_string(tile.offsetY), minimapVerts,
+          minimapIndices);
+      meshRenderer.minimapMesh = minimapHandle;
+      tileMaxHeight = ComputeMaxVertexHeight(vertices);
+    }
 
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
@@ -781,6 +913,19 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     overlayRenderer.isTransparent = true;
     overlayRenderer.blendMode = BlendMode::Multiply;
     overlayRenderer.customFlags = {1.0f, 0.0f, 1.0f, 0.0f}; // readabilityMode=0 (乗算で対応)
+    overlayRenderer.minimapMode = MinimapRenderMode::Textured;
+
+    // ミニマップ専用の平面2三角形メッシュ（本描画用の地形追従メッシュとは別物）
+    {
+      const float flatY = tileMaxHeight + kTerrainOverlayHeightOffset;
+      std::vector<uint32_t> minimapOvIndices;
+      std::vector<graphics::Vertex> minimapOvVerts = BuildMinimapOverlayQuad(
+          width, zTop, zBottom, flatY, minimapOvIndices);
+      resources::MeshHandle minimapOvHandle = ctx.resource.CreateDynamicMesh(
+          "TerrainTileOverlayMinimap_" + std::to_string(tile.offsetY),
+          minimapOvVerts, minimapOvIndices);
+      overlayRenderer.minimapMesh = minimapOvHandle;
+    }
 
     m_entities.push_back(overlayEntity);
     ctx.world.Add<TerrainObject>(overlayEntity);
