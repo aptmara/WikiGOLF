@@ -48,6 +48,25 @@ struct TextStyle {
                                     1.0f}; // 白アウトライン（黒文字用）
   float outlineWidth = 1.0f;
 
+  /// @brief 描画に関わる全フィールドの値比較（テキストのラスタキャッシュ/安定度判定用）
+  bool operator==(const TextStyle &o) const {
+    auto colorEq = [](const DirectX::XMFLOAT4 &a, const DirectX::XMFLOAT4 &b) {
+      return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
+    };
+    return fontFamily == o.fontFamily && fontSize == o.fontSize &&
+           colorEq(color, o.color) && align == o.align && valign == o.valign &&
+           hasShadow == o.hasShadow && colorEq(shadowColor, o.shadowColor) &&
+           shadowOffsetX == o.shadowOffsetX &&
+           shadowOffsetY == o.shadowOffsetY && colorEq(bgColor, o.bgColor) &&
+           cornerRadius == o.cornerRadius && borderWidth == o.borderWidth &&
+           colorEq(borderColor, o.borderColor) &&
+           useGradient == o.useGradient &&
+           colorEq(bgGradientEnd, o.bgGradientEnd) &&
+           hasOutline == o.hasOutline && colorEq(outlineColor, o.outlineColor) &&
+           outlineWidth == o.outlineWidth;
+  }
+  bool operator!=(const TextStyle &o) const { return !(*this == o); }
+
   /// @brief デフォルトスタイル（黒、24pt、左揃え）
   static TextStyle Default() { return TextStyle{}; }
 

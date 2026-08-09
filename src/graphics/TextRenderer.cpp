@@ -5,12 +5,70 @@
 
 #include "TextRenderer.h"
 #include <d2d1_1.h>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "windowscodecs.lib")
 
 namespace graphics {
+
+namespace {
+
+uint32_t FloatBits(float f) {
+  uint32_t u = 0;
+  std::memcpy(&u, &f, sizeof(u));
+  return u;
+}
+
+size_t HashCombine(size_t seed, size_t v) {
+  return seed * 1099511628211ull ^ v;
+}
+
+size_t HashColor(const DirectX::XMFLOAT4 &c) {
+  size_t h = 1469598103934665603ull;
+  h = HashCombine(h, FloatBits(c.x));
+  h = HashCombine(h, FloatBits(c.y));
+  h = HashCombine(h, FloatBits(c.z));
+  h = HashCombine(h, FloatBits(c.w));
+  return h;
+}
+
+size_t HashStyle(const TextStyle &s) {
+  size_t h = 1469598103934665603ull;
+  h = HashCombine(h, std::hash<std::string>{}(s.fontFamily));
+  h = HashCombine(h, FloatBits(s.fontSize));
+  h = HashCombine(h, HashColor(s.color));
+  h = HashCombine(h, static_cast<size_t>(s.align));
+  h = HashCombine(h, static_cast<size_t>(s.valign));
+  h = HashCombine(h, s.hasShadow ? 1u : 0u);
+  h = HashCombine(h, HashColor(s.shadowColor));
+  h = HashCombine(h, FloatBits(s.shadowOffsetX));
+  h = HashCombine(h, FloatBits(s.shadowOffsetY));
+  h = HashCombine(h, HashColor(s.bgColor));
+  h = HashCombine(h, FloatBits(s.cornerRadius));
+  h = HashCombine(h, FloatBits(s.borderWidth));
+  h = HashCombine(h, HashColor(s.borderColor));
+  h = HashCombine(h, s.useGradient ? 1u : 0u);
+  h = HashCombine(h, HashColor(s.bgGradientEnd));
+  h = HashCombine(h, s.hasOutline ? 1u : 0u);
+  h = HashCombine(h, HashColor(s.outlineColor));
+  h = HashCombine(h, FloatBits(s.outlineWidth));
+  return h;
+}
+
+} // namespace
+
+size_t TextRenderer::RasterCacheKeyHash::operator()(
+    const RasterCacheKey &k) const {
+  size_t h = std::hash<std::wstring>{}(k.text);
+  h = HashCombine(h, HashStyle(k.style));
+  h = HashCombine(h, k.widthBits);
+  h = HashCombine(h, k.heightBits);
+  return h;
+}
 
 bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
   if (!swapChain) {
@@ -148,6 +206,10 @@ HRESULT TextRenderer::CreateTargetBitmap(IDXGISwapChain *swapChain) {
 void TextRenderer::Shutdown() {
   m_brushCache.Clear();
   m_bitmapCache.clear();
+  m_srvBitmapCache.clear();
+  m_layoutCache.clear();
+  m_rasterCache.clear();
+  m_rasterCacheBytes = 0;
   m_fontManager.Shutdown();
   m_d2dContext.Reset();
   m_dwriteFactory.Reset();
@@ -163,6 +225,7 @@ void TextRenderer::BeginDraw() {
       D2D1::Matrix3x2F scaleMatrix = D2D1::Matrix3x2F::Scale(
           m_width / kVirtualWidth, m_height / kVirtualHeight);
       m_d2dContext->SetTransform(scaleMatrix);
+      ++m_frameCounter;
     }
     m_drawRefCount++;
   }
@@ -342,25 +405,40 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
   if (!m_d2dContext || !srv)
     return;
 
-  // SRVからリソース取得
+  // SRVからリソース取得（キーはSRVではなく実体のID3D11Resourceで一致判定する）
   ComPtr<ID3D11Resource> res;
   srv->GetResource(&res);
-
-  ComPtr<IDXGISurface> surface;
-  if (FAILED(res.As(&surface)))
+  if (!res)
     return;
 
-  // Bitmap プロパティ
-  D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
-      D2D1_BITMAP_OPTIONS_NONE,
-      D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_IGNORE));
+  ID2D1Bitmap1 *bitmap = nullptr;
+  auto it = m_srvBitmapCache.find(res.Get());
+  if (it != m_srvBitmapCache.end()) {
+    // テクスチャの中身はGPU側で更新され続けるため、ラップ済みビットマップを使い回す
+    bitmap = it->second.bitmap.Get();
+  } else {
+    ComPtr<IDXGISurface> surface;
+    if (FAILED(res.As(&surface)))
+      return;
 
-  ComPtr<ID2D1Bitmap1> bitmap;
-  HRESULT hr =
-      m_d2dContext->CreateBitmapFromDxgiSurface(surface.Get(), &props, &bitmap);
-  if (FAILED(hr)) {
-    LOG_ERROR("TextRenderer", "CreateBitmapFromDxgiSurface failed in RenderImage: {:08X}", static_cast<uint32_t>(hr));
-    return;
+    // Bitmap プロパティ
+    D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_IGNORE));
+
+    ComPtr<ID2D1Bitmap1> newBitmap;
+    HRESULT hr = m_d2dContext->CreateBitmapFromDxgiSurface(surface.Get(),
+                                                            &props, &newBitmap);
+    if (FAILED(hr)) {
+      LOG_ERROR("TextRenderer", "CreateBitmapFromDxgiSurface failed in RenderImage: {:08X}", static_cast<uint32_t>(hr));
+      return;
+    }
+
+    SrvBitmapCacheEntry entry;
+    entry.resource = res;
+    entry.bitmap = newBitmap;
+    bitmap = newBitmap.Get();
+    m_srvBitmapCache.emplace(res.Get(), std::move(entry));
   }
 
   // 回転変換
@@ -375,7 +453,7 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
   }
 
   // 描画
-  m_d2dContext->DrawBitmap(bitmap.Get(), destRect, alpha,
+  m_d2dContext->DrawBitmap(bitmap, destRect, alpha,
                            D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
 
   // 変換リセット
@@ -386,46 +464,102 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
 
 void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
                               const TextStyle &style) {
+  DrawTextCore(text, rect, style);
+}
+
+IDWriteTextLayout *TextRenderer::GetOrCreateTextLayout(
+    const std::wstring &text, IDWriteTextFormat *format,
+    const std::string &fontFamily, float fontSize, TextAlign align,
+    float maxWidth, float maxHeight) {
+  if (!m_dwriteFactory || !format)
+    return nullptr;
+
+  TextLayoutKey key;
+  key.text = text;
+  key.fontFamily = fontFamily;
+  key.fontSizeBits = FloatBits(fontSize);
+  key.align = align;
+  key.widthBits = FloatBits(maxWidth);
+  key.heightBits = FloatBits(maxHeight);
+
+  auto it = m_layoutCache.find(key);
+  if (it != m_layoutCache.end()) {
+    it->second.lastUsedFrame = m_frameCounter;
+    return it->second.layout.Get();
+  }
+
+  ComPtr<IDWriteTextLayout> layout;
+  HRESULT hr = m_dwriteFactory->CreateTextLayout(
+      text.c_str(), static_cast<UINT32>(text.length()), format, maxWidth,
+      maxHeight, &layout);
+  if (FAILED(hr))
+    return nullptr;
+
+  EvictLayoutCacheIfNeeded();
+
+  TextLayoutEntry entry;
+  entry.layout = layout;
+  entry.lastUsedFrame = m_frameCounter;
+  auto res = m_layoutCache.emplace(std::move(key), std::move(entry));
+  return res.first->second.layout.Get();
+}
+
+void TextRenderer::EvictLayoutCacheIfNeeded() {
+  while (m_layoutCache.size() >= kMaxLayoutCacheEntries) {
+    auto oldest = m_layoutCache.begin();
+    for (auto it = m_layoutCache.begin(); it != m_layoutCache.end(); ++it) {
+      if (it->second.lastUsedFrame < oldest->second.lastUsedFrame) {
+        oldest = it;
+      }
+    }
+    m_layoutCache.erase(oldest);
+  }
+}
+
+void TextRenderer::DrawTextCore(const std::wstring &text,
+                                const D2D1_RECT_F &rect,
+                                const TextStyle &style) {
   if (!m_d2dContext) return;
+
+  float maxWidth = rect.right - rect.left;
+  float maxHeight = rect.bottom - rect.top;
+
+  IDWriteTextFormat *format = nullptr;
+  IDWriteTextLayout *layout = nullptr;
+  if (!text.empty()) {
+    format =
+        m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
+    if (format) {
+      layout = GetOrCreateTextLayout(text, format, style.fontFamily,
+                                     style.fontSize, style.align, maxWidth,
+                                     maxHeight);
+    }
+  }
 
   // 背景描画 (bgColor.w > 0 の場合)
   if (style.bgColor.w > 0.0f) {
     D2D1_RECT_F bgRect = rect;
 
-    if (!text.empty()) {
-      IDWriteTextFormat *format =
-          m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
-      if (format) {
-        ComPtr<IDWriteTextLayout> layout;
-        float maxWidth = rect.right - rect.left;
-        float maxHeight = rect.bottom - rect.top;
+    if (layout) {
+      DWRITE_TEXT_METRICS metrics;
+      layout->GetMetrics(&metrics);
 
-        HRESULT hr = m_dwriteFactory->CreateTextLayout(
-            text.c_str(), static_cast<UINT32>(text.length()), format, maxWidth,
-            maxHeight, &layout);
-
-        if (SUCCEEDED(hr)) {
-          DWRITE_TEXT_METRICS metrics;
-          layout->GetMetrics(&metrics);
-
-          float textW = metrics.width;
-          float textH = metrics.height;
-          float offsetX = 0.0f;
-          if (style.align == TextAlign::Center) {
-            offsetX = (maxWidth - textW) * 0.5f;
-          } else if (style.align == TextAlign::Right) {
-            offsetX = (maxWidth - textW);
-          }
-          bgRect.left += offsetX;
-          bgRect.right = bgRect.left + textW;
-
-          float padding = 8.0f;
-          bgRect.left -= padding;
-          bgRect.top -= padding * 0.5f;
-          bgRect.right += padding;
-          bgRect.bottom = bgRect.top + textH + padding;
-        }
+      float textW = metrics.width;
+      float textH = metrics.height;
+      float offsetX = 0.0f;
+      if (style.align == TextAlign::Center) {
+        offsetX = (maxWidth - textW) * 0.5f;
+      } else if (style.align == TextAlign::Right) {
+        offsetX = (maxWidth - textW);
       }
+      bgRect.left += offsetX;
+      bgRect.right = bgRect.left + textW;
+
+      float padding = 8.0f;
+      bgRect.left -= padding;
+      bgRect.top -= padding * 0.5f;
+      bgRect.right += padding;
+      bgRect.bottom = bgRect.top + textH + padding;
     }
 
     // 描画
@@ -502,10 +636,6 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
   }
 
   if (text.empty()) return;
-
-  // TextFormat 取得
-  IDWriteTextFormat *format =
-      m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
   if (!format)
     return;
 
@@ -514,14 +644,21 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
     ID2D1SolidColorBrush *shadowBrush =
         m_brushCache.GetBrush(style.shadowColor);
     if (shadowBrush) {
-      D2D1_RECT_F shadowRect = rect;
-      shadowRect.left += style.shadowOffsetX;
-      shadowRect.top += style.shadowOffsetY;
-      shadowRect.right += style.shadowOffsetX;
-      shadowRect.bottom += style.shadowOffsetY;
+      if (layout) {
+        m_d2dContext->DrawTextLayout(
+            D2D1::Point2F(rect.left + style.shadowOffsetX,
+                         rect.top + style.shadowOffsetY),
+            layout, shadowBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+      } else {
+        D2D1_RECT_F shadowRect = rect;
+        shadowRect.left += style.shadowOffsetX;
+        shadowRect.top += style.shadowOffsetY;
+        shadowRect.right += style.shadowOffsetX;
+        shadowRect.bottom += style.shadowOffsetY;
 
-      m_d2dContext->DrawTextW(text.c_str(), static_cast<UINT32>(text.length()),
-                              format, shadowRect, shadowBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+        m_d2dContext->DrawTextW(text.c_str(), static_cast<UINT32>(text.length()),
+                                format, shadowRect, shadowBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+      }
     }
   }
 
@@ -539,15 +676,21 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
                             {-style.outlineWidth, style.outlineWidth},
                             {style.outlineWidth, style.outlineWidth}};
       for (auto &offset : offsets) {
-        D2D1_RECT_F outlineRect = rect;
-        outlineRect.left += offset[0];
-        outlineRect.top += offset[1];
-        outlineRect.right += offset[0];
-        outlineRect.bottom += offset[1];
+        if (layout) {
+          m_d2dContext->DrawTextLayout(
+              D2D1::Point2F(rect.left + offset[0], rect.top + offset[1]),
+              layout, outlineBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        } else {
+          D2D1_RECT_F outlineRect = rect;
+          outlineRect.left += offset[0];
+          outlineRect.top += offset[1];
+          outlineRect.right += offset[0];
+          outlineRect.bottom += offset[1];
 
-        m_d2dContext->DrawTextW(text.c_str(),
-                                static_cast<UINT32>(text.length()), format,
-                                outlineRect, outlineBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+          m_d2dContext->DrawTextW(text.c_str(),
+                                  static_cast<UINT32>(text.length()), format,
+                                  outlineRect, outlineBrush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
       }
     }
   }
@@ -555,8 +698,13 @@ void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
   // 本体描画
   ID2D1SolidColorBrush *brush = m_brushCache.GetBrush(style.color);
   if (brush) {
-    m_d2dContext->DrawTextW(text.c_str(), static_cast<UINT32>(text.length()),
-                            format, rect, brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+    if (layout) {
+      m_d2dContext->DrawTextLayout(D2D1::Point2F(rect.left, rect.top), layout,
+                                   brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    } else {
+      m_d2dContext->DrawTextW(text.c_str(), static_cast<UINT32>(text.length()),
+                              format, rect, brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+    }
   }
 }
 
@@ -564,6 +712,146 @@ void TextRenderer::RenderText(const std::wstring &text, float x, float y,
                               const TextStyle &style) {
   D2D1_RECT_F rect = D2D1::RectF(x, y, m_width, m_height);
   RenderText(text, rect, style);
+}
+
+void TextRenderer::RenderTextCached(const std::wstring &text,
+                                    const D2D1_RECT_F &rect,
+                                    const TextStyle &style) {
+  if (!m_d2dContext) return;
+
+  // 空テキストの背景パネルはキャッシュせず直接描画で済ませる
+  if (text.empty()) {
+    DrawTextCore(text, rect, style);
+    return;
+  }
+
+  const float width = rect.right - rect.left;
+  const float height = rect.bottom - rect.top;
+  if (width <= 0.0f || height <= 0.0f) {
+    DrawTextCore(text, rect, style);
+    return;
+  }
+
+  RasterCacheKey key;
+  key.text = text;
+  key.style = style;
+  key.widthBits = FloatBits(width);
+  key.heightBits = FloatBits(height);
+
+  auto it = m_rasterCache.find(key);
+  if (it == m_rasterCache.end()) {
+    // 影/アウトラインのはみ出し分を吸収する余白（仮想座標系）
+    float margin = 8.0f + style.borderWidth;
+    if (style.hasOutline) margin += style.outlineWidth;
+    if (style.hasShadow) {
+      margin += (std::max)(std::abs(style.shadowOffsetX),
+                           std::abs(style.shadowOffsetY));
+    }
+    margin = (std::max)(margin, 1.0f);
+
+    const float scaleX = (m_width > 0.0f) ? (m_width / kVirtualWidth) : 1.0f;
+    const float scaleY = (m_height > 0.0f) ? (m_height / kVirtualHeight) : 1.0f;
+
+    const UINT32 pxW = static_cast<UINT32>(
+        (std::max)(1.0f, std::ceil((width + margin * 2.0f) * scaleX)));
+    const UINT32 pxH = static_cast<UINT32>(
+        (std::max)(1.0f, std::ceil((height + margin * 2.0f) * scaleY)));
+
+    const size_t approxBytes = static_cast<size_t>(pxW) * pxH * 4u;
+
+    // 1エントリでキャッシュ上限バイト数を超える場合はキャッシュせず、
+    // オフスクリーンへの切り替えすら行わずに直接描画へフォールバックする。
+    if (approxBytes > kMaxRasterCacheBytes) {
+      LOG_WARN("TextRenderer",
+               "RenderTextCached: bitmap ({}x{}, {} bytes) exceeds raster "
+               "cache byte cap, rendering directly without caching",
+               pxW, pxH, approxBytes);
+      DrawTextCore(text, rect, style);
+      return;
+    }
+
+    D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_TARGET,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
+                          D2D1_ALPHA_MODE_PREMULTIPLIED));
+
+    ComPtr<ID2D1Bitmap1> offscreen;
+    HRESULT hr = m_d2dContext->CreateBitmap(D2D1::SizeU(pxW, pxH), nullptr, 0,
+                                            &props, &offscreen);
+    if (FAILED(hr)) {
+      LOG_WARN("TextRenderer",
+               "RenderTextCached: CreateBitmap failed ({:08X}), falling back",
+               static_cast<uint32_t>(hr));
+      DrawTextCore(text, rect, style);
+      return;
+    }
+
+    // ターゲット/変換行列/アンチエイリアスモードを退避してオフスクリーンへ切り替える。
+    // オフスクリーンは透明合成前提のプリマルチプライドアルファビットマップのため、
+    // ClearTypeは無効な結果になる（背景色が透明黒に汚染される）。合成に有効な
+    // グレースケールへ一時的に切り替える。
+    ComPtr<ID2D1Image> prevTarget;
+    m_d2dContext->GetTarget(&prevTarget);
+    D2D1_MATRIX_3X2_F prevTransform;
+    m_d2dContext->GetTransform(&prevTransform);
+    const D2D1_TEXT_ANTIALIAS_MODE prevAAMode = m_d2dContext->GetTextAntialiasMode();
+
+    m_d2dContext->SetTarget(offscreen.Get());
+    m_d2dContext->Clear(D2D1::ColorF(0, 0, 0, 0));
+    m_d2dContext->SetTransform(D2D1::Matrix3x2F::Scale(scaleX, scaleY));
+    m_d2dContext->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+
+    D2D1_RECT_F localRect =
+        D2D1::RectF(margin, margin, margin + width, margin + height);
+    DrawTextCore(text, localRect, style);
+
+    // ターゲット/変換行列/アンチエイリアスモードを復元
+    m_d2dContext->SetTarget(prevTarget.Get());
+    m_d2dContext->SetTransform(prevTransform);
+    m_d2dContext->SetTextAntialiasMode(prevAAMode);
+
+    RasterCacheEntry entry;
+    entry.bitmap = offscreen;
+    entry.marginVirtual = margin;
+    entry.approxBytes = approxBytes;
+    entry.lastUsedFrame = m_frameCounter;
+
+    EvictRasterCacheIfNeeded(entry.approxBytes);
+
+    m_rasterCacheBytes += entry.approxBytes;
+    auto emplaceResult = m_rasterCache.emplace(std::move(key), std::move(entry));
+    it = emplaceResult.first;
+  } else {
+    it->second.lastUsedFrame = m_frameCounter;
+  }
+
+  if (it == m_rasterCache.end() || !it->second.bitmap) {
+    DrawTextCore(text, rect, style);
+    return;
+  }
+
+  const float margin = it->second.marginVirtual;
+  D2D1_RECT_F destRect =
+      D2D1::RectF(rect.left - margin, rect.top - margin,
+                 rect.left - margin + width + margin * 2.0f,
+                 rect.top - margin + height + margin * 2.0f);
+  m_d2dContext->DrawBitmap(it->second.bitmap.Get(), destRect, 1.0f,
+                           D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+}
+
+void TextRenderer::EvictRasterCacheIfNeeded(size_t incomingBytes) {
+  while (!m_rasterCache.empty() &&
+        (m_rasterCache.size() >= kMaxRasterCacheEntries ||
+         m_rasterCacheBytes + incomingBytes >= kMaxRasterCacheBytes)) {
+    auto oldest = m_rasterCache.begin();
+    for (auto it = m_rasterCache.begin(); it != m_rasterCache.end(); ++it) {
+      if (it->second.lastUsedFrame < oldest->second.lastUsedFrame) {
+        oldest = it;
+      }
+    }
+    m_rasterCacheBytes -= (std::min)(m_rasterCacheBytes, oldest->second.approxBytes);
+    m_rasterCache.erase(oldest);
+  }
 }
 
 } // namespace graphics

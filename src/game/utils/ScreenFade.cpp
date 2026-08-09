@@ -34,9 +34,9 @@ void ScreenFade::Initialize(core::GameContext &ctx) {
   mr.mesh = ctx.resource.LoadMesh("builtin/quad");
 
   // カスタムシェーダーのロードを行います。
-  mr.shader =
-      ctx.resource.LoadShader("TransitionFade", L"Assets/shaders/BasicVS.hlsl",
-                              L"Assets/shaders/TransitionPS.hlsl");
+  mr.shader = ctx.resource.LoadShader("TransitionFade",
+                                      L"Assets/shaders/FullscreenVS.hlsl",
+                                      L"Assets/shaders/TransitionPS.hlsl");
 
   // 手動描画するため描画システムでの描画は無効化します。
   mr.isVisible = false;
@@ -217,43 +217,8 @@ void ScreenFade::Render(core::GameContext &ctx) {
   // シェーダーをバインドします。
   shader->Bind(context);
 
-  // 全画面描画のための行列を計算します。
-  XMMATRIX world = XMMatrixScaling(2.0f, 2.0f, 1.0f);
-  XMMATRIX view = XMMatrixIdentity();
-  XMMATRIX proj = XMMatrixIdentity();
-
-  // 頂点シェーダー用定数バッファを生成します。
-  struct BasicCB {
-    XMMATRIX World;
-    XMMATRIX View;
-    XMMATRIX Projection;
-    XMFLOAT4 Color;
-    XMFLOAT4 CameraPos; // BasicVSが要求する場合
-  };
-
-  // このCBはメンバとして持っておくべきだが、今回は即席で作る
-  static Microsoft::WRL::ComPtr<ID3D11Buffer> s_basicCB;
-  if (!s_basicCB) {
-    D3D11_BUFFER_DESC bd = {};
-    bd.ByteWidth = sizeof(BasicCB);
-    bd.Usage = D3D11_USAGE_DEFAULT;
-    bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    ctx.graphics.GetDevice()->CreateBuffer(&bd, nullptr,
-                                           s_basicCB.GetAddressOf());
-  }
-
-  if (s_basicCB) {
-    BasicCB bcb;
-    bcb.World = XMMatrixTranspose(world);
-    bcb.View = XMMatrixTranspose(view);
-    bcb.Projection = XMMatrixTranspose(proj);
-    bcb.Color = {1, 1, 1, 1};
-    // bcb.CameraPos ... BasicVSの内容次第だが、標準的ならWVPのみか？
-    // DX_GAMEのBasicVSを確認していないが、通常はWVP。
-
-    context->UpdateSubresource(s_basicCB.Get(), 0, nullptr, &bcb, 0, 0);
-    context->VSSetConstantBuffers(0, 1, s_basicCB.GetAddressOf());
-  }
+  // FullscreenVSは頂点位置を直接クリップ空間へ変換するため、頂点シェーダー用の
+  // 定数バッファは不要です。
 
   // メッシュ描画 (Bind inside)
   mesh->Bind(context);

@@ -6,6 +6,8 @@
 
 #include <dwrite.h>
 #include <wrl/client.h>
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -64,7 +66,12 @@ public:
         if (!m_factory) return nullptr;
 
         // キャッシュキー作成
-        std::string key = fontName + "_" + std::to_string(static_cast<int>(size)) + "_" + std::to_string(static_cast<int>(align));
+        // floatサイズをintへ丸めると、僅かに異なるサイズが同一TextFormatとして
+        // 誤って再利用されてしまう（=キャッシュヒット時の実際のレイアウトサイズと
+        // フォーマットのサイズがズレる）ため、ビット完全一致のキーを用いる。
+        uint32_t sizeBits = 0;
+        std::memcpy(&sizeBits, &size, sizeof(sizeBits));
+        std::string key = fontName + "_" + std::to_string(sizeBits) + "_" + std::to_string(static_cast<int>(align));
         auto it = m_formatCache.find(key);
         if (it != m_formatCache.end()) {
             return it->second.Get();

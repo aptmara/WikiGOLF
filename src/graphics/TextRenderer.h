@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <wincodec.h> // WIC
 #include <wrl/client.h>
 
@@ -70,13 +71,21 @@ public:
   void RenderImage(ID3D11ShaderResourceView *srv, const D2D1_RECT_F &destRect,
                    float alpha = 1.0f, float rotation = 0.0f);
 
-  /// @brief テキスト描画（詳細スタイル指定）
+  /// @brief テキスト描画（詳細スタイル指定・直接描画パス）
   void RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
                   const TextStyle &style);
 
   /// @brief テキスト描画（簡易版）
   void RenderText(const std::wstring &text, float x, float y,
                   const TextStyle &style);
+
+  /// @brief テキスト描画（ラスタキャッシュパス）
+  /// @details 安定している（毎フレーム内容が変わらない）UIテキスト向け。
+  ///          初回はオフスクリーンビットマップへ一度だけ本描画（影/8方向アウトライン/
+  ///          本体/背景）を行い、以降は同一内容・同一スタイル・同一レイアウトサイズ
+  ///          であればDrawBitmap一発で合成する。位置(x,y)はキャッシュ識別に含めない。
+  void RenderTextCached(const std::wstring &text, const D2D1_RECT_F &rect,
+                        const TextStyle &style);
 
   /// @brief 画面サイズ取得
   float GetWidth() const { return kVirtualWidth; }
@@ -89,6 +98,18 @@ private:
   /// @brief バックバッファを D2D ターゲットとして設定
   HRESULT CreateTargetBitmap(IDXGISwapChain *swapChain);
 
+  /// @brief 背景/影/アウトライン/本体を描画する共通コア処理
+  /// @details RenderText と RenderTextCached のオフスクリーン生成の両方から呼ばれる。
+  void DrawTextCore(const std::wstring &text, const D2D1_RECT_F &rect,
+                    const TextStyle &style);
+
+  /// @brief IDWriteTextLayout をキャッシュ経由で取得（なければ作成）
+  IDWriteTextLayout *GetOrCreateTextLayout(const std::wstring &text,
+                                           IDWriteTextFormat *format,
+                                           const std::string &fontFamily,
+                                           float fontSize, TextAlign align,
+                                           float maxWidth, float maxHeight);
+
   ComPtr<IDXGISwapChain> m_swapChain;
 
   // D2D 1.1 オブジェクト
@@ -100,9 +121,90 @@ private:
   // 画像キャッシュ
   std::map<std::string, ComPtr<ID2D1Bitmap1>> m_bitmapCache;
 
+  /// @brief SRVラップ用D2Dビットマップのキャッシュエントリ
+  /// @details キーのID3D11Resource*が指すリソースをComPtrで保持し続けることで、
+  ///          解放済みアドレスが別リソースに再利用されてキーが衝突する事態を防ぐ。
+  struct SrvBitmapCacheEntry {
+    ComPtr<ID3D11Resource> resource;
+    ComPtr<ID2D1Bitmap1> bitmap;
+  };
+  std::unordered_map<ID3D11Resource *, SrvBitmapCacheEntry> m_srvBitmapCache;
+
   // サブシステム
   FontManager m_fontManager;
   BrushCache m_brushCache;
+
+  /// @brief IDWriteTextLayoutキャッシュのキー
+  /// @details text/フォントファミリー/正確なfloatフォントサイズ/アラインメント/
+  ///          レイアウト幅・高さの完全一致で識別する。
+  struct TextLayoutKey {
+    std::wstring text;
+    std::string fontFamily;
+    uint32_t fontSizeBits = 0;
+    TextAlign align = TextAlign::Left;
+    uint32_t widthBits = 0;
+    uint32_t heightBits = 0;
+
+    bool operator==(const TextLayoutKey &o) const {
+      return fontSizeBits == o.fontSizeBits && widthBits == o.widthBits &&
+             heightBits == o.heightBits && align == o.align &&
+             fontFamily == o.fontFamily && text == o.text;
+    }
+  };
+  struct TextLayoutKeyHash {
+    size_t operator()(const TextLayoutKey &k) const {
+      size_t h = std::hash<std::wstring>{}(k.text);
+      h = h * 31 + std::hash<std::string>{}(k.fontFamily);
+      h = h * 31 + k.fontSizeBits;
+      h = h * 31 + static_cast<size_t>(k.align);
+      h = h * 31 + k.widthBits;
+      h = h * 31 + k.heightBits;
+      return h;
+    }
+  };
+  struct TextLayoutEntry {
+    ComPtr<IDWriteTextLayout> layout;
+    uint64_t lastUsedFrame = 0;
+  };
+  std::unordered_map<TextLayoutKey, TextLayoutEntry, TextLayoutKeyHash>
+      m_layoutCache;
+  static constexpr size_t kMaxLayoutCacheEntries = 512;
+
+  /// @brief 安定テキストのラスタ（ビットマップ）キャッシュのキー
+  /// @details テキスト内容 + 描画に関わる全スタイルフィールド + レイアウト
+  ///          幅・高さで識別する。位置(x, y)は含めない。
+  struct RasterCacheKey {
+    std::wstring text;
+    TextStyle style;
+    uint32_t widthBits = 0;
+    uint32_t heightBits = 0;
+
+    bool operator==(const RasterCacheKey &o) const {
+      return widthBits == o.widthBits && heightBits == o.heightBits &&
+             text == o.text && style == o.style;
+    }
+  };
+  struct RasterCacheKeyHash {
+    size_t operator()(const RasterCacheKey &k) const;
+  };
+  struct RasterCacheEntry {
+    ComPtr<ID2D1Bitmap1> bitmap;
+    float marginVirtual = 0.0f; // オフスクリーン生成時に付与した余白（仮想座標系）
+    size_t approxBytes = 0;
+    uint64_t lastUsedFrame = 0;
+  };
+  std::unordered_map<RasterCacheKey, RasterCacheEntry, RasterCacheKeyHash>
+      m_rasterCache;
+  static constexpr size_t kMaxRasterCacheEntries = 160;
+  static constexpr size_t kMaxRasterCacheBytes = 24u * 1024u * 1024u;
+  size_t m_rasterCacheBytes = 0;
+
+  uint64_t m_frameCounter = 0;
+
+  void EvictLayoutCacheIfNeeded();
+  /// @brief エントリ数上限、および (現在バイト数 + 挿入予定バイト数) が上限を
+  ///        超えないようになるまで、最古のエントリから追い出す。
+  void EvictRasterCacheIfNeeded(size_t incomingBytes);
 
   static constexpr float kVirtualWidth = 1280.0f;
   static constexpr float kVirtualHeight = 720.0f;
