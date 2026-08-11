@@ -21,6 +21,7 @@
 #include <chrono>
 #include <cmath>
 #include <d2d1_1.h>
+#include <filesystem>
 #include <random>
 #include <thread>
 
@@ -86,6 +87,12 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   m_explosionTimer = 0.0f;
   m_exploded = false;
   m_loadProgress = std::make_shared<std::atomic<float>>(0.0f);
+
+  // ゲームプレイ用アセットの先行ロードキューを再構築
+  m_preloadTasks.clear();
+  m_preloadIndex = 0;
+  m_preloadComplete = false;
+  BuildGameplayPreloadQueue();
 
   std::string overrideStartPage;
   std::string overrideTargetPage;
@@ -398,6 +405,99 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
 
   LOG_INFO("LoadingScene", "OnEnter complete ({} ms)",
            ElapsedMs(enterStartedAt));
+}
+
+/**
+ * @brief 本編プレイで実際に参照されるテクスチャ/SEアセットを列挙し、
+ *        1フレーム1件ロード用のタスクキューを構築します。
+ * @details ここで作るのはロードタスクの「予約」のみで、実際のWIC/MFの
+ *          同期IOはOnUpdateで1フレームに1件ずつ実行される。
+ */
+void LoadingScene::BuildGameplayPreloadQueue() {
+  // クラブアイコン（Club_01〜Club_09）
+  static const std::array<const char *, 9> kClubTextures = {
+      "Assets/textures/Club_01_1W_Driver.png",
+      "Assets/textures/Club_02_3W_Wood.png",
+      "Assets/textures/Club_03_5W_Wood.png",
+      "Assets/textures/Club_04_5I_Iron.png",
+      "Assets/textures/Club_05_7I_Iron.png",
+      "Assets/textures/Club_06_9I_Iron.png",
+      "Assets/textures/Club_07_PW_PitchingWedge.png",
+      "Assets/textures/Club_08_SW_SandWedge.png",
+      "Assets/textures/Club_09_PT_Putter.png",
+  };
+
+  // ミニマップ用アイコン、地形/判定バッジUI画像
+  static const std::array<const char *, 11> kUiTextures = {
+      "Assets/textures/golf_ball_icon_transparent.png",
+      "Assets/textures/golf_hole_icon_transparent.png",
+      "Assets/textures/ui_terrain_bunker.png",
+      "Assets/textures/ui_terrain_fairway.png",
+      "Assets/textures/ui_terrain_green.png",
+      "Assets/textures/ui_terrain_ob.png",
+      "Assets/textures/ui_terrain_rough.png",
+      "Assets/textures/ui_judge_great.png",
+      "Assets/textures/ui_judge_miss.png",
+      "Assets/textures/ui_judge_nice.png",
+      "Assets/textures/ui_judge_perfect.png",
+  };
+
+  // ショット/判定/地形/カップ/ゴール/ワープ/OB経路で実際に再生されるSE
+  static const std::array<const char *, 22> kGameplaySounds = {
+      "Assets/sounds/se_shot.mp3",
+      "Assets/sounds/se_shot_hard.mp3",
+      "Assets/sounds/se_shot_soft.mp3",
+      "Assets/sounds/se_shot_charge.mp3",
+      "Assets/sounds/se_cancel.mp3",
+      "Assets/sounds/se_judge_perfect.mp3",
+      "Assets/sounds/se_judge_great.mp3",
+      "Assets/sounds/se_judge_nice.mp3",
+      "Assets/sounds/se_judge_miss.mp3",
+      "Assets/sounds/se_judge_ob.mp3",
+      "Assets/sounds/judge_Bad.wav",
+      "Assets/sounds/se_Fairway.wav",
+      "Assets/sounds/se_Fairway.mp3",
+      "Assets/sounds/se_Rough.wav",
+      "Assets/sounds/se_Rough.mp3",
+      "Assets/sounds/se_Bunker_new.mp3",
+      "Assets/sounds/se_Bunker.mp3",
+      "Assets/sounds/se_Green.mp3",
+      "Assets/sounds/se_OB.wav",
+      "Assets/sounds/se_cupin.mp3",
+      "Assets/sounds/se_holeInOne.mp3",
+      "Assets/sounds/se_warp.mp3",
+  };
+
+  for (const char *path : kClubTextures) {
+    if (!std::filesystem::exists(path))
+      continue;
+    std::string p = path;
+    m_preloadTasks.emplace_back([p](core::GameContext &ctx) {
+      if (ctx.textRenderer)
+        ctx.textRenderer->LoadBitmapFromFile(p);
+    });
+  }
+
+  for (const char *path : kUiTextures) {
+    if (!std::filesystem::exists(path))
+      continue;
+    std::string p = path;
+    m_preloadTasks.emplace_back([p](core::GameContext &ctx) {
+      if (ctx.textRenderer)
+        ctx.textRenderer->LoadBitmapFromFile(p);
+    });
+  }
+
+  for (const char *path : kGameplaySounds) {
+    if (!std::filesystem::exists(path))
+      continue;
+    std::string p = path;
+    m_preloadTasks.emplace_back(
+        [p](core::GameContext &ctx) { ctx.resource.LoadAudio(p); });
+  }
+
+  LOG_INFO("LoadingScene", "Gameplay preload queue built: {} tasks",
+           m_preloadTasks.size());
 }
 
 void LoadingScene::CreateBoundaries(core::GameContext &ctx) {
@@ -1030,6 +1130,19 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
   float dt = ctx.dt;
   m_sceneTime += dt;
 
+  // ゲームプレイ用アセットを1フレームに1件だけ先行ロード
+  if (m_preloadIndex < m_preloadTasks.size()) {
+    m_preloadTasks[m_preloadIndex](ctx);
+    ++m_preloadIndex;
+    if (m_preloadIndex >= m_preloadTasks.size() && !m_preloadComplete) {
+      m_preloadComplete = true;
+      LOG_INFO("LoadingScene", "Gameplay asset preload complete: {} tasks",
+               m_preloadTasks.size());
+    }
+  } else if (!m_preloadComplete) {
+    m_preloadComplete = true;
+  }
+
   // ボールをスポーン
   if (m_spawnedCount < TOTAL_BALLS) {
     m_spawnTimer += dt;
@@ -1102,8 +1215,8 @@ void LoadingScene::OnUpdate(core::GameContext &ctx) {
     }
   }
 
-  if (m_loadCompleted) {
-    triggerFade = true; // ロード完了したら即終了
+  if (m_loadCompleted && m_preloadComplete) {
+    triggerFade = true; // Wikiデータとゲームプレイアセットの両方が揃ったら終了
   }
 
   // タイムアウト安全装置

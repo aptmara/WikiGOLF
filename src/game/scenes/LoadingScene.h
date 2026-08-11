@@ -151,6 +151,14 @@ private:
   bool m_loadCompleted = false;
   std::shared_ptr<std::atomic<float>> m_loadProgress;
   float m_uiProgress = 0.0f;
+
+  /// @brief 本編で使用するゲームプレイ用アセット（テクスチャ/SE）を1フレームに1件だけ
+  ///        先行ロードするためのタスクキュー。WIC/MFの重い同期ロードが1フレームに
+  ///        集中して固まるのを防ぐ。
+  void BuildGameplayPreloadQueue();
+  std::vector<std::function<void(core::GameContext &)>> m_preloadTasks;
+  size_t m_preloadIndex = 0;
+  bool m_preloadComplete = false;
 };
 
 } // namespace game::scenes
