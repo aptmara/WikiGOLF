@@ -56,9 +56,16 @@ private:
   Microsoft::WRL::ComPtr<ID3D11Buffer> m_cb;
   Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samp;
 
+  // インスタンシング用の動的構造化バッファ（t15にバインド）
+  Microsoft::WRL::ComPtr<ID3D11Buffer> m_instancedBuffer;
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_instancedSRV;
+  size_t m_instancedBufferCapacity = 0;
+
   Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_saveRTV;
   Microsoft::WRL::ComPtr<ID3D11DepthStencilView> m_saveDSV;
   D3D11_VIEWPORT m_saveVP;
+
+  bool EnsureInstanceBuffer(ID3D11Device *device, size_t requiredCount);
 };
 
 } // namespace game::systems

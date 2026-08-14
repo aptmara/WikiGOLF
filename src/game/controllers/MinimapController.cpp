@@ -4,6 +4,7 @@
 #include "../components/UIText.h"
 #include "../components/Camera.h"
 #include "../components/Skybox.h"
+#include "../components/WikiComponents.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../graphics/GraphicsDevice.h"
@@ -129,7 +130,17 @@ MarkerBounds GetMapViewMarkerBounds() {
 void MinimapController::Initialize(Config cfg, core::GameContext &ctx) {
   m_cfg = cfg;
   m_minimapRenderer = std::make_unique<game::systems::MapSys>();
-  m_minimapRenderer->Initialize(ctx.graphics.GetDevice(), 720, 720);
+  m_minimapRenderer->Initialize(ctx.graphics.GetDevice(), 256, 256);
+
+  // 変化駆動レンダリングの状態をリセット（初回は必ず1回描画させる）
+  m_minimapHasRenderedOnce = false;
+  m_lastRenderedCenter = {0.0f, 0.0f, 0.0f};
+  m_lastRenderedZoom = -1.0f;
+  m_lastRenderedFieldWidth = -1.0f;
+  m_lastRenderedFieldDepth = -1.0f;
+  m_lastRenderedSpan = -1.0f;
+  m_lastRenderedMoveCount = -1;
+  m_pendingMoveCount = -1;
 }
 
 /**
@@ -437,6 +448,11 @@ void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skybox
     m_mapOpenHintTimer = 0.0f;
     if (auto* openBg = ctx.world.Get<UIText>(m_mapOpenHintBg)) openBg->visible = false;
     if (auto* openTxt = ctx.world.Get<UIText>(m_mapOpenHintText)) openTxt->visible = false;
+
+    // マップビュー中はHUDミニマップのオフスクリーン描画を止めていたため、
+    // 復帰直後は変化駆動判定に関わらず必ず1回再描画する。
+    m_minimapHasRenderedOnce = false;
+    m_lastRenderedMoveCount = -1;
   }
 }
 
@@ -490,6 +506,9 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
 
   if (!m_isVisible) {
     if (ui) ui->visible = false;
+    m_minimapRenderPending = false;
+    m_minimapHasRenderedOnce = false; // 再表示時に必ず1回再描画させる
+    m_lastRenderedMoveCount = -1;
     SetVisible(ctx, false);
     return;
   }
@@ -498,7 +517,44 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   game::systems::MapRenderParams params = m_isMapView
       ? BuildMapViewParams(m_mapCenter, m_mapZoom, fieldWidth, fieldDepth)
       : BuildHudMinimapParams(ctx, m_cfg.ballEntity, fieldWidth, fieldDepth);
-  m_minimapRenderer->Render(ctx, params);
+
+  // マップビュー中はメインカメラが俯瞰映像を描画するため、オフスクリーン描画は不要
+  m_pendingMinimapParams = params;
+  if (!m_isMapView) {
+    // 変化駆動レンダリング：初回表示・ページ/フィールド変更・中心移動・
+    // ズームや表示範囲の変化があった場合のみ再描画を要求する。
+    // 静止中は毎フレームのGPU再描画を行わない。
+    const float span = ComputeMinimapWorldSpan(params);
+    const float moveThresholdPixels = 1.0f; // 256x256マップ上で意味のある移動量
+    const float moveThreshold =
+        std::max(0.05f, (span / 256.0f) * moveThresholdPixels);
+
+    // ページ/地形の内容識別子。GolfGameState::moveCountはページ遷移のたびに
+    // 単調増加するため、寸法が同一の新しいページへ遷移した場合でも変化を検出できる。
+    int currentMoveCount = m_lastRenderedMoveCount;
+    if (auto *state = ctx.world.GetGlobal<components::GolfGameState>()) {
+      currentMoveCount = state->moveCount;
+    }
+
+    const bool paramsChanged =
+        !m_minimapHasRenderedOnce ||
+        fieldWidth != m_lastRenderedFieldWidth ||
+        fieldDepth != m_lastRenderedFieldDepth ||
+        currentMoveCount != m_lastRenderedMoveCount ||
+        std::abs(params.zoom - m_lastRenderedZoom) > 0.0001f ||
+        std::abs(span - m_lastRenderedSpan) > 0.01f ||
+        std::abs(params.center.x - m_lastRenderedCenter.x) > moveThreshold ||
+        std::abs(params.center.z - m_lastRenderedCenter.z) > moveThreshold;
+
+    if (paramsChanged) {
+      m_minimapRenderPending = true;
+    }
+    m_pendingFieldWidth = fieldWidth;
+    m_pendingFieldDepth = fieldDepth;
+    m_pendingMoveCount = currentMoveCount;
+  } else {
+    m_minimapRenderPending = false;
+  }
 
   const float clipWidth = ComputeMinimapWorldSpan(params);
   const MarkerBounds mapBounds = m_isMapView
@@ -742,6 +798,30 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
 }
 
 /**
+ * @brief 保留中のミニマップ描画要求があれば、オフスクリーンレンダーターゲットへ実際に描画します。
+ */
+void MinimapController::RenderPendingMinimap(core::GameContext &ctx) {
+  if (m_isMapView || !m_isVisible) {
+    m_minimapRenderPending = false;
+    return;
+  }
+  if (!m_minimapRenderPending || !m_minimapRenderer) {
+    return;
+  }
+  m_minimapRenderer->Render(ctx, m_pendingMinimapParams);
+  m_minimapRenderPending = false;
+
+  // 変化駆動レンダリング用に、実際に描画したときのパラメータを記録する
+  m_minimapHasRenderedOnce = true;
+  m_lastRenderedCenter = m_pendingMinimapParams.center;
+  m_lastRenderedZoom = m_pendingMinimapParams.zoom;
+  m_lastRenderedFieldWidth = m_pendingFieldWidth;
+  m_lastRenderedFieldDepth = m_pendingFieldDepth;
+  m_lastRenderedSpan = ComputeMinimapWorldSpan(m_pendingMinimapParams);
+  m_lastRenderedMoveCount = m_pendingMoveCount;
+}
+
+/**
  * @brief マップの中心座標をボール位置に同期させます。
  */
 void MinimapController::SyncMapCenterToBall(core::GameContext &ctx, float dt, float fieldWidth, float fieldDepth, bool forceSnap) {
@@ -871,6 +951,12 @@ namespace game::controllers {
  * 出力: なし（副作用としてコンポーネントの表示状態が変化）
  */
 void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
+    if (!visible && m_isVisible) {
+      // 非表示化：再表示時に必ず1回再描画させるため状態を無効化する
+      m_minimapHasRenderedOnce = false;
+      m_minimapRenderPending = false;
+      m_lastRenderedMoveCount = -1;
+    }
     m_isVisible = visible;
     auto setUIImg = [&](ecs::Entity e, bool v) {
         if (e == UINT32_MAX) return;

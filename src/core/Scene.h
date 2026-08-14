@@ -35,6 +35,9 @@ public:
   /// @brief 毎フレーム描画（オプション）
   virtual void Render(GameContext &ctx) {}
 
+  /// @brief BeginFrame直後・Skybox/メインメッシュ描画前に呼ばれるオフスクリーン描画（オプション）
+  virtual void RenderOffscreen(GameContext &ctx) {}
+
 protected:
   /// @brief エンティティを作成し、追跡リストに追加
   ecs::Entity CreateEntity(ecs::World &world) {

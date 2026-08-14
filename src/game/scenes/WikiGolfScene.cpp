@@ -1,4 +1,5 @@
 #include "WikiGolfScene.h"
+#include "../../core/Profiler.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
@@ -651,10 +652,7 @@ bool WikiGolfScene::CanReturnToPreviousPage(core::GameContext &ctx) const {
   }
 
   const auto* state = ctx.world.GetGlobal<GolfGameState>();
-  const auto* shot = ctx.world.GetGlobal<ShotState>();
-  return state && shot &&
-         shot->phase == ShotState::Phase::Idle &&
-         state->pathHistory.size() >= 2;
+  return state && state->pathHistory.size() >= 2;
 }
 
 bool WikiGolfScene::ReturnToPreviousPage(core::GameContext &ctx) {
@@ -761,6 +759,7 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
  * @brief シーンの毎フレーム更新処理を行います。
  */
 void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
+  PROFILE_SCOPE("WikiGolf.Update");
   const float dt = ctx.dt;
   m_screenFade.Update(dt);
 
@@ -769,10 +768,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   if (!state || !shot) return;
 
   if (m_pageLoader) {
+      PROFILE_SCOPE("WikiGolf.PageLoaderAsync");
       m_pageLoader->UpdateAsyncPathEvaluation(ctx);
   }
 
   if (m_phase == ScenePhase::Transitioning && m_transitionController) {
+      PROFILE_SCOPE("WikiGolf.Transition");
       bool finished = m_transitionController->Update(ctx);
       if (finished) {
           m_phase = ScenePhase::Playing;
@@ -814,6 +815,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   bool tutorialInputLocked = false;
   if (m_isTutorial && m_tutorialOverlay) {
+    PROFILE_SCOPE("WikiGolf.TutorialOverlay");
     m_tutorialOverlay->Update(ctx, m_cameraController.get(), m_clubController.get(), m_shotController.get(), m_minimapController.get());
     if (m_tutorialOverlay->IsDone()) {
       // チュートリアル終了後、タイトルへ戻る処理など
@@ -834,6 +836,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   bool isMapView = false;
   bool wasMapView = m_minimapController && m_minimapController->IsMapView();
   if (m_minimapController && !tutorialInputLocked) {
+      PROFILE_SCOPE("WikiGolf.Minimap");
       float fieldW = m_pageLoader ? m_pageLoader->GetFieldWidth() : 80.0f;
       float fieldD = m_pageLoader ? m_pageLoader->GetFieldDepth() : 120.0f;
       m_minimapController->ProcessInput(ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
@@ -872,6 +875,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // クラブ更新
   if (m_clubController && !tutorialInputLocked && !isMapView &&
       shot->phase == game::components::ShotState::Phase::Idle) {
+      PROFILE_SCOPE("WikiGolf.ClubInput");
       game::controllers::ClubController::InputParams cParams;
       cParams.allowInput = state->canShoot;
       auto cResult = m_clubController->UpdateInput(ctx, cParams);
@@ -884,12 +888,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // カメラ更新
   if (m_cameraController && !tutorialInputLocked && !isMapView) {
+      PROFILE_SCOPE("WikiGolf.Camera");
       m_cameraController->ProcessInput(ctx, mouseX, mouseY);
       m_cameraController->Update(ctx);
   }
 
   // ショット処理
   if (m_shotController && !tutorialInputLocked && !isMapView) {
+      PROFILE_SCOPE("WikiGolf.Shot");
       auto event = m_shotController->ProcessShot(ctx, state->canShoot, m_hud.get(), m_clubController.get());
       if (event.shotFired) {
           state->canShoot = false;
@@ -919,6 +925,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   
   // クラブアニメーション更新
   if (m_clubController && !tutorialInputLocked) {
+      PROFILE_SCOPE("WikiGolf.ClubAnimation");
       DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
       m_clubController->UpdateAnimation(ctx, dt, m_ballEntity, shotDir);
   }
@@ -1089,6 +1096,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       (shot->phase == game::components::ShotState::Phase::Idle ||
        shot->phase == game::components::ShotState::Phase::PowerCharging ||
        shot->phase == game::components::ShotState::Phase::ImpactTiming)) {
+      PROFILE_SCOPE("WikiGolf.Trajectory");
       game::controllers::TrajectoryPredictor::Params tParams;
       tParams.ballEntity    = m_ballEntity;
       tParams.arrowEntity   = m_arrowEntity;
@@ -1191,6 +1199,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // HUD 更新
   if (m_hud) {
+      PROFILE_SCOPE("WikiGolf.HUD");
       float currentPower = shot->powerGaugePos;
       if (shot->phase == game::components::ShotState::Phase::ImpactTiming || shot->confirmedPower > 0.0f) {
           currentPower = shot->confirmedPower;
@@ -1251,9 +1260,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   if (m_gameJuice) {
+      PROFILE_SCOPE("WikiGolf.GameJuice");
       m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
-  UpdateProceduralFlagEffects(ctx, dt);
+  {
+    PROFILE_SCOPE("WikiGolf.ProceduralFlags");
+    UpdateProceduralFlagEffects(ctx, dt);
+  }
 
   // 地形判定UIの更新
   if (m_terrainDisplayTimer > 0.0f) {
@@ -1294,7 +1307,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
  * @brief シーンの描画処理を行います。
  */
 void WikiGolfScene::Render(core::GameContext &ctx) {
+  PROFILE_SCOPE("WikiGolf.SceneOverlay");
   m_screenFade.Render(ctx);
+}
+
+void WikiGolfScene::RenderOffscreen(core::GameContext &ctx) {
+  if (m_minimapController) {
+    m_minimapController->RenderPendingMinimap(ctx);
+  }
 }
 
 /**

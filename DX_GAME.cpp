@@ -19,6 +19,7 @@
 #include "src/resources/ResourceManager.h"
 #include <Windows.h>
 #include <chrono>
+#include <filesystem>
 
 // グローバル入力ポインタ（WndProc用）
 core::Input *g_Input = nullptr;
@@ -51,6 +52,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                    LPSTR lpCmdLine, int nCmdShow) {
+
+  wchar_t modulePathBuffer[32768] = {};
+  const DWORD modulePathLength =
+      GetModuleFileNameW(nullptr, modulePathBuffer,
+                         static_cast<DWORD>(std::size(modulePathBuffer)));
+  std::filesystem::path executableDirectory;
+  std::error_code workingDirectoryError;
+  if (modulePathLength > 0 &&
+      modulePathLength < static_cast<DWORD>(std::size(modulePathBuffer))) {
+    executableDirectory =
+        std::filesystem::path(modulePathBuffer).parent_path();
+    std::filesystem::current_path(executableDirectory, workingDirectoryError);
+  } else {
+    workingDirectoryError =
+        std::error_code(static_cast<int>(GetLastError()), std::system_category());
+  }
 
   // ウィンドウクラス登録
   WNDCLASSEX wc = {0};
@@ -101,6 +118,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   // ログシステム初期化
   core::Logger::Instance().Initialize("game_startup.log");
+  if (workingDirectoryError) {
+    LOG_WARN("Main", "Failed to set executable working directory: {}",
+             workingDirectoryError.message());
+  } else {
+    LOG_INFO("Main", "Working directory fixed to executable location: '{}'",
+             executableDirectory.string());
+  }
+  LOG_INFO("Main",
+           "Graphics device: Driver={} Adapter='{}' DedicatedVRAM={:.0f}MB",
+           graphics.GetDriverType() == D3D_DRIVER_TYPE_HARDWARE ? "HARDWARE"
+                                                                : "WARP",
+           graphics.GetAdapterName(),
+           static_cast<double>(graphics.GetDedicatedVideoMemoryBytes()) /
+               (1024.0 * 1024.0));
+  core::Profiler::Instance().Initialize("profiling");
 
   graphics::TextRenderer textRenderer;
   if (!textRenderer.Initialize(graphics.GetSwapChain())) {
@@ -161,18 +193,40 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       ctx.dt = dt;
       ctx.time += dt;
 
-      PROFILE_SCOPE("MainLoop");
+      const char *sceneName = sceneManager.Current()
+                                  ? sceneManager.Current()->GetName()
+                                  : "NoScene";
+      auto &profiler = core::Profiler::Instance();
+      const uint64_t profileFrame =
+          profiler.BeginFrame(sceneName, world.GetEntityCount());
+      profiler.SetCounter("Frame.DeltaSeconds", dt);
+      profiler.SetCounter("GPU.DriverIsWarp",
+                          graphics.GetDriverType() == D3D_DRIVER_TYPE_WARP ? 1.0
+                                                                          : 0.0);
+      profiler.SetCounter(
+          "GPU.DedicatedVideoMemoryMB",
+          static_cast<double>(graphics.GetDedicatedVideoMemoryBytes()) /
+              (1024.0 * 1024.0));
 
       {
           PROFILE_SCOPE("LogicUpdate");
           // UI更新 (Logic)
-          uiButtonSystem(ctx);
+          {
+              PROFILE_SCOPE("Logic.UIButtonSystem");
+              uiButtonSystem(ctx);
+          }
 
           // シーン更新 (Game Logic + Physics)
-          sceneManager.Update(ctx);
+          {
+              PROFILE_SCOPE("Logic.SceneUpdate");
+              sceneManager.Update(ctx);
+          }
 
           // オーディオ更新
-          audioSystem.Update(ctx);
+          {
+              PROFILE_SCOPE("Logic.AudioSystem");
+              audioSystem.Update(ctx);
+          }
       }
 
       {
@@ -180,22 +234,58 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           
           {
               PROFILE_SCOPE("BeginFrame");
-              graphics.BeginFrame();
+              graphics.BeginFrame(profileFrame);
+          }
+
+          {
+              PROFILE_SCOPE("Render.Offscreen");
+              graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.Minimap");
+              sceneManager.RenderOffscreen(ctx);
           }
 
           {
               PROFILE_SCOPE("Render_3D");
-              game::systems::SkyboxRenderSystem(ctx);
-              game::systems::RenderSystem(ctx);
+              {
+                  PROFILE_SCOPE("Render.Skybox");
+                  graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.Skybox");
+                  game::systems::SkyboxRenderSystem(ctx);
+              }
+              {
+                  PROFILE_SCOPE("Render.Meshes");
+                  graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.Meshes");
+                  game::systems::RenderSystem(ctx);
+              }
           }
 
           {
               PROFILE_SCOPE("Render_UI");
-              uiRenderSystem(ctx);
-              uiImageRenderSystem(ctx);
-              uiBarGaugeRenderSystem(ctx); // 追加
-              uiButtonRenderSystem(ctx);
-              sceneManager.Render(ctx);
+              {
+                  PROFILE_SCOPE("Render.UI2D");
+                  graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.UI2D");
+                  textRenderer.BeginDraw();
+                  {
+                      PROFILE_SCOPE("Render.UIText");
+                      uiRenderSystem(ctx);
+                  }
+                  {
+                      PROFILE_SCOPE("Render.UIImage");
+                      uiImageRenderSystem(ctx);
+                  }
+                  {
+                      PROFILE_SCOPE("Render.UIBarGauge");
+                      uiBarGaugeRenderSystem(ctx); // 追加
+                  }
+                  {
+                      PROFILE_SCOPE("Render.UIButton");
+                      uiButtonRenderSystem(ctx);
+                  }
+                  textRenderer.EndDraw();
+              }
+              {
+                  PROFILE_SCOPE("Render.SceneOverlay");
+                  graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.SceneOverlay");
+                  sceneManager.Render(ctx);
+              }
           }
 
           {
@@ -206,13 +296,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
       // 入力状態更新（次フレームのためにフラグクリア）
       // Logic処理の後、描画の後に行う
-      input.Update();
+      {
+          PROFILE_SCOPE("Input.EndFrame");
+          input.Update();
+      }
 
-      // パフォーマンスレポート出力 (1秒毎)
-      core::Profiler::Instance().ReportAndReset(dt);
+      profiler.EndFrame();
+      for (auto &sample : graphics.ConsumeGpuProfileSamples()) {
+        profiler.SubmitGpuFrame(std::move(sample));
+      }
     }
   }
 
+  core::Profiler::Instance().Shutdown();
   textRenderer.Shutdown();
   graphics.Shutdown();
   audioSystem.Shutdown();

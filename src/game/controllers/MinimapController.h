@@ -36,8 +36,13 @@ public:
   // 毎フレーム呼び出し
   // ------------------------------------------------------------------
 
-  /// @brief 右上ミニマップの更新
+  /// @brief 右上ミニマップの更新（マーカー等のUI更新と描画リクエストの発行のみ行う）
   void UpdateMinimap(core::GameContext &ctx, float fieldWidth, float fieldDepth, const DirectX::XMFLOAT3& shotDirection);
+
+  /// @brief レンダーフェーズ内で呼び出し、保留中のミニマップGPU描画を実行する
+  /// @details BeginFrame後・Skybox/メインメッシュ描画前に呼ばれる想定。マップビュー中はメイン
+  ///          カメラが俯瞰映像を描画するため、ここではオフスクリーン描画をスキップする。
+  void RenderPendingMinimap(core::GameContext &ctx);
 
   /// @brief 俯瞰マップカメラの更新（マップビュー有効時）
   void UpdateMapCamera(core::GameContext &ctx, float fieldWidth, float fieldDepth);
@@ -114,6 +119,26 @@ private:
 
   // ミニマップ（右上常時表示）
   std::unique_ptr<game::systems::MapSys> m_minimapRenderer;
+  game::systems::MapRenderParams m_pendingMinimapParams; ///< 次回RenderPendingMinimapで使う最新パラメータ
+  bool m_minimapRenderPending = false; ///< オフスクリーン描画の要求フラグ
+
+  // 変化駆動レンダリング：前回実際にオフスクリーン描画した時点のパラメータ。
+  // 意味のある変化（初回表示・ページ/フィールド変更・中心移動・ズーム/表示範囲変化）
+  // がない限り、GPU再描画は要求しない。
+  bool m_minimapHasRenderedOnce = false;
+  DirectX::XMFLOAT3 m_lastRenderedCenter = {0.0f, 0.0f, 0.0f};
+  float m_lastRenderedZoom = -1.0f;
+  float m_lastRenderedFieldWidth = -1.0f;
+  float m_lastRenderedFieldDepth = -1.0f;
+  float m_lastRenderedSpan = -1.0f;
+  float m_pendingFieldWidth = 0.0f;  ///< 直近のUpdateMinimap呼び出し時のfieldWidth
+  float m_pendingFieldDepth = 0.0f;  ///< 直近のUpdateMinimap呼び出し時のfieldDepth
+
+  // ページ/地形の内容識別（寸法が同一でも新しい記事に地形が再構築された場合に
+  // ミニマップを確実に再描画させるため）。GolfGameState::moveCountはページ遷移
+  // のたびに単調増加するため、これをそのまま識別子として利用する。
+  int m_lastRenderedMoveCount = -1;
+  int m_pendingMoveCount = -1;
 
   ecs::Entity m_minimapEntity = UINT32_MAX;
   ecs::Entity m_minimapMarkerEntity = UINT32_MAX;      ///< 自ボール用内側ドットマーカー（●）

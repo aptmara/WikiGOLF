@@ -5,8 +5,11 @@
 
 #include "GraphicsDevice.h"
 #include "../core/Logger.h"
+#include <algorithm>
 #include <d3d11.h>
 #include <d3d11_4.h>
+#include <dxgi1_6.h>
+#include <limits>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -14,6 +17,25 @@
 #pragma comment(lib, "dwrite.lib")
 
 namespace graphics {
+namespace {
+
+std::string WideToUtf8(const wchar_t *value) {
+  if (!value || value[0] == L'\0') {
+    return "Unknown";
+  }
+  const int required =
+      WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
+  if (required <= 1) {
+    return "Unknown";
+  }
+  std::string result(static_cast<size_t>(required), '\0');
+  WideCharToMultiByte(CP_UTF8, 0, value, -1, result.data(), required, nullptr,
+                      nullptr);
+  result.pop_back();
+  return result;
+}
+
+} // namespace
 
 bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height) {
   m_width = width;
@@ -27,12 +49,28 @@ bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height) {
     return false;
   SetupViewport();
 
+  m_gpuProfilerAvailable = InitializeGpuProfilerQueries();
+  if (!m_gpuProfilerAvailable) {
+    LOG_WARN("GraphicsDevice",
+             "D3D11 GPU profiler queries are unavailable; CPU profiling will continue");
+  }
+
   return true;
 }
 
 void GraphicsDevice::Shutdown() {
   if (m_context) {
     m_context->ClearState();
+  }
+  m_currentGpuQueryFrame = nullptr;
+  m_gpuScopeStack.clear();
+  m_readyGpuSamples.clear();
+  for (auto &frame : m_gpuQueryFrames) {
+    frame.scopes.clear();
+    frame.frameEnd.Reset();
+    frame.frameStart.Reset();
+    frame.pipeline.Reset();
+    frame.disjoint.Reset();
   }
   m_rasterizerState.Reset();
   m_depthStencilState.Reset();
@@ -44,7 +82,24 @@ void GraphicsDevice::Shutdown() {
   m_device.Reset();
 }
 
-void GraphicsDevice::BeginFrame(float r, float g, float b, float a) {
+void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
+                                float b, float a) {
+  ResolveGpuProfilerQueries();
+  m_gpuScopeStack.clear();
+  m_currentGpuQueryFrame = nullptr;
+
+  if (m_gpuProfilerAvailable) {
+    auto &queryFrame = m_gpuQueryFrames[m_gpuQueryWriteIndex];
+    if (!queryFrame.issued) {
+      queryFrame.frameIndex = profileFrameIndex;
+      queryFrame.usedScopeCount = 0;
+      m_context->Begin(queryFrame.disjoint.Get());
+      m_context->End(queryFrame.frameStart.Get());
+      m_context->Begin(queryFrame.pipeline.Get());
+      m_currentGpuQueryFrame = &queryFrame;
+    }
+  }
+
   float clearColor[4] = {r, g, b, a};
   m_context->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
   m_context->ClearDepthStencilView(m_depthStencilView.Get(),
@@ -55,7 +110,66 @@ void GraphicsDevice::BeginFrame(float r, float g, float b, float a) {
 }
 
 void GraphicsDevice::EndFrame() {
+  if (m_currentGpuQueryFrame) {
+    while (!m_gpuScopeStack.empty()) {
+      EndGpuScope();
+    }
+    m_context->End(m_currentGpuQueryFrame->pipeline.Get());
+    m_context->End(m_currentGpuQueryFrame->frameEnd.Get());
+    m_context->End(m_currentGpuQueryFrame->disjoint.Get());
+    m_currentGpuQueryFrame->issued = true;
+    m_gpuQueryWriteIndex = (m_gpuQueryWriteIndex + 1) % kGpuQueryBufferCount;
+    m_currentGpuQueryFrame = nullptr;
+  }
+
   m_swapChain->Present(1, 0); // VSync有効
+  ResolveGpuProfilerQueries();
+}
+
+void GraphicsDevice::BeginGpuScope(std::string_view name) {
+  m_gpuScopeStack.push_back(std::numeric_limits<size_t>::max());
+  if (!m_currentGpuQueryFrame) {
+    return;
+  }
+
+  const size_t scopeIndex = m_currentGpuQueryFrame->usedScopeCount++;
+  if (scopeIndex >= m_currentGpuQueryFrame->scopes.size()) {
+    D3D11_QUERY_DESC queryDesc{};
+    queryDesc.Query = D3D11_QUERY_TIMESTAMP;
+    GpuTimestampQueries queries;
+    if (FAILED(m_device->CreateQuery(&queryDesc, &queries.start)) ||
+        FAILED(m_device->CreateQuery(&queryDesc, &queries.end))) {
+      --m_currentGpuQueryFrame->usedScopeCount;
+      return;
+    }
+    m_currentGpuQueryFrame->scopes.push_back(std::move(queries));
+  }
+
+  auto &queries = m_currentGpuQueryFrame->scopes[scopeIndex];
+  queries.name = std::string(name);
+  m_context->End(queries.start.Get());
+  m_gpuScopeStack.back() = scopeIndex;
+}
+
+void GraphicsDevice::EndGpuScope() {
+  if (m_gpuScopeStack.empty()) {
+    return;
+  }
+  const size_t scopeIndex = m_gpuScopeStack.back();
+  m_gpuScopeStack.pop_back();
+  if (!m_currentGpuQueryFrame ||
+      scopeIndex == std::numeric_limits<size_t>::max() ||
+      scopeIndex >= m_currentGpuQueryFrame->scopes.size()) {
+    return;
+  }
+  m_context->End(m_currentGpuQueryFrame->scopes[scopeIndex].end.Get());
+}
+
+std::vector<core::GpuFrameSample>
+GraphicsDevice::ConsumeGpuProfileSamples() {
+  std::vector<core::GpuFrameSample> result;
+  result.swap(m_readyGpuSamples);
+  return result;
 }
 
 bool GraphicsDevice::Resize(uint32_t width, uint32_t height) {
@@ -124,23 +238,82 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
       D3D_FEATURE_LEVEL_11_0,
   };
 
-  D3D_FEATURE_LEVEL featureLevel;
-  auto tryCreate = [&](D3D_DRIVER_TYPE type) {
+  D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_11_0;
+  auto resetCreatedObjects = [&]() {
+    m_context.Reset();
+    m_device.Reset();
+    m_swapChain.Reset();
+  };
+  auto tryCreateForAdapter = [&](IDXGIAdapter1 *adapter) {
+    resetCreatedObjects();
     return D3D11CreateDeviceAndSwapChain(
-        nullptr, type, nullptr, createDeviceFlags, featureLevels,
+        adapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, createDeviceFlags,
+        featureLevels,
         _countof(featureLevels), D3D11_SDK_VERSION, &swapChainDesc,
         &m_swapChain, &m_device, &featureLevel, &m_context);
   };
 
-  // WARPを先に試し、ハードウェアが安定しない環境でも起動を優先
-  HRESULT hr = tryCreate(D3D_DRIVER_TYPE_WARP);
-  m_driverType = D3D_DRIVER_TYPE_WARP;
-  if (FAILED(hr)) {
-    LOG_WARN("GraphicsDevice",
-             "WARP device creation failed (hr={:08X}), trying hardware",
-             static_cast<uint32_t>(hr));
-    hr = tryCreate(D3D_DRIVER_TYPE_HARDWARE);
+  HRESULT hr = E_FAIL;
+  ComPtr<IDXGIFactory1> factory;
+  if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
+    ComPtr<IDXGIFactory6> factory6;
+    if (SUCCEEDED(factory.As(&factory6))) {
+      for (UINT index = 0;; ++index) {
+        ComPtr<IDXGIAdapter1> adapter;
+        const HRESULT enumResult = factory6->EnumAdapterByGpuPreference(
+            index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+            IID_PPV_ARGS(&adapter));
+        if (enumResult == DXGI_ERROR_NOT_FOUND) {
+          break;
+        }
+        if (FAILED(enumResult)) {
+          break;
+        }
+        DXGI_ADAPTER_DESC1 description{};
+        if (FAILED(adapter->GetDesc1(&description)) ||
+            (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+          continue;
+        }
+        hr = tryCreateForAdapter(adapter.Get());
+        if (SUCCEEDED(hr)) {
+          break;
+        }
+      }
+    } else {
+      for (UINT index = 0;; ++index) {
+        ComPtr<IDXGIAdapter1> adapter;
+        const HRESULT enumResult = factory->EnumAdapters1(index, &adapter);
+        if (enumResult == DXGI_ERROR_NOT_FOUND) {
+          break;
+        }
+        if (FAILED(enumResult)) {
+          break;
+        }
+        DXGI_ADAPTER_DESC1 description{};
+        if (FAILED(adapter->GetDesc1(&description)) ||
+            (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+          continue;
+        }
+        hr = tryCreateForAdapter(adapter.Get());
+        if (SUCCEEDED(hr)) {
+          break;
+        }
+      }
+    }
+  }
+
+  if (SUCCEEDED(hr)) {
     m_driverType = D3D_DRIVER_TYPE_HARDWARE;
+  } else {
+    LOG_WARN("GraphicsDevice",
+             "Hardware device creation failed (hr={:08X}); falling back to WARP",
+             static_cast<uint32_t>(hr));
+    resetCreatedObjects();
+    hr = D3D11CreateDeviceAndSwapChain(
+        nullptr, D3D_DRIVER_TYPE_WARP, nullptr, createDeviceFlags,
+        featureLevels, _countof(featureLevels), D3D11_SDK_VERSION,
+        &swapChainDesc, &m_swapChain, &m_device, &featureLevel, &m_context);
+    m_driverType = D3D_DRIVER_TYPE_WARP;
   }
 
   if (FAILED(hr)) {
@@ -150,12 +323,17 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
   }
 
   m_featureLevel = featureLevel;
+  CaptureAdapterInfo();
   const char* driverStr = "WARP";
   if (m_driverType == D3D_DRIVER_TYPE_HARDWARE) {
     driverStr = "HARDWARE";
   }
-  LOG_INFO("GraphicsDevice", "Device created. Driver={}, FeatureLevel=0x{:04X}",
-           driverStr, static_cast<uint32_t>(featureLevel));
+  LOG_INFO("GraphicsDevice",
+           "Device created. Driver={}, Adapter='{}', DedicatedVRAM={:.0f}MB, "
+           "FeatureLevel=0x{:04X}",
+           driverStr, m_adapterName,
+           static_cast<double>(m_dedicatedVideoMemoryBytes) / (1024.0 * 1024.0),
+           static_cast<uint32_t>(featureLevel));
 
   // D3D11でのマルチスレッド保護を有効化
   // デバイスコンテキストからマルチスレッド保護インターフェースを取得
@@ -182,6 +360,25 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
   }
 
   return true;
+}
+
+void GraphicsDevice::CaptureAdapterInfo() {
+  m_adapterName = "Unknown";
+  m_dedicatedVideoMemoryBytes = 0;
+  if (!m_device) {
+    return;
+  }
+
+  ComPtr<IDXGIDevice> dxgiDevice;
+  ComPtr<IDXGIAdapter> adapter;
+  DXGI_ADAPTER_DESC description{};
+  if (SUCCEEDED(m_device.As(&dxgiDevice)) &&
+      SUCCEEDED(dxgiDevice->GetAdapter(&adapter)) &&
+      SUCCEEDED(adapter->GetDesc(&description))) {
+    m_adapterName = WideToUtf8(description.Description);
+    m_dedicatedVideoMemoryBytes =
+        static_cast<uint64_t>(description.DedicatedVideoMemory);
+  }
 }
 
 bool GraphicsDevice::CreateRenderTargetView() {
@@ -266,6 +463,100 @@ void GraphicsDevice::SetupRenderState() {
 
   m_device->CreateDepthStencilState(&depthDesc, &m_depthStencilState);
   m_context->OMSetDepthStencilState(m_depthStencilState.Get(), 1);
+}
+
+bool GraphicsDevice::InitializeGpuProfilerQueries() {
+  D3D11_QUERY_DESC disjointDesc{};
+  disjointDesc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+  D3D11_QUERY_DESC pipelineDesc{};
+  pipelineDesc.Query = D3D11_QUERY_PIPELINE_STATISTICS;
+  D3D11_QUERY_DESC timestampDesc{};
+  timestampDesc.Query = D3D11_QUERY_TIMESTAMP;
+
+  for (auto &frame : m_gpuQueryFrames) {
+    if (FAILED(m_device->CreateQuery(&disjointDesc, &frame.disjoint)) ||
+        FAILED(m_device->CreateQuery(&pipelineDesc, &frame.pipeline)) ||
+        FAILED(m_device->CreateQuery(&timestampDesc, &frame.frameStart)) ||
+        FAILED(m_device->CreateQuery(&timestampDesc, &frame.frameEnd))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void GraphicsDevice::ResolveGpuProfilerQueries() {
+  if (!m_gpuProfilerAvailable) {
+    return;
+  }
+
+  for (auto &frame : m_gpuQueryFrames) {
+    if (!frame.issued) {
+      continue;
+    }
+
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint{};
+    const HRESULT disjointResult =
+        m_context->GetData(frame.disjoint.Get(), &disjoint, sizeof(disjoint),
+                           D3D11_ASYNC_GETDATA_DONOTFLUSH);
+    if (disjointResult == S_FALSE) {
+      continue;
+    }
+
+    core::GpuFrameSample sample;
+    sample.frameIndex = frame.frameIndex;
+    sample.valid = SUCCEEDED(disjointResult) && !disjoint.Disjoint &&
+                   disjoint.Frequency != 0;
+
+    uint64_t frameStart = 0;
+    uint64_t frameEnd = 0;
+    D3D11_QUERY_DATA_PIPELINE_STATISTICS pipeline{};
+    if (sample.valid) {
+      const HRESULT startResult =
+          m_context->GetData(frame.frameStart.Get(), &frameStart,
+                             sizeof(frameStart), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+      const HRESULT endResult =
+          m_context->GetData(frame.frameEnd.Get(), &frameEnd, sizeof(frameEnd),
+                             D3D11_ASYNC_GETDATA_DONOTFLUSH);
+      const HRESULT pipelineResult =
+          m_context->GetData(frame.pipeline.Get(), &pipeline, sizeof(pipeline),
+                             D3D11_ASYNC_GETDATA_DONOTFLUSH);
+      sample.valid = startResult == S_OK && endResult == S_OK &&
+                     pipelineResult == S_OK && frameEnd >= frameStart;
+    }
+
+    if (sample.valid) {
+      const double millisecondsPerTick =
+          1000.0 / static_cast<double>(disjoint.Frequency);
+      sample.scopes.push_back(
+          {"GPU.Frame", static_cast<double>(frameEnd - frameStart) *
+                            millisecondsPerTick});
+
+      for (size_t i = 0; i < frame.usedScopeCount; ++i) {
+        auto &scope = frame.scopes[i];
+        uint64_t start = 0;
+        uint64_t end = 0;
+        const HRESULT startResult =
+            m_context->GetData(scope.start.Get(), &start, sizeof(start),
+                               D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        const HRESULT endResult =
+            m_context->GetData(scope.end.Get(), &end, sizeof(end),
+                               D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        if (startResult == S_OK && endResult == S_OK && end >= start) {
+          sample.scopes.push_back(
+              {scope.name,
+               static_cast<double>(end - start) * millisecondsPerTick});
+        }
+      }
+
+      sample.pipeline.inputAssemblerVertices = pipeline.IAVertices;
+      sample.pipeline.inputAssemblerPrimitives = pipeline.IAPrimitives;
+      sample.pipeline.vertexShaderInvocations = pipeline.VSInvocations;
+      sample.pipeline.pixelShaderInvocations = pipeline.PSInvocations;
+    }
+
+    m_readyGpuSamples.push_back(std::move(sample));
+    frame.issued = false;
+  }
 }
 
 } // namespace graphics

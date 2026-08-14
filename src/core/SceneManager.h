@@ -63,6 +63,13 @@ public:
     // LOG_DEBUG("SceneManager", "Render FINISHED");
   }
 
+  /// @brief BeginFrame直後・Skybox/メインメッシュ描画前のオフスクリーン描画
+  void RenderOffscreen(GameContext &ctx) {
+    if (auto *scene = Current()) {
+      scene->RenderOffscreen(ctx);
+    }
+  }
+
   /// @brief シーンスタックが空か
   bool IsEmpty() const { return m_sceneStack.empty(); }
 
