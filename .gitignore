@@ -14,6 +14,8 @@
 !sounds/**
 !Assets/
 !Assets/**
+!docs/
+!docs/**
 
 # --- Whitelist: Root Files ---
 !.gitignore
