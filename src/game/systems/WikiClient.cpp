@@ -208,6 +208,13 @@ WikiClient::WikiClient() {
   }
 
   if (m_hSession) {
+    // 名前解決/接続/送信/受信の各タイムアウトを明示的に短く設定する。
+    // 既定値のままだとネットワークが不調な際に同期呼び出しが長時間ブロックし、
+    // ウィンドウを閉じてからプロセスが終了するまでの時間を引き延ばしてしまう。
+    WinHttpSetTimeouts(m_hSession, 5000, 5000, 5000, 10000);
+  }
+
+  if (m_hSession) {
     m_hConnect = WinHttpConnect(m_hSession, L"ja.wikipedia.org",
                                 INTERNET_DEFAULT_HTTPS_PORT, 0);
   }

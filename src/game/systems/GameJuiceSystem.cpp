@@ -12,6 +12,7 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
+#include "PhysicsFriction.h"
 #include <algorithm>
 #include <cmath>
 
@@ -99,6 +100,9 @@ void GameJuiceSystem::Initialize(core::GameContext &ctx) {
   // 環境パーティクルエンティティ作成
   CreateEnvironmentParticleEntities(ctx);
 
+  // バンカーの窪みとボール周囲の砂
+  CreateSandSurfaceEntities(ctx);
+
   // リップルエフェクト
   CreateRippleEntities(ctx);
 
@@ -127,6 +131,7 @@ void GameJuiceSystem::Update(core::GameContext &ctx, ecs::Entity cameraEntity,
   // 環境パーティクル更新
   EmitEnvironmentParticles(ctx, targetEntity);
   UpdateEnvironmentParticles(ctx, targetEntity);
+  UpdateSandSurfaceEffects(ctx, targetEntity);
 
   // リップル更新
   UpdateRipples(ctx);
@@ -877,37 +882,46 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
 void GameJuiceSystem::TriggerMaterialEffect(
     core::GameContext &ctx, const DirectX::XMFLOAT3 &position,
     game::components::TerrainMaterial material, float strength) {
+  const bool isBunker = material == TerrainMaterial::Bunker;
+  const int count = isBunker
+                        ? std::clamp(34 + static_cast<int>(strength * 22.0f),
+                                     34, 56)
+                        : std::clamp(static_cast<int>(strength * 6.0f), 1, 6);
+  const auto particleShader = ctx.resource.LoadShader(
+      "Particle", L"shaders/ParticleVS.hlsl", L"shaders/ParticlePS.hlsl");
+  const auto basicShader = ctx.resource.LoadShader(
+      "Basic", L"Assets/shaders/BasicVS.hlsl",
+      L"Assets/shaders/BasicPS.hlsl");
 
-  // マテリアルに応じたエフェクト発生
-  // EnvironmentParticle の放出ロジックを流用・拡張する
-
-  // 放出数（強さに応じて）
-  int count = std::clamp(static_cast<int>(strength * 6.0f), 1, 6);
-  if (material == game::components::TerrainMaterial::Bunker)
-    count = std::clamp(count * 2, 2, 8);
+  if (isBunker) {
+    SpawnSandImprint(ctx, position, 0.17f + strength * 0.18f,
+                     1.15f + strength * 0.80f,
+                     {1.02f, 0.89f, 0.62f, 0.24f});
+    TriggerCameraShake(0.035f + strength * 0.065f,
+                       0.12f + strength * 0.12f);
+  }
 
   for (int k = 0; k < count; ++k) {
     auto &p = m_envParticles[m_envWriteIndex];
     m_envWriteIndex = (m_envWriteIndex + 1) % kEnvParticleCount;
 
-    p.lifetime = 0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f;
+    p.lifetime = 0.5f + Rand01() * 0.5f;
     p.maxLifetime = p.lifetime;
+    p.groundHeight = position.y;
 
     auto *t = ctx.world.Get<Transform>(p.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
 
     if (t && mr) {
       t->position = position;
-      // 接地点より少し上
-      t->position.y += 0.1f;
+      t->position.y += isBunker ? 0.012f : 0.1f;
 
       mr->isVisible = true;
+      mr->customFlags = {0.0f, 0.0f, 0.0f, 0.0f};
 
-      // 初速計算
-      float speed =
-          strength * 5.0f * (0.8f + ((float)(rand() % 100) / 100.0f) * 0.4f);
-      float angle = ((float)(rand() % 100) / 100.0f) * XM_2PI;
-      float upBias = 0.5f + ((float)(rand() % 100) / 100.0f) * 0.5f;
+      const float speed = strength * 5.0f * (0.8f + Rand01() * 0.4f);
+      const float angle = Rand01() * XM_2PI;
+      const float upBias = 0.5f + Rand01() * 0.5f;
 
       p.velocity.x = std::cos(angle) * speed * 0.5f;
       p.velocity.y = speed * upBias;
@@ -915,30 +929,83 @@ void GameJuiceSystem::TriggerMaterialEffect(
 
       // 個別パラメータ
       switch (material) {
-      case game::components::TerrainMaterial::Bunker:
-        // 砂煙
-        p.isDust = true;
-        mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
-        p.baseColor = {0.88f, 0.78f, 0.55f, 0.92f};
-        mr->color = p.baseColor;
-        mr->customFlags.x = 1.0f;
-        mr->customFlags.y = 0.0f;
-        p.baseScale = 0.24f + strength * 0.25f;
-        t->scale = {p.baseScale, p.baseScale, p.baseScale};
-        p.lifetime *= 1.4f;
-        p.maxLifetime = p.lifetime;
-        p.velocity.x *= 0.55f;
-        p.velocity.z *= 0.55f;
-        p.velocity.y *= 0.85f;
-        p.angularVelocity = {0, 0, 0};
-        break;
+      case TerrainMaterial::Bunker: {
+        const bool makeDust = (k % 4) == 0;
+        const bool makeClump = !makeDust && (k % 5) == 0;
+        const float radialSpeed =
+            (1.2f + strength * 4.8f) * (0.55f + Rand01() * 0.75f);
 
-      case game::components::TerrainMaterial::Rough:
-      case game::components::TerrainMaterial::Fairway:
-      case game::components::TerrainMaterial::Green: {
+        if (makeDust) {
+          p.kind = EnvironmentParticleKind::SandDust;
+          mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+          mr->shader = particleShader;
+          mr->isTransparent = true;
+          mr->blendMode = BlendMode::Alpha;
+          mr->customFlags = {1.0f, k == 0 ? 1.0f : 0.0f, 0.0f, 0.0f};
+          const float warmth = Rand01() * 0.10f;
+          p.baseColor = {1.05f + warmth, 0.82f + warmth * 0.7f,
+                         0.45f + warmth * 0.35f, 0.93f};
+          p.baseScale = 0.18f + strength * 0.22f + Rand01() * 0.13f;
+          p.lifetime = 1.0f + strength * 0.55f + Rand01() * 0.55f;
+          p.velocity = {std::cos(angle) * radialSpeed * 0.28f,
+                        0.45f + strength * 1.05f + Rand01() * 0.65f,
+                        std::sin(angle) * radialSpeed * 0.28f};
+          p.angularVelocity = {0, 0, 0};
+          t->scale = {p.baseScale, p.baseScale * 0.72f, p.baseScale};
+        } else if (makeClump) {
+          p.kind = EnvironmentParticleKind::SandClump;
+          mr->mesh = ctx.resource.LoadMesh("builtin/rock");
+          mr->shader = basicShader;
+          mr->isTransparent = false;
+          mr->blendMode = BlendMode::Opaque;
+          const float shade = Rand01() * 0.16f;
+          p.baseColor = {0.84f + shade, 0.63f + shade * 0.75f,
+                         0.34f + shade * 0.35f, 1.0f};
+          p.baseScale = 0.040f + strength * 0.050f + Rand01() * 0.035f;
+          p.lifetime = 0.72f + Rand01() * 0.48f;
+          p.velocity = {std::cos(angle) * radialSpeed * 0.72f,
+                        1.4f + strength * 3.0f + Rand01() * 1.2f,
+                        std::sin(angle) * radialSpeed * 0.72f};
+          p.angularVelocity = {RandCentered() * 24.0f,
+                               RandCentered() * 30.0f,
+                               RandCentered() * 24.0f};
+          t->scale = {p.baseScale * 1.35f, p.baseScale * 0.75f,
+                      p.baseScale};
+        } else {
+          p.kind = EnvironmentParticleKind::SandGrain;
+          mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+          mr->shader = basicShader;
+          mr->isTransparent = false;
+          mr->blendMode = BlendMode::Opaque;
+          const float brightness = Rand01() * 0.18f;
+          p.baseColor = {0.94f + brightness, 0.72f + brightness * 0.72f,
+                         0.39f + brightness * 0.35f, 1.0f};
+          p.baseScale = 0.014f + strength * 0.018f + Rand01() * 0.018f;
+          p.lifetime = 0.58f + Rand01() * 0.44f;
+          p.velocity = {std::cos(angle) * radialSpeed,
+                        1.0f + strength * 3.8f + Rand01() * 1.8f,
+                        std::sin(angle) * radialSpeed};
+          p.angularVelocity = {RandCentered() * 40.0f,
+                               RandCentered() * 48.0f,
+                               RandCentered() * 40.0f};
+          t->scale = {p.baseScale * (0.65f + Rand01()),
+                      p.baseScale * (0.45f + Rand01() * 0.8f),
+                      p.baseScale * (0.65f + Rand01())};
+        }
+        p.maxLifetime = p.lifetime;
+        mr->color = p.baseColor;
+        break;
+      }
+
+      case TerrainMaterial::Rough:
+      case TerrainMaterial::Fairway:
+      case TerrainMaterial::Green: {
         // 芝・葉っぱ
-        p.isDust = false;
+        p.kind = EnvironmentParticleKind::GrassClip;
         mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+        mr->shader = particleShader;
+        mr->isTransparent = true;
+        mr->blendMode = BlendMode::Alpha;
         mr->customFlags.x = 0.0f;
         mr->customFlags.y = 0.0f;
 
@@ -969,8 +1036,11 @@ void GameJuiceSystem::TriggerMaterialEffect(
 
       default:
         // 岩など（汎用拡散）
-        p.isDust = true; // 簡略化のためDust扱い
+        p.kind = EnvironmentParticleKind::GenericDebris;
         mr->mesh = ctx.resource.LoadMesh("builtin/cube"); // 岩片
+        mr->shader = basicShader;
+        mr->isTransparent = false;
+        mr->blendMode = BlendMode::Opaque;
         p.baseColor = {0.5f, 0.5f, 0.5f, 1.0f};
         mr->color = p.baseColor;
         mr->customFlags.x = 0.0f;
@@ -1007,6 +1077,154 @@ void GameJuiceSystem::CreateEnvironmentParticleEntities(
     m_envParticles[i].lifetime = 0.0f;
   }
   m_envWriteIndex = 0;
+}
+
+void GameJuiceSystem::CreateSandSurfaceEntities(core::GameContext &ctx) {
+  const auto craterMesh = ctx.resource.LoadMesh("builtin/sand_crater");
+  const auto basicShader = ctx.resource.LoadShader(
+      "Basic", L"Assets/shaders/BasicVS.hlsl",
+      L"Assets/shaders/BasicPS.hlsl");
+
+  m_sandImprints.clear();
+  m_sandImprints.resize(kSandImprintCount);
+  for (SandImprint &imprint : m_sandImprints) {
+    imprint.entity = ctx.world.CreateEntity();
+    auto &transform = ctx.world.Add<Transform>(imprint.entity);
+    transform.position = {0.0f, -100.0f, 0.0f};
+    transform.scale = {0.1f, 0.1f, 0.1f};
+
+    auto &renderer = ctx.world.Add<MeshRenderer>(imprint.entity);
+    renderer.mesh = craterMesh;
+    renderer.shader = basicShader;
+    renderer.color = {1.0f, 0.9f, 0.66f, 0.0f};
+    renderer.isVisible = false;
+    renderer.isTransparent = true;
+    renderer.blendMode = BlendMode::Alpha;
+    renderer.maxDrawDistance = 65.0f;
+    renderer.boundsScale = 1.4f;
+  }
+  m_sandImprintWriteIndex = 0;
+
+  m_sandCollarEntity = ctx.world.CreateEntity();
+  auto &collarTransform = ctx.world.Add<Transform>(m_sandCollarEntity);
+  collarTransform.position = {0.0f, -100.0f, 0.0f};
+  collarTransform.scale = {0.085f, 0.42f, 0.085f};
+
+  auto &collarRenderer = ctx.world.Add<MeshRenderer>(m_sandCollarEntity);
+  collarRenderer.mesh = craterMesh;
+  collarRenderer.shader = basicShader;
+  collarRenderer.color = {1.05f, 0.91f, 0.62f, 0.42f};
+  collarRenderer.isVisible = false;
+  collarRenderer.isTransparent = true;
+  collarRenderer.blendMode = BlendMode::Alpha;
+  collarRenderer.maxDrawDistance = 55.0f;
+  collarRenderer.boundsScale = 1.8f;
+}
+
+void GameJuiceSystem::SpawnSandImprint(core::GameContext &ctx,
+                                       const XMFLOAT3 &position, float scale,
+                                       float lifetime,
+                                       const XMFLOAT4 &color) {
+  if (m_sandImprints.empty()) {
+    return;
+  }
+
+  SandImprint &imprint = m_sandImprints[m_sandImprintWriteIndex];
+  m_sandImprintWriteIndex =
+      (m_sandImprintWriteIndex + 1) % kSandImprintCount;
+  imprint.lifetime = std::max(lifetime, 0.1f);
+  imprint.maxLifetime = imprint.lifetime;
+  imprint.startScale = std::max(scale, 0.02f);
+  imprint.baseColor = color;
+
+  if (auto *transform = ctx.world.Get<Transform>(imprint.entity)) {
+    transform->position = position;
+    transform->position.y += 0.0025f;
+    transform->scale = {imprint.startScale, 0.55f,
+                        imprint.startScale * (0.82f + Rand01() * 0.24f)};
+    XMStoreFloat4(&transform->rotation,
+                  XMQuaternionRotationRollPitchYaw(0.0f, Rand01() * XM_2PI,
+                                                   0.0f));
+  }
+  if (auto *renderer = ctx.world.Get<MeshRenderer>(imprint.entity)) {
+    renderer->color = color;
+    renderer->isVisible = true;
+  }
+}
+
+void GameJuiceSystem::UpdateSandSurfaceEffects(core::GameContext &ctx,
+                                               ecs::Entity targetEntity) {
+  for (SandImprint &imprint : m_sandImprints) {
+    if (imprint.lifetime <= 0.0f) {
+      continue;
+    }
+    imprint.lifetime = std::max(0.0f, imprint.lifetime - ctx.dt);
+    const float lifeRatio = imprint.lifetime / imprint.maxLifetime;
+    if (auto *renderer = ctx.world.Get<MeshRenderer>(imprint.entity)) {
+      const float fade = std::pow(std::clamp(lifeRatio, 0.0f, 1.0f), 1.8f);
+      renderer->color = imprint.baseColor;
+      renderer->color.w = imprint.baseColor.w * fade;
+      if (imprint.lifetime <= 0.0f) {
+        renderer->isVisible = false;
+      }
+    }
+  }
+
+  auto *state = ctx.world.GetGlobal<GolfGameState>();
+  auto *ballTransform = ctx.world.Get<Transform>(targetEntity);
+  auto *ballBody = ctx.world.Get<RigidBody>(targetEntity);
+  auto *ballCollider = ctx.world.Get<Collider>(targetEntity);
+  auto *collarRenderer = ctx.world.Get<MeshRenderer>(m_sandCollarEntity);
+  auto *collarTransform = ctx.world.Get<Transform>(m_sandCollarEntity);
+  const bool isInSand = state && ballTransform && ballCollider &&
+                        state->isBallGrounded &&
+                        state->currentMaterial == TerrainMaterial::Bunker;
+
+  if (!isInSand) {
+    if (collarRenderer) {
+      collarRenderer->isVisible = false;
+    }
+    m_sandTrackTimer = 0.0f;
+    return;
+  }
+
+  const float speed = ballBody
+                          ? std::sqrt(ballBody->velocity.x * ballBody->velocity.x +
+                                      ballBody->velocity.y * ballBody->velocity.y +
+                                      ballBody->velocity.z * ballBody->velocity.z)
+                          : 0.0f;
+  const float verticalImpact =
+      ballBody ? std::max(0.0f, -ballBody->velocity.y) : 0.0f;
+  const float sink = ComputeSurfaceSinkDepth(
+      TerrainMaterial::Bunker, verticalImpact, speed, ballCollider->radius);
+  const float surfaceHeight =
+      ballTransform->position.y - ballCollider->radius + sink;
+
+  if (collarTransform && collarRenderer) {
+    collarTransform->position = {ballTransform->position.x,
+                                 surfaceHeight + 0.003f,
+                                 ballTransform->position.z};
+    const float collarScale = 0.075f + sink * 1.15f +
+                              std::clamp(speed / 30.0f, 0.0f, 0.025f);
+    collarTransform->scale = {collarScale, 0.46f, collarScale};
+    collarRenderer->color = {1.06f, 0.91f, 0.61f,
+                             std::clamp(0.34f + sink * 5.0f, 0.34f, 0.50f)};
+    collarRenderer->isVisible = true;
+  }
+
+  if (speed > 0.35f) {
+    m_sandTrackTimer += ctx.dt;
+    const float interval = std::clamp(0.11f - speed * 0.002f, 0.045f, 0.11f);
+    if (m_sandTrackTimer >= interval) {
+      m_sandTrackTimer = 0.0f;
+      SpawnSandImprint(
+          ctx,
+          {ballTransform->position.x, surfaceHeight, ballTransform->position.z},
+          0.050f + std::clamp(speed / 300.0f, 0.0f, 0.035f),
+          0.75f + Rand01() * 0.55f,
+          {0.86f, 0.70f, 0.43f, 0.16f});
+    }
+  }
 }
 
 void GameJuiceSystem::CreateRippleEntities(core::GameContext &ctx) {
@@ -1057,7 +1275,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
     // 放出量
     int count = 1;
     if (state->currentMaterial == TerrainMaterial::Bunker) {
-      count = 2 + static_cast<int>(speed01 * 2.0f);
+      count = 6 + static_cast<int>(speed01 * 8.0f);
     } else if (state->currentMaterial == TerrainMaterial::Rough ||
                state->currentMaterial == TerrainMaterial::Fairway) {
       count = 1 + static_cast<int>(speed01 * 1.8f);
@@ -1077,8 +1295,22 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
 
       if (t && mr) {
         t->position = targetT->position;
-        // 地面にめり込まないよう少し上げる
-        t->position.y += 0.05f;
+        p.groundHeight = targetT->position.y - 0.02f;
+        if (state->currentMaterial == TerrainMaterial::Bunker) {
+          auto *collider = ctx.world.Get<Collider>(targetEntity);
+          auto *body = ctx.world.Get<RigidBody>(targetEntity);
+          if (collider) {
+            const float verticalImpact =
+                body ? std::max(0.0f, -body->velocity.y) : 0.0f;
+            const float sink = ComputeSurfaceSinkDepth(
+                TerrainMaterial::Bunker, verticalImpact,
+                state->currentBallSpeed, collider->radius);
+            p.groundHeight = targetT->position.y - collider->radius + sink;
+          }
+          t->position.y = p.groundHeight + 0.012f;
+        } else {
+          t->position.y += 0.05f;
+        }
 
         mr->isVisible = true;
         mr->isTransparent = true;
@@ -1088,42 +1320,72 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
         // マテリアル別の設定
         switch (state->currentMaterial) {
         case TerrainMaterial::Bunker: {
-          // 砂煙: 芯を残した濃い砂粒、上昇・拡散
-          p.isDust = true;
-          mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
-          float warmth = Rand01() * 0.08f;
-          p.baseColor = {0.78f + warmth, 0.66f + warmth * 0.7f,
-                         0.43f + warmth * 0.4f, 0.88f};
-          mr->color = p.baseColor;
-          mr->customFlags.x = 1.0f; // isDustフラグをシェーダーへ
-          mr->customFlags.y = 1.0f; // 濃い芯を持つ転がり砂煙
-          p.baseScale = 0.22f + Rand01() * 0.16f + speed01 * 0.10f;
-          t->scale = {p.baseScale, p.baseScale, p.baseScale};
-          p.lifetime *= 1.55f;
-          p.maxLifetime = p.lifetime;
-
-          // 進行方向の逆にふわっと広がる
           auto *rb = ctx.world.Get<RigidBody>(targetEntity);
           XMVECTOR v = rb ? XMLoadFloat3(&rb->velocity) : XMVectorZero();
-          v = XMVectorScale(v, -0.22f - speed01 * 0.12f);
-
-          float spread = 0.7f + speed01 * 0.45f;
-          XMStoreFloat3(&p.velocity, v);
-          p.velocity.x += RandCentered() * spread;
-          p.velocity.y += 0.45f + Rand01() * 0.65f + speed01 * 0.25f;
-          p.velocity.z += RandCentered() * spread;
-          p.velocity.x *= 0.65f;
-          p.velocity.z *= 0.65f;
-          p.velocity.y *= 0.9f;
-
-          p.angularVelocity = {0, 0, 0};
+          const bool makeDust = (k % 3) == 0;
+          const bool makeClump = !makeDust && speed01 > 0.35f && (k % 5) == 0;
+          if (makeDust) {
+            p.kind = EnvironmentParticleKind::SandDust;
+            mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+            mr->shader = ctx.resource.LoadShader(
+                "Particle", L"shaders/ParticleVS.hlsl",
+                L"shaders/ParticlePS.hlsl");
+            mr->isTransparent = true;
+            mr->blendMode = BlendMode::Alpha;
+            mr->customFlags = {1.0f, 1.0f, 0.0f, 0.0f};
+            const float warmth = Rand01() * 0.08f;
+            p.baseColor = {1.02f + warmth, 0.81f + warmth * 0.7f,
+                           0.46f + warmth * 0.4f, 0.92f};
+            p.baseScale = 0.14f + Rand01() * 0.12f + speed01 * 0.10f;
+            t->scale = {p.baseScale, p.baseScale * 0.7f, p.baseScale};
+            p.lifetime = 0.72f + Rand01() * 0.45f + speed01 * 0.45f;
+            v = XMVectorScale(v, -0.10f - speed01 * 0.10f);
+            XMStoreFloat3(&p.velocity, v);
+            p.velocity.x += RandCentered() * (0.5f + speed01 * 0.5f);
+            p.velocity.y = 0.28f + Rand01() * 0.55f + speed01 * 0.35f;
+            p.velocity.z += RandCentered() * (0.5f + speed01 * 0.5f);
+            p.angularVelocity = {0, 0, 0};
+          } else {
+            p.kind = makeClump ? EnvironmentParticleKind::SandClump
+                               : EnvironmentParticleKind::SandGrain;
+            mr->mesh = ctx.resource.LoadMesh(makeClump ? "builtin/rock"
+                                                       : "builtin/cube");
+            mr->shader = ctx.resource.LoadShader(
+                "Basic", L"Assets/shaders/BasicVS.hlsl",
+                L"Assets/shaders/BasicPS.hlsl");
+            mr->isTransparent = false;
+            mr->blendMode = BlendMode::Opaque;
+            mr->customFlags = {0.0f, 0.0f, 0.0f, 0.0f};
+            p.baseColor = makeClump
+                              ? XMFLOAT4{0.86f, 0.64f, 0.35f, 1.0f}
+                              : XMFLOAT4{1.02f, 0.79f, 0.44f, 1.0f};
+            p.baseScale = makeClump ? 0.040f + speed01 * 0.035f
+                                    : 0.014f + speed01 * 0.016f;
+            t->scale = {p.baseScale * (makeClump ? 1.4f : 0.7f),
+                        p.baseScale * (makeClump ? 0.8f : 0.5f),
+                        p.baseScale};
+            const float angle = Rand01() * XM_2PI;
+            const float scatter = 0.8f + speed01 * 3.4f;
+            p.velocity = {std::cos(angle) * scatter,
+                          0.55f + Rand01() * 1.25f + speed01 * 1.4f,
+                          std::sin(angle) * scatter};
+            p.angularVelocity = {RandCentered() * 32.0f,
+                                 RandCentered() * 40.0f,
+                                 RandCentered() * 32.0f};
+            p.lifetime = 0.42f + Rand01() * 0.38f;
+          }
+          p.maxLifetime = p.lifetime;
+          mr->color = p.baseColor;
           break;
         }
         case TerrainMaterial::Rough:
         case TerrainMaterial::Fairway: {
           // 芝片: 立方体(薄く)、緑、弾ける、回転
-          p.isDust = false;
+          p.kind = EnvironmentParticleKind::GrassClip;
           mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+          mr->shader = ctx.resource.LoadShader(
+              "Particle", L"shaders/ParticleVS.hlsl",
+              L"shaders/ParticlePS.hlsl");
           mr->customFlags.x = 0.0f; // 芝は通常の四角
           mr->customFlags.y = 0.0f;
           if (state->currentMaterial == TerrainMaterial::Rough) {
@@ -1155,8 +1417,11 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
         }
         case TerrainMaterial::Green: {
           // グリーン: 細かい削れ粉だけを控えめに出す
-          p.isDust = false;
+          p.kind = EnvironmentParticleKind::GrassClip;
           mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+          mr->shader = ctx.resource.LoadShader(
+              "Particle", L"shaders/ParticleVS.hlsl",
+              L"shaders/ParticlePS.hlsl");
           p.baseColor = {0.28f, 0.72f, 0.26f, 0.95f};
           mr->color = p.baseColor;
           mr->customFlags.x = 0.0f;
@@ -1190,7 +1455,6 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
 void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
                                                  ecs::Entity targetEntity) {
   const float gravity = 9.8f;
-  const float airResistance = 1.5f;
 
   for (auto &p : m_envParticles) {
     if (p.lifetime <= 0.0f)
@@ -1202,24 +1466,34 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
 
     if (t) {
-      if (p.isDust) {
-        // 砂煙: 重力少なめ、空気抵抗強め、拡大
-        p.velocity.x -= p.velocity.x * airResistance * ctx.dt;
-        p.velocity.y +=
-            (0.2f - p.velocity.y) * airResistance * ctx.dt; // わずかに上昇
-        p.velocity.z -= p.velocity.z * airResistance * ctx.dt;
+      if (p.kind == EnvironmentParticleKind::SandDust) {
+        const float drag = std::exp(-1.9f * ctx.dt);
+        p.velocity.x *= drag;
+        p.velocity.y += (0.16f - p.velocity.y) * 1.35f * ctx.dt;
+        p.velocity.z *= drag;
 
         t->position.x += p.velocity.x * ctx.dt;
         t->position.y += p.velocity.y * ctx.dt;
         t->position.z += p.velocity.z * ctx.dt;
 
-        // 拡大フェード
         float progress = 1.0f - (p.lifetime / p.maxLifetime);
-        float scale = p.baseScale * (1.0f + progress * 2.45f);
-        t->scale = {scale, scale, scale};
+        float scale = p.baseScale * (1.0f + progress * 2.8f);
+        t->scale = {scale * (1.0f + progress * 0.45f),
+                    scale * (0.62f + progress * 0.32f), scale};
       } else {
-        // 芝片: 物理、回転
-        p.velocity.y -= gravity * ctx.dt;
+        float particleGravity = gravity;
+        float drag = 0.18f;
+        if (p.kind == EnvironmentParticleKind::SandGrain) {
+          particleGravity = 13.5f;
+          drag = 0.35f;
+        } else if (p.kind == EnvironmentParticleKind::SandClump) {
+          particleGravity = 11.5f;
+          drag = 0.55f;
+        }
+        const float dragRatio = std::exp(-drag * ctx.dt);
+        p.velocity.x *= dragRatio;
+        p.velocity.y -= particleGravity * ctx.dt;
+        p.velocity.z *= dragRatio;
 
         t->position.x += p.velocity.x * ctx.dt;
         t->position.y += p.velocity.y * ctx.dt;
@@ -1234,11 +1508,18 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
         rot = XMQuaternionMultiply(rot, deltaRot);
         XMStoreFloat4(&t->rotation, rot);
 
-        // 地面で停止/消滅
-        if (t->position.y < 0.0f) {
-          t->position.y = 0.0f;
-          p.lifetime *= 0.5f; // 地面に付いたらすぐ消える
-          p.velocity = {0, 0, 0};
+        if (t->position.y < p.groundHeight) {
+          t->position.y = p.groundHeight + 0.002f;
+          if ((p.kind == EnvironmentParticleKind::SandGrain ||
+               p.kind == EnvironmentParticleKind::SandClump) &&
+              std::abs(p.velocity.y) > 0.16f) {
+            p.velocity.y = -p.velocity.y * 0.16f;
+            p.velocity.x *= 0.48f;
+            p.velocity.z *= 0.48f;
+          } else {
+            p.velocity = {0, 0, 0};
+            p.lifetime = std::min(p.lifetime, 0.22f);
+          }
         }
       }
     }
@@ -1246,10 +1527,13 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
     if (mr) {
       float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
       mr->color = p.baseColor;
-      if (p.isDust) {
+      if (p.kind == EnvironmentParticleKind::SandDust) {
         float progress = 1.0f - lifeRatio;
-        float alphaHold = 1.0f - SmoothFade(progress, 0.58f, 1.0f);
+        float alphaHold = 1.0f - SmoothFade(progress, 0.46f, 1.0f);
         mr->color.w = p.baseColor.w * std::clamp(alphaHold, 0.0f, 1.0f);
+      } else if (p.kind == EnvironmentParticleKind::SandGrain ||
+                 p.kind == EnvironmentParticleKind::SandClump) {
+        mr->color.w = p.baseColor.w * SmoothFade(lifeRatio, 0.0f, 0.20f);
       } else {
         mr->color.w = p.baseColor.w * std::pow(lifeRatio, 0.55f);
       }

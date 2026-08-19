@@ -4,7 +4,7 @@
  * @brief フォントファイルのロードと TextFormat キャッシュ管理
  */
 
-#include <dwrite.h>
+#include <dwrite_3.h>
 #include <wrl/client.h>
 #include <cstdint>
 #include <cstring>
@@ -20,6 +20,14 @@ using Microsoft::WRL::ComPtr;
 
 /// @brief フォント管理クラス
 /// @details カスタムフォントのロード、TextFormat のキャッシュを担当
+///
+/// AddFontResourceEx(FR_PRIVATE) による GDI 登録だけでは、
+/// IDWriteFactory::CreateTextFormat がそのファミリー名を見つけられるとは
+/// 限らない（見つからなくても CreateTextFormat 自体はエラーを返さず、
+/// 描画時に静かに既定フォントへフォールバックするため気付きにくい）。
+/// そのため同梱フォントは IDWriteFontSetBuilder で専用の
+/// IDWriteFontCollection を組み立て、CreateTextFormat にそのコレクションを
+/// 明示的に渡すことで確実に解決させる。
 class FontManager {
 public:
     /// @brief 初期化
@@ -27,34 +35,44 @@ public:
     void Initialize(IDWriteFactory* factory) {
         m_factory = factory;
         m_formatCache.clear();
+        m_factory5.Reset();
+        if (factory) {
+            factory->QueryInterface(__uuidof(IDWriteFactory5),
+                                    reinterpret_cast<void**>(m_factory5.GetAddressOf()));
+            if (!m_factory5) {
+                LOG_WARN("FontManager",
+                        "IDWriteFactory5 unavailable. Bundled fonts may fail to resolve by name.");
+            }
+        }
     }
 
     /// @brief 終了処理
     void Shutdown() {
-        // ロード済みフォントを解除
         for (const auto& path : m_loadedFontPaths) {
             RemoveFontResourceExA(path.c_str(), FR_PRIVATE | FR_NOT_ENUM, nullptr);
         }
         m_loadedFontPaths.clear();
+        m_pendingFontFiles.clear();
+        m_collection.Reset();
         m_formatCache.clear();
+        m_factory5.Reset();
         m_factory = nullptr;
     }
 
-    /// @brief フォントファイルをシステムに登録
-    /// @param fontName 登録名（UIText の fontFamily と一致させる）
+    /// @brief フォントファイルを登録
+    /// @param fontName ログ表示用の名前（実際の解決はファイル内蔵のファミリー名で行う）
     /// @param filePath フォントファイルパス（.otf / .ttf）
     /// @return 成功なら true
     bool LoadFont(const std::string& fontName, const std::string& filePath) {
-        int result = AddFontResourceExA(filePath.c_str(), FR_PRIVATE | FR_NOT_ENUM, nullptr);
-        if (result > 0) {
-            m_loadedFontPaths.push_back(filePath);
-            m_fontNameToFamily[fontName] = fontName; // 通常は fontName == ファミリー名
-            LOG_INFO("FontManager", "Loaded font: {} from {}", fontName, filePath);
-            return true;
-        } else {
-            LOG_ERROR("FontManager", "Failed to load font: {} from {}", fontName, filePath);
-            return false;
-        }
+        // 旧経路（GDI）も一応登録しておく。害はないが、実際の解決には使わない。
+        AddFontResourceExA(filePath.c_str(), FR_PRIVATE | FR_NOT_ENUM, nullptr);
+        m_loadedFontPaths.push_back(filePath);
+
+        std::wstring wPath(filePath.begin(), filePath.end());
+        m_pendingFontFiles.push_back(std::move(wPath));
+        m_collectionDirty = true;
+        LOG_INFO("FontManager", "Queued bundled font: {} ({})", fontName, filePath);
+        return true;
     }
 
     /// @brief TextFormat を取得（キャッシュがあれば再利用）
@@ -77,13 +95,28 @@ public:
             return it->second.Get();
         }
 
-        // 新規作成
         std::wstring wFontName(fontName.begin(), fontName.end());
         ComPtr<IDWriteTextFormat> format;
 
+        // 同梱フォントの専用コレクションにこの名前があれば、そちらを明示指定する。
+        // 見つからない場合は nullptr（システムコレクション）のままにする。
+        IDWriteFontCollection* collectionToUse = nullptr;
+        IDWriteFontCollection1* bundled = EnsureCollection();
+        if (bundled) {
+            BOOL exists = FALSE;
+            UINT32 index = 0;
+            if (SUCCEEDED(bundled->FindFamilyName(wFontName.c_str(), &index, &exists)) && exists) {
+                collectionToUse = bundled;
+            } else {
+                LOG_WARN("FontManager",
+                        "'{}' not found in bundled font collection. Using system collection.",
+                        fontName);
+            }
+        }
+
         HRESULT hr = m_factory->CreateTextFormat(
             wFontName.c_str(),
-            nullptr,
+            collectionToUse,
             DWRITE_FONT_WEIGHT_NORMAL,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
@@ -129,9 +162,53 @@ public:
     }
 
 private:
+    /// @brief 同梱フォントファイル群から IDWriteFontCollection を（未構築/変更時のみ）組み立てる
+    IDWriteFontCollection1* EnsureCollection() {
+        if (!m_factory5) return nullptr;
+        if (m_collection && !m_collectionDirty) return m_collection.Get();
+        if (m_pendingFontFiles.empty()) return nullptr;
+
+        ComPtr<IDWriteFontSetBuilder1> builder;
+        if (FAILED(m_factory5->CreateFontSetBuilder(&builder))) {
+            LOG_ERROR("FontManager", "CreateFontSetBuilder failed");
+            return nullptr;
+        }
+
+        int added = 0;
+        for (const auto& path : m_pendingFontFiles) {
+            ComPtr<IDWriteFontFile> file;
+            if (SUCCEEDED(m_factory->CreateFontFileReference(path.c_str(), nullptr, &file))) {
+                if (SUCCEEDED(builder->AddFontFile(file.Get()))) {
+                    ++added;
+                }
+            } else {
+                LOG_ERROR("FontManager", "CreateFontFileReference failed for bundled font file");
+            }
+        }
+        if (added == 0) return nullptr;
+
+        ComPtr<IDWriteFontSet> fontSet;
+        if (FAILED(builder->CreateFontSet(&fontSet))) {
+            LOG_ERROR("FontManager", "CreateFontSet failed");
+            return nullptr;
+        }
+
+        m_collection.Reset();
+        if (FAILED(m_factory5->CreateFontCollectionFromFontSet(fontSet.Get(), &m_collection))) {
+            LOG_ERROR("FontManager", "CreateFontCollectionFromFontSet failed");
+            return nullptr;
+        }
+        m_collectionDirty = false;
+        LOG_INFO("FontManager", "Built bundled font collection with {} file(s)", added);
+        return m_collection.Get();
+    }
+
     IDWriteFactory* m_factory = nullptr;
+    ComPtr<IDWriteFactory5> m_factory5;
     std::vector<std::string> m_loadedFontPaths;
-    std::unordered_map<std::string, std::string> m_fontNameToFamily;
+    std::vector<std::wstring> m_pendingFontFiles;
+    ComPtr<IDWriteFontCollection1> m_collection;
+    bool m_collectionDirty = false;
     std::unordered_map<std::string, ComPtr<IDWriteTextFormat>> m_formatCache;
 };
 

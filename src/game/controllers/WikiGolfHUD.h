@@ -7,6 +7,7 @@
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
 #include "../components/WikiComponents.h"
+#include "../../graphics/TextStyle.h"
 #include <DirectXMath.h>
 #include <vector>
 #include <string>
@@ -31,8 +32,10 @@ public:
         // 左上: ブラウザ風コース情報
         ecs::Entity browserBgEntity         = UINT32_MAX; // 背景パネル
         ecs::Entity browserTabIconEntity    = UINT32_MAX; // バッジ
-        ecs::Entity browserCurrentPageEntity= UINT32_MAX; // 現在地表示
-        ecs::Entity browserTargetEntity     = UINT32_MAX; // 目的地表示
+        ecs::Entity browserCurrentLabelEntity = UINT32_MAX; // "CURRENT" ラベル
+        ecs::Entity browserCurrentPageEntity= UINT32_MAX; // 現在地表示（値）
+        ecs::Entity browserTargetLabelEntity  = UINT32_MAX; // "TARGET" ラベル
+        ecs::Entity browserTargetEntity     = UINT32_MAX; // 目的地表示（値）
         ecs::Entity browserShotInfoEntity   = UINT32_MAX; // スコア情報
         ecs::Entity browserHistoryEntity    = UINT32_MAX; // 経路履歴
         
@@ -49,15 +52,18 @@ public:
         ecs::Entity windEntity              = UINT32_MAX;
         ecs::Entity windArrowEntity         = UINT32_MAX;
         ecs::Entity windCardLabelEntity     = UINT32_MAX; // 風ラベル
-        ecs::Entity windCardValueEntity     = UINT32_MAX; // 風速値
+        ecs::Entity windCardValueEntity     = UINT32_MAX; // 風速値 (数値ウェーブ化により非表示のまま保持)
         ecs::Entity windCardUnitEntity      = UINT32_MAX; // 風向と単位
+        std::vector<ecs::Entity> windValueWaveChars; // 風速値を1文字ずつ表示するウェーブ演出用
 
         // 左側: クラブ選択リスト
         std::vector<ecs::Entity> clubBgEntities;   
         std::vector<ecs::Entity> clubIconEntities; 
         std::vector<ecs::Entity> clubNameEntities; 
-        std::vector<ecs::Entity> clubSubNameEntities; 
+        std::vector<ecs::Entity> clubSubNameEntities;
         std::vector<ecs::Entity> clubArrowEntities;
+        ecs::Entity clubScrollUpEntity      = UINT32_MAX; // 上にも切替可能ヒント(▲)
+        ecs::Entity clubScrollDownEntity    = UINT32_MAX; // 下にも切替可能ヒント(▼)
 
         // 右下: ショットボタン
         ecs::Entity shotButtonBgEntity      = UINT32_MAX; 
@@ -71,22 +77,11 @@ public:
         std::vector<ecs::Entity> minimapDecorationEntities;
 
         // 下部中央: 情報パネル
-        ecs::Entity distPanelBgEntity       = UINT32_MAX; 
-        ecs::Entity distLabelEntity         = UINT32_MAX;
-        ecs::Entity distValueEntity         = UINT32_MAX;
-        ecs::Entity heightLabelEntity       = UINT32_MAX;
-        ecs::Entity heightValueEntity       = UINT32_MAX;
-        
-        ecs::Entity clubInfoPanelBgEntity   = UINT32_MAX; // クラブパネル
-        ecs::Entity clubInfoLabelEntity     = UINT32_MAX;
-        ecs::Entity clubInfoNameEntity      = UINT32_MAX;
-        ecs::Entity clubInfoIconEntity      = UINT32_MAX;
-        ecs::Entity clubInfoShortNameEntity = UINT32_MAX;
-        
+        // 残り距離(目的地が多数あり単一距離表示に意味が薄い)と選択中クラブ
+        // (左のクラブ選択リストと重複)は削除し、ライ(地形)情報だけを残す。
         ecs::Entity liePanelBgEntity        = UINT32_MAX; // ライ情報パネル
         ecs::Entity lieLabelEntity          = UINT32_MAX;
         ecs::Entity lieValueEntity          = UINT32_MAX;
-        ecs::Entity lieCondLabelEntity      = UINT32_MAX;
         ecs::Entity lieCondValueEntity      = UINT32_MAX;
 
         // ショット時のみ表示
@@ -120,6 +115,7 @@ public:
                 game::components::ShotState::Phase shotPhase,
                 float currentImpact,
                 float currentPower, float confirmedPower,
+                float confirmedImpact,
                 float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
                 const std::vector<ClubUIData>& clubs,
                 int currentClubIndex,
@@ -170,21 +166,46 @@ private:
     void UpdateCourseInfoPanel(core::GameContext& ctx, const game::components::GolfGameState& state);
     void UpdateWindUI(core::GameContext& ctx, float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw);
     void UpdateClubSelectList(core::GameContext& ctx, const std::vector<ClubUIData>& clubs, int currentClubIndex);
-    void UpdateBottomInfoPanels(core::GameContext& ctx, float distanceToTarget, float heightDiff, 
-                                game::components::TerrainMaterial lie, const ClubUIData& currentClub);
+    void UpdateBottomInfoPanels(core::GameContext& ctx, game::components::TerrainMaterial lie);
     void UpdateGuideUI(core::GameContext& ctx, const game::components::GolfGameState& state);
     void UpdateShotPhasePanel(core::GameContext& ctx,
                               game::components::ShotState::Phase shotPhase,
                               float currentPower,
                               float confirmedPower,
                               float currentImpact,
+                              float confirmedImpact,
                               const ClubUIData& currentClub);
     void SetEntityAlpha(core::GameContext& ctx, ecs::Entity e, float alpha);
+
+    /// @brief 数値文字列を1文字ずつ独立したエンティティに割り当て、右から
+    ///        位相をずらして上下に揺らす「ウェーブ」演出で描画する。
+    void UpdateWaveNumberText(core::GameContext& ctx,
+                              std::vector<ecs::Entity>& chars,
+                              const std::wstring& text,
+                              float baseX, float baseY,
+                              const graphics::TextStyle& baseStyle,
+                              int layer);
 
     UIEntities m_ui;
 
     // クラブリスト構築済みフラグ (クラブ数が変わった場合に再構築)
     int m_builtClubCount = 0;
+
+    // UpdateClubSelectList が計算した「前後3行の窓」に今その行が入って
+    // いるかどうか。SetShotPhaseUIVisible がショット終了時に即座に正しい
+    // 行だけを復元できるよう、ここに結果をキャッシュしておく（そうしない
+    // と次に UpdateClubSelectList が呼ばれる=最大0.1秒後まで、ショット中
+    // 非表示にした行が復元されず、選択中の1行だけが残って見える）。
+    std::vector<bool> m_clubRowWindowVisible;
+
+    float m_elapsedTime = 0.0f;
+    float m_phaseTransition = 1.0f;
+    game::components::ShotState::Phase m_previousShotPhase =
+        game::components::ShotState::Phase::Idle;
+
+    // インパクト確定後、判定色つきで保持表示 → フェードアウトするまでの残り時間（秒）
+    // kGaugeHoldDuration + kGaugeFadeDuration からカウントダウンする。
+    float m_gaugeDismissRemaining = 0.0f;
 };
 
 } // namespace game::controllers

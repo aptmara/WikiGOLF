@@ -355,6 +355,9 @@ struct UIBarGauge {
   float confirmedValue = 0.0f;      ///< 確定済みマーカー値 (0.0 - 1.0)
   DirectX::XMFLOAT4 confirmedMarkerColor = {1.0f, 0.76f, 0.16f, 1.0f};
 
+  float confirmPulse = 0.0f; ///< 確定直後のスナップ演出強度 (1.0=直後, 0.0=平常)
+  float opacity = 1.0f; ///< ゲージ全体の不透明度倍率 (フェードアウト演出用)
+
   // インパクトゾーン（ゴルフゲーム特化）
   bool showImpactZones = false;
   float impactCenter = 0.5f;     ///< インパクト中心 (0.0-1.0)

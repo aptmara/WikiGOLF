@@ -232,6 +232,20 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
       ui.alpha = 0.0f;
   }
 
+  // スイング判定UIの初期化（着地地形とは別エンティティ）
+  if (m_judgeImageEntity == UINT32_MAX) {
+      m_judgeImageEntity = CreateEntity(ctx.world);
+      auto& ui = ctx.world.Add<game::components::UIImage>(m_judgeImageEntity);
+      ui.texturePath = "";
+      ui.x = 1280.0f * 0.5f;
+      ui.y = 720.0f * 0.5f;
+      ui.width = 0.0f;
+      ui.height = 0.0f;
+      ui.visible = false;
+      ui.layer = 131; // 地形判定UIより手前
+      ui.alpha = 0.0f;
+  }
+
   std::string targetPage;
   int targetId = -1;
   bool isUserOverride = false;
@@ -905,19 +919,24 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
           m_shotController->ExecuteShot(ctx, m_ballEntity, shotDir, clubPower, clubAngle, &m_timeOfDay, m_hud.get());
 
-          // 打球判定の演出表示
+          // 打球判定の演出表示（着地地形の演出とは別エンティティ・別カーブ）
           auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
-          if (feedback.HasVisual() && m_terrainImageEntity != UINT32_MAX) {
-              auto* ui = ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
+          if (feedback.HasVisual() && m_judgeImageEntity != UINT32_MAX) {
+              auto* ui = ctx.world.Get<game::components::UIImage>(m_judgeImageEntity);
               if (ui) {
                   ui->texturePath = feedback.texturePath;
                   ui->visible = true;
                   ui->alpha = 0.0f;
                   ui->width = 0.0f;
                   ui->height = 0.0f;
+                  ui->rotation = 0.0f;
                   ui->x = 1280.0f * 0.5f;
                   ui->y = 720.0f * 0.5f;
-                  m_terrainDisplayTimer = feedback.displaySeconds;
+                  m_judgeDisplayTimer = feedback.displaySeconds;
+                  m_judgeDisplayTotal  = feedback.displaySeconds;
+                  m_judgeDisplayTargetW = feedback.width;
+                  m_judgeDisplayTargetH = feedback.height;
+                  m_judgeDisplayJudgement = shot->judgement;
               }
           }
       }
@@ -947,6 +966,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
               rb->velocity = {0, 0, 0};
               std::string terrainTex = "";
               bool treatAsOB = false;
+              const bool wasOB = state->isOB; // state->isOB はこの後リセットされるため先に控える
 
               auto GetTerrainTex = [](const std::string& preferred, const std::string& fallback) {
                   if (std::filesystem::exists("Assets/textures/" + preferred)) {
@@ -1029,9 +1049,24 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                       ui->alpha = 0.0f; // Updateでフェードイン
                       ui->width = 0.0f;
                       ui->height = 0.0f;
+                      ui->rotation = 0.0f;
                       ui->x = 1280.0f * 0.5f;
                       ui->y = 720.0f * 0.5f;
                       m_terrainDisplayTimer = 2.0f;
+                      m_terrainDisplayTotal  = 2.0f;
+                      m_terrainDisplayTargetW = 512.0f;
+                      m_terrainDisplayTargetH = 256.0f;
+                      if (wasOB || treatAsOB) {
+                          m_terrainDisplayTier = TerrainResultTier::Rough;
+                      } else {
+                          using Material = game::components::TerrainMaterial;
+                          switch (state->currentMaterial) {
+                          case Material::Green:                    m_terrainDisplayTier = TerrainResultTier::Perfect; break;
+                          case Material::Fairway:
+                          case Material::Ice:                      m_terrainDisplayTier = TerrainResultTier::Good;    break;
+                          default:                                 m_terrainDisplayTier = TerrainResultTier::Rough;   break;
+                          }
+                      }
 
                       if (ctx.audio && !state->isOB && !treatAsOB) {
                           std::string seName = "";
@@ -1212,6 +1247,11 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       const bool shouldRefreshHud = isShotPhase || m_hudUpdateTimer >= 0.1f;
 
       if (shouldRefreshHud) {
+          // 間引き中に経過した実時間を渡す。ここで単フレームの dt を渡すと、
+          // 間引き期間(約0.1秒)ぶん進んだはずのアイドルアニメーション用の
+          // 時計(m_elapsedTime)が単フレーム分しか進まず、クラブの矢印や
+          // 選択行の揺れ等がほぼ静止して見える不具合になっていた。
+          const float hudDt = isShotPhase ? dt : m_hudUpdateTimer;
           m_hudUpdateTimer = 0.0f;
 
           // クラブ情報リストを構築して渡す
@@ -1240,9 +1280,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
               }
           }
 
-          m_hud->Update(ctx, dt, *state,
+          m_hud->Update(ctx, hudDt, *state,
                         shot->phase, currentImpact,
                         currentPower, shot->confirmedPower,
+                        shot->confirmedImpact,
                         state->windSpeed, state->windDirection,
                         m_cameraController ? m_cameraController->GetYaw() : 0.0f,
                         clubDataList, clubIdx,
@@ -1263,12 +1304,18 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       PROFILE_SCOPE("WikiGolf.GameJuice");
       m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
+  if (m_terrainSystem) {
+      PROFILE_SCOPE("WikiGolf.SurfaceResponse");
+      m_terrainSystem->UpdateSurfaceResponse(ctx, m_ballEntity, dt);
+  }
   {
     PROFILE_SCOPE("WikiGolf.ProceduralFlags");
     UpdateProceduralFlagEffects(ctx, dt);
   }
 
-  // 地形判定UIの更新
+  // 着地地形の結果画像(Fairway/Rough/Bunker/Green/OB)の登場・中間・退場
+  // アニメーション。スイング判定の結果画像とは完全に別のエンティティ・
+  // 別の演出カーブ(このすぐ下のブロック)で、意図的に共通化しない。
   if (m_terrainDisplayTimer > 0.0f) {
       m_terrainDisplayTimer -= dt;
       if (m_terrainImageEntity != UINT32_MAX) {
@@ -1277,26 +1324,181 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
               if (m_terrainDisplayTimer <= 0.0f) {
                   ui->visible = false;
               } else {
-                  // 最初はズームイン、最後はフェードアウトするアニメーション
-                  float lifeTime = 2.0f - m_terrainDisplayTimer;
-                  if (lifeTime < 0.2f) {
-                      // ズームイン
-                      float t = lifeTime / 0.2f;
-                      ui->width = 512.0f * t;
-                      ui->height = 256.0f * t;
-                      ui->alpha = t;
-                  } else if (m_terrainDisplayTimer < 0.5f) {
-                      // フェードアウト
-                      ui->alpha = m_terrainDisplayTimer / 0.5f;
-                      ui->width = 512.0f;
-                      ui->height = 256.0f;
-                  } else {
-                      ui->alpha = 1.0f;
-                      ui->width = 512.0f;
-                      ui->height = 256.0f;
+                  const float total   = std::max(m_terrainDisplayTotal, 0.05f);
+                  const float elapsed = total - m_terrainDisplayTimer;
+                  const float targetW = m_terrainDisplayTargetW;
+                  const float targetH = m_terrainDisplayTargetH;
+
+                  float scale = 1.0f;
+                  float alpha = 1.0f;
+                  float rotDeg = 0.0f;
+                  float offsetX = 0.0f;
+                  float offsetY = 0.0f;
+
+                  switch (m_terrainDisplayTier) {
+                  case TerrainResultTier::Perfect: {
+                      // グリーンにきれいに乗った、上品でゆったりした演出。
+                      // 判定側の Perfect(激しく弾む)とは違い、着地の柔らかさを
+                      // 表すため沈み込んでから静かに定位置へ戻る。
+                      constexpr float kEnter = 0.4f;
+                      constexpr float kExit  = 0.4f;
+                      if (elapsed < kEnter) {
+                          float t = elapsed / kEnter;
+                          float settle = 1.0f - (1.0f - t) * (1.0f - t); // イーズアウト
+                          scale = 1.08f - 0.08f * settle; // わずかに大きめから収束
+                          alpha = std::min(1.0f, t * 1.6f);
+                      } else if (m_terrainDisplayTimer < kExit) {
+                          float t = m_terrainDisplayTimer / kExit;
+                          alpha = t;
+                          offsetY = -(1.0f - t) * 10.0f;
+                      } else {
+                          offsetY = std::sin(elapsed * 1.2f) * 3.0f; // 静かな浮遊
+                      }
+                      break;
                   }
-                  ui->x = (1280.0f - ui->width) * 0.5f;
-                  ui->y = (720.0f - ui->height) * 0.5f;
+                  case TerrainResultTier::Good: {
+                      // フェアウェイ/氷: 過度な演出を付けない実直なポップ。
+                      constexpr float kEnter = 0.2f;
+                      constexpr float kExit  = 0.3f;
+                      if (elapsed < kEnter) {
+                          float t = elapsed / kEnter;
+                          scale = t;
+                          alpha = t;
+                      } else if (m_terrainDisplayTimer < kExit) {
+                          alpha = m_terrainDisplayTimer / kExit;
+                      }
+                      break;
+                  }
+                  case TerrainResultTier::Rough:
+                  default: {
+                      // ラフ/バンカー/OB: ボテッと落ちて土煙が舞うような、
+                      // 弾みの悪い着地感。表示中もじわっと沈む。
+                      constexpr float kEnter = 0.18f;
+                      constexpr float kExit  = 0.25f;
+                      if (elapsed < kEnter) {
+                          float t = elapsed / kEnter;
+                          scale = 1.25f - 0.25f * t; // 大きめから縮んで収まる(潰れる感じ)
+                          alpha = t;
+                          offsetY = (1.0f - t) * 10.0f; // 落下してめり込む
+                      } else if (m_terrainDisplayTimer < kExit) {
+                          alpha = m_terrainDisplayTimer / kExit;
+                      }
+                      offsetX += std::sin(elapsed * 9.0f) * 2.0f; // 土煙のようなゆらぎ(低頻度)
+                      break;
+                  }
+                  }
+
+                  ui->alpha = std::clamp(alpha, 0.0f, 1.0f);
+                  ui->width  = targetW * scale;
+                  ui->height = targetH * scale;
+                  ui->rotation = rotDeg; // D2D1::Matrix3x2F::Rotation は度数指定
+                  ui->x = (1280.0f - ui->width) * 0.5f + offsetX;
+                  ui->y = (720.0f - ui->height) * 0.5f + offsetY;
+              }
+          }
+      }
+  }
+
+  // スイング判定の結果画像(Perfect/Great/Nice/Miss)の登場・中間・退場
+  // アニメーション。着地地形の演出とは別エンティティ・別カーブ。
+  if (m_judgeDisplayTimer > 0.0f) {
+      m_judgeDisplayTimer -= dt;
+      if (m_judgeImageEntity != UINT32_MAX) {
+          auto* ui = ctx.world.Get<game::components::UIImage>(m_judgeImageEntity);
+          if (ui) {
+              if (m_judgeDisplayTimer <= 0.0f) {
+                  ui->visible = false;
+              } else {
+                  const float total   = std::max(m_judgeDisplayTotal, 0.05f);
+                  const float elapsed = total - m_judgeDisplayTimer;
+                  const float targetW = m_judgeDisplayTargetW;
+                  const float targetH = m_judgeDisplayTargetH;
+
+                  float scale = 1.0f;
+                  float alpha = 1.0f;
+                  float rotDeg = 0.0f;
+                  float offsetX = 0.0f;
+                  float offsetY = 0.0f;
+
+                  using Judgement = game::components::ShotJudgement;
+                  switch (m_judgeDisplayJudgement) {
+                  case Judgement::Special: {
+                      // インパクトの気持ちよさを弾けるスタンプで表現。
+                      // 大きくオーバーシュートして登場し、余韻中も脈動し続け、
+                      // 最後は膨らみながら浮き上がって消える。
+                      constexpr float kEnter = 0.28f;
+                      constexpr float kExit  = 0.4f;
+                      if (elapsed < kEnter) {
+                          float t = elapsed / kEnter;
+                          float tm1 = t - 1.0f;
+                          constexpr float kOvershoot = 2.0f;
+                          scale = std::max(0.0f, 1.0f + (kOvershoot + 1.0f) * tm1 * tm1 * tm1 +
+                                                  kOvershoot * tm1 * tm1);
+                          alpha = std::min(1.0f, t * 2.4f);
+                      } else if (m_judgeDisplayTimer < kExit) {
+                          float t = m_judgeDisplayTimer / kExit;
+                          scale = 1.0f + (1.0f - t) * 0.15f;
+                          alpha = t;
+                          offsetY = -(1.0f - t) * 16.0f;
+                      } else {
+                          scale = 1.0f + std::sin(elapsed * 4.0f) * 0.04f;
+                          rotDeg = std::sin(elapsed * 2.0f) * 2.2f;
+                      }
+                      break;
+                  }
+                  case Judgement::Great: {
+                      // 確かな手応え。小さめのバウンドでキビキビ決まる。
+                      constexpr float kEnter = 0.18f;
+                      constexpr float kExit  = 0.3f;
+                      if (elapsed < kEnter) {
+                          float t = elapsed / kEnter;
+                          scale = t * (1.0f + (1.0f - t) * 0.22f);
+                          alpha = t;
+                      } else if (m_judgeDisplayTimer < kExit) {
+                          alpha = m_judgeDisplayTimer / kExit;
+                      }
+                      break;
+                  }
+                  case Judgement::Nice: {
+                      // まずまずの手応え。オーバーシュートなしで淡々と現れる。
+                      constexpr float kEnter = 0.22f;
+                      constexpr float kExit  = 0.25f;
+                      if (elapsed < kEnter) {
+                          float t = elapsed / kEnter;
+                          scale = t;
+                          alpha = t;
+                      } else if (m_judgeDisplayTimer < kExit) {
+                          alpha = m_judgeDisplayTimer / kExit;
+                      }
+                      break;
+                  }
+                  case Judgement::Miss:
+                  default: {
+                      // タイミングを外した気まずさをぐらつきで表現。
+                      // 斜めに傾いだまま現れ、表示中ずっと細かく震え、
+                      // 余韻なくすぐ消える。
+                      constexpr float kEnter = 0.12f;
+                      constexpr float kExit  = 0.18f;
+                      if (elapsed < kEnter) {
+                          float t = elapsed / kEnter;
+                          scale = 0.6f + 0.4f * t;
+                          alpha = t;
+                          rotDeg = (1.0f - t) * -10.0f;
+                      } else if (m_judgeDisplayTimer < kExit) {
+                          alpha = m_judgeDisplayTimer / kExit;
+                      }
+                      offsetX += (std::sin(elapsed * 34.0f) + std::sin(elapsed * 51.0f)) * 1.8f;
+                      rotDeg  += std::sin(elapsed * 26.0f) * 3.0f;
+                      break;
+                  }
+                  }
+
+                  ui->alpha = std::clamp(alpha, 0.0f, 1.0f);
+                  ui->width  = targetW * scale;
+                  ui->height = targetH * scale;
+                  ui->rotation = rotDeg; // D2D1::Matrix3x2F::Rotation は度数指定
+                  ui->x = (1280.0f - ui->width) * 0.5f + offsetX;
+                  ui->y = (720.0f - ui->height) * 0.5f + offsetY;
               }
           }
       }
@@ -1353,12 +1555,22 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       // カップイン！
       LOG_INFO("WikiGolf", "Cup In! Target: {}", hole->linkTarget);
 
-      // 遷移前に地形判定UIを非表示にする（次のコースに持ち越さない）
+      // カップイン後にボールが跳ねてホールから出てしまい、判定が
+      // ちらつく（出入りで再判定される）のを防ぐため速度を即座に停止する。
+      rb->velocity = {0.0f, 0.0f, 0.0f};
+      rb->angularVelocity = {0.0f, 0.0f, 0.0f};
+
+      // 遷移前に地形判定UI/スイング判定UIを非表示にする（次のコースに持ち越さない）
       if (m_terrainImageEntity != UINT32_MAX) {
           auto* ui = ctx.world.Get<game::components::UIImage>(m_terrainImageEntity);
           if (ui) ui->visible = false;
       }
       m_terrainDisplayTimer = 0.0f;
+      if (m_judgeImageEntity != UINT32_MAX) {
+          auto* ui = ctx.world.Get<game::components::UIImage>(m_judgeImageEntity);
+          if (ui) ui->visible = false;
+      }
+      m_judgeDisplayTimer = 0.0f;
 
       // カップイン時間進行 (1時間)
       m_timeOfDay.OnCupIn(1.0f);

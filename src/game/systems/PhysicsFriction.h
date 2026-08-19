@@ -109,7 +109,7 @@ struct SurfaceFrictionSettings {
   float constantBrake = 0.08f;
   float greenMultiplier = 1.45f;
   float roughMultiplier = 2.5f;
-  float bunkerMultiplier = 4.0f;
+  float bunkerMultiplier = 7.5f;
 };
 
 inline SurfaceFrictionSettings DefaultSurfaceFrictionSettings() {
@@ -191,6 +191,47 @@ ComputeGrassRollingAcceleration(float speed, float normalY,
   float brake =
       settings.constantBrake * (0.5f + 0.5f * slowMul); // 低速ほど粘らせる
   return frictionAccel + brake;
+}
+
+/// @brief 柔らかいバンカー表面へボールが沈む深さを返す
+inline float ComputeSurfaceSinkDepth(
+    game::components::TerrainMaterial material, float verticalImpactSpeed,
+    float totalSpeed, float ballRadius) {
+  using game::components::TerrainMaterial;
+  if (material != TerrainMaterial::Bunker || !std::isfinite(ballRadius) ||
+      ballRadius <= 0.0f) {
+    return 0.0f;
+  }
+
+  const float impact = std::isfinite(verticalImpactSpeed)
+                           ? std::max(verticalImpactSpeed, 0.0f)
+                           : 0.0f;
+  const float speed = std::isfinite(totalSpeed) ? std::max(totalSpeed, 0.0f)
+                                                 : 0.0f;
+  const float impactRatio = std::clamp((impact - 0.25f) / 9.0f, 0.0f, 1.0f);
+  const float rollRatio = std::clamp(speed / 12.0f, 0.0f, 1.0f);
+  const float radiusRatio = 1.0f + impactRatio * 0.38f + rollRatio * 0.17f;
+  return ballRadius * std::min(radiusRatio, 1.55f);
+}
+
+/// @brief バンカー着地時に砂へ吸収されず残る接線方向速度の割合を返す
+inline float ComputeSurfaceImpactTangentialRetention(
+    game::components::TerrainMaterial material, float verticalImpactSpeed,
+    float totalSpeed) {
+  using game::components::TerrainMaterial;
+  if (material != TerrainMaterial::Bunker) {
+    return 1.0f;
+  }
+
+  const float impact = std::isfinite(verticalImpactSpeed)
+                           ? std::max(verticalImpactSpeed, 0.0f)
+                           : 0.0f;
+  const float speed = std::isfinite(totalSpeed) ? std::max(totalSpeed, 0.0f)
+                                                 : 0.0f;
+  const float impactRatio = std::clamp(impact / 12.0f, 0.0f, 1.0f);
+  const float speedRatio = std::clamp(speed / 24.0f, 0.0f, 1.0f);
+  return std::clamp(0.52f - impactRatio * 0.18f - speedRatio * 0.08f,
+                    0.26f, 0.52f);
 }
 
 } // namespace game::systems

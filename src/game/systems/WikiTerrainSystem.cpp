@@ -31,6 +31,51 @@ namespace {
 
 constexpr float kTerrainOverlayHeightOffset = 0.02f;
 constexpr float kTerrainOverlayAlpha = 0.34f;
+constexpr float kTerrainVertexSpacing = 0.8f;
+
+struct TerrainResolution {
+  int x;
+  int z;
+};
+
+TerrainResolution CalculateTerrainResolution(float width, float depth) {
+  TerrainResolution resolution;
+  resolution.x = std::clamp(
+      static_cast<int>(std::ceil(width / kTerrainVertexSpacing)) + 1, 96,
+      160);
+  resolution.z = std::clamp(
+      static_cast<int>(std::ceil(depth / kTerrainVertexSpacing)) + 1, 96,
+      320);
+  return resolution;
+}
+
+float LerpValue(float a, float b, float t) { return a + (b - a) * t; }
+
+XMFLOAT3 SampleVisualMaterialColor(const TerrainData &data, float u, float v) {
+  const int resX = data.config.resolutionX;
+  const int resZ = data.config.resolutionZ;
+  float fx = std::clamp(u, 0.0f, 1.0f) * static_cast<float>(resX - 1);
+  float fz = std::clamp(v, 0.0f, 1.0f) * static_cast<float>(resZ - 1);
+  int x0 = std::clamp(static_cast<int>(std::floor(fx)), 0, resX - 1);
+  int z0 = std::clamp(static_cast<int>(std::floor(fz)), 0, resZ - 1);
+  int x1 = std::min(x0 + 1, resX - 1);
+  int z1 = std::min(z0 + 1, resZ - 1);
+  float tx = fx - static_cast<float>(x0);
+  float tz = fz - static_cast<float>(z0);
+
+  const XMFLOAT3 &c00 = data.visualMaterialColors[z0 * resX + x0];
+  const XMFLOAT3 &c10 = data.visualMaterialColors[z0 * resX + x1];
+  const XMFLOAT3 &c01 = data.visualMaterialColors[z1 * resX + x0];
+  const XMFLOAT3 &c11 = data.visualMaterialColors[z1 * resX + x1];
+  XMFLOAT3 result;
+  result.x = LerpValue(LerpValue(c00.x, c10.x, tx),
+                       LerpValue(c01.x, c11.x, tx), tz);
+  result.y = LerpValue(LerpValue(c00.y, c10.y, tx),
+                       LerpValue(c01.y, c11.y, tx), tz);
+  result.z = LerpValue(LerpValue(c00.z, c10.z, tx),
+                       LerpValue(c01.z, c11.z, tx), tz);
+  return result;
+}
 
 // ミニマップ(256x256)向けに積極的に間引いた地形タイルの分割数。
 // フル解像度(最大64x256)に対し十分小さく、俯瞰視点では見分けがつかない。
@@ -169,6 +214,7 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   m_buildTileIndex = 0;
   m_buildTiles.clear();
   m_buildLinks.clear();
+  m_grassPatches.clear();
 
   for (auto e : m_entities) {
     if (ctx.world.IsAlive(e)) {
@@ -218,11 +264,11 @@ void WikiTerrainSystem::BeginBuildField(
   m_tileMeshCaches.clear();
   m_buildProgress  = 0.0f;
 
-  // 地形解像度を事前計算
-  m_buildResX = 64;
-  m_buildResZ = static_cast<int>(fieldDepth);
-  m_buildResZ = (std::max)(64, m_buildResZ);
-  m_buildResZ = (std::min)(m_buildResZ, 256); // タスク1で設けた上限と一致
+  // フィールド寸法に対してセル間隔が大きくなりすぎない解像度を使用する。
+  const TerrainResolution terrainResolution =
+      CalculateTerrainResolution(fieldWidth, fieldDepth);
+  m_buildResX = terrainResolution.x;
+  m_buildResZ = terrainResolution.z;
 
   // TerrainGenerator を別スレッドで開始（CPU演算のみ、ECS/GPU不使用）
   const std::string seedText  = pageTitle;
@@ -412,18 +458,10 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
         uint8_t mat = m_terrainData->materialMap[gz * resX + gx];
 
         float matAlpha = (static_cast<float>(mat) + 0.5f) / 255.0f;
-        DirectX::XMFLOAT4 vcolor;
-        switch (mat) {
-          case 0:  vcolor = {0.35f, 0.55f, 0.25f, matAlpha}; break;
-          case 1:  vcolor = {0.25f, 0.45f, 0.20f, matAlpha}; break;
-          case 2:  vcolor = {0.90f, 0.85f, 0.70f, matAlpha}; break;
-          case 3:  vcolor = {0.40f, 0.75f, 0.30f, matAlpha}; break;
-          case 4:  vcolor = {0.70f, 0.88f, 0.98f, matAlpha}; break;
-          case 5:  vcolor = {0.20f, 0.45f, 0.85f, matAlpha}; break;
-          case 6:  vcolor = {0.95f, 0.35f, 0.12f, matAlpha}; break;
-          case 7:  vcolor = {0.50f, 0.48f, 0.52f, matAlpha}; break;
-          default: vcolor = {1.0f,  1.0f,  1.0f,  matAlpha}; break;
-        }
+        XMFLOAT3 visualColor =
+            SampleVisualMaterialColor(*m_terrainData, gridU, gridV);
+        DirectX::XMFLOAT4 vcolor = {visualColor.x, visualColor.y,
+                                    visualColor.z, matAlpha};
 
         graphics::Vertex vert;
         vert.position = {worldX, h, worldZ};
@@ -580,6 +618,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
   // 装飾の生成
   case BuildPhase::CreateDecorations: {
     CreateDecorations(ctx, m_buildFieldWidth, m_buildFieldDepth, m_biome);
+    CreateSurfaceGrass(ctx, m_buildFieldWidth, m_buildFieldDepth);
     m_buildPhase   = BuildPhase::Done;
     m_buildProgress = 1.0f;
     m_tileMeshCaches.clear(); // メモリ解放
@@ -612,6 +651,7 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
   CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle, pageCategories);
   CreateWalls(ctx, fieldWidth, fieldDepth);
   CreateDecorations(ctx, fieldWidth, fieldDepth, m_biome);
+  CreateSurfaceGrass(ctx, fieldWidth, fieldDepth);
 }
 
 /**
@@ -622,12 +662,11 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
                                     float width, float depth,
                                     const std::string &pageTitle,
                                     const std::vector<std::string> &pageCategories) {
-  // 地形解像度と設定の決定
-  int resX = 64;
-  // フィールド拡張による頂点数爆発を防ぐためメッシュ解像度の上限を256に制限
-  int resZ = static_cast<int>(depth);
-  resZ = (std::max)(64, resZ);
-  resZ = (std::min)(resZ, 256); // 上限: 64×256=16384頂点で固定
+  // 非同期生成経路と同じセル間隔・上限を使用する。
+  const TerrainResolution terrainResolution =
+      CalculateTerrainResolution(width, depth);
+  const int resX = terrainResolution.x;
+  const int resZ = terrainResolution.z;
 
   TerrainConfig config;
   config.worldWidth = width;
@@ -801,21 +840,12 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
                               resZ - 1);
         uint8_t mat = m_terrainData->materialMap[gz * resX + gx];
 
-        XMFLOAT4 vcolor;
         // アルファにはマテリアルID(0-7)を入れる。精度誤差を防ぐため中央値を狙う。
         float matAlpha = (static_cast<float>(mat) + 0.5f) / 255.0f;
-
-        switch (mat) {
-        case 0: vcolor = {0.35f, 0.55f, 0.25f, matAlpha}; break; // フェアウェイ
-        case 1: vcolor = {0.25f, 0.45f, 0.20f, matAlpha}; break; // ラフ
-        case 2: vcolor = {0.90f, 0.85f, 0.70f, matAlpha}; break; // バンカー
-        case 3: vcolor = {0.40f, 0.75f, 0.30f, matAlpha}; break; // グリーン
-        case 4: vcolor = {0.70f, 0.88f, 0.98f, matAlpha}; break; // 氷
-        case 5: vcolor = {0.20f, 0.45f, 0.85f, matAlpha}; break; // 水
-        case 6: vcolor = {0.95f, 0.35f, 0.12f, matAlpha}; break; // 溶岩
-        case 7: vcolor = {0.50f, 0.48f, 0.52f, matAlpha}; break; // 石
-        default: vcolor = {1.0f, 1.0f, 1.0f, matAlpha}; break;
-        }
+        XMFLOAT3 visualColor =
+            SampleVisualMaterialColor(*m_terrainData, gridU, gridV);
+        XMFLOAT4 vcolor = {visualColor.x, visualColor.y, visualColor.z,
+                           matAlpha};
 
         graphics::Vertex vert;
         vert.position = {worldX, h, worldZ};
@@ -1101,108 +1131,576 @@ float WikiTerrainSystem::GetHeight(float x, float z) const {
   return h0 * (1.0f - dz) + h1 * dz;
 }
 
+void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
+                                           float fieldWidth,
+                                           float fieldDepth) {
+  if (!m_terrainData || fieldWidth <= 0.0f || fieldDepth <= 0.0f) {
+    return;
+  }
+
+  const int resX = m_terrainData->config.resolutionX;
+  const int resZ = m_terrainData->config.resolutionZ;
+  if (resX < 2 || resZ < 2 || m_terrainData->materialMap.empty()) {
+    return;
+  }
+
+  // ラフのみに絞ったことで見た目の密度が不足するため間隔を詰めている。
+  // さらにもう2倍の密度が欲しいとのフィードバックを受け、間隔を約0.7倍
+  // （面積あたりの株数で約2倍）にし、上限も合わせて引き上げる。
+  constexpr float desiredSpacing = 0.53f;
+  constexpr float maximumPatchCount = 40000.0f;
+  const float fieldArea = fieldWidth * fieldDepth;
+  const float spacing =
+      std::max(desiredSpacing, std::sqrt(fieldArea / maximumPatchCount));
+  const int columns =
+      std::max(1, static_cast<int>(std::ceil(fieldWidth * 0.96f / spacing)));
+  const int rows =
+      std::max(1, static_cast<int>(std::ceil(fieldDepth * 0.96f / spacing)));
+  std::mt19937 rng(static_cast<unsigned>(
+      resX * 73856093u ^ resZ * 19349663u ^ (m_biome + 1) * 83492791u));
+  std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+  std::uniform_real_distribution<float> distYaw(0.0f, XM_2PI);
+  // 格子状の配置がそのまま見えないよう、間隔の4割近くまで大きく散らす。
+  std::uniform_real_distribution<float> distJitter(-spacing * 0.42f,
+                                                    spacing * 0.42f);
+
+  auto materialAt = [&](float x, float z) {
+    const float u = x / fieldWidth + 0.5f;
+    const float v = 0.5f - z / fieldDepth;
+    const int gx = std::clamp(
+        static_cast<int>(u * static_cast<float>(resX - 1) + 0.5f), 0,
+        resX - 1);
+    const int gz = std::clamp(
+        static_cast<int>(v * static_cast<float>(resZ - 1) + 0.5f), 0,
+        resZ - 1);
+    return static_cast<TerrainMaterial>(
+        m_terrainData->materialMap[gz * resX + gx]);
+  };
+
+  // 近傍の高さから地形の法線を求め、株の「上」をその法線に合わせる
+  // 回転を返す。坂の途中で根本が斜面にめり込んだり浮いたりしないよう、
+  // ラフ・フェアウェイ・グリーンの配置で共通利用する。
+  auto computeSlopeAlignQuat = [&](float x, float z) {
+    constexpr float normalSampleOffset = 0.15f;
+    const float heightLeft = GetHeight(x - normalSampleOffset, z);
+    const float heightRight = GetHeight(x + normalSampleOffset, z);
+    const float heightDown = GetHeight(x, z - normalSampleOffset);
+    const float heightUp = GetHeight(x, z + normalSampleOffset);
+    XMVECTOR slopeNormal = XMVector3Normalize(XMVectorSet(
+        (heightLeft - heightRight) / (2.0f * normalSampleOffset), 1.0f,
+        (heightDown - heightUp) / (2.0f * normalSampleOffset), 0.0f));
+
+    XMVECTOR worldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    XMVECTOR alignAxis = XMVector3Cross(worldUp, slopeNormal);
+    const float alignAxisLenSq = XMVectorGetX(XMVector3LengthSq(alignAxis));
+    if (alignAxisLenSq <= 1e-8f) {
+      return XMQuaternionIdentity();
+    }
+    const float cosAngle =
+        std::clamp(XMVectorGetX(XMVector3Dot(worldUp, slopeNormal)), -1.0f,
+                  1.0f);
+    return XMQuaternionRotationAxis(XMVector3Normalize(alignAxis),
+                                    std::acos(cosAngle));
+  };
+
+  // 同じ形のパッチが並んで見えないよう、配置ごとに複数のメッシュ
+  // バリアント（別seedで生成した葉の配置）から選ぶ。
+  constexpr int kGrassVariantCount = 4;
+  resources::MeshHandle grassMeshVariants[kGrassVariantCount] = {
+      ctx.resource.LoadMesh("builtin/grass_patch_0"),
+      ctx.resource.LoadMesh("builtin/grass_patch_1"),
+      ctx.resource.LoadMesh("builtin/grass_patch_2"),
+      ctx.resource.LoadMesh("builtin/grass_patch_3"),
+  };
+  auto grassShader = ctx.resource.LoadShader(
+      "Grass", L"Assets/shaders/GrassVS.hlsl",
+      L"Assets/shaders/GrassPS.hlsl");
+
+  int created = 0;
+  int roughCount = 0;
+  const float startX = -0.5f * static_cast<float>(columns - 1) * spacing;
+  const float startZ = -0.5f * static_cast<float>(rows - 1) * spacing;
+  // パッチ同士を軽く重ね合わせて境目を隠しつつ、重ねすぎて株が積み重なり
+  // 「トゲの塊」に見えないよう控えめなオーバーラップに留める。
+  const float horizontalScale = spacing * 1.20f;
+
+  for (int row = 0; row < rows; ++row) {
+    // 一行ごとに半間隔ずらす千鳥配置で、格子模様の集合体に見えるのを防ぐ。
+    const float rowStagger = (row % 2 == 0) ? 0.0f : spacing * 0.5f;
+    for (int column = 0; column < columns; ++column) {
+      const float x = startX + static_cast<float>(column) * spacing +
+                      rowStagger + distJitter(rng);
+      const float z = startZ + static_cast<float>(row) * spacing +
+                      distJitter(rng);
+      // フェアウェイ・グリーンは短く刈り込まれた芝生なので、3D葉ではなく
+      // 地形シェーダーの刈り跡ストライプ（TerrainPS）だけで表現する。
+      // 背の高いラフだけに3Dの葉を生やし、「野生の草地」ではなく
+      // 「手入れされたラフ」に見えるよう高さのばらつきも抑える。
+      const TerrainMaterial material = materialAt(x, z);
+      if (material != TerrainMaterial::Rough) {
+        continue;
+      }
+
+      const float variation = dist01(rng);
+      // 前回のフィードバックを受けて高さを約2/3に抑える。
+      const float heightScale = (0.32f + variation * 0.08f) * 0.667f;
+      const XMFLOAT4 color = {0.22f + variation * 0.05f,
+                              0.51f + variation * 0.08f,
+                              0.13f + variation * 0.03f, 1.0f};
+      ++roughCount;
+
+      const float yaw = distYaw(rng);
+      const float terrainHeight = GetHeight(x, z);
+      const XMVECTOR alignQuat = computeSlopeAlignQuat(x, z);
+      const XMVECTOR yawQuat = XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
+
+      const ecs::Entity entity = ctx.world.CreateEntity();
+      auto &transform = ctx.world.Add<Transform>(entity);
+      transform.position = {x, terrainHeight + 0.003f, z};
+      transform.scale = {horizontalScale, heightScale, horizontalScale};
+      XMStoreFloat4(&transform.rotation,
+                    XMQuaternionMultiply(yawQuat, alignQuat));
+
+      // 格子座標から決定的にバリアントを選び、隣接パッチが同じ葉配置に
+      // ならないようにする（乱数列は消費せず配置を安定させる）。
+      const unsigned variantHash = static_cast<unsigned>(row) * 374761393u ^
+                                   static_cast<unsigned>(column) * 668265263u;
+      const int variantIndex =
+          static_cast<int>((variantHash >> 13) % kGrassVariantCount);
+
+      auto &renderer = ctx.world.Add<MeshRenderer>(entity);
+      renderer.mesh = grassMeshVariants[variantIndex];
+      renderer.shader = grassShader;
+      renderer.color = color;
+      renderer.customFlags = {100000.0f, 100000.0f, 0.0f, 0.0f};
+      renderer.maxDrawDistance = 55.0f;
+      renderer.boundsScale = 1.35f;
+
+      GrassPatch grass;
+      grass.entity = entity;
+      grass.position = transform.position;
+      grass.halfExtent = horizontalScale * 0.72f;
+      m_grassPatches.push_back(grass);
+      m_entities.push_back(entity);
+      ctx.world.Add<TerrainObject>(entity);
+      ++created;
+    }
+  }
+
+  // --- フェアウェイ / グリーンの刈り込み芝 ---
+  // ラフと同じ実装（ランダムな向き・高さ）をそのまま使うとただの草地に
+  // 見えてしまうため、専用メッシュ（向きの乱れが小さい刈り込み株）を
+  // TerrainPS.hlsl の刈り跡ストライプの方向へ揃えて配置する。面積が
+  // ラフより広くなりがちなので間隔を粗くし、描画距離も短めに絞って
+  // 負荷を抑える（遠景はTerrainPSのストライプ表現に任せる）。
+  constexpr float turfSpacing = 0.72f;
+  constexpr float turfMaximumPatchCount = 30000.0f;
+  const float turfSpacingActual =
+      std::max(turfSpacing, std::sqrt(fieldArea / turfMaximumPatchCount));
+  const int turfColumns = std::max(
+      1, static_cast<int>(std::ceil(fieldWidth * 0.96f / turfSpacingActual)));
+  const int turfRows = std::max(
+      1, static_cast<int>(std::ceil(fieldDepth * 0.96f / turfSpacingActual)));
+  std::mt19937 turfRng(static_cast<unsigned>(
+      resX * 60000019u ^ resZ * 43112609u ^ (m_biome + 7) * 15485863u));
+  std::uniform_real_distribution<float> turfDist01(0.0f, 1.0f);
+  std::uniform_real_distribution<float> turfJitterDist(
+      -turfSpacingActual * 0.38f, turfSpacingActual * 0.38f);
+  // 刈り跡の縞に揃えるのが主目的なので、株ごとの向きの揺らぎは
+  // ラフよりずっと小さく抑える。
+  std::uniform_real_distribution<float> turfYawJitterDist(-0.06f, 0.06f);
+
+  constexpr int kTurfVariantCount = 4;
+  resources::MeshHandle turfMeshVariants[kTurfVariantCount] = {
+      ctx.resource.LoadMesh("builtin/turf_patch_0"),
+      ctx.resource.LoadMesh("builtin/turf_patch_1"),
+      ctx.resource.LoadMesh("builtin/turf_patch_2"),
+      ctx.resource.LoadMesh("builtin/turf_patch_3"),
+  };
+
+  const float turfHorizontalScale = turfSpacingActual * 1.15f;
+  const float turfStartX =
+      -0.5f * static_cast<float>(turfColumns - 1) * turfSpacingActual;
+  const float turfStartZ =
+      -0.5f * static_cast<float>(turfRows - 1) * turfSpacingActual;
+
+  int turfCreated = 0;
+  int fairwayCount = 0;
+  int greenCount = 0;
+
+  for (int row = 0; row < turfRows; ++row) {
+    const float rowStagger = (row % 2 == 0) ? 0.0f : turfSpacingActual * 0.5f;
+    for (int column = 0; column < turfColumns; ++column) {
+      const float x = turfStartX +
+                      static_cast<float>(column) * turfSpacingActual +
+                      rowStagger + turfJitterDist(turfRng);
+      const float z = turfStartZ +
+                      static_cast<float>(row) * turfSpacingActual +
+                      turfJitterDist(turfRng);
+      const TerrainMaterial material = materialAt(x, z);
+      if (material != TerrainMaterial::Fairway &&
+          material != TerrainMaterial::Green) {
+        continue;
+      }
+
+      const bool isGreen = material == TerrainMaterial::Green;
+      const float variation = turfDist01(turfRng);
+
+      // TerrainPS.hlsl のストライプ方向に揃える。フェアウェイはX方向の
+      // 帯（fairwayStripeWave = sin(x*2π/2.6)）、グリーンはZ方向の帯
+      // （greenStripeWave = sin(z*2π/1.5)）なので、それぞれの帯番号の
+      // 偶奇でわずかに逆向きへ傾け、刈り跡特有の縞の反転を3D葉でも表現する。
+      float baseYaw;
+      int bandIndex;
+      if (isGreen) {
+        baseYaw = XM_PIDIV2;
+        bandIndex = static_cast<int>(std::floor(z / 1.5f));
+      } else {
+        baseYaw = 0.0f;
+        bandIndex = static_cast<int>(std::floor(x / 2.6f));
+      }
+      const float bandLean = (bandIndex % 2 == 0) ? 0.14f : -0.14f;
+      const float yaw = baseYaw + bandLean + turfYawJitterDist(turfRng);
+
+      // グリーンはフェアウェイよりさらに短く刈り込まれた芝。色ムラも
+      // 抑え、均一な手入れ済みの見た目にする。
+      const float heightScale = isGreen ? (0.050f + variation * 0.014f)
+                                        : (0.105f + variation * 0.030f);
+      const XMFLOAT4 color =
+          isGreen ? XMFLOAT4{0.22f + variation * 0.02f,
+                             0.56f + variation * 0.03f,
+                             0.19f + variation * 0.02f, 0.15f}
+                  : XMFLOAT4{0.20f + variation * 0.03f,
+                             0.49f + variation * 0.05f,
+                             0.15f + variation * 0.02f, 0.35f};
+
+      const float terrainHeight = GetHeight(x, z);
+      const XMVECTOR alignQuat = computeSlopeAlignQuat(x, z);
+      const XMVECTOR yawQuat =
+          XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
+
+      const ecs::Entity entity = ctx.world.CreateEntity();
+      auto &transform = ctx.world.Add<Transform>(entity);
+      transform.position = {x, terrainHeight + 0.002f, z};
+      transform.scale = {turfHorizontalScale, heightScale,
+                         turfHorizontalScale};
+      XMStoreFloat4(&transform.rotation,
+                    XMQuaternionMultiply(yawQuat, alignQuat));
+
+      const unsigned variantHash = static_cast<unsigned>(row) * 2246822519u ^
+                                   static_cast<unsigned>(column) * 3266489917u;
+      const int variantIndex =
+          static_cast<int>((variantHash >> 15) % kTurfVariantCount);
+
+      auto &renderer = ctx.world.Add<MeshRenderer>(entity);
+      renderer.mesh = turfMeshVariants[variantIndex];
+      renderer.shader = grassShader;
+      renderer.color = color;
+      renderer.customFlags = {100000.0f, 100000.0f, 0.0f, 0.0f};
+      // フェアウェイ/グリーンは面積が広いため描画距離を短く絞り、
+      // 遠景はTerrainPSのストライプ表現に引き継ぐ。
+      renderer.maxDrawDistance = isGreen ? 30.0f : 34.0f;
+      renderer.boundsScale = 1.3f;
+
+      GrassPatch grass;
+      grass.entity = entity;
+      grass.position = transform.position;
+      grass.halfExtent = turfHorizontalScale * 0.72f;
+      m_grassPatches.push_back(grass);
+      m_entities.push_back(entity);
+      ctx.world.Add<TerrainObject>(entity);
+      ++turfCreated;
+      isGreen ? ++greenCount : ++fairwayCount;
+    }
+  }
+
+  LOG_INFO("WikiTerrain",
+           "Created {} dense reactive rough grass patches (rough={}, "
+           "spacing={:.2f})",
+           created, roughCount, spacing);
+  LOG_INFO("WikiTerrain",
+           "Created {} mowed turf patches (fairway={}, green={}, "
+           "spacing={:.2f})",
+           turfCreated, fairwayCount, greenCount, turfSpacingActual);
+}
+
+void WikiTerrainSystem::UpdateSurfaceResponse(core::GameContext &ctx,
+                                              ecs::Entity ballEntity,
+                                              float dt) {
+  if (m_grassPatches.empty() || !ctx.world.IsAlive(ballEntity) ||
+      !std::isfinite(dt) || dt <= 0.0f) {
+    return;
+  }
+
+  const auto *ballTransform = ctx.world.Get<Transform>(ballEntity);
+  const auto *ballBody = ctx.world.Get<RigidBody>(ballEntity);
+  const auto *state = ctx.world.GetGlobal<GolfGameState>();
+  if (!ballTransform) {
+    return;
+  }
+
+  float velocityX = ballBody ? ballBody->velocity.x : 0.0f;
+  float velocityZ = ballBody ? ballBody->velocity.z : 0.0f;
+  const float horizontalSpeed =
+      std::sqrt(velocityX * velocityX + velocityZ * velocityZ);
+  if (horizontalSpeed > 0.05f) {
+    velocityX /= horizontalSpeed;
+    velocityZ /= horizontalSpeed;
+  }
+
+  const bool touchesGrass =
+      state && state->isBallGrounded &&
+      (state->currentMaterial == TerrainMaterial::Fairway ||
+       state->currentMaterial == TerrainMaterial::Rough ||
+       state->currentMaterial == TerrainMaterial::Green);
+
+  for (GrassPatch &grass : m_grassPatches) {
+    auto *renderer = ctx.world.Get<MeshRenderer>(grass.entity);
+    if (!renderer) {
+      continue;
+    }
+
+    const float dx = grass.position.x - ballTransform->position.x;
+    const float dz = grass.position.z - ballTransform->position.z;
+    const float distanceSq = dx * dx + dz * dz;
+    const float patchReach = grass.halfExtent + 1.1f;
+    float targetResponse = 0.0f;
+
+    if (touchesGrass && distanceSq < patchReach * patchReach &&
+        std::abs(grass.position.y - ballTransform->position.y) < 0.7f) {
+      grass.interactionPoint = {ballTransform->position.x,
+                                ballTransform->position.z};
+      const float speedResponse =
+          std::clamp(0.42f + horizontalSpeed * 0.045f, 0.42f, 1.0f);
+      targetResponse = speedResponse;
+
+      if (horizontalSpeed > 0.05f) {
+        grass.interactionYaw = std::atan2(velocityZ, velocityX);
+      } else if (distanceSq > 0.0001f) {
+        grass.interactionYaw = std::atan2(dz, dx);
+      }
+    }
+
+    const float responseSpeed =
+        targetResponse > grass.response ? 18.0f : 3.8f;
+    const float blend = 1.0f - std::exp(-responseSpeed * dt);
+    grass.response += (targetResponse - grass.response) * blend;
+    if (grass.response < 0.002f) {
+      grass.response = 0.0f;
+    }
+
+    renderer->customFlags = {grass.interactionPoint.x,
+                             grass.interactionPoint.y,
+                             grass.interactionYaw, grass.response};
+  }
+}
+
 /**
  * @brief バイオームに応じた装飾オブジェクトを生成します。
  */
 void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
                                           float fieldWidth, float fieldDepth,
                                           int biome) {
-  // 装飾数設定（バイオームごとに調整）
-  int numDecorations = 15;
-  std::mt19937 rng(static_cast<unsigned>(biome * 12345 + 67890));
-  std::uniform_real_distribution<float> distX(-fieldWidth * 0.4f,
-                                              fieldWidth * 0.4f);
-  std::uniform_real_distribution<float> distZ(-fieldDepth * 0.4f,
-                                              fieldDepth * 0.4f);
-  std::uniform_real_distribution<float> distScale(0.5f, 1.5f);
-  std::uniform_real_distribution<float> distRot(0.0f, 6.28f);
-
-  // バイオーム別装飾設定
-  struct DecorationInfo {
-    XMFLOAT4 color;
-    XMFLOAT3 baseScale;
-    std::string meshName;
-  };
-
-  std::vector<DecorationInfo> decorations;
-
-  switch (biome) {
-  case 0: // 草原 - 木（縦長の緑色キューブ）
-    decorations.push_back(
-        {{0.15f, 0.5f, 0.15f, 1.0f}, {0.3f, 2.0f, 0.3f}, "builtin/cube"});
-    decorations.push_back(
-        {{0.2f, 0.6f, 0.2f, 1.0f}, {0.8f, 0.5f, 0.8f}, "builtin/cube"});
-    break;
-  case 1: // 砂漠 - サボテン風（縦長の緑、岩）
-    decorations.push_back(
-        {{0.2f, 0.55f, 0.2f, 1.0f}, {0.15f, 1.2f, 0.15f}, "builtin/cube"});
-    decorations.push_back(
-        {{0.7f, 0.6f, 0.45f, 1.0f}, {0.8f, 0.4f, 0.6f}, "builtin/cube"});
-    numDecorations = 12;
-    break;
-  case 2: // 氷原 - 氷塊（青白いキューブ）
-    decorations.push_back(
-        {{0.75f, 0.88f, 0.98f, 0.8f}, {0.6f, 0.8f, 0.5f}, "builtin/cube"});
-    decorations.push_back(
-        {{0.85f, 0.92f, 1.0f, 0.9f}, {0.4f, 1.2f, 0.3f}, "builtin/cube"});
-    numDecorations = 10;
-    break;
-  case 3: // 岩場 - 岩石（灰色キューブ）、溶岩光（赤オレンジ）
-    decorations.push_back(
-        {{0.45f, 0.42f, 0.48f, 1.0f}, {1.0f, 0.6f, 0.8f}, "builtin/cube"});
-    decorations.push_back(
-        {{0.95f, 0.4f, 0.15f, 0.9f}, {0.3f, 0.2f, 0.3f}, "builtin/cube"});
-    numDecorations = 18;
-    break;
-  default:
+  if (!m_terrainData) {
     return;
   }
 
-  if (decorations.empty())
-    return;
+  int targetClusters = 15;
+  if (biome == 1) {
+    targetClusters = 12;
+  } else if (biome == 2) {
+    targetClusters = 10;
+  } else if (biome == 3) {
+    targetClusters = 16;
+  }
 
-  std::uniform_int_distribution<size_t> distType(0, decorations.size() - 1);
+  std::mt19937 rng(static_cast<unsigned>(biome * 12345 + 67890));
+  std::uniform_real_distribution<float> distX(-fieldWidth * 0.4f,
+                                               fieldWidth * 0.4f);
+  std::uniform_real_distribution<float> distZ(-fieldDepth * 0.4f,
+                                               fieldDepth * 0.4f);
+  std::uniform_real_distribution<float> distScale(0.75f, 1.30f);
+  std::uniform_real_distribution<float> distRot(0.0f, 6.28f);
+  std::uniform_real_distribution<float> distOffset(-1.0f, 1.0f);
 
-  for (int i = 0; i < numDecorations; ++i) {
-    float x = distX(rng);
-    float z = distZ(rng);
-    float terrainHeight = GetHeight(x, z);
+  const int resX = m_terrainData->config.resolutionX;
+  const int resZ = m_terrainData->config.resolutionZ;
+  const float sampleOffset =
+      std::max(fieldWidth / static_cast<float>(resX - 1),
+               fieldDepth / static_cast<float>(resZ - 1));
 
-    // 装飾タイプ選択
-    const auto &deco = decorations[distType(rng)];
+  auto materialAt = [&](float x, float z) -> uint8_t {
+    float u = x / fieldWidth + 0.5f;
+    float v = 0.5f - z / fieldDepth;
+    if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) {
+      return 255;
+    }
+    int gx = std::clamp(
+        static_cast<int>(u * static_cast<float>(resX - 1) + 0.5f), 0,
+        resX - 1);
+    int gz = std::clamp(
+        static_cast<int>(v * static_cast<float>(resZ - 1) + 0.5f), 0,
+        resZ - 1);
+    return m_terrainData->materialMap[gz * resX + gx];
+  };
+  auto materialAllowed = [&](uint8_t material) {
+    switch (biome) {
+    case 0:
+      return material == 1;
+    case 1:
+      return material == 2 || material == 7;
+    case 2:
+      return material == 4 || material == 7;
+    case 3:
+      return material == 1 || material == 7;
+    default:
+      return false;
+    }
+  };
 
+  auto slopeAt = [&](float x, float z) {
+    float hL = GetHeight(x - sampleOffset, z);
+    float hR = GetHeight(x + sampleOffset, z);
+    float hD = GetHeight(x, z - sampleOffset);
+    float hU = GetHeight(x, z + sampleOffset);
+    float dx = (hR - hL) / (sampleOffset * 2.0f);
+    float dz = (hU - hD) / (sampleOffset * 2.0f);
+    return std::sqrt(dx * dx + dz * dz);
+  };
+
+  auto basicShader = ctx.resource.LoadShader(
+      "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
+  auto cylinderMesh = ctx.resource.LoadMesh("builtin/cylinder_smooth");
+  auto sphereMesh = ctx.resource.LoadMesh("builtin/sphere_smooth");
+  auto rockMesh = ctx.resource.LoadMesh("builtin/rock");
+
+  auto createPiece = [&](resources::MeshHandle mesh, const XMFLOAT4 &color,
+                         const XMFLOAT3 &position, const XMFLOAT3 &scale,
+                         float pitch, float yaw, float roll) {
     auto e = ctx.world.CreateEntity();
     Transform &transform = ctx.world.Add<Transform>(e);
-    float scale = distScale(rng);
-    transform.position = {x, terrainHeight + deco.baseScale.y * scale * 0.5f,
-                          z};
-    transform.scale = {deco.baseScale.x * scale, deco.baseScale.y * scale,
-                       deco.baseScale.z * scale};
-
-    // Y軸回転
-    float rot = distRot(rng);
-    XMVECTOR quat = XMQuaternionRotationRollPitchYaw(0.0f, rot, 0.0f);
+    transform.position = position;
+    transform.scale = scale;
+    XMVECTOR quat = XMQuaternionRotationRollPitchYaw(pitch, yaw, roll);
     XMFLOAT4 rotF;
     XMStoreFloat4(&rotF, quat);
     transform.rotation = rotF;
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = ctx.resource.LoadMesh(deco.meshName);
-    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                        L"Assets/shaders/BasicPS.hlsl");
-    mr.color = deco.color;
-    if (deco.color.w < 1.0f) {
-      mr.isTransparent = true;
-    }
-
-    // 当たり判定は追加しない
-
+    mr.mesh = mesh;
+    mr.shader = basicShader;
+    mr.color = color;
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
+  };
+
+  std::vector<XMFLOAT2> clusterPositions;
+  int createdClusters = 0;
+  const int maxAttempts = targetClusters * 30;
+  for (int attempt = 0;
+       attempt < maxAttempts && createdClusters < targetClusters; ++attempt) {
+    float x = distX(rng);
+    float z = distZ(rng);
+    if (!materialAllowed(materialAt(x, z))) {
+      continue;
+    }
+
+    float slopeLimit = biome == 0 ? 0.42f : 0.85f;
+    if (slopeAt(x, z) > slopeLimit) {
+      continue;
+    }
+
+    bool overlaps = false;
+    for (const auto &position : clusterPositions) {
+      float dx = x - position.x;
+      float dz = z - position.y;
+      if (dx * dx + dz * dz < 6.25f) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (overlaps) {
+      continue;
+    }
+
+    clusterPositions.push_back({x, z});
+    ++createdClusters;
+    float terrainHeight = GetHeight(x, z);
+    float scale = distScale(rng);
+    float yaw = distRot(rng);
+
+    if (biome == 0) {
+      float trunkHeight = 1.8f * scale;
+      createPiece(cylinderMesh, {0.30f, 0.20f, 0.11f, 1.0f},
+                  {x, terrainHeight + trunkHeight * 0.5f, z},
+                  {0.28f * scale, trunkHeight, 0.28f * scale}, 0.0f, yaw,
+                  0.0f);
+      const XMFLOAT4 leafColors[] = {
+          {0.16f, 0.36f, 0.12f, 1.0f}, {0.22f, 0.44f, 0.15f, 1.0f},
+          {0.12f, 0.31f, 0.10f, 1.0f}};
+      for (int part = 0; part < 3; ++part) {
+        float angle = yaw + static_cast<float>(part) * 2.094f;
+        float offset = 0.34f * scale;
+        createPiece(
+            sphereMesh, leafColors[part],
+            {x + std::cos(angle) * offset,
+             terrainHeight + trunkHeight + (0.18f + part * 0.10f) * scale,
+             z + std::sin(angle) * offset},
+            {(1.05f - part * 0.08f) * scale, 0.85f * scale,
+             (1.00f - part * 0.05f) * scale},
+            0.0f, angle, 0.0f);
+      }
+    } else if (biome == 1) {
+      int rockCount = 2 + static_cast<int>(distScale(rng) > 1.0f);
+      for (int part = 0; part < rockCount; ++part) {
+        float ox = distOffset(rng) * 0.55f * scale;
+        float oz = distOffset(rng) * 0.55f * scale;
+        float pieceScale = scale * (0.55f + 0.22f * part);
+        float pieceHeight = GetHeight(x + ox, z + oz);
+        createPiece(rockMesh,
+                    part == 0 ? XMFLOAT4{0.58f, 0.48f, 0.34f, 1.0f}
+                              : XMFLOAT4{0.68f, 0.58f, 0.42f, 1.0f},
+                    {x + ox, pieceHeight + pieceScale * 0.34f, z + oz},
+                    {pieceScale * 1.15f, pieceScale * 0.75f, pieceScale},
+                    distOffset(rng) * 0.18f, yaw + part * 0.7f,
+                    distOffset(rng) * 0.16f);
+      }
+    } else if (biome == 2) {
+      for (int part = 0; part < 3; ++part) {
+        float angle = yaw + static_cast<float>(part) * 2.094f;
+        float distance = part == 0 ? 0.0f : 0.38f * scale;
+        float pieceHeight = GetHeight(x + std::cos(angle) * distance,
+                                      z + std::sin(angle) * distance);
+        float pieceScale = scale * (1.0f - part * 0.16f);
+        createPiece(
+            rockMesh, {0.70f + part * 0.05f, 0.86f + part * 0.03f, 0.96f, 1.0f},
+            {x + std::cos(angle) * distance,
+             pieceHeight + pieceScale * 0.60f,
+             z + std::sin(angle) * distance},
+            {pieceScale * 0.55f, pieceScale * 1.45f,
+             pieceScale * 0.50f},
+            distOffset(rng) * 0.22f, angle, distOffset(rng) * 0.18f);
+      }
+    } else if (biome == 3) {
+      for (int part = 0; part < 3; ++part) {
+        float angle = yaw + static_cast<float>(part) * 2.094f;
+        float distance = 0.42f * part * scale;
+        float px = x + std::cos(angle) * distance;
+        float pz = z + std::sin(angle) * distance;
+        float pieceScale = scale * (1.0f - part * 0.14f);
+        createPiece(
+            rockMesh,
+            part == 0 ? XMFLOAT4{0.34f, 0.32f, 0.31f, 1.0f}
+                      : XMFLOAT4{0.43f, 0.40f, 0.38f, 1.0f},
+            {px, GetHeight(px, pz) + pieceScale * 0.34f, pz},
+            {pieceScale * 1.20f, pieceScale * 0.82f, pieceScale},
+            distOffset(rng) * 0.20f, angle, distOffset(rng) * 0.20f);
+      }
+    }
   }
 
-  LOG_INFO("WikiTerrain", "Created {} decorations for biome {}", numDecorations,
-           biome);
+  LOG_INFO("WikiTerrain", "Created {} decoration clusters for biome {}",
+           createdClusters, biome);
 }
 
 } // namespace game::systems

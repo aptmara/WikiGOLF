@@ -286,6 +286,31 @@ void TextRenderer::FillRect(const D2D1_RECT_F &rect,
   }
 }
 
+void TextRenderer::FillRoundedRect(const D2D1_RECT_F &rect, float radius,
+                                   const DirectX::XMFLOAT4 &color) {
+  if (!m_d2dContext)
+    return;
+
+  ID2D1SolidColorBrush *brush = m_brushCache.GetBrush(color);
+  if (brush) {
+    m_d2dContext->FillRoundedRectangle(
+        D2D1::RoundedRect(rect, radius, radius), brush);
+  }
+}
+
+void TextRenderer::DrawRoundedRect(const D2D1_RECT_F &rect, float radius,
+                                   const DirectX::XMFLOAT4 &color,
+                                   float width) {
+  if (!m_d2dContext || width <= 0.0f)
+    return;
+
+  ID2D1SolidColorBrush *brush = m_brushCache.GetBrush(color);
+  if (brush) {
+    m_d2dContext->DrawRoundedRectangle(
+        D2D1::RoundedRect(rect, radius, radius), brush, width);
+  }
+}
+
 bool TextRenderer::LoadBitmapFromFile(const std::string &filePath) {
   if (m_bitmapCache.find(filePath) != m_bitmapCache.end()) {
     return true; // すでにロード済み

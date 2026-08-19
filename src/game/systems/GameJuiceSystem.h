@@ -191,6 +191,14 @@ private:
   static constexpr int kImpactParticleCount = 96; ///< 祝祭を含む粒子数です。山内陽
 
   // --- 環境エフェクト（転がり・スライド） ---
+  enum class EnvironmentParticleKind {
+    GrassClip,
+    SandDust,
+    SandGrain,
+    SandClump,
+    GenericDebris
+  };
+
   struct EnvironmentParticle {
     ecs::Entity entity = UINT32_MAX;
     DirectX::XMFLOAT3 velocity = {0, 0, 0};
@@ -198,13 +206,28 @@ private:
     float lifetime = 0.0f;
     float maxLifetime = 1.0f;
     float baseScale = 0.1f;
+    float groundHeight = 0.0f;
     DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
-    bool isDust = false; // 砂煙(Sphere)か芝片(Cube/Sheet)か
+    EnvironmentParticleKind kind = EnvironmentParticleKind::GrassClip;
   };
   std::vector<EnvironmentParticle> m_envParticles;
   int m_envWriteIndex = 0;
   float m_envEmitTimer = 0.0f;
-  static constexpr int kEnvParticleCount = 96; ///< 環境粒子数です。山内陽
+  static constexpr int kEnvParticleCount = 256;
+
+  // --- バンカー表面の窪み・ボール周囲の砂の盛り上がり ---
+  struct SandImprint {
+    ecs::Entity entity = UINT32_MAX;
+    float lifetime = 0.0f;
+    float maxLifetime = 1.0f;
+    float startScale = 0.1f;
+    DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
+  };
+  std::vector<SandImprint> m_sandImprints;
+  int m_sandImprintWriteIndex = 0;
+  float m_sandTrackTimer = 0.0f;
+  ecs::Entity m_sandCollarEntity = UINT32_MAX;
+  static constexpr int kSandImprintCount = 28;
 
   // --- リップルエフェクト ---
   struct Ripple {
@@ -224,6 +247,8 @@ private:
   void UpdateImpactParticles(core::GameContext &ctx);
   void UpdateEnvironmentParticles(core::GameContext &ctx,
                                   ecs::Entity targetEntity);
+  void UpdateSandSurfaceEffects(core::GameContext &ctx,
+                                ecs::Entity targetEntity);
   void UpdateRipples(core::GameContext &ctx);
   float UpdateFovPunch(float dt);
   void EmitEnvironmentParticles(core::GameContext &ctx,
@@ -232,6 +257,10 @@ private:
   void CreateTrailEntities(core::GameContext &ctx);
   void CreateImpactParticleEntities(core::GameContext &ctx);
   void CreateEnvironmentParticleEntities(core::GameContext &ctx);
+  void CreateSandSurfaceEntities(core::GameContext &ctx);
+  void SpawnSandImprint(core::GameContext &ctx,
+                        const DirectX::XMFLOAT3 &position, float scale,
+                        float lifetime, const DirectX::XMFLOAT4 &color);
   void CreateRippleEntities(core::GameContext &ctx);
 };
 

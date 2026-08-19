@@ -60,6 +60,14 @@ public:
   /// @brief 矩形を塗りつぶし
   void FillRect(const D2D1_RECT_F &rect, const DirectX::XMFLOAT4 &color);
 
+  /// @brief 角丸矩形を塗りつぶし
+  void FillRoundedRect(const D2D1_RECT_F &rect, float radius,
+                       const DirectX::XMFLOAT4 &color);
+
+  /// @brief 角丸矩形の枠線を描画
+  void DrawRoundedRect(const D2D1_RECT_F &rect, float radius,
+                       const DirectX::XMFLOAT4 &color, float width);
+
   /// @brief 画像をロード（キャッシュ機能付き）
   bool LoadBitmapFromFile(const std::string &filePath);
 

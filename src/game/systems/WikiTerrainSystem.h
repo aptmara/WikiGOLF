@@ -78,8 +78,22 @@ public:
   /// @brief 指定座標の地形高さを取得
   float GetHeight(float x, float z) const;
 
+  /// @brief ボール近傍の芝を倒し、離れた芝を元の姿勢へ戻す
+  void UpdateSurfaceResponse(core::GameContext &ctx, ecs::Entity ballEntity,
+                             float dt);
+
 private:
+  struct GrassPatch {
+    ecs::Entity entity = 0xFFFFFFFF;
+    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
+    DirectX::XMFLOAT2 interactionPoint = {100000.0f, 100000.0f};
+    float interactionYaw = 0.0f;
+    float response = 0.0f;
+    float halfExtent = 1.0f;
+  };
+
   std::vector<ecs::Entity> m_entities;
+  std::vector<GrassPatch> m_grassPatches;
   ecs::Entity m_floorEntity = 0xFFFFFFFF;
   std::shared_ptr<TerrainData> m_terrainData;
   bool m_tutorialMode = false;
@@ -100,6 +114,8 @@ private:
   /// @brief バイオーム別装飾オブジェクト作成
   void CreateDecorations(core::GameContext &ctx, float fieldWidth,
                          float fieldDepth, int biome);
+  void CreateSurfaceGrass(core::GameContext &ctx, float fieldWidth,
+                          float fieldDepth);
 
   int m_biome = 0; ///< 現在のバイオーム
 

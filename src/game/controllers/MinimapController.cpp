@@ -588,8 +588,20 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
       ballIcon->visible = markerSurfaceVisible && (!m_isMapView || ballInView);
     }
 
+    // 自機の位置に「ここにいるよ」を伝える波紋(レーダーピング)。輪が広がり
+    // ながら薄れて消える1サイクルを繰り返す、常時アイドルアニメーション。
     if (auto *pulseMarker = ctx.world.Get<UIText>(m_minimapPulseMarkerEntity)) {
-      pulseMarker->visible = false;
+      const bool pulseVisible = markerSurfaceVisible && ballIcon && ballIcon->visible;
+      if (pulseVisible) {
+        constexpr float kPulseCycle = 1.6f;
+        const float phase = std::fmod(m_markerPulseTimer, kPulseCycle) / kPulseCycle; // 0..1
+        const float ringSize = game::ui::kMinimapMarkerSize * (0.9f + phase * 1.4f);
+        pulseMarker->x = mapBounds.x + u * mapBounds.width - ringSize * 0.5f;
+        pulseMarker->y = mapBounds.y + v * mapBounds.height - ringSize * 0.5f;
+        pulseMarker->style.fontSize = ringSize;
+        pulseMarker->style.color = {0.18f, 0.85f, 1.0f, (1.0f - phase) * 0.5f};
+      }
+      pulseMarker->visible = pulseVisible;
     }
   }
 
@@ -600,10 +612,6 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     if (marker) {
       marker->style.fontSize = game::ui::kMinimapMarkerSize * 0.85f; // シャープに小さく表示
       marker->style.color = {0.18f, 0.85f, 1.0f, 1.0f}; // ソリッドシアン
-    }
-
-    if (auto *pulseMarker = ctx.world.Get<UIText>(m_minimapPulseMarkerEntity)) {
-      pulseMarker->visible = false;
     }
   }
 

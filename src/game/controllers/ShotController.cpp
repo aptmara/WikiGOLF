@@ -88,19 +88,18 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
         // インパクト決定
         if (ctx.input.GetMouseButtonDown(0)) {
             shot->confirmedImpact = shot->impactGaugePos;
-            if (hud) hud->SetGaugeVisible(ctx, false);
-            
+
             // 判定ロジック
             shot->judgement =
                 game::utils::EvaluateImpactJudgement(shot->confirmedImpact);
             if (shot->judgement == game::components::ShotJudgement::Special) {
                 if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorSpecial);
             } else if (shot->judgement == game::components::ShotJudgement::Great) {
-                if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorError);
+                if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorSuccess);
             } else if (shot->judgement == game::components::ShotJudgement::Nice) {
                 if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorAccent);
             } else {
-                if (hud) hud->UpdateJudge(ctx, L"", {0.2f, 0.2f, 0.8f, 1.0f});
+                if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorError);
             }
 
             // 判定音の再生
@@ -197,10 +196,7 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     if (timeOfDay) {
         timeOfDay->OnShot(0.5f);
     }
-
-    if (hud) {
-        hud->SetGaugeVisible(ctx, false);
-    }
+    // ゲージの可視性（インパクト確定後の保持表示含む）は WikiGolfHUD 側で一元管理する。
 }
 
 } // namespace game::controllers

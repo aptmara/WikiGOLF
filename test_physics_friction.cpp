@@ -91,8 +91,8 @@ int main() {
 
     CHECK(flatFairway < flatGreen,
           "Green friction is now heavier than fairway");
-    CHECK(bunker > flatFairway * 1.5f,
-          "Bunker friction is stronger than fairway");
+    CHECK(bunker > flatFairway * 5.0f,
+          "Bunker friction stops the ball much sooner than fairway");
     CHECK(steepFairway > settings.constantBrake * 0.5f,
           "Steep slopes keep a friction floor to avoid endless sliding");
 
@@ -102,6 +102,49 @@ int main() {
             settings);
     CHECK(creeping < flatFairway * 0.7f,
           "Nonlinear friction eases at low speed to keep the ball creeping");
+  }
+
+  // 7) バンカーだけが速度に応じて沈み、半径内に収まる
+  {
+    constexpr float ballRadius = 0.02135f;
+    float fairway = game::systems::ComputeSurfaceSinkDepth(
+        game::components::TerrainMaterial::Fairway, 8.0f, 12.0f,
+        ballRadius);
+    float restingSand = game::systems::ComputeSurfaceSinkDepth(
+        game::components::TerrainMaterial::Bunker, 0.0f, 0.0f, ballRadius);
+    float impactSand = game::systems::ComputeSurfaceSinkDepth(
+        game::components::TerrainMaterial::Bunker, 12.0f, 18.0f,
+        ballRadius);
+
+    CHECK_CLOSE(fairway, 0.0f, 1e-6f,
+                "Fairway does not sink the ball");
+    CHECK(restingSand > 0.0f, "Resting ball settles slightly into bunker");
+    CHECK(restingSand >= ballRadius * 0.95f,
+          "Resting ball is buried halfway into bunker sand");
+    CHECK(impactSand > restingSand,
+          "Hard bunker impact sinks deeper than a resting ball");
+    CHECK(impactSand <= ballRadius * 1.55f + 1e-6f,
+          "Bunker sink depth remains bounded by the ball radius");
+  }
+
+  // 8) バンカー着地時だけ横方向の運動量を砂へ大きく吸収する
+  {
+    float fairwayRetention =
+        game::systems::ComputeSurfaceImpactTangentialRetention(
+            game::components::TerrainMaterial::Fairway, 10.0f, 20.0f);
+    float softSandRetention =
+        game::systems::ComputeSurfaceImpactTangentialRetention(
+            game::components::TerrainMaterial::Bunker, 2.0f, 8.0f);
+    float hardSandRetention =
+        game::systems::ComputeSurfaceImpactTangentialRetention(
+            game::components::TerrainMaterial::Bunker, 10.0f, 20.0f);
+
+    CHECK_CLOSE(fairwayRetention, 1.0f, 1e-6f,
+                "Fairway preserves tangential impact speed");
+    CHECK(softSandRetention < 0.5f,
+          "Bunker absorbs more than half of tangential impact speed");
+    CHECK(hardSandRetention < softSandRetention,
+          "Hard bunker impacts lose more tangential speed");
   }
 
   std::cout << "All physics friction tests passed!\n";

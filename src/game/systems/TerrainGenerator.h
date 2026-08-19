@@ -25,6 +25,8 @@ struct TerrainData {
   std::vector<float> heightMap;
   std::vector<uint8_t>
       materialMap; // マテリアルID（Fairway, Rough, Bunker, Green）
+  std::vector<DirectX::XMFLOAT3>
+      visualMaterialColors; // 描画専用の連続した地表カラー
   std::vector<DirectX::XMFLOAT3> normals; // 物理・描画用法線
 
   // 生のメッシュデータ (リソース生成用)
@@ -69,6 +71,11 @@ private:
    * @brief 小さすぎる孤立地形を整理し、コースの読みやすさを保ちます。
    */
   static void ApplyMaterialCleanup(TerrainData &data);
+
+  /**
+   * @brief 離散した物理材質から描画専用の連続カラーフィールドを生成します。
+   */
+  static void GenerateVisualMaterialColors(TerrainData &data);
 
   /**
    * @brief ハイトマップにスムージング処理を適用します。

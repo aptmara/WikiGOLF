@@ -13,6 +13,7 @@
 #include "src/game/systems/UIButtonSystem.h"
 #include "src/game/systems/UIImageRenderSystem.h"
 #include "src/game/systems/UIRenderSystem.h"
+#include "src/game/systems/WikiShortestPath.h"
 #include "src/graphics/GraphicsDevice.h"
 #include "src/core/Profiler.h"
 #include "src/graphics/TextRenderer.h"
@@ -23,6 +24,8 @@
 
 // グローバル入力ポインタ（WndProc用）
 core::Input *g_Input = nullptr;
+// グローバルオーディオポインタ（WndProc用。×閉じるで即座に音を止めるために使う）
+game::systems::AudioSystem *g_Audio = nullptr;
 
 // ウィンドウプロシージャ
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
@@ -41,6 +44,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
   case WM_KEYDOWN:
     // LOG_DEBUG("WndProc", "WM_KEYDOWN: {}", wParam);
     break;
+  case WM_CLOSE:
+    // Profiler::Shutdown()の同期CSV書き出しで実際のプロセス終了までは
+    // 数十秒かかることがあるが、ユーザーには即座に閉じたと感じてもらうため
+    // ここで先に音を止め、実行中のWikipedia経路計算(SQLite)を中断要求し、
+    // ウィンドウを隠してしまう。残りの重い後片付けは見えないところで続行する。
+    game::systems::WikiShortestPath::RequestCancelAll();
+    if (g_Audio) {
+      g_Audio->Shutdown();
+    }
+    ShowWindow(hWnd, SW_HIDE);
+    DestroyWindow(hWnd);
+    return 0;
   case WM_DESTROY:
     PostQuitMessage(0);
     return 0;
@@ -146,16 +161,37 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     LOG_ERROR("Main", "AudioSystem Init failed. Running without audio.");
     // 続行可能（nullptrチェックを入れる想定）
   }
+  g_Audio = &audioSystem;
 
   // ゲームコンテキスト
   core::GameContext ctx(resource, world, graphics, input);
   ctx.audio = &audioSystem;
   ctx.textRenderer = &textRenderer;
 
-  // 同梱日本語フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
-  if (!textRenderer.LoadFont("Mamelon 5 Hi-Regular",
-                             "Assets/Fonts/Mamelon-5-Hi-Regular.otf")) {
-    LOG_WARN("Main", "Bundled HUD font load failed. Falling back to system font.");
+  // 同梱フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
+  // 用途別に使い分ける（TextStyle.h の各プリセット参照）:
+  //   Mamelon 5 Hi        - 見出し・特別演出用の装飾フォント
+  //   Barlow Condensed *  - ラベル/本文用の引き締まったサンセリフ（UIの主力）
+  //   Share Tech Mono     - 風速/距離/パワー等、数値読み取り用のデジタル等幅
+  //   Kiwi Maru Medium    - 記事名・クラブ名など日本語文章用の丸ゴシック
+  // 登録名は実際のフォント内部ファミリー名と一致させる必要がある
+  // （一致しないと CreateTextFormat が見つけられず既定フォントへ
+  // 静かにフォールバックしてしまう）。
+  struct BundledFont { const char* family; const char* path; };
+  const BundledFont kBundledFonts[] = {
+      {"Mamelon 5 Hi",             "Assets/Fonts/Mamelon-5-Hi-Regular.otf"},
+      {"Barlow Condensed",         "Assets/Fonts/Barlow_Condensed/BarlowCondensed-Regular.ttf"},
+      {"Barlow Condensed Medium",  "Assets/Fonts/Barlow_Condensed/BarlowCondensed-Medium.ttf"},
+      {"Barlow Condensed SemiBold","Assets/Fonts/Barlow_Condensed/BarlowCondensed-SemiBold.ttf"},
+      {"Barlow Condensed Black",   "Assets/Fonts/Barlow_Condensed/BarlowCondensed-Black.ttf"},
+      {"Kiwi Maru Medium",         "Assets/Fonts/Kiwi_Maru/KiwiMaru-Medium.ttf"},
+      {"Share Tech Mono",          "Assets/Fonts/Share_Tech_Mono/ShareTechMono-Regular.ttf"},
+  };
+  for (const auto& font : kBundledFonts) {
+    if (!textRenderer.LoadFont(font.family, font.path)) {
+      LOG_WARN("Main", "Bundled font load failed: {} ({}). Falling back to system font.",
+               font.family, font.path);
+    }
   }
 
   // システムインスタンス

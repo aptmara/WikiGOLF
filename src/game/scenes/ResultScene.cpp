@@ -662,8 +662,9 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   bElem.baseColor = gradeColor;
   m_uiElements.push_back(bElem);
 
-  // 目的地ページ名を表示します。
+  // 目的地ページ名を表示します。日本語の記事名を含むため丸ゴシックにする。
   auto subStyle = graphics::TextStyle::ModernBlack();
+  subStyle.fontFamily = "Kiwi Maru Medium";
   subStyle.color = {0.8f, 0.8f, 0.9f, 1.0f};
   subStyle.hasShadow = true;
   subStyle.align = graphics::TextAlign::Center;
@@ -687,8 +688,9 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   std::wstring stats = L"Shots: " + std::to_wstring(m_data.shotCount) + L"  |  Hops: " + std::to_wstring(hops);
   addUI(stats, 340.0f, statStyle);
 
-  // 遷移経路文字列のテキストを追加します。
+  // 遷移経路文字列のテキストを追加します。日本語の記事名を含むため丸ゴシックにする。
   auto routeStyle = statStyle;
+  routeStyle.fontFamily = "Kiwi Maru Medium";
   routeStyle.align = graphics::TextAlign::Center;
   routeStyle.fontSize = 22.0f;
   addUI(routeStr, 390.0f, routeStyle);

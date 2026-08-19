@@ -441,6 +441,9 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   } else if (path == "builtin/sphere" || path == "sphere") {
     mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
     success = true;
+  } else if (path == "builtin/sphere_smooth") {
+    mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice(), 24);
+    success = true;
   } else if (path == "builtin/triangle") {
     mesh = graphics::MeshPrimitives::CreateTriangle(m_device.GetDevice());
     success = true;
@@ -452,8 +455,46 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
     mesh = graphics::MeshPrimitives::CreateQuad(m_device.GetDevice());
     success = true;
   } else if (path == "builtin/cylinder" || path == "cylinder") {
-    // TODO: CreateCylinder実装後に置換。現状はsphereで代用。
-    mesh = graphics::MeshPrimitives::CreateSphere(m_device.GetDevice());
+    mesh = graphics::MeshPrimitives::CreateCylinder(m_device.GetDevice());
+    success = true;
+  } else if (path == "builtin/cylinder_smooth") {
+    mesh = graphics::MeshPrimitives::CreateCylinder(m_device.GetDevice(), 24);
+    success = true;
+  } else if (path == "builtin/rock" || path == "rock") {
+    mesh = graphics::MeshPrimitives::CreateRock(m_device.GetDevice());
+    success = true;
+  } else if (path == "builtin/grass_clump" || path == "grass_clump") {
+    mesh = graphics::MeshPrimitives::CreateGrassClump(m_device.GetDevice());
+    success = true;
+  } else if (path == "builtin/grass_patch" || path == "grass_patch") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice());
+    success = true;
+  } else if (path == "builtin/grass_patch_0") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 0);
+    success = true;
+  } else if (path == "builtin/grass_patch_1") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_2") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 2);
+    success = true;
+  } else if (path == "builtin/grass_patch_3") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 3);
+    success = true;
+  } else if (path == "builtin/turf_patch_0") {
+    mesh = graphics::MeshPrimitives::CreateTurfPatch(m_device.GetDevice(), 0);
+    success = true;
+  } else if (path == "builtin/turf_patch_1") {
+    mesh = graphics::MeshPrimitives::CreateTurfPatch(m_device.GetDevice(), 1);
+    success = true;
+  } else if (path == "builtin/turf_patch_2") {
+    mesh = graphics::MeshPrimitives::CreateTurfPatch(m_device.GetDevice(), 2);
+    success = true;
+  } else if (path == "builtin/turf_patch_3") {
+    mesh = graphics::MeshPrimitives::CreateTurfPatch(m_device.GetDevice(), 3);
+    success = true;
+  } else if (path == "builtin/sand_crater" || path == "sand_crater") {
+    mesh = graphics::MeshPrimitives::CreateSandCrater(m_device.GetDevice());
     success = true;
   } else if (path == "builtin/torus" || path == "torus") {
     // TODO: CreateTorus実装後に置換。現状はsphereで代用。

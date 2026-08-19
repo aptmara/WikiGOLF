@@ -6,6 +6,7 @@
 
 #include "../../core/Scene.h"
 #include "../../ecs/Entity.h"
+#include "../components/WikiComponents.h"
 #include "../../graphics/SkyboxTextureGenerator.h"
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../systems/GameJuiceSystem.h"
@@ -151,8 +152,27 @@ private:
   
   game::utils::ScreenFade m_screenFade;
   
+  // === 着地地形の結果画像（Fairway/Rough/Bunker/Green/OB） ===
+  // スイング判定の結果画像とは別エンティティ・別アニメーションで演出する
+  // （同じ質感にすると「どちらの結果か」が伝わりにくくなるため意図的に
+  // 共通化しない）。
+  enum class TerrainResultTier { Perfect, Good, Rough };
+
   ecs::Entity m_terrainImageEntity = UINT32_MAX;
   float m_terrainDisplayTimer = 0.0f;
+  float m_terrainDisplayTotal = 2.0f;     // 表示開始時の合計秒数（tierごとのカーブ計算に使う）
+  float m_terrainDisplayTargetW = 512.0f; // 表示完了時の目標サイズ
+  float m_terrainDisplayTargetH = 256.0f;
+  TerrainResultTier m_terrainDisplayTier = TerrainResultTier::Good;
+
+  // === スイング判定の結果画像（Perfect/Great/Nice/Miss） ===
+  ecs::Entity m_judgeImageEntity = UINT32_MAX;
+  float m_judgeDisplayTimer = 0.0f;
+  float m_judgeDisplayTotal = 2.0f;
+  float m_judgeDisplayTargetW = 200.0f;
+  float m_judgeDisplayTargetH = 80.0f;
+  game::components::ShotJudgement m_judgeDisplayJudgement =
+      game::components::ShotJudgement::None;
   float m_hudUpdateTimer = 0.0f;     ///< HUD静的表示の更新間引きタイマーです。山内陽
   float m_minimapUpdateTimer = 0.0f; ///< ミニマップ描画の更新間引きタイマーです。山内陽
   float m_flagEffectTimer = 0.0f;    ///< 旗なびき・粒子演出の時間です。山内陽

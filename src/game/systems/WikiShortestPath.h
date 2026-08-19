@@ -155,6 +155,22 @@ public:
    */
   std::pair<std::string, int> FetchPopularPageTitle(int minIncomingLinks = 100);
 
+  /**
+   * @brief 実行中の全インスタンスのDBクエリに中断を要求します。 山内陽
+   *
+   * ウィンドウが閉じられた際などに呼び出し、リンク取得のような
+   * 巨大なチャンクループ(数十秒かかることがある)を即座に打ち切るために使う。
+   * sqlite3_interrupt() は別スレッドから安全に呼び出せるため、
+   * 現在 sqlite3_step() でブロック中のクエリもすぐにエラー終了する。
+   * 以後 Initialize() された新規インスタンスもチャンクループへ入らず即終了する。
+   */
+  static void RequestCancelAll();
+
+  /**
+   * @brief RequestCancelAll() が呼ばれたかどうかを返します。 山内陽
+   */
+  static bool IsCancelRequested();
+
 private:
   sqlite3 *m_db = nullptr;
   std::vector<int> m_popularPageIds; ///< 人気記事IDのキャッシュ

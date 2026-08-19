@@ -28,6 +28,25 @@ constexpr size_t kPathEvaluationDepthProgressUnits = 100;
 
 std::recursive_mutex g_sqliteMutex;
 
+// 実行中の全 WikiShortestPath インスタンスが開いている sqlite3* の一覧。
+// RequestCancelAll() から sqlite3_interrupt() を呼ぶために保持する。
+std::mutex g_activeDbMutex;
+std::vector<sqlite3 *> g_activeDbs;
+std::atomic<bool> g_cancelRequested{false};
+
+void RegisterActiveDb(sqlite3 *db) {
+  std::lock_guard<std::mutex> lock(g_activeDbMutex);
+  g_activeDbs.push_back(db);
+}
+
+void UnregisterActiveDb(sqlite3 *db) {
+  std::lock_guard<std::mutex> lock(g_activeDbMutex);
+  const auto it = std::find(g_activeDbs.begin(), g_activeDbs.end(), db);
+  if (it != g_activeDbs.end()) {
+    g_activeDbs.erase(it);
+  }
+}
+
 struct NodeInfo {
   int parent = -1;
   int depth = 0;
@@ -105,6 +124,12 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
     std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
     size_t index = 0;
     while (index < pageIds.size()) {
+      if (WikiShortestPath::IsCancelRequested()) {
+        LOG_WARN("WikiShortestPath",
+                 "FetchLinks cancelled: field={} chunk={}/{} (window closing)",
+                 fieldName, stats.chunks + 1, totalChunks);
+        break;
+      }
       const auto chunkStartedAt = std::chrono::steady_clock::now();
       size_t count = std::min(kLinkChunkSize, pageIds.size() - index);
 
@@ -230,15 +255,37 @@ std::vector<int> BuildPath(int meet,
 WikiShortestPath::~WikiShortestPath() {
   std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   if (m_db) {
+    UnregisterActiveDb(m_db);
     sqlite3_close(m_db);
     m_db = nullptr;
   }
 }
 
+void WikiShortestPath::RequestCancelAll() {
+  g_cancelRequested.store(true, std::memory_order_relaxed);
+  std::lock_guard<std::mutex> lock(g_activeDbMutex);
+  for (sqlite3 *db : g_activeDbs) {
+    // 別スレッドで sqlite3_step() 実行中でも安全に呼べる。
+    // ブロック中のクエリは SQLITE_INTERRUPT を返して即座に打ち切られる。
+    sqlite3_interrupt(db);
+  }
+}
+
+bool WikiShortestPath::IsCancelRequested() {
+  return g_cancelRequested.load(std::memory_order_relaxed);
+}
+
 bool WikiShortestPath::Initialize(const std::string &dbPath,
                                   bool cachePopularPages) {
+  if (IsCancelRequested()) {
+    // ウィンドウが閉じられた後：新規に重いDBセッションを開かず即座に諦める。
+    LOG_WARN("WikiShortestPath", "Initialize skipped: cancel already requested");
+    return false;
+  }
+
   std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
   if (m_db) {
+    UnregisterActiveDb(m_db);
     sqlite3_close(m_db);
     m_db = nullptr;
   }
@@ -290,6 +337,7 @@ bool WikiShortestPath::Initialize(const std::string &dbPath,
   }
 
   LOG_INFO("WikiShortestPath", "Database initialized: {}", targetPath);
+  RegisterActiveDb(m_db);
 
   if (!cachePopularPages) {
     return true;
@@ -382,6 +430,12 @@ WikiShortestPath::FetchPageIdsBatch(
   size_t index = 0;
   size_t totalHits = 0;
   while (index < normalizedTitles.size()) {
+    if (WikiShortestPath::IsCancelRequested()) {
+      LOG_WARN("WikiShortestPath",
+               "FetchPageIdsBatch cancelled at {}/{} (window closing)", index,
+               normalizedTitles.size());
+      break;
+    }
     const size_t count =
         std::min(kLinkChunkSize, normalizedTitles.size() - index);
 
@@ -873,6 +927,12 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
   for (int depth = 1; depth <= maxDepth && !frontier.empty() &&
                       !unresolvedPageIds.empty();
        ++depth) {
+    if (IsCancelRequested()) {
+      LOG_WARN("WikiShortestPath",
+               "ComputeDistancesToTarget cancelled before depth={} (window closing)",
+               depth);
+      break;
+    }
     std::unordered_map<int, std::vector<int>> linkMap;
     const auto depthStartedAt = std::chrono::steady_clock::now();
     const size_t frontierBefore = frontier.size();

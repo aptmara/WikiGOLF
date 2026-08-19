@@ -807,10 +807,17 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
         if (terrainSample.valid) {
           terrainH = terrainSample.height;
+          const float visualSurfaceHeight = terrainH;
           terrainN = terrainSample.normal;
           if (insideHole) {
             terrainH -= carveDepth;
             terrainN = XMVectorSet(0, 1, 0, 0);
+          } else {
+            const float verticalImpactSpeed =
+                std::max(0.0f, -XMVectorGetY(vel));
+            terrainH -= ComputeSurfaceSinkDepth(
+                static_cast<TerrainMaterial>(mat), verticalImpactSpeed,
+                SafeLength(vel), col.radius);
           }
 
           float ballBottom = posY - col.radius;
@@ -831,29 +838,55 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             // 速度の法線成分を処理
             float vn = XMVectorGetX(XMVector3Dot(vel, terrainN));
             if (vn < 0.0f) {
+              const TerrainMaterial surfaceMaterial =
+                  static_cast<TerrainMaterial>(mat);
+              const float impactSpeed = std::abs(vn);
+              const float incomingSpeed = SafeLength(vel);
               // 衝突による反射ベクトルを計算し、僅かなランダム挙動を加算
               float jitter = GetJitterFromTable(jitterCursor, 0.18f);
               float bounce = std::max(0.0f, rb.restitution * 0.5f * jitter);
+              if (surfaceMaterial == TerrainMaterial::Bunker) {
+                bounce = 0.0f;
+              }
               vel = XMVectorSubtract(
                   vel, XMVectorScale(terrainN, vn * (1.0f + bounce)));
 
+              if (surfaceMaterial == TerrainMaterial::Bunker) {
+                const float retention =
+                    ComputeSurfaceImpactTangentialRetention(
+                        surfaceMaterial, impactSpeed, incomingSpeed);
+                const float remainingNormalSpeed =
+                    XMVectorGetX(XMVector3Dot(vel, terrainN));
+                const XMVECTOR normalVelocity =
+                    XMVectorScale(terrainN, remainingNormalSpeed);
+                const XMVECTOR tangentialVelocity =
+                    XMVectorSubtract(vel, normalVelocity);
+                vel = XMVectorAdd(
+                    normalVelocity,
+                    XMVectorScale(tangentialVelocity, retention));
+              }
+
               // 一定の速度以上で衝突した際にバウンド演出および効果音を再生
-              float impactSpeed = std::abs(vn);
               if (impactSpeed > 2.0f) {
                 float strength =
                     std::clamp((impactSpeed - 2.0f) / 10.0f, 0.0f, 1.0f);
 
                 // マテリアルエフェクト
-                auto *juice = ctx.world.GetGlobal<
-                    GameJuiceSystem>();
-                if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
-                  juiceSys->TriggerMaterialEffect(
-                      ctx, t.position, static_cast<TerrainMaterial>(mat),
+                auto **juiceSlot =
+                    ctx.world.GetGlobal<GameJuiceSystem *>();
+                if (juiceSlot && *juiceSlot) {
+                  XMFLOAT3 impactPosition = {XMVectorGetX(pos),
+                                             visualSurfaceHeight + 0.006f,
+                                             XMVectorGetZ(pos)};
+                  (*juiceSlot)->TriggerMaterialEffect(
+                      ctx, impactPosition, static_cast<TerrainMaterial>(mat),
                       strength);
-                  if (impactSpeed > 3.0f) {
+                  if (impactSpeed > 3.0f &&
+                      static_cast<TerrainMaterial>(mat) !=
+                          TerrainMaterial::Bunker) {
                     float rippleRadius = col.radius * 8.0f;
-                    juiceSys->TriggerRippleEffect(ctx, t.position, rippleRadius,
-                                                  strength);
+                    (*juiceSlot)->TriggerRippleEffect(
+                        ctx, impactPosition, rippleRadius, strength);
                   }
                 }
 
@@ -942,11 +975,13 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
             float factor =
                 std::clamp((expo * 0.65f + ease * 0.75f), 0.0f, 1.1f);
             if (holeSlowMotionCooldown <= 0.0f) {
-              if (auto *juiceSys = ctx.world.GetGlobal<GameJuiceSystem>()) {
-              float slowScale = 0.35f + normalized * 0.25f;
-              float slowDuration = 0.5f + (1.0f - normalized) * 0.4f;
-              juiceSys->TriggerSlowMotion(slowDuration, slowScale);
-              holeSlowMotionCooldown = 0.25f;
+              auto **juiceSlot =
+                  ctx.world.GetGlobal<GameJuiceSystem *>();
+              if (juiceSlot && *juiceSlot) {
+                float slowScale = 0.35f + normalized * 0.25f;
+                float slowDuration = 0.5f + (1.0f - normalized) * 0.4f;
+                (*juiceSlot)->TriggerSlowMotion(slowDuration, slowScale);
+                holeSlowMotionCooldown = 0.25f;
               }
             }
             acc = XMVectorAdd(acc, XMVectorScale(dir, hole.gravity * factor));

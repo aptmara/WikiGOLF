@@ -1,6 +1,7 @@
 #include "src/game/systems/TerrainGenerator.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 
@@ -42,6 +43,90 @@ uint8_t MaterialAt(const game::systems::TerrainData &data, float worldX,
   return data.materialMap[gz * data.config.resolutionX + gx];
 }
 
+int CountIsolatedHazardCells(const game::systems::TerrainData &data) {
+  const int resX = data.config.resolutionX;
+  const int resZ = data.config.resolutionZ;
+  int isolated = 0;
+  for (int z = 1; z < resZ - 1; ++z) {
+    for (int x = 1; x < resX - 1; ++x) {
+      uint8_t material = data.materialMap[z * resX + x];
+      if (material < kBunker || material == kGreen) {
+        continue;
+      }
+
+      int sameNeighbors = 0;
+      for (int dz = -1; dz <= 1; ++dz) {
+        for (int dx = -1; dx <= 1; ++dx) {
+          if (dx == 0 && dz == 0) {
+            continue;
+          }
+          if (data.materialMap[(z + dz) * resX + (x + dx)] == material) {
+            ++sameNeighbors;
+          }
+        }
+      }
+      if (sameNeighbors == 0) {
+        ++isolated;
+      }
+    }
+  }
+  return isolated;
+}
+
+float MaxAdjacentHeightDelta(const game::systems::TerrainData &data) {
+  const int resX = data.config.resolutionX;
+  const int resZ = data.config.resolutionZ;
+  float maxDelta = 0.0f;
+  for (int z = 0; z < resZ; ++z) {
+    for (int x = 0; x < resX; ++x) {
+      const float height = data.heightMap[z * resX + x];
+      if (x + 1 < resX) {
+        maxDelta = std::max(
+            maxDelta,
+            std::abs(height - data.heightMap[z * resX + x + 1]));
+      }
+      if (z + 1 < resZ) {
+        maxDelta = std::max(
+            maxDelta,
+            std::abs(height - data.heightMap[(z + 1) * resX + x]));
+      }
+    }
+  }
+  return maxDelta;
+}
+
+float VisualColorDistance(const DirectX::XMFLOAT3 &a,
+                          const DirectX::XMFLOAT3 &b) {
+  float dx = a.x - b.x;
+  float dy = a.y - b.y;
+  float dz = a.z - b.z;
+  return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+float MaxAdjacentVisualColorDelta(const game::systems::TerrainData &data) {
+  const int resX = data.config.resolutionX;
+  const int resZ = data.config.resolutionZ;
+  float maxDelta = 0.0f;
+  for (int z = 0; z < resZ; ++z) {
+    for (int x = 0; x < resX; ++x) {
+      const auto &color = data.visualMaterialColors[z * resX + x];
+      if (x + 1 < resX) {
+        maxDelta = std::max(
+            maxDelta,
+            VisualColorDistance(color,
+                                data.visualMaterialColors[z * resX + x + 1]));
+      }
+      if (z + 1 < resZ) {
+        maxDelta = std::max(
+            maxDelta,
+            VisualColorDistance(
+                color, data.visualMaterialColors[(z + 1) * resX + x]));
+      }
+    }
+  }
+  return maxDelta;
+}
+
 } // namespace
 
 int main() {
@@ -64,6 +149,47 @@ int main() {
         "Material map has one entry per terrain vertex");
   CHECK(!data.vertices.empty() && !data.indices.empty(),
         "Terrain mesh is generated");
+  CHECK(data.vertices.size() == data.materialMap.size(),
+        "Terrain mesh keeps one material value per vertex");
+  CHECK(data.visualMaterialColors.size() == data.materialMap.size(),
+        "Terrain keeps one visual material color per physics material");
+  CHECK(MaxAdjacentVisualColorDelta(data) < 0.35f,
+        "Visual material colors transition smoothly between adjacent cells");
+
+  bool vertexMaterialsMatch = true;
+  for (size_t i = 0; i < data.vertices.size(); ++i) {
+    int encodedMaterial =
+        static_cast<int>(std::floor(data.vertices[i].color.w * 255.0f));
+    if (encodedMaterial != data.materialMap[i]) {
+      vertexMaterialsMatch = false;
+      break;
+    }
+  }
+  CHECK(vertexMaterialsMatch,
+        "Terrain vertex alpha consistently encodes the material layer");
+
+  auto repeated =
+      game::systems::TerrainGenerator::GenerateTerrain("Course variety seed",
+                                                       holes, config);
+  bool repeatedVisualColorsMatch =
+      repeated.visualMaterialColors.size() == data.visualMaterialColors.size();
+  if (repeatedVisualColorsMatch) {
+    for (size_t i = 0; i < data.visualMaterialColors.size(); ++i) {
+      const auto &a = data.visualMaterialColors[i];
+      const auto &b = repeated.visualMaterialColors[i];
+      if (a.x != b.x || a.y != b.y || a.z != b.z) {
+        repeatedVisualColorsMatch = false;
+        break;
+      }
+    }
+  }
+  CHECK(repeated.materialMap == data.materialMap &&
+            repeated.heightMap == data.heightMap && repeatedVisualColorsMatch,
+        "Terrain generation is deterministic for the same article and config");
+  CHECK(CountIsolatedHazardCells(data) == 0,
+        "Generated terrain contains no one-cell hazard speckles");
+  CHECK(MaxAdjacentHeightDelta(data) < config.heightScale,
+        "Generated terrain contains no abrupt one-cell height steps");
 
   std::array<int, 8> counts{};
   for (uint8_t mat : data.materialMap) {
@@ -114,6 +240,12 @@ int main() {
       CHECK(obCount > 0,
             "Ice and rocky biomes generate natural OB hazard terrain");
     }
+    if (biome == 1) {
+      CHECK(themedCounts[kBunker] + themedCounts[7] > themedCounts[kRough],
+            "Desert terrain is dominated by sand and stone outside the course");
+    }
+    CHECK(CountIsolatedHazardCells(themed) == 0,
+          "Biome terrain contains no one-cell hazard speckles");
     CHECK(unique >= 4, "Biome course keeps at least four terrain types");
   }
 
@@ -142,6 +274,9 @@ int main() {
         "Tutorial material map has one entry per terrain vertex");
   CHECK(!tutorialData.vertices.empty() && !tutorialData.indices.empty(),
         "Tutorial terrain mesh is generated");
+  CHECK(tutorialData.visualMaterialColors.size() ==
+            tutorialData.materialMap.size(),
+        "Tutorial terrain generates visual material colors");
 
   std::array<int, 8> tutorialCounts{};
   for (uint8_t mat : tutorialData.materialMap) {

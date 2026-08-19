@@ -12,20 +12,85 @@ using namespace DirectX;
 // ヘルパー：線形補間
 static float Lerp(float a, float b, float t) { return a + (b - a) * t; }
 
+static float CatmullRom(float p0, float p1, float p2, float p3, float t) {
+  float t2 = t * t;
+  float t3 = t2 * t;
+  return 0.5f * ((2.0f * p1) + (-p0 + p2) * t +
+                 (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
+                 (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3);
+}
+
 // ヘルパー：スムースステップ
 static float SmoothStep(float edge0, float edge1, float x) {
   x = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
   return x * x * (3 - 2 * x);
 }
 
-static float WrapAngle(float angle) {
-  while (angle > 3.14159f) {
-    angle -= 6.28318f;
+static uint32_t HashCoordinates(int x, int z, uint32_t seed) {
+  uint32_t h = seed ^ (static_cast<uint32_t>(x) * 0x9e3779b9u) ^
+               (static_cast<uint32_t>(z) * 0x85ebca6bu);
+  h ^= h >> 16;
+  h *= 0x7feb352du;
+  h ^= h >> 15;
+  h *= 0x846ca68bu;
+  h ^= h >> 16;
+  return h;
+}
+
+static float HashNoise(int x, int z, uint32_t seed) {
+  return static_cast<float>(HashCoordinates(x, z, seed) & 0x00ffffffu) /
+         static_cast<float>(0x00ffffffu);
+}
+
+static float ValueNoise(float x, float z, uint32_t seed) {
+  int x0 = static_cast<int>(std::floor(x));
+  int z0 = static_cast<int>(std::floor(z));
+  int x1 = x0 + 1;
+  int z1 = z0 + 1;
+  float tx = SmoothStep(0.0f, 1.0f, x - static_cast<float>(x0));
+  float tz = SmoothStep(0.0f, 1.0f, z - static_cast<float>(z0));
+
+  float n0 = Lerp(HashNoise(x0, z0, seed), HashNoise(x1, z0, seed), tx);
+  float n1 = Lerp(HashNoise(x0, z1, seed), HashNoise(x1, z1, seed), tx);
+  return Lerp(n0, n1, tz) * 2.0f - 1.0f;
+}
+
+static float FractalNoise(float x, float z, uint32_t seed) {
+  float total = 0.0f;
+  float amplitude = 0.5f;
+  float amplitudeSum = 0.0f;
+  for (int octave = 0; octave < 4; ++octave) {
+    total += ValueNoise(x, z, seed + static_cast<uint32_t>(octave) * 1013u) *
+             amplitude;
+    amplitudeSum += amplitude;
+    x *= 2.03f;
+    z *= 2.03f;
+    amplitude *= 0.5f;
   }
-  while (angle < -3.14159f) {
-    angle += 6.28318f;
+  return total / amplitudeSum;
+}
+
+static XMFLOAT3 TerrainMaterialColor(uint8_t material) {
+  switch (material) {
+  case 0:
+    return {0.35f, 0.55f, 0.25f};
+  case 1:
+    return {0.25f, 0.45f, 0.20f};
+  case 2:
+    return {0.90f, 0.85f, 0.70f};
+  case 3:
+    return {0.40f, 0.75f, 0.30f};
+  case 4:
+    return {0.70f, 0.88f, 0.98f};
+  case 5:
+    return {0.20f, 0.45f, 0.85f};
+  case 6:
+    return {0.95f, 0.35f, 0.12f};
+  case 7:
+    return {0.50f, 0.48f, 0.52f};
+  default:
+    return {1.0f, 1.0f, 1.0f};
   }
-  return angle;
 }
 
 static float DistanceToSegment(float px, float pz, float ax, float az, float bx,
@@ -85,6 +150,9 @@ TerrainData TerrainGenerator::GenerateTerrain(
 
   // プレイヤーが狙いを読めるよう、小さな孤立地形を整理
   ApplyMaterialCleanup(data);
+
+  // 物理材質は離散値のまま保ち、描画境界だけを連続化する。
+  GenerateVisualMaterialColors(data);
 
   // スムージング処理
   ApplySmoothing(data, 3); // 3回スムージング
@@ -199,6 +267,7 @@ TerrainData TerrainGenerator::GenerateTutorialTerrain(
     }
   }
 
+  GenerateVisualMaterialColors(data);
   ApplySmoothing(data, 1);
   CalculateNormals(data);
   GenerateMesh(data, holePositions);
@@ -219,6 +288,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
   int resZ = data.config.resolutionZ;
   int biome = data.config.biome;
   float hScale = data.config.heightScale;
+  uint32_t terrainSeed = rng();
 
   // 全体をデフォルトで初期化
   for (int i = 0; i < resX * resZ; ++i) {
@@ -320,8 +390,19 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
       float v1 = routePoints[seg + 1].second;
       if (v <= v0 && v >= v1) {
         float t = (v0 - v) / (v0 - v1 + 0.0001f);
-        routeU = Lerp(routePoints[seg].first, routePoints[seg + 1].first, t);
-        routeHeight = Lerp(segmentHeights[seg], segmentHeights[seg + 1], t);
+        size_t previous = seg > 0 ? seg - 1 : seg;
+        size_t next = seg + 1;
+        size_t following =
+            std::min(seg + 2, routePoints.size() - static_cast<size_t>(1));
+        routeU = std::clamp(
+            CatmullRom(routePoints[previous].first, routePoints[seg].first,
+                       routePoints[next].first, routePoints[following].first,
+                       t),
+            0.12f, 0.88f);
+        routeHeight = std::clamp(
+            CatmullRom(segmentHeights[previous], segmentHeights[seg],
+                       segmentHeights[next], segmentHeights[following], t),
+            -hScale, 2.0f * hScale);
         break;
       }
     }
@@ -376,18 +457,23 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
       // バイオーム別パターン
       switch (biome) {
       case 0:
-        h += std::sin(u * 9.42f) * std::sin(v * 12.56f) * 0.1f * hScale;
+        h += FractalNoise(u * 3.2f, v * 3.2f, terrainSeed ^ 0x18a3u) *
+             0.10f * hScale;
         break;
       case 1:
-        h += std::sin(u * 18.84f + v * 2.0f) * 0.2f * hScale +
-             std::sin(v * 12.56f) * 0.15f * hScale;
+        h += std::sin(u * 9.2f + v * 2.4f) * 0.14f * hScale +
+             FractalNoise(u * 2.6f, v * 2.2f, terrainSeed ^ 0x2bd1u) *
+                 0.12f * hScale;
         break;
       case 2:
-        h += std::sin(u * 6.28f + v * 6.28f) * 0.03f * hScale;
+        h += FractalNoise(u * 2.0f, v * 2.0f, terrainSeed ^ 0x3ce7u) *
+             0.035f * hScale;
         break;
       case 3:
-        h += std::sin(u * 31.4f) * std::sin(v * 25.12f) * 0.25f * hScale +
-             std::sin(u * 50.24f + v * 3.0f) * 0.1f * hScale;
+        h += FractalNoise(u * 5.0f, v * 5.0f, terrainSeed ^ 0x4df9u) *
+                 0.30f * hScale +
+             FractalNoise(u * 11.0f, v * 11.0f, terrainSeed ^ 0x58cbu) *
+                 0.07f * hScale;
         break;
       }
 
@@ -405,7 +491,8 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
       }
 
       // 微小ノイズ
-      h += (dist(rng) - 0.5f) * 0.03f * hScale;
+      h += FractalNoise(u * 18.0f, v * 18.0f, terrainSeed ^ 0x69e5u) *
+           0.012f * hScale;
 
       SetHeight(data, x, z, h);
 
@@ -414,9 +501,13 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
       if (distFromCenter > 0.85f) {
         wallFactor = SmoothStep(0.85f, 1.0f, distFromCenter);
       }
-      float borderNoise = std::sin((u * 37.0f + v * 19.0f) * 6.28318f) * 0.08f +
-                          (dist(rng) - 0.5f) * 0.14f;
+      float borderNoise =
+          FractalNoise(u * 6.0f, v * 6.0f, terrainSeed ^ 0x7af3u) * 0.16f;
       float corridor = distPixels / std::max(fairwayWidth, 0.001f) + borderNoise;
+      float materialNoise =
+          FractalNoise(u * 7.0f, v * 7.0f, terrainSeed ^ 0x81bdu);
+      float detailNoise =
+          FractalNoise(u * 3.5f, v * 3.5f, terrainSeed ^ 0x92c7u);
       bool shortcut = false;
       if (courseStyle >= 2 && routePoints.size() > 2) {
         auto first = routePoints.front();
@@ -429,27 +520,39 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
       }
 
       if (wallFactor > 0.3f) {
-        data.materialMap[idx] = 1;
-      } else if (corridor < 0.45f) {
-        data.materialMap[idx] = 0;
-      } else if (shortcut) {
-        data.materialMap[idx] = (biome == 2 && dist(rng) < 0.35f) ? 4 : 0;
-      } else if (corridor < 0.88f) {
-        if (dist(rng) < 0.65f) {
-          data.materialMap[idx] = 0;
+        if (biome == 1) {
+          data.materialMap[idx] = detailNoise > 0.48f ? 7 : 2;
         } else {
           data.materialMap[idx] = 1;
         }
+      } else if (corridor < 0.45f) {
+        data.materialMap[idx] = 0;
+      } else if (shortcut) {
+        data.materialMap[idx] = (biome == 2 && materialNoise > 0.3f) ? 4 : 0;
+      } else if (corridor < 0.88f) {
+        data.materialMap[idx] = materialNoise < 0.28f ? 0 : 1;
       } else if (corridor < 1.45f) {
         data.materialMap[idx] = 1;
+      } else if (biome == 1) {
+        float sandEdge = 1.28f + materialNoise * 0.16f;
+        if (corridor > sandEdge) {
+          data.materialMap[idx] = detailNoise > 0.48f ? 7 : 2;
+        } else {
+          data.materialMap[idx] = 1;
+        }
       } else {
         float hazardChance =
             std::clamp((corridor - 1.45f) * 0.28f, 0.0f, 0.62f);
         if (courseStyle == 4) {
           hazardChance += 0.08f;
         }
-        if (dist(rng) < hazardChance) {
-          data.materialMap[idx] = HazardMaterialForBiome(biome, dist(rng));
+        float hazardField = detailNoise * 0.5f + 0.5f;
+        if (hazardField > 1.0f - hazardChance) {
+          float hazardType = FractalNoise(u * 2.0f, v * 2.0f,
+                                          terrainSeed ^ 0xa391u) *
+                                 0.5f +
+                             0.5f;
+          data.materialMap[idx] = HazardMaterialForBiome(biome, hazardType);
         } else {
           data.materialMap[idx] = 1;
         }
@@ -463,97 +566,128 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
  */
 void TerrainGenerator::CreatePlatforms(
     TerrainData &data, const std::vector<DirectX::XMFLOAT2> &holePositions) {
-  int resX = data.config.resolutionX;
-  int resZ = data.config.resolutionZ;
-  float worldW = data.config.worldWidth;
-  float worldD = data.config.worldDepth;
+  const int resX = data.config.resolutionX;
+  const int resZ = data.config.resolutionZ;
+  const float worldW = data.config.worldWidth;
+  const float worldD = data.config.worldDepth;
 
-  // リンク位置に基づいてプラットフォームを作る
+  struct BunkerPatch {
+    float centerX;
+    float centerZ;
+    float radiusX;
+    float radiusZ;
+    float cosAngle;
+    float sinAngle;
+  };
+
   for (const auto &pos : holePositions) {
-    // ワールド座標からグリッドUV、インデックスへの逆算変換式
-
     float u = pos.x / worldW + 0.5f;
-    float v = 0.5f - pos.y / worldD; // pos.y is Z in world coords here (vector2
-                                     // x, z passed as x, y)
-
-    int cx = (int)(u * (resX - 1));
-    int cz = (int)(v * (resZ - 1));
+    float v = 0.5f - pos.y / worldD;
+    int cx = std::clamp(static_cast<int>(u * (resX - 1)), 0, resX - 1);
+    int cz = std::clamp(static_cast<int>(v * (resZ - 1)), 0, resZ - 1);
 
     std::mt19937 tempRng(cx * 73856093u ^ cz * 19349663u ^
                          data.config.biome * 83492791u);
     std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
+    const uint32_t patchSeed = tempRng();
 
-    // プラットフォーム半径 (グリーン)
-    int radius = std::max(4, resX / 12 + static_cast<int>(dist01(tempRng) * 4.0f));
+    const int radius =
+        std::max(4, resX / 12 + static_cast<int>(dist01(tempRng) * 4.0f));
+    const float targetHeight = GetHeight(data, cx, cz) + 0.05f;
+    const float bowlDepth = 0.2f;
+    const float greenRadiusX = radius * (0.88f + dist01(tempRng) * 0.22f);
+    const float greenRadiusZ = radius * (0.78f + dist01(tempRng) * 0.28f);
+    const float greenAngle = (dist01(tempRng) - 0.5f) * 0.8f;
+    const float greenCos = std::cos(greenAngle);
+    const float greenSin = std::sin(greenAngle);
 
-    // プラットフォームの高さ
-    float currentCenterH = GetHeight(data, cx, cz);
-    float targetHeight = currentCenterH + 0.05f; // わずかに持ち上げて埋没を防ぐ
-
-    // カップ底部の深さ
-    float bowlDepth = 0.2f;
-
-    // バンカーとギミック地形は、ホールごとに数と角度を変える。
-    int bunkerCount = 1 + static_cast<int>(dist01(tempRng) * 3.0f);
+    int bunkerCount = 1 + static_cast<int>(dist01(tempRng) * 2.0f);
     if (data.config.biome == 2) {
       bunkerCount = std::max(1, bunkerCount - 1);
     }
-    float bunkerStartAngle = dist01(tempRng) * 6.28318f;
-    float bunkerDist = radius * (1.55f + dist01(tempRng) * 0.55f);
+
+    std::vector<BunkerPatch> bunkers;
+    bunkers.reserve(bunkerCount);
+    const float bunkerStartAngle = dist01(tempRng) * 6.28318f;
+    for (int b = 0; b < bunkerCount; ++b) {
+      const float angle = bunkerStartAngle +
+                          (6.28318f / static_cast<float>(bunkerCount)) * b +
+                          (dist01(tempRng) - 0.5f) * 0.7f;
+      const float distance = radius * (1.45f + dist01(tempRng) * 0.70f);
+      const float patchAngle = angle + (dist01(tempRng) - 0.5f) * 1.0f;
+      BunkerPatch patch;
+      patch.centerX = std::cos(angle) * distance;
+      patch.centerZ = std::sin(angle) * distance;
+      patch.radiusX = radius * (0.32f + dist01(tempRng) * 0.24f);
+      patch.radiusZ = radius * (0.20f + dist01(tempRng) * 0.18f);
+      patch.cosAngle = std::cos(patchAngle);
+      patch.sinAngle = std::sin(patchAngle);
+      bunkers.push_back(patch);
+    }
 
     for (int z = cz - radius * 3; z <= cz + radius * 3; ++z) {
       for (int x = cx - radius * 3; x <= cx + radius * 3; ++x) {
-        if (x < 0 || x >= resX || z < 0 || z >= resZ)
+        if (x < 0 || x >= resX || z < 0 || z >= resZ) {
           continue;
+        }
 
-        float dx = (float)(x - cx);
-        float dz = (float)(z - cz);
-        float dist = std::sqrt(dx * dx + dz * dz);
-        int idx = z * resX + x;
+        const float dx = static_cast<float>(x - cx);
+        const float dz = static_cast<float>(z - cz);
+        const float cupDistance = std::sqrt(dx * dx + dz * dz);
+        const int idx = z * resX + x;
+        const float greenLocalX = greenCos * dx + greenSin * dz;
+        const float greenLocalZ = -greenSin * dx + greenCos * dz;
+        const float greenDistance =
+            std::sqrt((greenLocalX * greenLocalX) /
+                          (greenRadiusX * greenRadiusX) +
+                      (greenLocalZ * greenLocalZ) /
+                          (greenRadiusZ * greenRadiusZ));
+        const float boundaryNoise =
+            FractalNoise(static_cast<float>(x) * 0.16f,
+                         static_cast<float>(z) * 0.16f, patchSeed) *
+            0.07f;
 
-        // グリーンエリア
-        if (dist < radius) {
-          data.materialMap[idx] = 3; // Green
-
-          float cupRadius = 3.0f; // カップ半径（グリッド単位）
-          if (dist < cupRadius) {
-            // 平坦な穴（すり鉢ではなく一定深さ）
-            float h = targetHeight - bowlDepth;
-            SetHeight(data, x, z, h);
+        if (greenDistance < 1.0f + boundaryNoise) {
+          data.materialMap[idx] = 3;
+          if (cupDistance < 3.0f) {
+            SetHeight(data, x, z, targetHeight - bowlDepth);
           } else {
             SetHeight(data, x, z, targetHeight);
           }
-        } else if (dist < radius * 1.45f) {
-          // エプロンエリア
-          data.materialMap[idx] = 0;
+          continue;
+        }
 
-          // ラフとのブレンド接続
-          float t = SmoothStep(radius, radius * 1.45f, dist);
-          float currentH = GetHeight(data, x, z);
+        if (greenDistance < 1.18f + boundaryNoise) {
+          if (data.materialMap[idx] == 0 || data.materialMap[idx] == 1) {
+            data.materialMap[idx] = 0;
+          }
+          float t = SmoothStep(1.0f, 1.18f, greenDistance - boundaryNoise);
+          const float currentH = GetHeight(data, x, z);
           SetHeight(data, x, z, Lerp(targetHeight, currentH, t));
-        } else {
-          // バンカーの生成
-          float angle = std::atan2(dz, dx);
-          for (int b = 0; b < bunkerCount; ++b) {
-            float bunkerAngle =
-                bunkerStartAngle + (6.28318f / bunkerCount) * b +
-                (dist01(tempRng) - 0.5f) * 0.45f;
-            float angleDiff = WrapAngle(angle - bunkerAngle);
+          continue;
+        }
 
-            if (std::abs(angleDiff) < 0.42f + dist01(tempRng) * 0.24f) {
-              float distFromBunkerCenter = std::abs(dist - bunkerDist);
-              float bunkerRadius = radius * (0.35f + dist01(tempRng) * 0.25f);
-              if (distFromBunkerCenter < bunkerRadius) {
-                data.materialMap[idx] = 2; // Bunker
-                // 窪ませる
-                float currentH = GetHeight(data, x, z);
-                SetHeight(data, x, z,
-                          currentH - 0.18f *
-                                         std::cos(distFromBunkerCenter /
-                                                  bunkerRadius * 1.57f));
-                break;
-              }
-            }
+        if (data.materialMap[idx] == 3) {
+          continue;
+        }
+
+        for (const auto &bunker : bunkers) {
+          const float bx = dx - bunker.centerX;
+          const float bz = dz - bunker.centerZ;
+          const float localX = bunker.cosAngle * bx + bunker.sinAngle * bz;
+          const float localZ = -bunker.sinAngle * bx + bunker.cosAngle * bz;
+          float patchDistance =
+              std::sqrt((localX * localX) /
+                            (bunker.radiusX * bunker.radiusX) +
+                        (localZ * localZ) /
+                            (bunker.radiusZ * bunker.radiusZ));
+          patchDistance -= boundaryNoise * 0.8f;
+          if (patchDistance < 1.0f) {
+            data.materialMap[idx] = 2;
+            float depression = SmoothStep(1.0f, 0.0f, patchDistance);
+            SetHeight(data, x, z,
+                      GetHeight(data, x, z) - 0.18f * depression);
+            break;
           }
         }
       }
@@ -597,45 +731,94 @@ void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
  * @brief 小さな孤立地形を周囲へなじませます。
  */
 void TerrainGenerator::ApplyMaterialCleanup(TerrainData &data) {
-  int resX = data.config.resolutionX;
-  int resZ = data.config.resolutionZ;
+  const int resX = data.config.resolutionX;
+  const int resZ = data.config.resolutionZ;
   if (resX < 3 || resZ < 3 || data.materialMap.empty()) {
     return;
   }
 
-  std::vector<uint8_t> cleaned = data.materialMap;
-  for (int z = 1; z < resZ - 1; ++z) {
-    for (int x = 1; x < resX - 1; ++x) {
-      int idx = z * resX + x;
-      uint8_t mat = data.materialMap[idx];
-      if (mat == 0 || mat == 3) {
-        continue;
-      }
+  for (int pass = 0; pass < 3; ++pass) {
+    std::vector<uint8_t> cleaned = data.materialMap;
+    for (int z = 1; z < resZ - 1; ++z) {
+      for (int x = 1; x < resX - 1; ++x) {
+        const int idx = z * resX + x;
+        const uint8_t mat = data.materialMap[idx];
+        if (mat == 3) {
+          continue;
+        }
 
-      int same = 0;
-      int fairwayLike = 0;
-      for (int dz = -1; dz <= 1; ++dz) {
-        for (int dx = -1; dx <= 1; ++dx) {
-          if (dx == 0 && dz == 0) {
-            continue;
+        int counts[8] = {};
+        for (int dz = -1; dz <= 1; ++dz) {
+          for (int dx = -1; dx <= 1; ++dx) {
+            if (dx == 0 && dz == 0) {
+              continue;
+            }
+            uint8_t other = data.materialMap[(z + dz) * resX + (x + dx)];
+            if (other < 8) {
+              ++counts[other];
+            }
           }
-          uint8_t other = data.materialMap[(z + dz) * resX + (x + dx)];
-          if (other == mat) {
-            ++same;
+        }
+
+        int majorityCount = 0;
+        uint8_t majority = mat;
+        for (uint8_t candidate = 0; candidate < 8; ++candidate) {
+          if (counts[candidate] > majorityCount) {
+            majorityCount = counts[candidate];
+            majority = candidate;
           }
-          if (other == 0 || other == 3) {
-            ++fairwayLike;
-          }
+        }
+
+        const int sameCount = mat < 8 ? counts[mat] : 0;
+        const bool isolated = sameCount <= 1 && majorityCount >= 4;
+        const bool narrowHazard = mat >= 2 && mat != 3 && sameCount <= 2 &&
+                                  majorityCount >= 5;
+        if (isolated || narrowHazard) {
+          cleaned[idx] = majority;
+        }
+      }
+    }
+    data.materialMap = std::move(cleaned);
+  }
+}
+
+void TerrainGenerator::GenerateVisualMaterialColors(TerrainData &data) {
+  const int resX = data.config.resolutionX;
+  const int resZ = data.config.resolutionZ;
+  data.visualMaterialColors.resize(data.materialMap.size());
+  if (resX <= 0 || resZ <= 0 || data.materialMap.empty()) {
+    return;
+  }
+
+  constexpr int radius = 3;
+  constexpr float sigma = 1.35f;
+  constexpr float denominator = 2.0f * sigma * sigma;
+
+  for (int z = 0; z < resZ; ++z) {
+    for (int x = 0; x < resX; ++x) {
+      XMFLOAT3 blended = {0.0f, 0.0f, 0.0f};
+      float totalWeight = 0.0f;
+      for (int dz = -radius; dz <= radius; ++dz) {
+        int sampleZ = std::clamp(z + dz, 0, resZ - 1);
+        for (int dx = -radius; dx <= radius; ++dx) {
+          int sampleX = std::clamp(x + dx, 0, resX - 1);
+          float distanceSq = static_cast<float>(dx * dx + dz * dz);
+          float weight = std::exp(-distanceSq / denominator);
+          XMFLOAT3 color = TerrainMaterialColor(
+              data.materialMap[sampleZ * resX + sampleX]);
+          blended.x += color.x * weight;
+          blended.y += color.y * weight;
+          blended.z += color.z * weight;
+          totalWeight += weight;
         }
       }
 
-      if (same <= 1 && fairwayLike >= 4) {
-        cleaned[idx] = 1;
-      }
+      blended.x /= totalWeight;
+      blended.y /= totalWeight;
+      blended.z /= totalWeight;
+      data.visualMaterialColors[z * resX + x] = blended;
     }
   }
-
-  data.materialMap = std::move(cleaned);
 }
 
 /**
@@ -713,36 +896,9 @@ void TerrainGenerator::GenerateMesh(
       // デフォルト色 (マテリアルマップに基づく)
       int idx = z * resX + x;
       uint8_t mat = data.materialMap[idx];
-
-      switch (mat) {
-      case 0: // フェアウェイ
-        vert.color = {0.2f, 0.6f, 0.2f, 0.25f};
-        break;
-      case 1: // ラフ
-        vert.color = {0.1f, 0.35f, 0.1f, 0.50f};
-        break;
-      case 2: // バンカー
-        vert.color = {0.85f, 0.75f, 0.55f, 0.75f};
-        break;
-      case 3: // グリーン
-        vert.color = {0.3f, 0.8f, 0.3f, 1.0f};
-        break;
-      case 4: // 氷原
-        vert.color = {0.7f, 0.85f, 1.0f, 0.6f};
-        break;
-      case 5: // 水
-        vert.color = {0.2f, 0.4f, 0.8f, 0.5f};
-        break;
-      case 6: // 溶岩
-        vert.color = {1.0f, 0.3f, 0.1f, 0.9f};
-        break;
-      case 7: // 岩石
-        vert.color = {0.5f, 0.5f, 0.55f, 0.8f};
-        break;
-      default:
-        vert.color = {1.0f, 1.0f, 1.0f, 1.0f};
-        break;
-      }
+      float matAlpha = (static_cast<float>(mat) + 0.5f) / 255.0f;
+      const XMFLOAT3 &visualColor = data.visualMaterialColors[idx];
+      vert.color = {visualColor.x, visualColor.y, visualColor.z, matAlpha};
 
       vertices.push_back(vert);
     }

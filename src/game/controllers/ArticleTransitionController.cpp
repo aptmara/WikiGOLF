@@ -57,6 +57,7 @@ void ArticleTransitionController::Initialize(core::GameContext& ctx) {
     m_progressStyle.shadowColor = {0.0f, 0.0f, 0.0f, 0.0f};
 
     m_captionStyle = graphics::TextStyle::ModernBlack();
+    m_captionStyle.fontFamily = "Kiwi Maru Medium"; // Tips は日本語文なので丸ゴシックにする
     m_captionStyle.fontSize = 20.0f;
     m_captionStyle.align = graphics::TextAlign::Center;
     m_captionStyle.color = {0.2f, 0.2f, 0.25f, 0.0f};

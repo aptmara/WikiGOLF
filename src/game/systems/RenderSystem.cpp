@@ -177,6 +177,7 @@ void RenderSystem(core::GameContext &ctx) {
   auto basicHandle = ctx.resource.FindShader("Basic");
   auto particleHandle = ctx.resource.FindShader("Particle");
   auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
+  auto grassHandle = ctx.resource.FindShader("Grass");
 
   // インスタンス構造体の定義
   struct InstanceData {
@@ -348,6 +349,8 @@ void RenderSystem(core::GameContext &ctx) {
               speedFactor,
               windYaw + flag->yawOffset
           );
+        } else if (r.shader == grassHandle) {
+          inst.flags = r.customFlags;
         } else {
           inst.flags = XMFLOAT4(
               diffFlag,
@@ -412,7 +415,7 @@ void RenderSystem(core::GameContext &ctx) {
 
     const bool supportsInstancing =
         (key.shader == basicHandle || key.shader == particleHandle ||
-         key.shader == flagClothHandle);
+         key.shader == flagClothHandle || key.shader == grassHandle);
 
     if (supportsInstancing) {
       checkInstancedBuffer(instances.size());

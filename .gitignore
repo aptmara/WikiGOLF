@@ -37,6 +37,7 @@ tmp/
 dumps/
 tools/
 .gemini/
+.claude/
 
 # File extensions to ignore
 *.txt

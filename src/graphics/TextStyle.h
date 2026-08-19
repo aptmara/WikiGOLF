@@ -17,7 +17,10 @@ enum class TextVAlign { Top, Middle, Bottom };
 
 /// @brief テキスト描画スタイル
 struct TextStyle {
-  std::string fontFamily = "Mamelon 5 Hi-Regular";
+  // 既定値は汎用サンセリフ。用途に応じて各プリセット関数側で
+  // Barlow Condensed(ラベル/本文)・Share Tech Mono(数値)・
+  // Kiwi Maru(日本語文章)・Mamelon 5 Hi(装飾見出し)を使い分ける。
+  std::string fontFamily = "Barlow Condensed";
   float fontSize = 24.0f;
   DirectX::XMFLOAT4 color = {0.1f, 0.1f, 0.1f, 1.0f}; // 黒/ダークグレー基調
 
@@ -73,6 +76,7 @@ struct TextStyle {
   /// @brief モダンブラック（明瞭な黒、白縁取り付き）
   static TextStyle ModernBlack() {
     TextStyle s;
+    s.fontFamily = "Barlow Condensed SemiBold";
     s.color = {0.0f, 0.0f, 0.0f, 1.0f};
     s.hasOutline = true;
     s.outlineColor = {1.0f, 1.0f, 1.0f, 0.8f};
@@ -83,6 +87,7 @@ struct TextStyle {
   /// @brief FPS表示用スタイル（黄色、影付き）
   static TextStyle FPS() {
     TextStyle s;
+    s.fontFamily = "Share Tech Mono";
     s.fontSize = 28.0f;
     s.color = {1.0f, 1.0f, 0.0f, 1.0f};
     s.hasShadow = true;
@@ -114,6 +119,7 @@ struct TextStyle {
   /// @brief タイトルシーン用：スタートボタン
   static TextStyle LuxuryButton() {
     TextStyle s;
+    s.fontFamily = "Barlow Condensed SemiBold";
     s.fontSize = 42.0f;
     s.color = {1.0f, 1.0f, 1.0f, 1.0f};
     s.align = TextAlign::Center;
@@ -130,6 +136,7 @@ struct TextStyle {
   /// @brief ガイド表示用（白文字 + 太黒縁 + 影） - どんな背景でも読める最強設定
   static TextStyle Guide() {
     TextStyle s;
+    s.fontFamily = "Kiwi Maru Medium"; // 操作ガイド等は日本語主体のため丸ゴシック
     s.fontSize = 24.0f; // 読みやすく小さめに
     s.color = {1.0f, 1.0f, 1.0f, 1.0f};
     s.align = TextAlign::Center;
@@ -151,6 +158,7 @@ struct TextStyle {
   /// @brief ステータス表示用（特大白文字 + 影）
   static TextStyle Status() {
     TextStyle s;
+    s.fontFamily = "Barlow Condensed Black";
     s.fontSize = 28.0f; // 適度なサイズ
     s.color = {1.0f, 1.0f, 1.0f, 1.0f};
 
@@ -165,6 +173,7 @@ struct TextStyle {
   /// @brief タイトル用スタイル（大きめ、中央揃え）
   static TextStyle Title() {
     TextStyle s;
+    s.fontFamily = "Mamelon 5 Hi";
     s.fontSize = 48.0f;
     s.align = TextAlign::Center;
     s.valign = TextVAlign::Middle;
@@ -173,120 +182,114 @@ struct TextStyle {
     return s;
   }
 
-  /// @brief ブラウザURLバー風: 現在ページ表示用（太字・白・左揃え）
+  // -----------------------------------------------------------------
+  // ゲームHUD用タイポスケール
+  // 背景パネル側で面・枠線・影を統一して持たせるため、以下のテキスト
+  // スタイルはフォントサイズ・色・揃えのみを定義し、独自の背景/枠線は
+  // 持たない。影は可読性のための最小限の一種類だけを共通で使う。
+  // -----------------------------------------------------------------
+  /// @brief HUDの見出しテキスト: 現在ページ名・パネルタイトル用
   static TextStyle BrowserURL() {
     TextStyle s;
-    s.fontSize = 22.0f;
-    s.color = {0.973f, 0.980f, 0.988f, 1.0f}; // #F8FAFC
+    s.fontFamily = "Kiwi Maru Medium";
+    s.fontSize = 20.0f;
+    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
     s.align = TextAlign::Left;
-
-    // 半透明ダーク背景パネル（角丸）
-    s.bgColor = {0.059f, 0.090f, 0.165f, 0.85f}; // #0F172A
-    s.cornerRadius = 8.0f;
-
-    // 薄い枠線（グラスモーフィズム）
-    s.borderWidth = 1.0f;
-    s.borderColor = {0.220f, 0.380f, 0.600f, 0.5f}; // 青みがかった枠
-
-    // ドロップシャドウ
     s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.6f};
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
     s.shadowOffsetX = 0.0f;
-    s.shadowOffsetY = 2.0f;
-
+    s.shadowOffsetY = 1.0f;
     return s;
   }
 
-  /// @brief ブラウザ副情報: 打数/Par・経路履歴用（小さめ・薄白）
+  /// @brief HUD副情報: 打数/Par・経路履歴・クラブ種別等（小さめ・淡色）
   static TextStyle BrowserSub() {
     TextStyle s;
-    s.fontSize = 18.0f;
-    s.color = {0.792f, 0.835f, 0.886f, 1.0f}; // #CBD5E1
+    s.fontFamily = "Barlow Condensed Medium";
+    s.fontSize = 12.0f;
+    s.color = {0.620f, 0.660f, 0.700f, 1.0f};
     s.align = TextAlign::Left;
-
     s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.5f};
-    s.shadowOffsetX = 1.0f;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
+    s.shadowOffsetX = 0.0f;
     s.shadowOffsetY = 1.0f;
-
     return s;
   }
 
-  /// @brief カードラベル: WIND / CLUB等の見出し用（小・大文字感・スカイブルー）
+  /// @brief カードラベル: WIND / TO TARGET 等の見出し（小・全パネル共通の淡色）
   static TextStyle CardLabel() {
     TextStyle s;
-    s.fontSize = 13.0f;
-    s.color = {0.220f, 0.745f, 0.973f, 1.0f}; // #38BDF8
+    s.fontFamily = "Barlow Condensed SemiBold";
+    s.fontSize = 12.0f;
+    s.color = {0.620f, 0.660f, 0.700f, 1.0f};
     s.align = TextAlign::Left;
-
     s.hasShadow = false;
-    s.hasOutline = false;
-
     return s;
   }
 
-  /// @brief カード数値: 風速等の大きい数値用（大・白・太字）
+  /// @brief カード数値: 風速・距離等の主要数値（大・白）
   static TextStyle CardValue() {
     TextStyle s;
-    s.fontSize = 28.0f;
-    s.color = {0.973f, 0.980f, 0.988f, 1.0f}; // #F8FAFC
+    s.fontFamily = "Share Tech Mono";
+    s.fontSize = 26.0f;
+    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
     s.align = TextAlign::Left;
-
     s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.4f};
-    s.shadowOffsetX = 1.0f;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
+    s.shadowOffsetX = 0.0f;
     s.shadowOffsetY = 1.0f;
-
     return s;
   }
 
-  /// @brief ゴール強調: ターゲットページ名（金色・大・中央揃え）
+  /// @brief 目的地強調: ターゲットページ名専用（金色はこの用途にのみ使う）
   static TextStyle GoalHighlight() {
     TextStyle s;
-    s.fontSize = 22.0f;
-    s.color = {0.980f, 0.800f, 0.082f, 1.0f}; // #FACC15
+    s.fontFamily = "Mamelon 5 Hi";
+    s.fontSize = 20.0f;
+    s.color = {0.980f, 0.780f, 0.260f, 1.0f};
     s.align = TextAlign::Left;
-
     s.hasShadow = true;
-    s.shadowColor = {0.2f, 0.1f, 0.0f, 0.7f};
-    s.shadowOffsetX = 1.0f;
-    s.shadowOffsetY = 2.0f;
-
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
+    s.shadowOffsetX = 0.0f;
+    s.shadowOffsetY = 1.0f;
     return s;
   }
 
-  /// @brief ショットパネルラベル: Power/Accuracy表示用（小・スカイブルー）
+  /// @brief ショットパネルラベル: POWER/ACCURACY等の見出し
   static TextStyle ShotPanelLabel() {
     TextStyle s;
-    s.fontSize = 15.0f;
-    s.color = {0.220f, 0.745f, 0.973f, 0.9f}; // #38BDF8
+    s.fontFamily = "Barlow Condensed SemiBold";
+    s.fontSize = 12.0f;
+    s.color = {0.620f, 0.660f, 0.700f, 1.0f};
     s.align = TextAlign::Left;
     s.hasShadow = false;
     return s;
   }
 
-  /// @brief ショットパネル値: パーセント等（白・やや大）
+  /// @brief ショットパネル値: パーセント等の主要数値
   static TextStyle ShotPanelValue() {
     TextStyle s;
-    s.fontSize = 20.0f;
-    s.color = {0.973f, 0.980f, 0.988f, 1.0f}; // #F8FAFC
+    s.fontFamily = "Share Tech Mono";
+    s.fontSize = 22.0f;
+    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
     s.align = TextAlign::Right;
     s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.5f};
-    s.shadowOffsetX = 1.0f;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
+    s.shadowOffsetX = 0.0f;
     s.shadowOffsetY = 1.0f;
     return s;
   }
 
-  /// @brief クラブ名テキスト（カード内・白・太）
+  /// @brief クラブ名テキスト（カード内・白・中央揃え）
   static TextStyle ClubName() {
     TextStyle s;
+    s.fontFamily = "Kiwi Maru Medium";
     s.fontSize = 16.0f;
-    s.color = {0.973f, 0.980f, 0.988f, 1.0f}; // #F8FAFC
+    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
     s.align = TextAlign::Center;
     s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.6f};
-    s.shadowOffsetX = 1.0f;
+    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
+    s.shadowOffsetX = 0.0f;
     s.shadowOffsetY = 1.0f;
     return s;
   }
