@@ -1144,11 +1144,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
     return;
   }
 
-  // ラフのみに絞ったことで見た目の密度が不足するため間隔を詰めている。
-  // さらにもう2倍の密度が欲しいとのフィードバックを受け、間隔を約0.7倍
-  // （面積あたりの株数で約2倍）にし、上限も合わせて引き上げる。
-  constexpr float desiredSpacing = 0.53f;
-  constexpr float maximumPatchCount = 40000.0f;
+  // 1パッチ内を高密度の芝床として生成し、パッチ自体は適度に広げて重ねる。
+  // 小さな草株を大量に並べる方式より、連続面としてのラフを保ちやすい。
+  constexpr float desiredSpacing = 0.72f;
+  constexpr float maximumPatchCount = 28000.0f;
   const float fieldArea = fieldWidth * fieldDepth;
   const float spacing =
       std::max(desiredSpacing, std::sqrt(fieldArea / maximumPatchCount));
@@ -1160,9 +1159,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       resX * 73856093u ^ resZ * 19349663u ^ (m_biome + 1) * 83492791u));
   std::uniform_real_distribution<float> dist01(0.0f, 1.0f);
   std::uniform_real_distribution<float> distYaw(0.0f, XM_2PI);
-  // 格子状の配置がそのまま見えないよう、間隔の4割近くまで大きく散らす。
-  std::uniform_real_distribution<float> distJitter(-spacing * 0.42f,
-                                                    spacing * 0.42f);
+  std::uniform_real_distribution<float> distJitter(-spacing * 0.30f,
+                                                    spacing * 0.30f);
 
   auto materialAt = [&](float x, float z) {
     const float u = x / fieldWidth + 0.5f;
@@ -1179,7 +1177,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
 
   // 近傍の高さから地形の法線を求め、株の「上」をその法線に合わせる
   // 回転を返す。坂の途中で根本が斜面にめり込んだり浮いたりしないよう、
-  // ラフ・フェアウェイ・グリーンの配置で共通利用する。
+  // ラフと境界のセミラフで共通利用する。
   auto computeSlopeAlignQuat = [&](float x, float z) {
     constexpr float normalSampleOffset = 0.15f;
     const float heightLeft = GetHeight(x - normalSampleOffset, z);
@@ -1218,11 +1216,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
 
   int created = 0;
   int roughCount = 0;
+  int semiRoughCount = 0;
   const float startX = -0.5f * static_cast<float>(columns - 1) * spacing;
   const float startZ = -0.5f * static_cast<float>(rows - 1) * spacing;
-  // パッチ同士を軽く重ね合わせて境目を隠しつつ、重ねすぎて株が積み重なり
-  // 「トゲの塊」に見えないよう控えめなオーバーラップに留める。
-  const float horizontalScale = spacing * 1.20f;
+  const float horizontalScale = spacing * 1.08f;
 
   for (int row = 0; row < rows; ++row) {
     // 一行ごとに半間隔ずらす千鳥配置で、格子模様の集合体に見えるのを防ぐ。
@@ -1232,22 +1229,36 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
                       rowStagger + distJitter(rng);
       const float z = startZ + static_cast<float>(row) * spacing +
                       distJitter(rng);
-      // フェアウェイ・グリーンは短く刈り込まれた芝生なので、3D葉ではなく
-      // 地形シェーダーの刈り跡ストライプ（TerrainPS）だけで表現する。
-      // 背の高いラフだけに3Dの葉を生やし、「野生の草地」ではなく
-      // 「手入れされたラフ」に見えるよう高さのばらつきも抑える。
       const TerrainMaterial material = materialAt(x, z);
-      if (material != TerrainMaterial::Rough) {
+      const float edgeSample = std::max(0.8f, spacing * 1.4f);
+      const bool bordersRough =
+          material == TerrainMaterial::Fairway &&
+          (materialAt(x - edgeSample, z) == TerrainMaterial::Rough ||
+           materialAt(x + edgeSample, z) == TerrainMaterial::Rough ||
+           materialAt(x, z - edgeSample) == TerrainMaterial::Rough ||
+           materialAt(x, z + edgeSample) == TerrainMaterial::Rough);
+      const bool isRough = material == TerrainMaterial::Rough;
+      const bool isSemiRough = bordersRough && dist01(rng) < 0.62f;
+      if (!isRough && !isSemiRough) {
         continue;
       }
 
       const float variation = dist01(rng);
-      // 前回のフィードバックを受けて高さを約2/3に抑える。
-      const float heightScale = (0.32f + variation * 0.08f) * 0.667f;
-      const XMFLOAT4 color = {0.22f + variation * 0.05f,
-                              0.51f + variation * 0.08f,
-                              0.13f + variation * 0.03f, 1.0f};
-      ++roughCount;
+      const float heightScale = isSemiRough ? (0.085f + variation * 0.025f)
+                                            : (0.145f + variation * 0.045f);
+      const XMFLOAT4 color =
+          isSemiRough
+              ? XMFLOAT4{0.46f + variation * 0.025f,
+                         0.66f + variation * 0.035f,
+                         0.27f + variation * 0.020f, 0.58f}
+              : XMFLOAT4{0.38f + variation * 0.035f,
+                         0.58f + variation * 0.045f,
+                         0.21f + variation * 0.025f, 0.88f};
+      if (isRough) {
+        ++roughCount;
+      } else {
+        ++semiRoughCount;
+      }
 
       const float yaw = distYaw(rng);
       const float terrainHeight = GetHeight(x, z);
@@ -1273,7 +1284,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       renderer.shader = grassShader;
       renderer.color = color;
       renderer.customFlags = {100000.0f, 100000.0f, 0.0f, 0.0f};
-      renderer.maxDrawDistance = 55.0f;
+      renderer.maxDrawDistance = 60.0f;
       renderer.boundsScale = 1.35f;
 
       GrassPatch grass;
@@ -1287,141 +1298,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
     }
   }
 
-  // --- フェアウェイ / グリーンの刈り込み芝 ---
-  // ラフと同じ実装（ランダムな向き・高さ）をそのまま使うとただの草地に
-  // 見えてしまうため、専用メッシュ（向きの乱れが小さい刈り込み株）を
-  // TerrainPS.hlsl の刈り跡ストライプの方向へ揃えて配置する。面積が
-  // ラフより広くなりがちなので間隔を粗くし、描画距離も短めに絞って
-  // 負荷を抑える（遠景はTerrainPSのストライプ表現に任せる）。
-  constexpr float turfSpacing = 0.72f;
-  constexpr float turfMaximumPatchCount = 30000.0f;
-  const float turfSpacingActual =
-      std::max(turfSpacing, std::sqrt(fieldArea / turfMaximumPatchCount));
-  const int turfColumns = std::max(
-      1, static_cast<int>(std::ceil(fieldWidth * 0.96f / turfSpacingActual)));
-  const int turfRows = std::max(
-      1, static_cast<int>(std::ceil(fieldDepth * 0.96f / turfSpacingActual)));
-  std::mt19937 turfRng(static_cast<unsigned>(
-      resX * 60000019u ^ resZ * 43112609u ^ (m_biome + 7) * 15485863u));
-  std::uniform_real_distribution<float> turfDist01(0.0f, 1.0f);
-  std::uniform_real_distribution<float> turfJitterDist(
-      -turfSpacingActual * 0.38f, turfSpacingActual * 0.38f);
-  // 刈り跡の縞に揃えるのが主目的なので、株ごとの向きの揺らぎは
-  // ラフよりずっと小さく抑える。
-  std::uniform_real_distribution<float> turfYawJitterDist(-0.06f, 0.06f);
-
-  constexpr int kTurfVariantCount = 4;
-  resources::MeshHandle turfMeshVariants[kTurfVariantCount] = {
-      ctx.resource.LoadMesh("builtin/turf_patch_0"),
-      ctx.resource.LoadMesh("builtin/turf_patch_1"),
-      ctx.resource.LoadMesh("builtin/turf_patch_2"),
-      ctx.resource.LoadMesh("builtin/turf_patch_3"),
-  };
-
-  const float turfHorizontalScale = turfSpacingActual * 1.15f;
-  const float turfStartX =
-      -0.5f * static_cast<float>(turfColumns - 1) * turfSpacingActual;
-  const float turfStartZ =
-      -0.5f * static_cast<float>(turfRows - 1) * turfSpacingActual;
-
-  int turfCreated = 0;
-  int fairwayCount = 0;
-  int greenCount = 0;
-
-  for (int row = 0; row < turfRows; ++row) {
-    const float rowStagger = (row % 2 == 0) ? 0.0f : turfSpacingActual * 0.5f;
-    for (int column = 0; column < turfColumns; ++column) {
-      const float x = turfStartX +
-                      static_cast<float>(column) * turfSpacingActual +
-                      rowStagger + turfJitterDist(turfRng);
-      const float z = turfStartZ +
-                      static_cast<float>(row) * turfSpacingActual +
-                      turfJitterDist(turfRng);
-      const TerrainMaterial material = materialAt(x, z);
-      if (material != TerrainMaterial::Fairway &&
-          material != TerrainMaterial::Green) {
-        continue;
-      }
-
-      const bool isGreen = material == TerrainMaterial::Green;
-      const float variation = turfDist01(turfRng);
-
-      // TerrainPS.hlsl のストライプ方向に揃える。フェアウェイはX方向の
-      // 帯（fairwayStripeWave = sin(x*2π/2.6)）、グリーンはZ方向の帯
-      // （greenStripeWave = sin(z*2π/1.5)）なので、それぞれの帯番号の
-      // 偶奇でわずかに逆向きへ傾け、刈り跡特有の縞の反転を3D葉でも表現する。
-      float baseYaw;
-      int bandIndex;
-      if (isGreen) {
-        baseYaw = XM_PIDIV2;
-        bandIndex = static_cast<int>(std::floor(z / 1.5f));
-      } else {
-        baseYaw = 0.0f;
-        bandIndex = static_cast<int>(std::floor(x / 2.6f));
-      }
-      const float bandLean = (bandIndex % 2 == 0) ? 0.14f : -0.14f;
-      const float yaw = baseYaw + bandLean + turfYawJitterDist(turfRng);
-
-      // グリーンはフェアウェイよりさらに短く刈り込まれた芝。色ムラも
-      // 抑え、均一な手入れ済みの見た目にする。
-      const float heightScale = isGreen ? (0.050f + variation * 0.014f)
-                                        : (0.105f + variation * 0.030f);
-      const XMFLOAT4 color =
-          isGreen ? XMFLOAT4{0.22f + variation * 0.02f,
-                             0.56f + variation * 0.03f,
-                             0.19f + variation * 0.02f, 0.15f}
-                  : XMFLOAT4{0.20f + variation * 0.03f,
-                             0.49f + variation * 0.05f,
-                             0.15f + variation * 0.02f, 0.35f};
-
-      const float terrainHeight = GetHeight(x, z);
-      const XMVECTOR alignQuat = computeSlopeAlignQuat(x, z);
-      const XMVECTOR yawQuat =
-          XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
-
-      const ecs::Entity entity = ctx.world.CreateEntity();
-      auto &transform = ctx.world.Add<Transform>(entity);
-      transform.position = {x, terrainHeight + 0.002f, z};
-      transform.scale = {turfHorizontalScale, heightScale,
-                         turfHorizontalScale};
-      XMStoreFloat4(&transform.rotation,
-                    XMQuaternionMultiply(yawQuat, alignQuat));
-
-      const unsigned variantHash = static_cast<unsigned>(row) * 2246822519u ^
-                                   static_cast<unsigned>(column) * 3266489917u;
-      const int variantIndex =
-          static_cast<int>((variantHash >> 15) % kTurfVariantCount);
-
-      auto &renderer = ctx.world.Add<MeshRenderer>(entity);
-      renderer.mesh = turfMeshVariants[variantIndex];
-      renderer.shader = grassShader;
-      renderer.color = color;
-      renderer.customFlags = {100000.0f, 100000.0f, 0.0f, 0.0f};
-      // フェアウェイ/グリーンは面積が広いため描画距離を短く絞り、
-      // 遠景はTerrainPSのストライプ表現に引き継ぐ。
-      renderer.maxDrawDistance = isGreen ? 30.0f : 34.0f;
-      renderer.boundsScale = 1.3f;
-
-      GrassPatch grass;
-      grass.entity = entity;
-      grass.position = transform.position;
-      grass.halfExtent = turfHorizontalScale * 0.72f;
-      m_grassPatches.push_back(grass);
-      m_entities.push_back(entity);
-      ctx.world.Add<TerrainObject>(entity);
-      ++turfCreated;
-      isGreen ? ++greenCount : ++fairwayCount;
-    }
-  }
-
   LOG_INFO("WikiTerrain",
-           "Created {} dense reactive rough grass patches (rough={}, "
-           "spacing={:.2f})",
-           created, roughCount, spacing);
-  LOG_INFO("WikiTerrain",
-           "Created {} mowed turf patches (fairway={}, green={}, "
-           "spacing={:.2f})",
-           turfCreated, fairwayCount, greenCount, turfSpacingActual);
+           "Created {} managed rough and transition grass patches "
+           "(rough={}, semiRough={}, spacing={:.2f})",
+           created, roughCount, semiRoughCount, spacing);
 }
 
 void WikiTerrainSystem::UpdateSurfaceResponse(core::GameContext &ctx,
@@ -1451,23 +1331,28 @@ void WikiTerrainSystem::UpdateSurfaceResponse(core::GameContext &ctx,
   const bool touchesGrass =
       state && state->isBallGrounded &&
       (state->currentMaterial == TerrainMaterial::Fairway ||
-       state->currentMaterial == TerrainMaterial::Rough ||
-       state->currentMaterial == TerrainMaterial::Green);
+       state->currentMaterial == TerrainMaterial::Rough);
 
   for (GrassPatch &grass : m_grassPatches) {
+    const float dx = grass.position.x - ballTransform->position.x;
+    const float dz = grass.position.z - ballTransform->position.z;
+    const float distanceSq = dx * dx + dz * dz;
+    const float patchReach = grass.halfExtent + 1.1f;
+    const bool isNearBall =
+        touchesGrass && distanceSq < patchReach * patchReach &&
+        std::abs(grass.position.y - ballTransform->position.y) < 0.7f;
+    if (!isNearBall && grass.response <= 0.0f) {
+      continue;
+    }
+
     auto *renderer = ctx.world.Get<MeshRenderer>(grass.entity);
     if (!renderer) {
       continue;
     }
 
-    const float dx = grass.position.x - ballTransform->position.x;
-    const float dz = grass.position.z - ballTransform->position.z;
-    const float distanceSq = dx * dx + dz * dz;
-    const float patchReach = grass.halfExtent + 1.1f;
     float targetResponse = 0.0f;
 
-    if (touchesGrass && distanceSq < patchReach * patchReach &&
-        std::abs(grass.position.y - ballTransform->position.y) < 0.7f) {
+    if (isNearBall) {
       grass.interactionPoint = {ballTransform->position.x,
                                 ballTransform->position.z};
       const float speedResponse =

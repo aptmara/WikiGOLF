@@ -1,8 +1,7 @@
 /**
  * @file GrassPS.hlsl
- * @brief 芝ブレード専用のピクセルシェーダー。
- *        根本のAO、頂点カラーの根本→穂先グラデーション、逆光時の疑似透過(SSS風)、
- *        地形と統一したフォグを適用する。
+ * @brief 管理されたラフ芝のピクセルシェーダー。
+ *        薄い葉の両面照明、葉面の弱い光沢、透過光、距離フェードを扱う。
  */
 
 cbuffer ConstantBuffer : register(b0) {
@@ -21,32 +20,48 @@ struct PS_INPUT {
     float2 texCoord : TEXCOORD0;
     float4 color : COLOR;
     float3 worldPos : TEXCOORD1;
+    float distanceFade : TEXCOORD2;
 };
 
+float InterleavedGradientNoise(float2 pixelPosition) {
+    return frac(52.9829189f * frac(dot(pixelPosition,
+                                      float2(0.06711056f, 0.00583715f))));
+}
+
 float4 main(PS_INPUT input) : SV_TARGET {
+    clip(input.distanceFade - InterleavedGradientNoise(input.position.xy));
+
     float tipWeight = saturate(1.0f - input.texCoord.y); // 根本=0, 穂先=1
 
     float3 N = normalize(input.normal);
     float3 L = normalize(-LightDir.xyz);
     float3 V = normalize(CameraPos.xyz - input.worldPos);
 
-    float diffuse = max(dot(N, L), 0.0f);
-    // ラップライト。葉の裏側が真っ黒に落ちすぎないようにする。
-    float wrap = saturate(dot(N, L) * 0.5f + 0.5f);
+    // 葉は非常に薄いため、表裏で同じ法線を持つ板として暗転させず、
+    // 両面から受ける拡散光として評価する。
+    float nl = dot(N, L);
+    float diffuse = abs(nl);
+    float wrap = saturate(abs(nl) * 0.65f + 0.35f);
 
     // 太陽を透かして穂先が明るくなる疑似的な半透過（Subsurface風）。
-    float backlight = pow(saturate(dot(-L, V)), 3.0f) * tipWeight * 0.55f;
+    float backlight = pow(saturate(dot(-L, V)), 3.0f) * tipWeight * 0.38f;
 
     // 根本は地面に接しているため影になりやすい（疑似AO）。深く落として
     // 個々の葉が土から浮いて見えず、地面と一体化した芝生の質感にする。
-    float ao = lerp(0.42f, 1.0f, tipWeight * tipWeight);
+    float ao = lerp(0.54f, 1.0f, tipWeight * tipWeight);
 
-    float3 ambient = float3(0.30f, 0.34f, 0.27f) * ao;
+    float3 ambient = float3(0.27f, 0.31f, 0.24f) * ao;
     float3 lightColor = float3(1.0f, 0.97f, 0.88f);
-    float3 lit = ambient + lightColor * lerp(wrap, diffuse, 0.5f) * ao;
+    float3 lit = ambient + lightColor * lerp(wrap, diffuse, 0.58f) * ao;
 
     float3 baseColor = input.color.rgb;
     float3 finalColor = baseColor * lit + lightColor * backlight * baseColor;
+
+    // 刈り込まれた葉の細い面にだけ出る控えめな葉面光沢。
+    float3 H = normalize(L + V);
+    float leafSheen = pow(saturate(abs(dot(N, H))), 32.0f) *
+                      (0.10f + tipWeight * 0.08f);
+    finalColor += lightColor * leafSheen * baseColor;
 
     // 地形と統一したフォグ
     float dist = distance(CameraPos.xyz, input.worldPos);

@@ -73,13 +73,13 @@ static float FractalNoise(float x, float z, uint32_t seed) {
 static XMFLOAT3 TerrainMaterialColor(uint8_t material) {
   switch (material) {
   case 0:
-    return {0.35f, 0.55f, 0.25f};
+    return {0.25f, 0.43f, 0.16f};
   case 1:
-    return {0.25f, 0.45f, 0.20f};
+    return {0.18f, 0.32f, 0.11f};
   case 2:
     return {0.90f, 0.85f, 0.70f};
   case 3:
-    return {0.40f, 0.75f, 0.30f};
+    return {0.30f, 0.52f, 0.19f};
   case 4:
     return {0.70f, 0.88f, 0.98f};
   case 5:

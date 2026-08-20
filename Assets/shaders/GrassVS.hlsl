@@ -1,7 +1,7 @@
 /**
  * @file GrassVS.hlsl
- * @brief 密生芝のインスタンシング描画。常時のそよ風ゆれ・ボール接触変形・
- *        株ごとの明度/位相差（同じテンプレートの複製に見えないための個体差）を行う。
+ * @brief 管理されたラフ芝のインスタンシング描画。
+ *        ゲーム内風、ボール接触、葉ごとの小さな個体差を扱う。
  */
 
 cbuffer ConstantBuffer : register(b0) {
@@ -9,6 +9,7 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View;
     matrix Projection;
     float4 MaterialColor_unused;
+    // xy: ゲーム内風向、z: 風速(m/s)
     float4 MaterialFlags_unused;
     float4 LightDir; // w: 経過時間（秒）
     float4 CameraPos;
@@ -39,6 +40,7 @@ struct VS_OUTPUT {
     float2 texCoord : TEXCOORD0;
     float4 color : COLOR;
     float3 worldPos : TEXCOORD1;
+    float distanceFade : TEXCOORD2;
 };
 
 float Hash21(float2 p) {
@@ -53,13 +55,8 @@ VS_OUTPUT main(VS_INPUT input) {
 
     float4 worldPos = mul(float4(input.position, 1.0f), inst.World);
 
-    // 株（ブレード）ごとの疑似乱数シード。ワールド座標そのものを種にするので
-    // 1パッチ内のブレード同士でも明度・風位相がばらつき、量産テンプレートの
-    // 貼り付けに見えるのを防ぐ。
     float bladeRandom = Hash21(worldPos.xz);
-    // 個体差が強すぎると「野生の草むら」に見えるため、同じ品種の芝が
-    // 均一に生えている印象になる範囲に絞る。
-    float individualTint = 0.88f + bladeRandom * 0.24f;
+    float individualTint = 0.94f + bladeRandom * 0.12f;
     float windPhase = Hash21(worldPos.xz + 91.7f) * 6.2831853f;
 
     float materialClass = saturate(inst.Color.a);
@@ -76,21 +73,35 @@ VS_OUTPUT main(VS_INPUT input) {
     worldPos.xz += bendDirection * displacement;
     worldPos.y -= lerp(0.018f, 0.12f, materialClass) * bend * bend;
 
-    // --- 常時ゆれる環境風。株ごとに位相をずらした2波の合成で、
-    //     一斉に同じ動きをする不自然さを避け生きた芝に見せる ---
+    // ゲーム内の風向・風速へ連動する。無風時は葉先が完全に静止して見える
+    // 不自然さだけを避ける、ごく弱い揺れに留める。
     float time = LightDir.w;
-    float2 windDir = normalize(float2(0.62f, 0.78f));
+    float2 windVector = MaterialFlags_unused.xy;
+    float windLength = length(windVector);
+    float2 windDir = windLength > 0.0001f
+        ? windVector / windLength
+        : float2(0.62f, 0.78f);
+    float windStrength = saturate(MaterialFlags_unused.z / 12.0f);
     float travel = dot(worldPos.xz, windDir);
-    float gust = sin(travel * 0.55f + time * 1.7f + windPhase) * 0.6f +
-                sin(travel * 1.9f - time * 2.6f + windPhase * 1.3f) * 0.4f;
-    float windSway = gust * lerp(0.045f, 0.09f, materialClass) * tipWeight;
+    float gust = sin(travel * 0.42f + time * (0.65f + windStrength * 1.4f) +
+                     windPhase) * 0.72f +
+                 sin(travel * 1.35f - time * (1.1f + windStrength * 1.8f) +
+                     windPhase * 1.3f) * 0.28f;
+    float windAmplitude = lerp(0.006f, 0.065f, windStrength);
+    float windSway = gust * windAmplitude *
+                     lerp(0.68f, 1.0f, materialClass) * tipWeight;
     worldPos.xz += windDir * windSway;
     worldPos.y -= abs(windSway) * 0.12f;
 
     output.position = mul(mul(worldPos, View), Projection);
 
+    // SRT行列の各基底からスケールを除いて法線を変換する。草丈と横幅で
+    // 非等方スケールしても、照明法線が押し潰されないようにする。
     float3x3 world3x3 = (float3x3)inst.World;
-    float3 normal = normalize(mul(input.normal, world3x3));
+    float3x3 rotationOnly = float3x3(normalize(world3x3[0]),
+                                     normalize(world3x3[1]),
+                                     normalize(world3x3[2]));
+    float3 normal = normalize(mul(input.normal, rotationOnly));
     float2 leanTotal = bendDirection * bend * 0.42f + windDir * windSway * 3.6f;
     normal = normalize(normal + float3(-leanTotal.x,
                                        (bend + abs(windSway)) * 0.18f,
@@ -99,5 +110,7 @@ VS_OUTPUT main(VS_INPUT input) {
     output.texCoord = input.texCoord;
     output.color = float4(input.color.rgb * inst.Color.rgb * individualTint, 1.0f);
     output.worldPos = worldPos.xyz;
+    float cameraDistance = distance(CameraPos.xyz, worldPos.xyz);
+    output.distanceFade = saturate((58.0f - cameraDistance) / 12.0f);
     return output;
 }

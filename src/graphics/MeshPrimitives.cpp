@@ -333,74 +333,55 @@ Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
                                       uint32_t variantSeed) {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
-  // 1枚の平たい葉を格子状に並べると、正面から見た時に幅広の三角形が
-  // 敷き詰められた「トゲの壁」に見えてしまう。実際の芝は細い葉が
-  // 数本まとまって株（クランプ）を作るので、扇状に開いた細葉の束を
-  // グリッド上にタイル状配置し、どの角度から見ても葉として読める形にする。
-  constexpr int gridSize = 5;
-  constexpr int bladesPerClump = 3;
-  constexpr int clumpCount = gridSize * gridSize;
+  // ゴルフ場のラフは独立した草株の集合ではなく、地表全体を覆う芝床から
+  // 細い葉が高密度に立ち上がる。各セルに葉を分散し、根元を共有する
+  // 放射状クランプや、葉のない大きな隙間を作らない。
+  constexpr int gridSize = 9;
+  constexpr int bladesPerCell = 2;
+  constexpr int cellCount = gridSize * gridSize;
   constexpr float pi = 3.14159265358979f;
-  // バリアントごとに疑似乱数の起点をずらし、同じテンプレートの複製に
-  // 見えないよう株の配置・高さ・向きをパッチ単位で作り分ける。
   const float variantOffset = static_cast<float>(variantSeed) * 811.87f;
 
-  vertices.reserve(clumpCount * bladesPerClump * 6);
-  indices.reserve(clumpCount * bladesPerClump * 24);
+  vertices.reserve(cellCount * bladesPerCell * 6);
+  indices.reserve(cellCount * bladesPerCell * 24);
 
   for (int cz = 0; cz < gridSize; ++cz) {
     for (int cx = 0; cx < gridSize; ++cx) {
-      const int clump = cz * gridSize + cx;
-      const float clumpSeed = static_cast<float>(clump + 1) + variantOffset;
+      const int cell = cz * gridSize + cx;
+      const float cellSeed = static_cast<float>(cell + 1) + variantOffset;
 
-      const float clumpJitterX = std::sin(clumpSeed * 12.9898f) * 0.055f;
-      const float clumpJitterZ = std::sin(clumpSeed * 78.233f) * 0.055f;
-      const float clumpCenterX =
-          (static_cast<float>(cx) + 0.5f) / gridSize - 0.5f + clumpJitterX;
-      const float clumpCenterZ =
-          (static_cast<float>(cz) + 0.5f) / gridSize - 0.5f + clumpJitterZ;
-      const float clumpFacing = std::fmod(clumpSeed * 5.263f, pi * 2.0f);
-      const float clumpHeight =
-          0.58f + 0.30f * (0.5f + 0.5f * std::sin(clumpSeed * 4.173f));
-
-      for (int b = 0; b < bladesPerClump; ++b) {
+      for (int blade = 0; blade < bladesPerCell; ++blade) {
         const float seed =
-            clumpSeed * 7.0f + static_cast<float>(b + 1) * 3.371f;
-        // -0.5..0.5 の範囲で扇状に開く（株の中心から放射状に細葉が広がる）
-        const float bladeSpread =
-            static_cast<float>(b) / static_cast<float>(bladesPerClump - 1) -
-            0.5f;
-        const float angle = clumpFacing + bladeSpread * 1.7f;
+            cellSeed * 7.0f + static_cast<float>(blade + 1) * 3.371f;
+        const float jitterX = std::sin(seed * 12.9898f) * 0.036f;
+        const float jitterZ = std::sin(seed * 78.233f) * 0.036f;
+        const float rootOffsetX =
+            (static_cast<float>(cx) + 0.28f + 0.44f * blade) / gridSize -
+            0.5f + jitterX;
+        const float rootOffsetZ =
+            (static_cast<float>(cz) + 0.72f - 0.44f * blade) / gridSize -
+            0.5f + jitterZ;
+
+        // 芝床全体では方向を均一に分散するが、葉単体はほぼ直立させる。
+        // 放射状に大きく開かせると雑草の株に見えるため行わない。
+        const float angle = std::fmod(seed * 5.263f, pi * 2.0f);
         const float sideX = std::cos(angle);
         const float sideZ = std::sin(angle);
         const float normalX = -sideZ;
         const float normalZ = sideX;
 
-        // 葉ごとに根本もわずかにずらし、1点から生えた扇ではなく
-        // 小さな株らしい広がりを出す。
-        const float rootOffsetX =
-            clumpCenterX + sideX * 0.03f * bladeSpread * 2.0f;
-        const float rootOffsetZ =
-            clumpCenterZ + sideZ * 0.03f * bladeSpread * 2.0f;
-
         const float height =
-            clumpHeight * (0.82f + 0.32f * std::sin(seed * 4.7f + 1.3f));
-        // 実際の芝の葉らしい細さ（高さの1/35〜1/55程度）に抑える。
+            0.78f + 0.20f * (0.5f + 0.5f * std::sin(seed * 4.173f));
         const float halfWidth =
-            0.0075f + 0.0045f * (0.5f + 0.5f * std::sin(seed * 7.913f));
-        const float naturalBend =
-            std::sin(seed * 3.117f) * 0.07f + bladeSpread * 0.14f;
+            0.0045f + 0.0022f * (0.5f + 0.5f * std::sin(seed * 7.913f));
+        const float lean = std::sin(seed * 3.117f) * 0.045f;
         const uint32_t base = static_cast<uint32_t>(vertices.size());
 
-        const DirectX::XMFLOAT3 normal = {normalX, 0.22f, normalZ};
-        const DirectX::XMFLOAT4 rootColor = {0.56f, 0.72f, 0.44f, 1.0f};
-        const DirectX::XMFLOAT4 midColor = {0.79f, 0.92f, 0.60f, 1.0f};
-        const DirectX::XMFLOAT4 tipColor = {0.90f, 0.98f, 0.70f, 1.0f};
-
-        // 穂先を1点に尖らせず、幅を残したまま切り揃える。芝刈り機で
-        // 刈り込んだような平らな断面にすることで「野生の草」ではなく
-        // 「手入れされたラフ」に見せる。
-        const float tipHalfWidth = halfWidth * 0.30f;
+        const DirectX::XMFLOAT3 normal = {normalX, 0.12f, normalZ};
+        const DirectX::XMFLOAT4 rootColor = {0.52f, 0.64f, 0.42f, 1.0f};
+        const DirectX::XMFLOAT4 midColor = {0.82f, 0.91f, 0.68f, 1.0f};
+        const DirectX::XMFLOAT4 tipColor = {0.74f, 0.84f, 0.58f, 1.0f};
+        const float tipHalfWidth = halfWidth * 0.16f;
 
         vertices.push_back({{rootOffsetX - sideX * halfWidth, 0.0f,
                              rootOffsetZ - sideZ * halfWidth},
@@ -409,28 +390,28 @@ Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
                              rootOffsetZ + sideZ * halfWidth},
                             normal, {1.0f, 1.0f}, rootColor});
         vertices.push_back({{rootOffsetX - sideX * halfWidth * 0.62f +
-                                 normalX * naturalBend,
-                             height * 0.55f,
+                                 normalX * lean,
+                             height * 0.58f,
                              rootOffsetZ - sideZ * halfWidth * 0.62f +
-                                 normalZ * naturalBend},
+                                 normalZ * lean},
                             normal, {0.18f, 0.45f}, midColor});
         vertices.push_back({{rootOffsetX + sideX * halfWidth * 0.62f +
-                                 normalX * naturalBend,
-                             height * 0.55f,
+                                 normalX * lean,
+                             height * 0.58f,
                              rootOffsetZ + sideZ * halfWidth * 0.62f +
-                                 normalZ * naturalBend},
+                                 normalZ * lean},
                             normal, {0.82f, 0.45f}, midColor});
         vertices.push_back({{rootOffsetX - sideX * tipHalfWidth +
-                                 normalX * naturalBend * 2.1f,
+                                 normalX * lean * 2.0f,
                              height,
                              rootOffsetZ - sideZ * tipHalfWidth +
-                                 normalZ * naturalBend * 2.1f},
+                                 normalZ * lean * 2.0f},
                             normal, {0.32f, 0.0f}, tipColor});
         vertices.push_back({{rootOffsetX + sideX * tipHalfWidth +
-                                 normalX * naturalBend * 2.1f,
+                                 normalX * lean * 2.0f,
                              height,
                              rootOffsetZ + sideZ * tipHalfWidth +
-                                 normalZ * naturalBend * 2.1f},
+                                 normalZ * lean * 2.0f},
                             normal, {0.68f, 0.0f}, tipColor});
 
         const uint32_t front[] = {base,     base + 1, base + 3,

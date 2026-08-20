@@ -29,24 +29,29 @@ float SandHash(float2 p) {
     return frac(p.x * p.y);
 }
 
-float TurfFibers(float2 worldXZ, float density) {
-    float2 gridPosition = worldXZ * density;
+float TurfFibers(float2 worldXZ, float2 bladeDirection, float density) {
+    float2 direction = normalize(bladeDirection);
+    float2 across = float2(-direction.y, direction.x);
+    float2 orientedPosition =
+        float2(dot(worldXZ, direction), dot(worldXZ, across));
+    float2 gridPosition = orientedPosition * float2(density * 0.36f, density);
     float2 cell = floor(gridPosition);
     float2 local = frac(gridPosition) - 0.5f;
     float seed = SandHash(cell);
     float2 offset =
         float2(SandHash(cell + 17.3f), SandHash(cell + 41.7f)) - 0.5f;
     offset *= 0.42f;
-    float bladeDistance = length(local - offset);
-    float fiber = 1.0f - smoothstep(0.055f, 0.23f, bladeDistance);
+    float2 bladeDelta = local - offset;
+    float bladeDistance = length(float2(bladeDelta.x * 0.32f, bladeDelta.y));
+    float fiber = 1.0f - smoothstep(0.045f, 0.19f, bladeDistance);
     return fiber * (0.55f + seed * 0.45f);
 }
 
 static const float3 kTerrainPalette[8] = {
-    float3(0.35f, 0.55f, 0.25f),
-    float3(0.25f, 0.45f, 0.20f),
+    float3(0.25f, 0.43f, 0.16f),
+    float3(0.18f, 0.32f, 0.11f),
     float3(0.90f, 0.85f, 0.70f),
-    float3(0.40f, 0.75f, 0.30f),
+    float3(0.30f, 0.52f, 0.19f),
     float3(0.70f, 0.88f, 0.98f),
     float3(0.20f, 0.45f, 0.85f),
     float3(0.95f, 0.35f, 0.12f),
@@ -129,33 +134,29 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float3 warmSand = baseColor.rgb * sandShade * float3(1.06f, 1.00f, 0.88f);
     baseColor.rgb = lerp(baseColor.rgb, warmSand, bunkerWeight);
 
-    // 遠景や3D葉の隙間も連続した芝面に見せる微細な繊維と、
-    // ゴルフ場らしい「刈り跡ストライプ」。野生の草地ではなく手入れされた
-    // 芝生に見せる最大の手掛かりなので、帯がはっきり読める強さで入れる。
+    // フェアウェイとグリーンは個別の3D葉を並べず、刈り方向へ伸びる
+    // 微細繊維と、葉が倒れる向きの反転として表現する。
     float2 turfWorld = input.WorldPos.xz;
-    float fairwayFiber = TurfFibers(turfWorld, 10.0f);
-    float roughFiber = TurfFibers(turfWorld, 7.0f);
-    // ラフは3D葉が疎らな場所でも地面自体が「土」ではなく「芝」に見えるよう、
-    // 粗密2スケールの繊維を重ねて密度感を底上げする。
-    float roughFiberFine = TurfFibers(turfWorld, 21.0f);
-    float greenFiber = TurfFibers(turfWorld, 16.0f);
+    float fairwayFiber = TurfFibers(turfWorld, float2(0.0f, 1.0f), 18.0f);
+    float roughFiber = TurfFibers(turfWorld, float2(0.64f, 0.77f), 11.0f);
+    float roughFiberFine =
+        TurfFibers(turfWorld + 13.7f, float2(-0.38f, 0.92f), 24.0f);
+    float greenFiber = TurfFibers(turfWorld, float2(1.0f, 0.0f), 30.0f);
 
-    float fairwayStripeWave = sin(turfWorld.x * (6.28318f / 2.6f));
-    float fairwayStripe =
-        (smoothstep(-0.12f, 0.12f, fairwayStripeWave) - 0.5f) * 0.11f;
-    float greenStripeWave = sin(turfWorld.y * (6.28318f / 1.5f));
-    float greenStripe =
-        (smoothstep(-0.14f, 0.14f, greenStripeWave) - 0.5f) * 0.07f;
-    // ラフにもうっすらとした刈り跡の目を入れ、伸びた草地ではなく
-    // 手入れされたラフであることをほのめかす（フェアウェイほど強くしない）。
-    float roughGrain =
-        sin(turfWorld.x * (6.28318f / 0.85f) + turfWorld.y * 0.55f) * 0.025f;
+    float fairwayStripeWave = sin(turfWorld.x * (6.28318f / 3.2f));
+    float greenStripeWave = sin(turfWorld.y * (6.28318f / 1.8f));
+    float fairwayMowDirection = fairwayStripeWave >= 0.0f ? 1.0f : -1.0f;
+    float greenMowDirection = greenStripeWave >= 0.0f ? 1.0f : -1.0f;
+    float broadVariation =
+        (SandHash(floor(turfWorld * 0.72f)) - 0.5f) * 0.035f;
 
-    float turfShade = fairwayWeight * (fairwayFiber * 0.05f + fairwayStripe) +
-                      roughWeight *
-                          (roughFiber * 0.16f + roughFiberFine * 0.11f +
-                           roughGrain) +
-                      greenWeight * (greenFiber * 0.03f + greenStripe);
+    float turfShade =
+        fairwayWeight * (fairwayFiber * 0.038f +
+                         fairwayMowDirection * 0.018f + broadVariation) +
+        roughWeight * (roughFiber * 0.085f + roughFiberFine * 0.045f +
+                       broadVariation * 1.4f) +
+        greenWeight * (greenFiber * 0.022f +
+                       greenMowDirection * 0.012f + broadVariation * 0.45f);
     baseColor.rgb *= 1.0f + turfShade;
 
     // 3. 法線計算
@@ -175,6 +176,15 @@ float4 main(PS_INPUT input) : SV_TARGET {
         N = normalize(mul(mapN, TBN));
     }
 
+    // 刈り跡の明暗を単純な色帯ではなく、葉が寝る向きによる法線差として
+    // 作る。視点と光源が変わると順目・逆目の見え方も変化する。
+    float3 fairwayMowNormal =
+        normalize(N + float3(0.0f, 0.0f, fairwayMowDirection * 0.085f));
+    float3 greenMowNormal =
+        normalize(N + float3(greenMowDirection * 0.045f, 0.0f, 0.0f));
+    N = normalize(lerp(N, fairwayMowNormal, fairwayWeight * 0.82f));
+    N = normalize(lerp(N, greenMowNormal, greenWeight * 0.72f));
+
     float sandDx = SandHash(floor((sandWorld + float2(0.008f, 0.0f)) * 145.0f)) -
                    sandGrain;
     float sandDz = SandHash(floor((sandWorld + float2(0.0f, 0.008f)) * 145.0f)) -
@@ -186,6 +196,8 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float diff = max(dot(N, L), 0.0f);
     float3 ambient = float3(0.35f, 0.35f, 0.4f);
     float3 lightColor = float3(1.0f, 0.98f, 0.95f);
+    float3 V = normalize(CameraPos.xyz - input.WorldPos);
+    float3 H = normalize(L + V);
     
     float3 lighting = ambient + lightColor * diff;
     
@@ -194,8 +206,20 @@ float4 main(PS_INPUT input) : SV_TARGET {
     // 最終カラー。アルファは必ず 1.0 にする
     float4 finalColor = float4(baseColor.rgb * lighting, 1.0f);
 
+    // 細い刈り込み葉が同じ方向へ揃うことで生じる弱い異方性光沢。
+    float2 halfXZ = normalize(H.xz + float2(0.0001f, 0.0001f));
+    float fairwayAlong = abs(dot(halfXZ, float2(0.0f, 1.0f)));
+    float greenAlong = abs(dot(halfXZ, float2(1.0f, 0.0f)));
+    float normalHighlight = pow(saturate(dot(N, H)), 24.0f);
+    float turfSheen =
+        normalHighlight *
+        (fairwayWeight * (0.025f + fairwayAlong * 0.045f) +
+         greenWeight * (0.035f + greenAlong * 0.060f) +
+         roughWeight * 0.012f);
+    finalColor.rgb += lightColor * turfSheen;
+
     // ごく一部の砂粒だけが強く反射し、均一な黄色い面に見えるのを防ぐ。
-    float viewFacing = saturate(dot(N, normalize(CameraPos.xyz - input.WorldPos)));
+    float viewFacing = saturate(dot(N, V));
     float grainSparkle = pow(saturate(sandGrainFine), 24.0f) *
                          pow(viewFacing, 5.0f) * diff;
     finalColor.rgb += bunkerWeight * grainSparkle *

@@ -441,7 +441,13 @@ void RenderSystem(core::GameContext &ctx) {
         constants->cameraPos = camPos;
         constants->world = XMMatrixIdentity();
         constants->materialColor = XMFLOAT4(1, 1, 1, 1);
-        constants->materialFlags = XMFLOAT4(0, 0, 0, 0);
+        if (key.shader == grassHandle && golfState) {
+          constants->materialFlags =
+              XMFLOAT4(golfState->windDirection.x,
+                       golfState->windDirection.y, golfState->windSpeed, 0.0f);
+        } else {
+          constants->materialFlags = XMFLOAT4(0, 0, 0, 0);
+        }
         context->Unmap(state->cBuffer.Get(), 0);
       }
       context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
