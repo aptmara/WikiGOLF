@@ -438,66 +438,54 @@ Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
                                      uint32_t variantSeed) {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
-  // ラフの株のように向きをバラバラにすると「刈り込まれた芝」ではなく
-  // ただの草むらに見えてしまう。ここでは株の向きのばらつきをラフの
-  // 1/10程度に抑え、まっすぐ密に並んだ「刈り込み株」にする。実際に
-  // 刈り跡の方向へ揃えるのは配置側（パッチ全体のyaw）で行う。
-  constexpr int gridSize = 7;
-  constexpr int bladesPerTuft = 2;
-  constexpr int tuftCount = gridSize * gridSize;
-  constexpr float pi = 3.14159265358979f;
+  // Fairway / Greenは株を作らず、刈り方向へ揃った細葉が地表全体から
+  // 立ち上がる。近距離のシルエットだけを3D葉で補い、中遠距離の密度は
+  // TerrainPSの微細繊維へ連続させる。
+  constexpr int gridSize = 12;
+  constexpr int bladesPerCell = 2;
+  constexpr int cellCount = gridSize * gridSize;
   const float variantOffset = static_cast<float>(variantSeed) * 733.31f;
 
-  vertices.reserve(tuftCount * bladesPerTuft * 6);
-  indices.reserve(tuftCount * bladesPerTuft * 24);
+  vertices.reserve(cellCount * bladesPerCell * 6);
+  indices.reserve(cellCount * bladesPerCell * 24);
 
   for (int cz = 0; cz < gridSize; ++cz) {
     for (int cx = 0; cx < gridSize; ++cx) {
-      const int tuft = cz * gridSize + cx;
-      const float tuftSeed = static_cast<float>(tuft + 1) + variantOffset;
+      const int cell = cz * gridSize + cx;
+      const float cellSeed = static_cast<float>(cell + 1) + variantOffset;
 
-      const float jitterX = std::sin(tuftSeed * 12.9898f) * 0.028f;
-      const float jitterZ = std::sin(tuftSeed * 78.233f) * 0.028f;
-      const float centerX =
-          (static_cast<float>(cx) + 0.5f) / gridSize - 0.5f + jitterX;
-      const float centerZ =
-          (static_cast<float>(cz) + 0.5f) / gridSize - 0.5f + jitterZ;
-      // 向きはほぼ一定（局所+Z寄り）。ラフの clumpFacing は 0..2πの
-      // フルランダムだったが、ここでは±0.12rad程度の微揺れに留める。
-      const float tuftFacing =
-          (pi * 0.5f) + std::sin(tuftSeed * 5.263f) * 0.12f;
-      const float tuftHeight =
-          0.42f + 0.10f * (0.5f + 0.5f * std::sin(tuftSeed * 4.173f));
-
-      for (int b = 0; b < bladesPerTuft; ++b) {
+      for (int blade = 0; blade < bladesPerCell; ++blade) {
         const float seed =
-            tuftSeed * 7.0f + static_cast<float>(b + 1) * 3.371f;
-        const float bladeSpread =
-            static_cast<float>(b) / static_cast<float>(bladesPerTuft - 1) -
-            0.5f;
-        const float angle = tuftFacing + bladeSpread * 0.10f;
+            cellSeed * 7.0f + static_cast<float>(blade + 1) * 3.371f;
+        const float jitterX = std::sin(seed * 12.9898f) * 0.020f;
+        const float jitterZ = std::sin(seed * 78.233f) * 0.020f;
+        const float rootOffsetX =
+            (static_cast<float>(cx) + 0.30f + 0.40f * blade) / gridSize -
+            0.5f + jitterX;
+        const float rootOffsetZ =
+            (static_cast<float>(cz) + 0.70f - 0.40f * blade) / gridSize -
+            0.5f + jitterZ;
+
+        // 局所+Z方向の刈り目へほぼ揃える。パッチ全体のyawを配置側で
+        // 変えることで、FairwayとGreenそれぞれの刈り方向へ合わせる。
+        const float angle = std::sin(seed * 5.263f) * 0.09f;
         const float sideX = std::cos(angle);
         const float sideZ = std::sin(angle);
         const float normalX = -sideZ;
         const float normalZ = sideX;
 
-        const float rootOffsetX = centerX + sideX * 0.012f * bladeSpread;
-        const float rootOffsetZ = centerZ + sideZ * 0.012f * bladeSpread;
-
         const float height =
-            tuftHeight * (0.88f + 0.20f * std::sin(seed * 4.7f + 1.3f));
-        // ラフより細く短い刈り込み芝の葉。
+            0.88f + 0.10f * (0.5f + 0.5f * std::sin(seed * 4.173f));
         const float halfWidth =
-            0.0060f + 0.0020f * (0.5f + 0.5f * std::sin(seed * 7.913f));
-        const float naturalBend = std::sin(seed * 3.117f) * 0.03f;
+            0.0012f + 0.0008f * (0.5f + 0.5f * std::sin(seed * 7.913f));
+        const float lean = std::sin(seed * 3.117f) * 0.0022f;
         const uint32_t base = static_cast<uint32_t>(vertices.size());
 
-        const DirectX::XMFLOAT3 normal = {normalX, 0.30f, normalZ};
-        const DirectX::XMFLOAT4 rootColor = {0.20f, 0.46f, 0.16f, 1.0f};
-        const DirectX::XMFLOAT4 midColor = {0.34f, 0.62f, 0.24f, 1.0f};
-        const DirectX::XMFLOAT4 tipColor = {0.44f, 0.72f, 0.30f, 1.0f};
-
-        const float tipHalfWidth = halfWidth * 0.35f;
+        const DirectX::XMFLOAT3 normal = {normalX, 0.10f, normalZ};
+        const DirectX::XMFLOAT4 rootColor = {0.62f, 0.72f, 0.52f, 1.0f};
+        const DirectX::XMFLOAT4 midColor = {0.88f, 0.95f, 0.77f, 1.0f};
+        const DirectX::XMFLOAT4 tipColor = {0.84f, 0.91f, 0.70f, 1.0f};
+        const float tipHalfWidth = halfWidth * 0.18f;
 
         vertices.push_back({{rootOffsetX - sideX * halfWidth, 0.0f,
                              rootOffsetZ - sideZ * halfWidth},
@@ -506,28 +494,28 @@ Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
                              rootOffsetZ + sideZ * halfWidth},
                             normal, {1.0f, 1.0f}, rootColor});
         vertices.push_back({{rootOffsetX - sideX * halfWidth * 0.65f +
-                                 normalX * naturalBend,
-                             height * 0.55f,
+                                 normalX * lean,
+                             height * 0.60f,
                              rootOffsetZ - sideZ * halfWidth * 0.65f +
-                                 normalZ * naturalBend},
+                                 normalZ * lean},
                             normal, {0.18f, 0.45f}, midColor});
         vertices.push_back({{rootOffsetX + sideX * halfWidth * 0.65f +
-                                 normalX * naturalBend,
-                             height * 0.55f,
+                                 normalX * lean,
+                             height * 0.60f,
                              rootOffsetZ + sideZ * halfWidth * 0.65f +
-                                 normalZ * naturalBend},
+                                 normalZ * lean},
                             normal, {0.82f, 0.45f}, midColor});
         vertices.push_back({{rootOffsetX - sideX * tipHalfWidth +
-                                 normalX * naturalBend * 1.8f,
+                                 normalX * lean * 2.0f,
                              height,
                              rootOffsetZ - sideZ * tipHalfWidth +
-                                 normalZ * naturalBend * 1.8f},
+                                 normalZ * lean * 2.0f},
                             normal, {0.32f, 0.0f}, tipColor});
         vertices.push_back({{rootOffsetX + sideX * tipHalfWidth +
-                                 normalX * naturalBend * 1.8f,
+                                 normalX * lean * 2.0f,
                              height,
                              rootOffsetZ + sideZ * tipHalfWidth +
-                                 normalZ * naturalBend * 1.8f},
+                                 normalZ * lean * 2.0f},
                             normal, {0.68f, 0.0f}, tipColor});
 
         const uint32_t front[] = {base,     base + 1, base + 3,

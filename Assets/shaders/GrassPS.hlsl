@@ -21,6 +21,7 @@ struct PS_INPUT {
     float4 color : COLOR;
     float3 worldPos : TEXCOORD1;
     float distanceFade : TEXCOORD2;
+    float materialClass : TEXCOORD3;
 };
 
 float InterleavedGradientNoise(float2 pixelPosition) {
@@ -44,11 +45,13 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float wrap = saturate(abs(nl) * 0.65f + 0.35f);
 
     // 太陽を透かして穂先が明るくなる疑似的な半透過（Subsurface風）。
-    float backlight = pow(saturate(dot(-L, V)), 3.0f) * tipWeight * 0.38f;
+    float backlight = pow(saturate(dot(-L, V)), 3.0f) * tipWeight * 0.38f *
+                      lerp(0.45f, 1.0f, input.materialClass);
 
     // 根本は地面に接しているため影になりやすい（疑似AO）。深く落として
     // 個々の葉が土から浮いて見えず、地面と一体化した芝生の質感にする。
-    float ao = lerp(0.54f, 1.0f, tipWeight * tipWeight);
+    float rootOcclusion = lerp(0.72f, 0.54f, input.materialClass);
+    float ao = lerp(rootOcclusion, 1.0f, tipWeight * tipWeight);
 
     float3 ambient = float3(0.27f, 0.31f, 0.24f) * ao;
     float3 lightColor = float3(1.0f, 0.97f, 0.88f);
@@ -60,7 +63,8 @@ float4 main(PS_INPUT input) : SV_TARGET {
     // 刈り込まれた葉の細い面にだけ出る控えめな葉面光沢。
     float3 H = normalize(L + V);
     float leafSheen = pow(saturate(abs(dot(N, H))), 32.0f) *
-                      (0.10f + tipWeight * 0.08f);
+                      lerp(0.20f, 0.10f, input.materialClass) *
+                      (0.72f + tipWeight * 0.28f);
     finalColor += lightColor * leafSheen * baseColor;
 
     // 地形と統一したフォグ

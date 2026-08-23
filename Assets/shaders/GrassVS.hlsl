@@ -41,6 +41,7 @@ struct VS_OUTPUT {
     float4 color : COLOR;
     float3 worldPos : TEXCOORD1;
     float distanceFade : TEXCOORD2;
+    float materialClass : TEXCOORD3;
 };
 
 float Hash21(float2 p) {
@@ -69,9 +70,10 @@ VS_OUTPUT main(VS_INPUT input) {
     contactFalloff = contactFalloff * contactFalloff * (3.0f - 2.0f * contactFalloff);
     float bend = saturate(inst.Flags.w) * contactFalloff * tipWeight;
     float2 bendDirection = float2(cos(inst.Flags.z), sin(inst.Flags.z));
-    float displacement = lerp(0.045f, 0.22f, materialClass) * bend;
+    float flexibility = materialClass * materialClass;
+    float displacement = lerp(0.002f, 0.15f, flexibility) * bend;
     worldPos.xz += bendDirection * displacement;
-    worldPos.y -= lerp(0.018f, 0.12f, materialClass) * bend * bend;
+    worldPos.y -= lerp(0.001f, 0.075f, flexibility) * bend * bend;
 
     // ゲーム内の風向・風速へ連動する。無風時は葉先が完全に静止して見える
     // 不自然さだけを避ける、ごく弱い揺れに留める。
@@ -88,8 +90,8 @@ VS_OUTPUT main(VS_INPUT input) {
                  sin(travel * 1.35f - time * (1.1f + windStrength * 1.8f) +
                      windPhase * 1.3f) * 0.28f;
     float windAmplitude = lerp(0.006f, 0.065f, windStrength);
-    float windSway = gust * windAmplitude *
-                     lerp(0.68f, 1.0f, materialClass) * tipWeight;
+    float surfaceFlex = 0.08f + materialClass * 0.92f;
+    float windSway = gust * windAmplitude * surfaceFlex * tipWeight;
     worldPos.xz += windDir * windSway;
     worldPos.y -= abs(windSway) * 0.12f;
 
@@ -111,6 +113,9 @@ VS_OUTPUT main(VS_INPUT input) {
     output.color = float4(input.color.rgb * inst.Color.rgb * individualTint, 1.0f);
     output.worldPos = worldPos.xyz;
     float cameraDistance = distance(CameraPos.xyz, worldPos.xyz);
-    output.distanceFade = saturate((58.0f - cameraDistance) / 12.0f);
+    float fadeEnd = 14.0f + materialClass * 50.0f;
+    float fadeWidth = 5.0f + materialClass * 7.0f;
+    output.distanceFade = saturate((fadeEnd - cameraDistance) / fadeWidth);
+    output.materialClass = materialClass;
     return output;
 }
