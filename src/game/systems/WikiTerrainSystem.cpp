@@ -9,6 +9,7 @@
 #include "../../core/StringUtils.h"
 #include "../../ecs/World.h"
 #include "../../resources/ResourceManager.h"
+#include "../components/GrassRenderBatch.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
@@ -1214,6 +1215,106 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       "Grass", L"Assets/shaders/GrassVS.hlsl",
       L"Assets/shaders/GrassPS.hlsl");
 
+  constexpr float kGrassChunkSize = 12.0f;
+  enum class GrassSurfaceGroup {
+    Rough,
+    SemiRough,
+    Fairway,
+    Green,
+  };
+  struct GrassBatchKey {
+    int chunkX = 0;
+    int chunkZ = 0;
+    int variantIndex = 0;
+    GrassSurfaceGroup surface = GrassSurfaceGroup::Rough;
+
+    bool operator==(const GrassBatchKey &other) const {
+      return chunkX == other.chunkX && chunkZ == other.chunkZ &&
+             variantIndex == other.variantIndex && surface == other.surface;
+    }
+  };
+  struct GrassBatchKeyHash {
+    size_t operator()(const GrassBatchKey &key) const {
+      size_t hash = static_cast<size_t>(key.chunkX);
+      hash = hash * 31u + static_cast<size_t>(key.chunkZ);
+      hash = hash * 31u + static_cast<size_t>(key.variantIndex);
+      hash = hash * 31u + static_cast<size_t>(key.surface);
+      return hash;
+    }
+  };
+
+  std::unordered_map<GrassBatchKey, ecs::Entity, GrassBatchKeyHash>
+      grassBatches;
+  int batchCreated = 0;
+
+  auto appendGrassInstance =
+      [&](float x, float y, float z, float horizontalScale,
+          float heightScale, const XMFLOAT4 &rotation, const XMFLOAT4 &color,
+          resources::MeshHandle mesh, int variantIndex,
+          GrassSurfaceGroup surface, float maxDrawDistance) {
+        GrassBatchKey key;
+        key.chunkX = static_cast<int>(std::floor(x / kGrassChunkSize));
+        key.chunkZ = static_cast<int>(std::floor(z / kGrassChunkSize));
+        key.variantIndex = variantIndex;
+        key.surface = surface;
+
+        ecs::Entity batchEntity = 0xFFFFFFFF;
+        const auto batchIt = grassBatches.find(key);
+        if (batchIt == grassBatches.end()) {
+          batchEntity = ctx.world.CreateEntity();
+          auto &newBatch = ctx.world.Add<GrassRenderBatch>(batchEntity);
+          newBatch.mesh = mesh;
+          newBatch.shader = grassShader;
+          newBatch.maxDrawDistance = maxDrawDistance;
+          grassBatches.emplace(key, batchEntity);
+          m_entities.push_back(batchEntity);
+          ctx.world.Add<TerrainObject>(batchEntity);
+          ++batchCreated;
+        } else {
+          batchEntity = batchIt->second;
+        }
+
+        auto *batch = ctx.world.Get<GrassRenderBatch>(batchEntity);
+        if (!batch) {
+          return;
+        }
+
+        Transform transform;
+        transform.position = {x, y, z};
+        transform.scale = {horizontalScale, heightScale, horizontalScale};
+        transform.rotation = rotation;
+
+        GrassRenderInstance instance;
+        XMStoreFloat4x4(&instance.world, transform.GetWorldMatrix());
+        instance.color = color;
+        instance.position = transform.position;
+
+        const size_t instanceIndex = batch->instances.size();
+        batch->instances.push_back(instance);
+
+        const float horizontalExtent = horizontalScale;
+        const float verticalExtent = std::max(0.08f, heightScale * 1.35f);
+        batch->boundsMin.x =
+            std::min(batch->boundsMin.x, x - horizontalExtent);
+        batch->boundsMin.y =
+            std::min(batch->boundsMin.y, y - verticalExtent);
+        batch->boundsMin.z =
+            std::min(batch->boundsMin.z, z - horizontalExtent);
+        batch->boundsMax.x =
+            std::max(batch->boundsMax.x, x + horizontalExtent);
+        batch->boundsMax.y =
+            std::max(batch->boundsMax.y, y + verticalExtent);
+        batch->boundsMax.z =
+            std::max(batch->boundsMax.z, z + horizontalExtent);
+
+        GrassPatch grass;
+        grass.entity = batchEntity;
+        grass.instanceIndex = instanceIndex;
+        grass.position = transform.position;
+        grass.halfExtent = horizontalScale * 0.72f;
+        m_grassPatches.push_back(grass);
+      };
+
   int created = 0;
   int roughCount = 0;
   int semiRoughCount = 0;
@@ -1265,12 +1366,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       const XMVECTOR alignQuat = computeSlopeAlignQuat(x, z);
       const XMVECTOR yawQuat = XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
 
-      const ecs::Entity entity = ctx.world.CreateEntity();
-      auto &transform = ctx.world.Add<Transform>(entity);
-      transform.position = {x, terrainHeight + 0.003f, z};
-      transform.scale = {horizontalScale, heightScale, horizontalScale};
-      XMStoreFloat4(&transform.rotation,
-                    XMQuaternionMultiply(yawQuat, alignQuat));
+      XMFLOAT4 rotation;
+      XMStoreFloat4(&rotation, XMQuaternionMultiply(yawQuat, alignQuat));
 
       // 格子座標から決定的にバリアントを選び、隣接パッチが同じ葉配置に
       // ならないようにする（乱数列は消費せず配置を安定させる）。
@@ -1279,21 +1376,13 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       const int variantIndex =
           static_cast<int>((variantHash >> 13) % kGrassVariantCount);
 
-      auto &renderer = ctx.world.Add<MeshRenderer>(entity);
-      renderer.mesh = grassMeshVariants[variantIndex];
-      renderer.shader = grassShader;
-      renderer.color = color;
-      renderer.customFlags = {100000.0f, 100000.0f, 0.0f, 0.0f};
-      renderer.maxDrawDistance = isSemiRough ? 46.0f : 60.0f;
-      renderer.boundsScale = 1.35f;
-
-      GrassPatch grass;
-      grass.entity = entity;
-      grass.position = transform.position;
-      grass.halfExtent = horizontalScale * 0.72f;
-      m_grassPatches.push_back(grass);
-      m_entities.push_back(entity);
-      ctx.world.Add<TerrainObject>(entity);
+      const GrassSurfaceGroup surface =
+          isSemiRough ? GrassSurfaceGroup::SemiRough
+                      : GrassSurfaceGroup::Rough;
+      appendGrassInstance(
+          x, terrainHeight + 0.003f, z, horizontalScale, heightScale,
+          rotation, color, grassMeshVariants[variantIndex], variantIndex,
+          surface, isSemiRough ? 46.0f : 60.0f);
       ++created;
     }
   }
@@ -1373,34 +1462,20 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       const XMVECTOR yawQuat =
           XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
 
-      const ecs::Entity entity = ctx.world.CreateEntity();
-      auto &transform = ctx.world.Add<Transform>(entity);
-      transform.position = {x, terrainHeight + 0.0015f, z};
-      transform.scale = {turfHorizontalScale, heightScale,
-                         turfHorizontalScale};
-      XMStoreFloat4(&transform.rotation,
-                    XMQuaternionMultiply(yawQuat, alignQuat));
+      XMFLOAT4 rotation;
+      XMStoreFloat4(&rotation, XMQuaternionMultiply(yawQuat, alignQuat));
 
       const unsigned variantHash = static_cast<unsigned>(row) * 2246822519u ^
                                    static_cast<unsigned>(column) * 3266489917u;
       const int variantIndex =
           static_cast<int>((variantHash >> 15) % kTurfVariantCount);
 
-      auto &renderer = ctx.world.Add<MeshRenderer>(entity);
-      renderer.mesh = turfMeshVariants[variantIndex];
-      renderer.shader = grassShader;
-      renderer.color = color;
-      renderer.customFlags = {100000.0f, 100000.0f, 0.0f, 0.0f};
-      renderer.maxDrawDistance = isGreen ? 19.0f : 31.0f;
-      renderer.boundsScale = 1.25f;
-
-      GrassPatch grass;
-      grass.entity = entity;
-      grass.position = transform.position;
-      grass.halfExtent = turfHorizontalScale * 0.72f;
-      m_grassPatches.push_back(grass);
-      m_entities.push_back(entity);
-      ctx.world.Add<TerrainObject>(entity);
+      const GrassSurfaceGroup surface =
+          isGreen ? GrassSurfaceGroup::Green : GrassSurfaceGroup::Fairway;
+      appendGrassInstance(
+          x, terrainHeight + 0.0015f, z, turfHorizontalScale, heightScale,
+          rotation, color, turfMeshVariants[variantIndex], variantIndex,
+          surface, isGreen ? 19.0f : 31.0f);
       ++turfCreated;
       if (isGreen) {
         ++greenCount;
@@ -1418,6 +1493,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
            "Created {} close-range mown turf patches "
            "(fairway={}, green={}, spacing={:.2f})",
            turfCreated, fairwayCount, greenCount, turfSpacing);
+  LOG_INFO("WikiTerrain",
+           "Packed {} grass patches into {} spatial GPU instance batches "
+           "(chunkSize={:.1f})",
+           created + turfCreated, batchCreated, kGrassChunkSize);
 }
 
 void WikiTerrainSystem::UpdateSurfaceResponse(core::GameContext &ctx,
@@ -1462,8 +1541,8 @@ void WikiTerrainSystem::UpdateSurfaceResponse(core::GameContext &ctx,
       continue;
     }
 
-    auto *renderer = ctx.world.Get<MeshRenderer>(grass.entity);
-    if (!renderer) {
+    auto *batch = ctx.world.Get<GrassRenderBatch>(grass.entity);
+    if (!batch || grass.instanceIndex >= batch->instances.size()) {
       continue;
     }
 
@@ -1491,9 +1570,9 @@ void WikiTerrainSystem::UpdateSurfaceResponse(core::GameContext &ctx,
       grass.response = 0.0f;
     }
 
-    renderer->customFlags = {grass.interactionPoint.x,
-                             grass.interactionPoint.y,
-                             grass.interactionYaw, grass.response};
+    batch->instances[grass.instanceIndex].flags = {
+        grass.interactionPoint.x, grass.interactionPoint.y,
+        grass.interactionYaw, grass.response};
   }
 }
 

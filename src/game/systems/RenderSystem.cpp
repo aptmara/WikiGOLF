@@ -5,6 +5,7 @@
 #include "../../graphics/GraphicsDevice.h"
 #include "../../resources/ResourceManager.h"
 #include "../components/Camera.h"
+#include "../components/GrassRenderBatch.h"
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
@@ -64,6 +65,9 @@ struct RenderFrameStats {
   size_t drawCalls = 0;
   size_t instancedDrawCalls = 0;
   size_t nonInstancedDrawCalls = 0;
+  size_t grassBatchCandidates = 0;
+  size_t grassInstancesConsidered = 0;
+  size_t grassInstancesDistanceSkipped = 0;
 };
 
 void RenderSystem(core::GameContext &ctx) {
@@ -366,6 +370,92 @@ void RenderSystem(core::GameContext &ctx) {
           opaqueBuckets[key].push_back(inst);
         }
       });
+
+    world.Query<components::GrassRenderBatch>().Each(
+        [&](ecs::Entity e, components::GrassRenderBatch &batch) {
+          ++stats.candidates;
+          ++stats.grassBatchCandidates;
+          if (batch.instances.empty()) {
+            ++stats.invisibleSkipped;
+            return;
+          }
+          ++stats.visibleCandidates;
+
+          auto *candidateMesh = ctx.resource.GetMesh(batch.mesh);
+          if (!candidateMesh || !candidateMesh->IsValid()) {
+            ++stats.missingResourceSkipped;
+            return;
+          }
+
+          const XMFLOAT3 boundsCenter = {
+              (batch.boundsMin.x + batch.boundsMax.x) * 0.5f,
+              (batch.boundsMin.y + batch.boundsMax.y) * 0.5f,
+              (batch.boundsMin.z + batch.boundsMax.z) * 0.5f};
+          const XMFLOAT3 boundsExtents = {
+              (batch.boundsMax.x - batch.boundsMin.x) * 0.5f,
+              (batch.boundsMax.y - batch.boundsMin.y) * 0.5f,
+              (batch.boundsMax.z - batch.boundsMin.z) * 0.5f};
+
+          if (batch.maxDrawDistance > 0.0f) {
+            const float distanceX =
+                std::max(std::abs(camPos.x - boundsCenter.x) -
+                             boundsExtents.x,
+                         0.0f);
+            const float distanceY =
+                std::max(std::abs(camPos.y - boundsCenter.y) -
+                             boundsExtents.y,
+                         0.0f);
+            const float distanceZ =
+                std::max(std::abs(camPos.z - boundsCenter.z) -
+                             boundsExtents.z,
+                         0.0f);
+            const float batchDistanceSq =
+                distanceX * distanceX + distanceY * distanceY +
+                distanceZ * distanceZ;
+            if (batchDistanceSq >
+                batch.maxDrawDistance * batch.maxDrawDistance) {
+              ++stats.lodDistanceSkipped;
+              stats.grassInstancesDistanceSkipped += batch.instances.size();
+              return;
+            }
+          }
+
+          const BoundingBox worldBounds(boundsCenter, boundsExtents);
+          if (worldFrustum.Contains(worldBounds) == DISJOINT) {
+            ++stats.frustumSkipped;
+            return;
+          }
+
+          RenderKey key;
+          key.mesh = batch.mesh;
+          key.shader = batch.shader;
+          key.blendMode = components::BlendMode::Opaque;
+          key.isTransparent = false;
+
+          auto &instances = opaqueBuckets[key];
+          instances.reserve(instances.size() + batch.instances.size());
+          for (const auto &grassInstance : batch.instances) {
+            ++stats.grassInstancesConsidered;
+            if (batch.maxDrawDistance > 0.0f) {
+              const float dx = grassInstance.position.x - camPos.x;
+              const float dy = grassInstance.position.y - camPos.y;
+              const float dz = grassInstance.position.z - camPos.z;
+              const float distanceSq = dx * dx + dy * dy + dz * dz;
+              if (distanceSq >
+                  batch.maxDrawDistance * batch.maxDrawDistance) {
+                ++stats.grassInstancesDistanceSkipped;
+                continue;
+              }
+            }
+
+            RenderInstance instance;
+            instance.entity = e;
+            instance.worldMatrix = XMLoadFloat4x4(&grassInstance.world);
+            instance.color = grassInstance.color;
+            instance.flags = grassInstance.flags;
+            instances.push_back(instance);
+          }
+        });
   }
 
   // バケットごとの描画関数
@@ -534,6 +624,13 @@ void RenderSystem(core::GameContext &ctx) {
                       static_cast<double>(stats.instancedDrawCalls));
   profiler.SetCounter("Render.NonInstancedDrawCalls",
                       static_cast<double>(stats.nonInstancedDrawCalls));
+  profiler.SetCounter("Render.GrassBatchCandidates",
+                      static_cast<double>(stats.grassBatchCandidates));
+  profiler.SetCounter("Render.GrassInstancesConsidered",
+                      static_cast<double>(stats.grassInstancesConsidered));
+  profiler.SetCounter(
+      "Render.GrassInstancesDistanceSkipped",
+      static_cast<double>(stats.grassInstancesDistanceSkipped));
   profiler.SetCounter("Render.OpaqueBuckets",
                       static_cast<double>(opaqueBuckets.size()));
   profiler.SetCounter("Render.TransparentBuckets",
@@ -562,12 +659,16 @@ void RenderSystem(core::GameContext &ctx) {
   if (isSlowFrame || isPeriodicLog) {
     LOG_INFO("RenderSystem",
              "Render stats frame={} elapsed={:.3f}ms candidates={} visible={} "
+             "grassBatches={} grassInstancesConsidered={} "
+             "grassInstancesDistanceSkipped={} "
              "drawn={} opaque={} transparent={} textured={} normalMapped={} "
              "terrain={} holeFlags={} skippedInvisible={} skippedAlpha={} "
              "skippedTransparentDistance={} skippedLodDistance={} "
              "skippedFrustum={} skippedMissingResource={}",
              s_frameIndex, static_cast<double>(elapsedUs) / 1000.0,
-             stats.candidates, stats.visibleCandidates, stats.drawn,
+             stats.candidates, stats.visibleCandidates,
+             stats.grassBatchCandidates, stats.grassInstancesConsidered,
+             stats.grassInstancesDistanceSkipped, stats.drawn,
              stats.opaqueDrawn, stats.transparentDrawn, stats.texturedDrawn,
              stats.normalMappedDrawn, stats.terrainDrawn, stats.holeFlagDrawn,
              stats.invisibleSkipped, stats.alphaSkipped,

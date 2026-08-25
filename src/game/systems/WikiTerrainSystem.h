@@ -85,6 +85,7 @@ public:
 private:
   struct GrassPatch {
     ecs::Entity entity = 0xFFFFFFFF;
+    size_t instanceIndex = 0;
     DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
     DirectX::XMFLOAT2 interactionPoint = {100000.0f, 100000.0f};
     float interactionYaw = 0.0f;
