@@ -38,6 +38,7 @@ struct RenderState {
   ComPtr<ID3D11BlendState> alphaBlendState;
   ComPtr<ID3D11BlendState> multiplyBlendState;
   ComPtr<ID3D11BlendState> addBlendState;
+  ComPtr<ID3D11RasterizerState> twoSidedRasterizerState;
   ComPtr<ID3D11Buffer> instancedBuffer;
   ComPtr<ID3D11ShaderResourceView> instancedSRV;
   size_t instancedBufferSize = 0;
@@ -68,6 +69,8 @@ struct RenderFrameStats {
   size_t grassBatchCandidates = 0;
   size_t grassInstancesConsidered = 0;
   size_t grassInstancesDistanceSkipped = 0;
+  size_t grassNearLodInstances = 0;
+  size_t grassMidLodInstances = 0;
 };
 
 void RenderSystem(core::GameContext &ctx) {
@@ -130,6 +133,14 @@ void RenderSystem(core::GameContext &ctx) {
     blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
     device->CreateBlendState(&blendDesc, &newState.addBlendState);
+
+    D3D11_RASTERIZER_DESC rasterizerDesc = {};
+    rasterizerDesc.FillMode = D3D11_FILL_SOLID;
+    rasterizerDesc.CullMode = D3D11_CULL_NONE;
+    rasterizerDesc.FrontCounterClockwise = FALSE;
+    rasterizerDesc.DepthClipEnable = TRUE;
+    device->CreateRasterizerState(&rasterizerDesc,
+                                  &newState.twoSidedRasterizerState);
 
     world.SetGlobal(std::move(newState));
     state = world.GetGlobal<RenderState>();
@@ -198,11 +209,13 @@ void RenderSystem(core::GameContext &ctx) {
     ID3D11ShaderResourceView *normalMapSRV = nullptr;
     components::BlendMode blendMode;
     bool isTransparent;
+    bool twoSided = false;
 
     bool operator==(const RenderKey &o) const {
       return mesh == o.mesh && shader == o.shader &&
              textureSRV == o.textureSRV && normalMapSRV == o.normalMapSRV &&
-             blendMode == o.blendMode && isTransparent == o.isTransparent;
+             blendMode == o.blendMode && isTransparent == o.isTransparent &&
+             twoSided == o.twoSided;
     }
   };
 
@@ -218,6 +231,7 @@ void RenderSystem(core::GameContext &ctx) {
       h = h * 31 + reinterpret_cast<size_t>(k.normalMapSRV);
       h = h * 31 + static_cast<size_t>(k.blendMode);
       h = h * 31 + (k.isTransparent ? 1 : 0);
+      h = h * 31 + (k.twoSided ? 1 : 0);
       return h;
     }
   };
@@ -386,6 +400,13 @@ void RenderSystem(core::GameContext &ctx) {
             ++stats.missingResourceSkipped;
             return;
           }
+          if (batch.lodMesh.IsValid()) {
+            auto *lodMesh = ctx.resource.GetMesh(batch.lodMesh);
+            if (!lodMesh || !lodMesh->IsValid()) {
+              ++stats.missingResourceSkipped;
+              return;
+            }
+          }
 
           const XMFLOAT3 boundsCenter = {
               (batch.boundsMin.x + batch.boundsMax.x) * 0.5f,
@@ -426,26 +447,36 @@ void RenderSystem(core::GameContext &ctx) {
             return;
           }
 
-          RenderKey key;
-          key.mesh = batch.mesh;
-          key.shader = batch.shader;
-          key.blendMode = components::BlendMode::Opaque;
-          key.isTransparent = false;
+          RenderKey nearKey;
+          nearKey.mesh = batch.mesh;
+          nearKey.shader = batch.shader;
+          nearKey.blendMode = components::BlendMode::Opaque;
+          nearKey.isTransparent = false;
+          nearKey.twoSided = batch.twoSided;
 
-          auto &instances = opaqueBuckets[key];
-          instances.reserve(instances.size() + batch.instances.size());
+          auto &nearInstances = opaqueBuckets[nearKey];
+          nearInstances.reserve(nearInstances.size() + batch.instances.size());
+
+          std::vector<RenderInstance> *midInstances = nullptr;
+          if (batch.lodMesh.IsValid() && batch.lodSwitchDistance > 0.0f) {
+            RenderKey midKey = nearKey;
+            midKey.mesh = batch.lodMesh;
+            midInstances = &opaqueBuckets[midKey];
+            midInstances->reserve(midInstances->size() +
+                                  batch.instances.size());
+          }
+
           for (const auto &grassInstance : batch.instances) {
             ++stats.grassInstancesConsidered;
-            if (batch.maxDrawDistance > 0.0f) {
-              const float dx = grassInstance.position.x - camPos.x;
-              const float dy = grassInstance.position.y - camPos.y;
-              const float dz = grassInstance.position.z - camPos.z;
-              const float distanceSq = dx * dx + dy * dy + dz * dz;
-              if (distanceSq >
-                  batch.maxDrawDistance * batch.maxDrawDistance) {
-                ++stats.grassInstancesDistanceSkipped;
-                continue;
-              }
+            const float dx = grassInstance.position.x - camPos.x;
+            const float dy = grassInstance.position.y - camPos.y;
+            const float dz = grassInstance.position.z - camPos.z;
+            const float distanceSq = dx * dx + dy * dy + dz * dz;
+            if (batch.maxDrawDistance > 0.0f &&
+                distanceSq >
+                    batch.maxDrawDistance * batch.maxDrawDistance) {
+              ++stats.grassInstancesDistanceSkipped;
+              continue;
             }
 
             RenderInstance instance;
@@ -453,7 +484,18 @@ void RenderSystem(core::GameContext &ctx) {
             instance.worldMatrix = XMLoadFloat4x4(&grassInstance.world);
             instance.color = grassInstance.color;
             instance.flags = grassInstance.flags;
-            instances.push_back(instance);
+
+            if (midInstances &&
+                distanceSq >
+                    batch.lodSwitchDistance * batch.lodSwitchDistance) {
+              midInstances->push_back(instance);
+              ++stats.grassMidLodInstances;
+            } else {
+              nearInstances.push_back(instance);
+              if (midInstances) {
+                ++stats.grassNearLodInstances;
+              }
+            }
           }
         });
   }
@@ -482,6 +524,8 @@ void RenderSystem(core::GameContext &ctx) {
     } else {
       context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
     }
+    context->RSSetState(key.twoSided ? state->twoSidedRasterizerState.Get()
+                                     : nullptr);
 
     shader->Bind(context);
 
@@ -613,6 +657,7 @@ void RenderSystem(core::GameContext &ctx) {
   }
 
   context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+  context->RSSetState(nullptr);
 
   auto &profiler = core::Profiler::Instance();
   profiler.SetCounter("Render.Candidates", static_cast<double>(stats.candidates));
@@ -631,6 +676,10 @@ void RenderSystem(core::GameContext &ctx) {
   profiler.SetCounter(
       "Render.GrassInstancesDistanceSkipped",
       static_cast<double>(stats.grassInstancesDistanceSkipped));
+  profiler.SetCounter("Render.GrassNearLodInstances",
+                      static_cast<double>(stats.grassNearLodInstances));
+  profiler.SetCounter("Render.GrassMidLodInstances",
+                      static_cast<double>(stats.grassMidLodInstances));
   profiler.SetCounter("Render.OpaqueBuckets",
                       static_cast<double>(opaqueBuckets.size()));
   profiler.SetCounter("Render.TransparentBuckets",
@@ -660,7 +709,7 @@ void RenderSystem(core::GameContext &ctx) {
     LOG_INFO("RenderSystem",
              "Render stats frame={} elapsed={:.3f}ms candidates={} visible={} "
              "grassBatches={} grassInstancesConsidered={} "
-             "grassInstancesDistanceSkipped={} "
+             "grassInstancesDistanceSkipped={} grassNearLod={} grassMidLod={} "
              "drawn={} opaque={} transparent={} textured={} normalMapped={} "
              "terrain={} holeFlags={} skippedInvisible={} skippedAlpha={} "
              "skippedTransparentDistance={} skippedLodDistance={} "
@@ -668,7 +717,8 @@ void RenderSystem(core::GameContext &ctx) {
              s_frameIndex, static_cast<double>(elapsedUs) / 1000.0,
              stats.candidates, stats.visibleCandidates,
              stats.grassBatchCandidates, stats.grassInstancesConsidered,
-             stats.grassInstancesDistanceSkipped, stats.drawn,
+             stats.grassInstancesDistanceSkipped, stats.grassNearLodInstances,
+             stats.grassMidLodInstances, stats.drawn,
              stats.opaqueDrawn, stats.transparentDrawn, stats.texturedDrawn,
              stats.normalMappedDrawn, stats.terrainDrawn, stats.holeFlagDrawn,
              stats.invisibleSkipped, stats.alphaSkipped,

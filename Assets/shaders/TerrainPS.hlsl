@@ -109,6 +109,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float greenWeight = lerp(1.0f - saturate(abs(materialLayerA - 3.0f)),
                              1.0f - saturate(abs(materialLayerB - 3.0f)),
                              materialBlend);
+    float shortTurfWeight = saturate(fairwayWeight + greenWeight);
 
     // 頂点色の補間に合わせ、最も近い2種類の地表テクスチャを連続的に混ぜる。
     float4 baseColor = float4(input.Color.rgb, 1.0f);
@@ -118,7 +119,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
         float4 texColorA = g_AlbedoArray.Sample(g_Sampler, uvwA);
         float4 texColorB = g_AlbedoArray.Sample(g_Sampler, uvwB);
         float4 texColor = lerp(texColorA, texColorB, materialBlend);
-        baseColor.rgb *= lerp(float3(1.0f, 1.0f, 1.0f), texColor.rgb, 0.45f);
+        float textureStrength = lerp(0.45f, 0.08f, shortTurfWeight);
+        baseColor.rgb *=
+            lerp(float3(1.0f, 1.0f, 1.0f), texColor.rgb, textureStrength);
     }
 
     // バンカー専用の微細な砂粒と、風でできた複数スケールの波紋。
@@ -134,14 +137,18 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float3 warmSand = baseColor.rgb * sandShade * float3(1.06f, 1.00f, 0.88f);
     baseColor.rgb = lerp(baseColor.rgb, warmSand, bunkerWeight);
 
-    // フェアウェイとグリーンは個別の3D葉を並べず、刈り方向へ伸びる
-    // 微細繊維と、葉が倒れる向きの反転として表現する。
+    // 中遠距離でも短芝が連続面に見えるよう、刈り方向へ伸びる
+    // 複数スケールの微細繊維と、葉が倒れる向きの反転を加える。
     float2 turfWorld = input.WorldPos.xz;
     float fairwayFiber = TurfFibers(turfWorld, float2(0.0f, 1.0f), 18.0f);
+    float fairwayFiberFine =
+        TurfFibers(turfWorld + 9.4f, float2(0.0f, 1.0f), 38.0f);
     float roughFiber = TurfFibers(turfWorld, float2(0.64f, 0.77f), 11.0f);
     float roughFiberFine =
         TurfFibers(turfWorld + 13.7f, float2(-0.38f, 0.92f), 24.0f);
     float greenFiber = TurfFibers(turfWorld, float2(1.0f, 0.0f), 30.0f);
+    float greenFiberFine =
+        TurfFibers(turfWorld + 21.6f, float2(1.0f, 0.0f), 56.0f);
 
     float fairwayStripeWave = sin(turfWorld.x * (6.28318f / 3.2f));
     float greenStripeWave = sin(turfWorld.y * (6.28318f / 1.8f));
@@ -151,11 +158,12 @@ float4 main(PS_INPUT input) : SV_TARGET {
         (SandHash(floor(turfWorld * 0.72f)) - 0.5f) * 0.035f;
 
     float turfShade =
-        fairwayWeight * (fairwayFiber * 0.038f +
-                         fairwayMowDirection * 0.018f + broadVariation) +
+        fairwayWeight * (fairwayFiber * 0.045f +
+                         fairwayFiberFine * 0.032f +
+                         fairwayMowDirection * 0.016f + broadVariation) +
         roughWeight * (roughFiber * 0.085f + roughFiberFine * 0.045f +
                        broadVariation * 1.4f) +
-        greenWeight * (greenFiber * 0.022f +
+        greenWeight * (greenFiber * 0.028f + greenFiberFine * 0.020f +
                        greenMowDirection * 0.012f + broadVariation * 0.45f);
     baseColor.rgb *= 1.0f + turfShade;
 
@@ -172,7 +180,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
         mapN = mapN * 2.0f - 1.0f;
         
         // 地形の起伏を覆わない程度に法線マップの細部を加える。
-        mapN.xy *= 0.85f;
+        mapN.xy *= lerp(0.85f, 0.28f, shortTurfWeight);
         N = normalize(mul(mapN, TBN));
     }
 

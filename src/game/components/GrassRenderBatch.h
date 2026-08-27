@@ -21,8 +21,11 @@ struct GrassRenderInstance {
 
 struct GrassRenderBatch {
   resources::MeshHandle mesh;
+  resources::MeshHandle lodMesh = resources::MeshHandle::Invalid();
   resources::ShaderHandle shader;
+  float lodSwitchDistance = 0.0f;
   float maxDrawDistance = 0.0f;
+  bool twoSided = false;
   DirectX::XMFLOAT3 boundsMin = {
       (std::numeric_limits<float>::max)(),
       (std::numeric_limits<float>::max)(),

@@ -1250,8 +1250,9 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
   auto appendGrassInstance =
       [&](float x, float y, float z, float horizontalScale,
           float heightScale, const XMFLOAT4 &rotation, const XMFLOAT4 &color,
-          resources::MeshHandle mesh, int variantIndex,
-          GrassSurfaceGroup surface, float maxDrawDistance) {
+          resources::MeshHandle mesh, resources::MeshHandle lodMesh,
+          int variantIndex, GrassSurfaceGroup surface, float lodSwitchDistance,
+          float maxDrawDistance, bool twoSided) {
         GrassBatchKey key;
         key.chunkX = static_cast<int>(std::floor(x / kGrassChunkSize));
         key.chunkZ = static_cast<int>(std::floor(z / kGrassChunkSize));
@@ -1264,8 +1265,11 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           batchEntity = ctx.world.CreateEntity();
           auto &newBatch = ctx.world.Add<GrassRenderBatch>(batchEntity);
           newBatch.mesh = mesh;
+          newBatch.lodMesh = lodMesh;
           newBatch.shader = grassShader;
+          newBatch.lodSwitchDistance = lodSwitchDistance;
           newBatch.maxDrawDistance = maxDrawDistance;
+          newBatch.twoSided = twoSided;
           grassBatches.emplace(key, batchEntity);
           m_entities.push_back(batchEntity);
           ctx.world.Add<TerrainObject>(batchEntity);
@@ -1381,15 +1385,15 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
                       : GrassSurfaceGroup::Rough;
       appendGrassInstance(
           x, terrainHeight + 0.003f, z, horizontalScale, heightScale,
-          rotation, color, grassMeshVariants[variantIndex], variantIndex,
-          surface, isSemiRough ? 46.0f : 60.0f);
+          rotation, color, grassMeshVariants[variantIndex],
+          resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
+          isSemiRough ? 46.0f : 60.0f, false);
       ++created;
     }
   }
 
-  // Fairway / Greenは地表シェーダーを密度の下地にし、近距離で輪郭を
-  // 読み取れる分だけ短い3D葉を重ねる。Roughより大きなパッチと短い
-  // 描画距離を使い、刈り込み面全体へ過剰なポリゴンを配置しない。
+  // Fairway / Greenは地表シェーダーを密度の下地にし、近距離では
+  // 高密度の短い3D葉、中距離では軽量な短芝LODを重ねる。
   constexpr float desiredTurfSpacing = 1.05f;
   constexpr float maximumTurfPatchCount = 14000.0f;
   const float turfSpacing =
@@ -1412,6 +1416,12 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       ctx.resource.LoadMesh("builtin/turf_patch_1"),
       ctx.resource.LoadMesh("builtin/turf_patch_2"),
       ctx.resource.LoadMesh("builtin/turf_patch_3"),
+  };
+  resources::MeshHandle denseTurfMeshVariants[kTurfVariantCount] = {
+      ctx.resource.LoadMesh("builtin/turf_patch_dense_0"),
+      ctx.resource.LoadMesh("builtin/turf_patch_dense_1"),
+      ctx.resource.LoadMesh("builtin/turf_patch_dense_2"),
+      ctx.resource.LoadMesh("builtin/turf_patch_dense_3"),
   };
 
   const float turfHorizontalScale = turfSpacing * 1.06f;
@@ -1474,8 +1484,9 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           isGreen ? GrassSurfaceGroup::Green : GrassSurfaceGroup::Fairway;
       appendGrassInstance(
           x, terrainHeight + 0.0015f, z, turfHorizontalScale, heightScale,
-          rotation, color, turfMeshVariants[variantIndex], variantIndex,
-          surface, isGreen ? 19.0f : 31.0f);
+          rotation, color, denseTurfMeshVariants[variantIndex],
+          turfMeshVariants[variantIndex], variantIndex, surface,
+          isGreen ? 8.0f : 13.0f, isGreen ? 19.0f : 31.0f, true);
       ++turfCreated;
       if (isGreen) {
         ++greenCount;

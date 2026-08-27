@@ -434,20 +434,19 @@ Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
   return mesh;
 }
 
-Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
-                                     uint32_t variantSeed) {
+namespace {
+
+Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
+                         int gridSize, float minimumHalfWidth,
+                         float maximumHalfWidth) {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
-  // Fairway / Greenは株を作らず、刈り方向へ揃った細葉が地表全体から
-  // 立ち上がる。近距離のシルエットだけを3D葉で補い、中遠距離の密度は
-  // TerrainPSの微細繊維へ連続させる。
-  constexpr int gridSize = 12;
   constexpr int bladesPerCell = 2;
-  constexpr int cellCount = gridSize * gridSize;
+  const int cellCount = gridSize * gridSize;
   const float variantOffset = static_cast<float>(variantSeed) * 733.31f;
 
-  vertices.reserve(cellCount * bladesPerCell * 6);
-  indices.reserve(cellCount * bladesPerCell * 24);
+  vertices.reserve(cellCount * bladesPerCell * 4);
+  indices.reserve(cellCount * bladesPerCell * 6);
 
   for (int cz = 0; cz < gridSize; ++cz) {
     for (int cx = 0; cx < gridSize; ++cx) {
@@ -476,16 +475,18 @@ Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
 
         const float height =
             0.88f + 0.10f * (0.5f + 0.5f * std::sin(seed * 4.173f));
+        const float widthVariation =
+            0.5f + 0.5f * std::sin(seed * 7.913f);
         const float halfWidth =
-            0.0012f + 0.0008f * (0.5f + 0.5f * std::sin(seed * 7.913f));
-        const float lean = std::sin(seed * 3.117f) * 0.0022f;
+            minimumHalfWidth +
+            (maximumHalfWidth - minimumHalfWidth) * widthVariation;
+        const float lean = std::sin(seed * 3.117f) * 0.0032f;
         const uint32_t base = static_cast<uint32_t>(vertices.size());
 
         const DirectX::XMFLOAT3 normal = {normalX, 0.10f, normalZ};
         const DirectX::XMFLOAT4 rootColor = {0.62f, 0.72f, 0.52f, 1.0f};
-        const DirectX::XMFLOAT4 midColor = {0.88f, 0.95f, 0.77f, 1.0f};
         const DirectX::XMFLOAT4 tipColor = {0.84f, 0.91f, 0.70f, 1.0f};
-        const float tipHalfWidth = halfWidth * 0.18f;
+        const float tipHalfWidth = halfWidth * 0.28f;
 
         vertices.push_back({{rootOffsetX - sideX * halfWidth, 0.0f,
                              rootOffsetZ - sideZ * halfWidth},
@@ -493,18 +494,6 @@ Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
         vertices.push_back({{rootOffsetX + sideX * halfWidth, 0.0f,
                              rootOffsetZ + sideZ * halfWidth},
                             normal, {1.0f, 1.0f}, rootColor});
-        vertices.push_back({{rootOffsetX - sideX * halfWidth * 0.65f +
-                                 normalX * lean,
-                             height * 0.60f,
-                             rootOffsetZ - sideZ * halfWidth * 0.65f +
-                                 normalZ * lean},
-                            normal, {0.18f, 0.45f}, midColor});
-        vertices.push_back({{rootOffsetX + sideX * halfWidth * 0.65f +
-                                 normalX * lean,
-                             height * 0.60f,
-                             rootOffsetZ + sideZ * halfWidth * 0.65f +
-                                 normalZ * lean},
-                            normal, {0.82f, 0.45f}, midColor});
         vertices.push_back({{rootOffsetX - sideX * tipHalfWidth +
                                  normalX * lean * 2.0f,
                              height,
@@ -518,16 +507,9 @@ Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
                                  normalZ * lean * 2.0f},
                             normal, {0.68f, 0.0f}, tipColor});
 
-        const uint32_t front[] = {base,     base + 1, base + 3,
-                                  base,     base + 3, base + 2,
-                                  base + 2, base + 3, base + 5,
-                                  base + 2, base + 5, base + 4};
-        indices.insert(indices.end(), front, front + 12);
-        for (int tri = 0; tri < 4; ++tri) {
-          indices.push_back(front[tri * 3 + 2]);
-          indices.push_back(front[tri * 3 + 1]);
-          indices.push_back(front[tri * 3]);
-        }
+        const uint32_t front[] = {base, base + 1, base + 3,
+                                  base, base + 3, base + 2};
+        indices.insert(indices.end(), front, front + 6);
       }
     }
   }
@@ -536,6 +518,20 @@ Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
   Mesh mesh;
   mesh.Create(device, vertices, indices);
   return mesh;
+}
+
+} // namespace
+
+Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
+                                     uint32_t variantSeed) {
+  // 中距離では葉数を抑え、地形シェーダーの微細繊維へ連続させる。
+  return CreateTurfPatchMesh(device, variantSeed, 12, 0.0024f, 0.0036f);
+}
+
+Mesh MeshPrimitives::CreateDenseTurfPatch(ID3D11Device *device,
+                                          uint32_t variantSeed) {
+  // 近距離は葉数を約2.8倍にし、地表が隙間から露出しない密度にする。
+  return CreateTurfPatchMesh(device, variantSeed, 20, 0.0020f, 0.0032f);
 }
 
 Mesh MeshPrimitives::CreateSandCrater(ID3D11Device *device, int segments) {
