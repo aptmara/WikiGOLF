@@ -119,7 +119,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
         float4 texColorA = g_AlbedoArray.Sample(g_Sampler, uvwA);
         float4 texColorB = g_AlbedoArray.Sample(g_Sampler, uvwB);
         float4 texColor = lerp(texColorA, texColorB, materialBlend);
-        float textureStrength = lerp(0.45f, 0.08f, shortTurfWeight);
+        float textureStrength = lerp(0.45f, 0.0f, shortTurfWeight);
         baseColor.rgb *=
             lerp(float3(1.0f, 1.0f, 1.0f), texColor.rgb, textureStrength);
     }
@@ -160,11 +160,13 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float turfShade =
         fairwayWeight * (fairwayFiber * 0.045f +
                          fairwayFiberFine * 0.032f +
-                         fairwayMowDirection * 0.016f + broadVariation) +
+                         fairwayMowDirection * 0.016f + broadVariation -
+                         0.028f) +
         roughWeight * (roughFiber * 0.085f + roughFiberFine * 0.045f +
                        broadVariation * 1.4f) +
         greenWeight * (greenFiber * 0.028f + greenFiberFine * 0.020f +
-                       greenMowDirection * 0.012f + broadVariation * 0.45f);
+                       greenMowDirection * 0.012f + broadVariation * 0.45f -
+                       0.020f);
     baseColor.rgb *= 1.0f + turfShade;
 
     // 3. 法線計算
@@ -180,7 +182,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
         mapN = mapN * 2.0f - 1.0f;
         
         // 地形の起伏を覆わない程度に法線マップの細部を加える。
-        mapN.xy *= lerp(0.85f, 0.28f, shortTurfWeight);
+        mapN.xy *= lerp(0.85f, 0.06f, shortTurfWeight);
         N = normalize(mul(mapN, TBN));
     }
 

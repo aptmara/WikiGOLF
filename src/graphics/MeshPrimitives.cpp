@@ -456,13 +456,14 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
       for (int blade = 0; blade < bladesPerCell; ++blade) {
         const float seed =
             cellSeed * 7.0f + static_cast<float>(blade + 1) * 3.371f;
-        const float jitterX = std::sin(seed * 12.9898f) * 0.020f;
-        const float jitterZ = std::sin(seed * 78.233f) * 0.020f;
+        const float cellJitter = 0.12f / static_cast<float>(gridSize);
+        const float jitterX = std::sin(seed * 12.9898f) * cellJitter;
+        const float jitterZ = std::sin(seed * 78.233f) * cellJitter;
         const float rootOffsetX =
-            (static_cast<float>(cx) + 0.30f + 0.40f * blade) / gridSize -
+            (static_cast<float>(cx) + 0.25f + 0.50f * blade) / gridSize -
             0.5f + jitterX;
         const float rootOffsetZ =
-            (static_cast<float>(cz) + 0.70f - 0.40f * blade) / gridSize -
+            (static_cast<float>(cz) + 0.75f - 0.50f * blade) / gridSize -
             0.5f + jitterZ;
 
         // 局所+Z方向の刈り目へほぼ揃える。パッチ全体のyawを配置側で
@@ -530,8 +531,8 @@ Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
 
 Mesh MeshPrimitives::CreateDenseTurfPatch(ID3D11Device *device,
                                           uint32_t variantSeed) {
-  // 近距離は葉数を約2.8倍にし、地表が隙間から露出しない密度にする。
-  return CreateTurfPatchMesh(device, variantSeed, 20, 0.0020f, 0.0032f);
+  // 隣接セルとの境界まで同じ葉間隔を保つ高密度の近距離短芝。
+  return CreateTurfPatchMesh(device, variantSeed, 24, 0.0020f, 0.0032f);
 }
 
 Mesh MeshPrimitives::CreateSandCrater(ID3D11Device *device, int segments) {

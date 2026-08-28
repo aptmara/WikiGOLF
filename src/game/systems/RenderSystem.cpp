@@ -492,7 +492,7 @@ void RenderSystem(core::GameContext &ctx) {
               ++stats.grassMidLodInstances;
             } else {
               nearInstances.push_back(instance);
-              if (midInstances) {
+              if (midInstances || batch.twoSided) {
                 ++stats.grassNearLodInstances;
               }
             }

@@ -1392,8 +1392,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
     }
   }
 
-  // Fairway / Greenは地表シェーダーを密度の下地にし、近距離では
-  // 高密度の短い3D葉、中距離では軽量な短芝LODを重ねる。
+  // Fairway / Greenは同寸法のセルを隙間なく並べ、近距離の3D葉から
+  // 中遠距離の地表シェーダーへディザーフェードで連続させる。
   constexpr float desiredTurfSpacing = 1.05f;
   constexpr float maximumTurfPatchCount = 14000.0f;
   const float turfSpacing =
@@ -1403,20 +1403,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       1, static_cast<int>(std::ceil(fieldWidth * 0.96f / turfSpacing)));
   const int turfRows = std::max(
       1, static_cast<int>(std::ceil(fieldDepth * 0.96f / turfSpacing)));
-  std::mt19937 turfRng(static_cast<unsigned>(
-      resX * 60000019u ^ resZ * 43112609u ^ (m_biome + 7) * 15485863u));
-  std::uniform_real_distribution<float> turfDist01(0.0f, 1.0f);
-  std::uniform_real_distribution<float> turfJitter(-turfSpacing * 0.22f,
-                                                    turfSpacing * 0.22f);
-  std::uniform_real_distribution<float> turfYawJitter(-0.025f, 0.025f);
-
   constexpr int kTurfVariantCount = 4;
-  resources::MeshHandle turfMeshVariants[kTurfVariantCount] = {
-      ctx.resource.LoadMesh("builtin/turf_patch_0"),
-      ctx.resource.LoadMesh("builtin/turf_patch_1"),
-      ctx.resource.LoadMesh("builtin/turf_patch_2"),
-      ctx.resource.LoadMesh("builtin/turf_patch_3"),
-  };
   resources::MeshHandle denseTurfMeshVariants[kTurfVariantCount] = {
       ctx.resource.LoadMesh("builtin/turf_patch_dense_0"),
       ctx.resource.LoadMesh("builtin/turf_patch_dense_1"),
@@ -1424,7 +1411,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       ctx.resource.LoadMesh("builtin/turf_patch_dense_3"),
   };
 
-  const float turfHorizontalScale = turfSpacing * 1.06f;
+  const float turfHorizontalScale = turfSpacing;
   const float turfStartX =
       -0.5f * static_cast<float>(turfColumns - 1) * turfSpacing;
   const float turfStartZ =
@@ -1434,12 +1421,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
   int greenCount = 0;
 
   for (int row = 0; row < turfRows; ++row) {
-    const float rowStagger = (row % 2 == 0) ? 0.0f : turfSpacing * 0.5f;
     for (int column = 0; column < turfColumns; ++column) {
-      const float x = turfStartX + static_cast<float>(column) * turfSpacing +
-                      rowStagger + turfJitter(turfRng);
-      const float z = turfStartZ + static_cast<float>(row) * turfSpacing +
-                      turfJitter(turfRng);
+      const float x =
+          turfStartX + static_cast<float>(column) * turfSpacing;
+      const float z = turfStartZ + static_cast<float>(row) * turfSpacing;
       const TerrainMaterial material = materialAt(x, z);
       if (material != TerrainMaterial::Fairway &&
           material != TerrainMaterial::Green) {
@@ -1447,17 +1432,11 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       }
 
       const bool isGreen = material == TerrainMaterial::Green;
-      const float variation = turfDist01(turfRng);
-      const float heightScale = isGreen ? (0.010f + variation * 0.004f)
-                                        : (0.032f + variation * 0.011f);
+      const float heightScale = isGreen ? 0.012f : 0.0375f;
       const XMFLOAT4 color =
           isGreen
-              ? XMFLOAT4{0.52f + variation * 0.020f,
-                         0.70f + variation * 0.025f,
-                         0.31f + variation * 0.015f, 0.06f}
-              : XMFLOAT4{0.45f + variation * 0.025f,
-                         0.64f + variation * 0.035f,
-                         0.26f + variation * 0.020f, 0.28f};
+              ? XMFLOAT4{0.53f, 0.71f, 0.32f, 0.06f}
+              : XMFLOAT4{0.46f, 0.66f, 0.27f, 0.28f};
 
       const float bandWidth = isGreen ? 1.8f : 3.2f;
       const float bandCoordinate = isGreen ? z : x;
@@ -1465,7 +1444,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           static_cast<int>(std::floor(bandCoordinate / bandWidth));
       const float reverseYaw = (bandIndex % 2 == 0) ? 0.0f : XM_PI;
       const float baseYaw = isGreen ? XM_PIDIV2 : 0.0f;
-      const float yaw = baseYaw + reverseYaw + turfYawJitter(turfRng);
+      const float yaw = baseYaw + reverseYaw;
 
       const float terrainHeight = GetHeight(x, z);
       const XMVECTOR alignQuat = computeSlopeAlignQuat(x, z);
@@ -1485,8 +1464,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       appendGrassInstance(
           x, terrainHeight + 0.0015f, z, turfHorizontalScale, heightScale,
           rotation, color, denseTurfMeshVariants[variantIndex],
-          turfMeshVariants[variantIndex], variantIndex, surface,
-          isGreen ? 8.0f : 13.0f, isGreen ? 19.0f : 31.0f, true);
+          resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
+          isGreen ? 19.0f : 31.0f, true);
       ++turfCreated;
       if (isGreen) {
         ++greenCount;
@@ -1501,8 +1480,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
            "(rough={}, semiRough={}, spacing={:.2f})",
            created, roughCount, semiRoughCount, spacing);
   LOG_INFO("WikiTerrain",
-           "Created {} close-range mown turf patches "
-           "(fairway={}, green={}, spacing={:.2f})",
+           "Created {} seamless mown turf cells "
+           "(fairway={}, green={}, cellSize={:.2f})",
            turfCreated, fairwayCount, greenCount, turfSpacing);
   LOG_INFO("WikiTerrain",
            "Packed {} grass patches into {} spatial GPU instance batches "
