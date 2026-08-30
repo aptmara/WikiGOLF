@@ -25,6 +25,7 @@ struct GrassRenderBatch {
   resources::ShaderHandle shader;
   float lodSwitchDistance = 0.0f;
   float maxDrawDistance = 0.0f;
+  float maxThreeDOverheadRatio = 1.1f;
   bool twoSided = false;
   DirectX::XMFLOAT3 boundsMin = {
       (std::numeric_limits<float>::max)(),

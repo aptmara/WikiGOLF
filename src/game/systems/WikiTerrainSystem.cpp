@@ -1269,6 +1269,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           newBatch.shader = grassShader;
           newBatch.lodSwitchDistance = lodSwitchDistance;
           newBatch.maxDrawDistance = maxDrawDistance;
+          newBatch.maxThreeDOverheadRatio =
+              surface == GrassSurfaceGroup::Fairway ? 0.75f : 1.1f;
           newBatch.twoSided = twoSided;
           grassBatches.emplace(key, batchEntity);
           m_entities.push_back(batchEntity);
@@ -1410,6 +1412,12 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       ctx.resource.LoadMesh("builtin/turf_patch_dense_2"),
       ctx.resource.LoadMesh("builtin/turf_patch_dense_3"),
   };
+  resources::MeshHandle denseFairwayMeshVariants[kTurfVariantCount] = {
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_0"),
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_1"),
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_2"),
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_3"),
+  };
 
   const float turfHorizontalScale = turfSpacing;
   const float turfStartX =
@@ -1436,7 +1444,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       const XMFLOAT4 color =
           isGreen
               ? XMFLOAT4{0.53f, 0.71f, 0.32f, 0.06f}
-              : XMFLOAT4{0.46f, 0.66f, 0.27f, 0.28f};
+              : XMFLOAT4{0.46f, 0.66f, 0.27f, 0.14f};
 
       const float bandWidth = isGreen ? 1.8f : 3.2f;
       const float bandCoordinate = isGreen ? z : x;
@@ -1461,11 +1469,13 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
 
       const GrassSurfaceGroup surface =
           isGreen ? GrassSurfaceGroup::Green : GrassSurfaceGroup::Fairway;
+      const resources::MeshHandle turfMesh =
+          isGreen ? denseTurfMeshVariants[variantIndex]
+                  : denseFairwayMeshVariants[variantIndex];
       appendGrassInstance(
           x, terrainHeight + 0.0015f, z, turfHorizontalScale, heightScale,
-          rotation, color, denseTurfMeshVariants[variantIndex],
-          resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
-          isGreen ? 19.0f : 31.0f, true);
+          rotation, color, turfMesh, resources::MeshHandle::Invalid(),
+          variantIndex, surface, 0.0f, isGreen ? 19.0f : 22.0f, true);
       ++turfCreated;
       if (isGreen) {
         ++greenCount;

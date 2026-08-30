@@ -156,12 +156,18 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float greenMowDirection = greenStripeWave >= 0.0f ? 1.0f : -1.0f;
     float broadVariation =
         (SandHash(floor(turfWorld * 0.72f)) - 0.5f) * 0.035f;
+    float3 turfViewDirection = normalize(CameraPos.xyz - input.WorldPos);
+    float fairwayOverheadView =
+        smoothstep(0.50f, 0.78f, abs(turfViewDirection.y));
 
     float turfShade =
         fairwayWeight * (fairwayFiber * 0.045f +
                          fairwayFiberFine * 0.032f +
                          fairwayMowDirection * 0.016f + broadVariation -
-                         0.028f) +
+                         0.028f +
+                         fairwayOverheadView *
+                             (fairwayFiber * 0.025f +
+                              fairwayFiberFine * 0.045f - 0.018f)) +
         roughWeight * (roughFiber * 0.085f + roughFiberFine * 0.045f +
                        broadVariation * 1.4f) +
         greenWeight * (greenFiber * 0.028f + greenFiberFine * 0.020f +

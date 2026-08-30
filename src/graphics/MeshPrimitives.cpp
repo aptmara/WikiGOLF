@@ -438,7 +438,8 @@ namespace {
 
 Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
                          int gridSize, float minimumHalfWidth,
-                         float maximumHalfWidth) {
+                         float maximumHalfWidth, float rootJitterRatio,
+                         float angleVariation, float maximumLean) {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
   constexpr int bladesPerCell = 2;
@@ -456,7 +457,8 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
       for (int blade = 0; blade < bladesPerCell; ++blade) {
         const float seed =
             cellSeed * 7.0f + static_cast<float>(blade + 1) * 3.371f;
-        const float cellJitter = 0.12f / static_cast<float>(gridSize);
+        const float cellJitter =
+            rootJitterRatio / static_cast<float>(gridSize);
         const float jitterX = std::sin(seed * 12.9898f) * cellJitter;
         const float jitterZ = std::sin(seed * 78.233f) * cellJitter;
         const float rootOffsetX =
@@ -468,7 +470,7 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
 
         // 局所+Z方向の刈り目へほぼ揃える。パッチ全体のyawを配置側で
         // 変えることで、FairwayとGreenそれぞれの刈り方向へ合わせる。
-        const float angle = std::sin(seed * 5.263f) * 0.09f;
+        const float angle = std::sin(seed * 5.263f) * angleVariation;
         const float sideX = std::cos(angle);
         const float sideZ = std::sin(angle);
         const float normalX = -sideZ;
@@ -481,7 +483,7 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
         const float halfWidth =
             minimumHalfWidth +
             (maximumHalfWidth - minimumHalfWidth) * widthVariation;
-        const float lean = std::sin(seed * 3.117f) * 0.0032f;
+        const float lean = std::sin(seed * 3.117f) * maximumLean;
         const uint32_t base = static_cast<uint32_t>(vertices.size());
 
         const DirectX::XMFLOAT3 normal = {normalX, 0.10f, normalZ};
@@ -526,13 +528,23 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
 Mesh MeshPrimitives::CreateTurfPatch(ID3D11Device *device,
                                      uint32_t variantSeed) {
   // 中距離では葉数を抑え、地形シェーダーの微細繊維へ連続させる。
-  return CreateTurfPatchMesh(device, variantSeed, 12, 0.0024f, 0.0036f);
+  return CreateTurfPatchMesh(device, variantSeed, 12, 0.0024f, 0.0036f,
+                             0.12f, 0.09f, 0.0032f);
 }
 
 Mesh MeshPrimitives::CreateDenseTurfPatch(ID3D11Device *device,
                                           uint32_t variantSeed) {
   // 隣接セルとの境界まで同じ葉間隔を保つ高密度の近距離短芝。
-  return CreateTurfPatchMesh(device, variantSeed, 24, 0.0020f, 0.0032f);
+  return CreateTurfPatchMesh(device, variantSeed, 24, 0.0020f, 0.0032f,
+                             0.12f, 0.09f, 0.0032f);
+}
+
+Mesh MeshPrimitives::CreateDenseFairwayTurfPatch(ID3D11Device *device,
+                                                 uint32_t variantSeed) {
+  // 小区画内で根元、向き、寝方をばらつかせ、刈り方向を保ちながら
+  // 低角度では葉同士が重なった連続面に見える密度にする。
+  return CreateTurfPatchMesh(device, variantSeed, 32, 0.0022f, 0.0036f,
+                             0.22f, 0.32f, 0.0090f);
 }
 
 Mesh MeshPrimitives::CreateSandCrater(ID3D11Device *device, int segments) {

@@ -69,6 +69,7 @@ struct RenderFrameStats {
   size_t grassBatchCandidates = 0;
   size_t grassInstancesConsidered = 0;
   size_t grassInstancesDistanceSkipped = 0;
+  size_t grassInstancesOverheadSkipped = 0;
   size_t grassNearLodInstances = 0;
   size_t grassMidLodInstances = 0;
 };
@@ -478,6 +479,14 @@ void RenderSystem(core::GameContext &ctx) {
               ++stats.grassInstancesDistanceSkipped;
               continue;
             }
+            if (batch.maxThreeDOverheadRatio <= 1.0f) {
+              const float distance = std::sqrt(std::max(distanceSq, 0.0001f));
+              const float overheadRatio = std::abs(dy) / distance;
+              if (overheadRatio >= batch.maxThreeDOverheadRatio) {
+                ++stats.grassInstancesOverheadSkipped;
+                continue;
+              }
+            }
 
             RenderInstance instance;
             instance.entity = e;
@@ -676,6 +685,9 @@ void RenderSystem(core::GameContext &ctx) {
   profiler.SetCounter(
       "Render.GrassInstancesDistanceSkipped",
       static_cast<double>(stats.grassInstancesDistanceSkipped));
+  profiler.SetCounter(
+      "Render.GrassInstancesOverheadSkipped",
+      static_cast<double>(stats.grassInstancesOverheadSkipped));
   profiler.SetCounter("Render.GrassNearLodInstances",
                       static_cast<double>(stats.grassNearLodInstances));
   profiler.SetCounter("Render.GrassMidLodInstances",
@@ -709,7 +721,8 @@ void RenderSystem(core::GameContext &ctx) {
     LOG_INFO("RenderSystem",
              "Render stats frame={} elapsed={:.3f}ms candidates={} visible={} "
              "grassBatches={} grassInstancesConsidered={} "
-             "grassInstancesDistanceSkipped={} grassNearLod={} grassMidLod={} "
+             "grassInstancesDistanceSkipped={} grassInstancesOverheadSkipped={} "
+             "grassNearLod={} grassMidLod={} "
              "drawn={} opaque={} transparent={} textured={} normalMapped={} "
              "terrain={} holeFlags={} skippedInvisible={} skippedAlpha={} "
              "skippedTransparentDistance={} skippedLodDistance={} "
@@ -717,8 +730,10 @@ void RenderSystem(core::GameContext &ctx) {
              s_frameIndex, static_cast<double>(elapsedUs) / 1000.0,
              stats.candidates, stats.visibleCandidates,
              stats.grassBatchCandidates, stats.grassInstancesConsidered,
-             stats.grassInstancesDistanceSkipped, stats.grassNearLodInstances,
-             stats.grassMidLodInstances, stats.drawn,
+             stats.grassInstancesDistanceSkipped,
+             stats.grassInstancesOverheadSkipped,
+             stats.grassNearLodInstances, stats.grassMidLodInstances,
+             stats.drawn,
              stats.opaqueDrawn, stats.transparentDrawn, stats.texturedDrawn,
              stats.normalMappedDrawn, stats.terrainDrawn, stats.holeFlagDrawn,
              stats.invisibleSkipped, stats.alphaSkipped,

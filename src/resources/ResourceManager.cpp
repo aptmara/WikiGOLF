@@ -509,6 +509,22 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
     mesh =
         graphics::MeshPrimitives::CreateDenseTurfPatch(m_device.GetDevice(), 3);
     success = true;
+  } else if (path == "builtin/fairway_turf_patch_dense_0") {
+    mesh = graphics::MeshPrimitives::CreateDenseFairwayTurfPatch(
+        m_device.GetDevice(), 0);
+    success = true;
+  } else if (path == "builtin/fairway_turf_patch_dense_1") {
+    mesh = graphics::MeshPrimitives::CreateDenseFairwayTurfPatch(
+        m_device.GetDevice(), 1);
+    success = true;
+  } else if (path == "builtin/fairway_turf_patch_dense_2") {
+    mesh = graphics::MeshPrimitives::CreateDenseFairwayTurfPatch(
+        m_device.GetDevice(), 2);
+    success = true;
+  } else if (path == "builtin/fairway_turf_patch_dense_3") {
+    mesh = graphics::MeshPrimitives::CreateDenseFairwayTurfPatch(
+        m_device.GetDevice(), 3);
+    success = true;
   } else if (path == "builtin/sand_crater" || path == "sand_crater") {
     mesh = graphics::MeshPrimitives::CreateSandCrater(m_device.GetDevice());
     success = true;
