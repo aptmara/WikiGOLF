@@ -10,6 +10,7 @@
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "TextStyle.h"
 #include "../core/Logger.h"
@@ -35,6 +36,7 @@ public:
     void Initialize(IDWriteFactory* factory) {
         m_factory = factory;
         m_formatCache.clear();
+        m_missingBundledFamilyWarnings.clear();
         m_factory5.Reset();
         if (factory) {
             factory->QueryInterface(__uuidof(IDWriteFactory5),
@@ -55,6 +57,7 @@ public:
         m_pendingFontFiles.clear();
         m_collection.Reset();
         m_formatCache.clear();
+        m_missingBundledFamilyWarnings.clear();
         m_factory5.Reset();
         m_factory = nullptr;
     }
@@ -71,6 +74,7 @@ public:
         std::wstring wPath(filePath.begin(), filePath.end());
         m_pendingFontFiles.push_back(std::move(wPath));
         m_collectionDirty = true;
+        m_missingBundledFamilyWarnings.clear();
         LOG_INFO("FontManager", "Queued bundled font: {} ({})", fontName, filePath);
         return true;
     }
@@ -107,7 +111,7 @@ public:
             UINT32 index = 0;
             if (SUCCEEDED(bundled->FindFamilyName(wFontName.c_str(), &index, &exists)) && exists) {
                 collectionToUse = bundled;
-            } else {
+            } else if (m_missingBundledFamilyWarnings.insert(fontName).second) {
                 LOG_WARN("FontManager",
                         "'{}' not found in bundled font collection. Using system collection.",
                         fontName);
@@ -210,6 +214,7 @@ private:
     ComPtr<IDWriteFontCollection1> m_collection;
     bool m_collectionDirty = false;
     std::unordered_map<std::string, ComPtr<IDWriteTextFormat>> m_formatCache;
+    std::unordered_set<std::string> m_missingBundledFamilyWarnings;
 };
 
 } // namespace graphics

@@ -5,9 +5,12 @@
  */
 
 #include "../../resources/ResourceManager.h"
+#include "../../ecs/Entity.h"
 #include <DirectXMath.h>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
+#include <unordered_map>
 #include <vector>
 
 namespace game::components {
@@ -36,6 +39,18 @@ struct GrassRenderBatch {
       (std::numeric_limits<float>::lowest)(),
       (std::numeric_limits<float>::lowest)()};
   std::vector<GrassRenderInstance> instances;
+};
+
+struct GrassRenderSpatialIndex {
+  static uint64_t MakeKey(int chunkX, int chunkZ) {
+    return (static_cast<uint64_t>(static_cast<uint32_t>(chunkX)) << 32u) |
+           static_cast<uint32_t>(chunkZ);
+  }
+
+  float chunkSize = 0.0f;
+  float maxDrawDistance = 0.0f;
+  float maxHorizontalExtent = 0.0f;
+  std::unordered_map<uint64_t, std::vector<ecs::Entity>> batchesByChunk;
 };
 
 } // namespace game::components

@@ -52,6 +52,7 @@ private:
     ~Logger();
 
     std::ofstream m_fileStream;
+    std::ofstream m_warningFileStream;
     std::mutex m_mutex;
     bool m_initialized = false;
 };

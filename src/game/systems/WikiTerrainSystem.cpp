@@ -216,6 +216,7 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   m_buildTiles.clear();
   m_buildLinks.clear();
   m_grassPatches.clear();
+  ctx.world.SetGlobal(GrassRenderSpatialIndex{});
 
   for (auto e : m_entities) {
     if (ctx.world.IsAlive(e)) {
@@ -1216,6 +1217,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       L"Assets/shaders/GrassPS.hlsl");
 
   constexpr float kGrassChunkSize = 12.0f;
+  GrassRenderSpatialIndex grassSpatialIndex;
+  grassSpatialIndex.chunkSize = kGrassChunkSize;
   enum class GrassSurfaceGroup {
     Rough,
     SemiRough,
@@ -1276,6 +1279,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
                   : 1.1f;
           newBatch.twoSided = twoSided;
           grassBatches.emplace(key, batchEntity);
+          grassSpatialIndex
+              .batchesByChunk[GrassRenderSpatialIndex::MakeKey(
+                  key.chunkX, key.chunkZ)]
+              .push_back(batchEntity);
           m_entities.push_back(batchEntity);
           ctx.world.Add<TerrainObject>(batchEntity);
           ++batchCreated;
@@ -1287,6 +1294,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
         if (!batch) {
           return;
         }
+        grassSpatialIndex.maxDrawDistance =
+            std::max(grassSpatialIndex.maxDrawDistance, maxDrawDistance);
+        grassSpatialIndex.maxHorizontalExtent =
+            std::max(grassSpatialIndex.maxHorizontalExtent, horizontalScale);
 
         Transform transform;
         transform.position = {x, y, z};
@@ -1515,6 +1526,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
            "Packed {} grass patches into {} spatial GPU instance batches "
            "(chunkSize={:.1f})",
            created + turfCreated, batchCreated, kGrassChunkSize);
+  ctx.world.SetGlobal(std::move(grassSpatialIndex));
 }
 
 void WikiTerrainSystem::UpdateSurfaceResponse(core::GameContext &ctx,

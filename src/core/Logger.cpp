@@ -8,6 +8,7 @@
 #include <vector>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <sstream>
 #include <windows.h> // OutputDebugString, SetConsoleTextAttribute
@@ -28,16 +29,25 @@ void Logger::Initialize(const std::string& filename) {
     if (m_initialized) return;
 
     m_fileStream.open(filename, std::ios::out | std::ios::trunc);
-    if (m_fileStream.is_open()) {
-        m_initialized = true;
-        
-        // ヘッダー書き込み (localtime_s 使用)
+    std::filesystem::path warningPath(filename);
+    const std::string warningFilename =
+        warningPath.stem().string() + "_warnings" +
+        warningPath.extension().string();
+    warningPath.replace_filename(warningFilename);
+    m_warningFileStream.open(warningPath, std::ios::out | std::ios::trunc);
+
+    m_initialized = m_fileStream.is_open() || m_warningFileStream.is_open();
+    if (m_initialized) {
         auto now = std::chrono::system_clock::now();
         auto in_time_t = std::chrono::system_clock::to_time_t(now);
         struct tm tm_buf;
         localtime_s(&tm_buf, &in_time_t);
 
-        m_fileStream << "=== Game Log Started at " << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S") << " ===" << std::endl;
+        if (m_fileStream.is_open()) {
+            m_fileStream << "=== Game Log Started at "
+                         << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S")
+                         << " ===" << std::endl;
+        }
     }
 }
 
@@ -47,6 +57,7 @@ void Logger::Shutdown() {
         m_fileStream << "=== Game Log Ended ===" << std::endl;
         m_fileStream.close();
     }
+    if (m_warningFileStream.is_open()) m_warningFileStream.close();
     m_initialized = false;
 }
 
@@ -89,6 +100,11 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
     if (m_initialized && m_fileStream.is_open()) {
         m_fileStream << fullMessage << std::endl;
         if (level == LogLevel::Error) m_fileStream.flush();
+    }
+    if (m_initialized && m_warningFileStream.is_open() &&
+        (level == LogLevel::Warning || level == LogLevel::Error)) {
+        m_warningFileStream << fullMessage << std::endl;
+        m_warningFileStream.flush();
     }
 
     // デバッグ出力処理

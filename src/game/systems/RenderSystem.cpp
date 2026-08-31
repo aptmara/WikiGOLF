@@ -386,7 +386,7 @@ void RenderSystem(core::GameContext &ctx) {
         }
       });
 
-    world.Query<components::GrassRenderBatch>().Each(
+    auto collectGrassBatch =
         [&](ecs::Entity e, components::GrassRenderBatch &batch) {
           ++stats.candidates;
           ++stats.grassBatchCandidates;
@@ -506,7 +506,40 @@ void RenderSystem(core::GameContext &ctx) {
               }
             }
           }
-        });
+        };
+
+    auto *grassSpatialIndex =
+        world.GetGlobal<components::GrassRenderSpatialIndex>();
+    if (grassSpatialIndex && grassSpatialIndex->chunkSize > 0.0f) {
+      const float queryDistance = grassSpatialIndex->maxDrawDistance +
+                                  grassSpatialIndex->maxHorizontalExtent;
+      const int minChunkX = static_cast<int>(
+          std::floor((camPos.x - queryDistance) / grassSpatialIndex->chunkSize));
+      const int maxChunkX = static_cast<int>(
+          std::floor((camPos.x + queryDistance) / grassSpatialIndex->chunkSize));
+      const int minChunkZ = static_cast<int>(
+          std::floor((camPos.z - queryDistance) / grassSpatialIndex->chunkSize));
+      const int maxChunkZ = static_cast<int>(
+          std::floor((camPos.z + queryDistance) / grassSpatialIndex->chunkSize));
+
+      for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; ++chunkZ) {
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; ++chunkX) {
+          const auto chunkIt = grassSpatialIndex->batchesByChunk.find(
+              components::GrassRenderSpatialIndex::MakeKey(chunkX, chunkZ));
+          if (chunkIt == grassSpatialIndex->batchesByChunk.end()) {
+            continue;
+          }
+          for (ecs::Entity entity : chunkIt->second) {
+            auto *batch = world.Get<components::GrassRenderBatch>(entity);
+            if (batch) {
+              collectGrassBatch(entity, *batch);
+            }
+          }
+        }
+      }
+    } else {
+      world.Query<components::GrassRenderBatch>().Each(collectGrassBatch);
+    }
   }
 
   // バケットごとの描画関数
