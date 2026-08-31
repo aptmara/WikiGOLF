@@ -53,6 +53,14 @@ public:
     size_t directDraws = 0;
 
     for (const auto &[entity, ui] : uiTexts) {
+      if (ui->fullScreenCover) {
+        // 仮想解像度のレターボックスを無視し、物理画面全体を塗りつぶす
+        // （フェード/暗転オーバーレイ）。テキストやキャッシュ追跡は行わない。
+        m_renderer.FillFullScreenRect(ui->style.bgColor);
+        seen.insert(entity);
+        continue;
+      }
+
       // 描画領域を計算
       float w = m_renderer.GetWidth() - ui->x;
       if (ui->width > 0) {

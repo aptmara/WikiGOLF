@@ -24,6 +24,10 @@ struct UIText {
     bool visible = true;        ///< 可視性（false なら描画スキップ）
     int layer = 0;              ///< レイヤー（大きいほど前面に描画）
 
+    /// @brief trueの場合、x/y/width/heightを無視し、style.bgColorで物理画面全体
+    ///        （レターボックスの余白含む）を塗りつぶす。フェード/暗転オーバーレイ用。
+    bool fullScreenCover = false;
+
     /// @brief 簡易コンストラクタ
     static UIText Create(const std::wstring& text, float x, float y, const graphics::TextStyle& style = graphics::TextStyle::Default()) {
         UIText ui;

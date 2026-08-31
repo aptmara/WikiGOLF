@@ -203,6 +203,41 @@ HRESULT TextRenderer::CreateTargetBitmap(IDXGISwapChain *swapChain) {
   return S_OK;
 }
 
+float TextRenderer::ComputeUniformScale() const {
+  if (m_width <= 0.0f || m_height <= 0.0f) {
+    return 1.0f;
+  }
+  return (std::min)(m_width / kVirtualWidth, m_height / kVirtualHeight);
+}
+
+D2D1::Matrix3x2F TextRenderer::ComputeVirtualToScreenTransform() const {
+  const float scale = ComputeUniformScale();
+  const float offsetX = (m_width - kVirtualWidth * scale) * 0.5f;
+  const float offsetY = (m_height - kVirtualHeight * scale) * 0.5f;
+  return D2D1::Matrix3x2F::Scale(scale, scale) *
+         D2D1::Matrix3x2F::Translation(offsetX, offsetY);
+}
+
+void TextRenderer::ReleaseTargetForResize() {
+  if (m_d2dContext) {
+    m_d2dContext->SetTarget(nullptr);
+  }
+}
+
+bool TextRenderer::RecreateTargetAfterResize() {
+  if (!m_swapChain) {
+    return false;
+  }
+  HRESULT hr = CreateTargetBitmap(m_swapChain.Get());
+  if (FAILED(hr)) {
+    LOG_ERROR("TextRenderer",
+              "RecreateTargetAfterResize failed (HRESULT: {:08X})",
+              static_cast<uint32_t>(hr));
+    return false;
+  }
+  return true;
+}
+
 void TextRenderer::Shutdown() {
   m_brushCache.Clear();
   m_bitmapCache.clear();
@@ -222,9 +257,7 @@ void TextRenderer::BeginDraw() {
   if (m_d2dContext) {
     if (m_drawRefCount == 0) {
       m_d2dContext->BeginDraw();
-      D2D1::Matrix3x2F scaleMatrix = D2D1::Matrix3x2F::Scale(
-          m_width / kVirtualWidth, m_height / kVirtualHeight);
-      m_d2dContext->SetTransform(scaleMatrix);
+      m_d2dContext->SetTransform(ComputeVirtualToScreenTransform());
       ++m_frameCounter;
     }
     m_drawRefCount++;
@@ -284,6 +317,17 @@ void TextRenderer::FillRect(const D2D1_RECT_F &rect,
   if (brush) {
     m_d2dContext->FillRectangle(rect, brush);
   }
+}
+
+void TextRenderer::FillFullScreenRect(const DirectX::XMFLOAT4 &color) {
+  if (!m_d2dContext)
+    return;
+
+  D2D1_MATRIX_3X2_F prevTransform;
+  m_d2dContext->GetTransform(&prevTransform);
+  m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
+  FillRect(D2D1::RectF(0.0f, 0.0f, m_width, m_height), color);
+  m_d2dContext->SetTransform(prevTransform);
 }
 
 void TextRenderer::FillRoundedRect(const D2D1_RECT_F &rect, float radius,
@@ -404,8 +448,7 @@ void TextRenderer::RenderImage(const std::string &filePath,
   }
 
   // 回転変換
-  D2D1::Matrix3x2F scaleMatrix = D2D1::Matrix3x2F::Scale(
-      m_width / kVirtualWidth, m_height / kVirtualHeight);
+  D2D1::Matrix3x2F scaleMatrix = ComputeVirtualToScreenTransform();
   if (rotation != 0.0f) {
     float centerX = destRect.left + (destRect.right - destRect.left) * 0.5f;
     float centerY = destRect.top + (destRect.bottom - destRect.top) * 0.5f;
@@ -467,8 +510,7 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
   }
 
   // 回転変換
-  D2D1::Matrix3x2F scaleMatrix = D2D1::Matrix3x2F::Scale(
-      m_width / kVirtualWidth, m_height / kVirtualHeight);
+  D2D1::Matrix3x2F scaleMatrix = ComputeVirtualToScreenTransform();
   if (rotation != 0.0f) {
     float centerX = destRect.left + (destRect.right - destRect.left) * 0.5f;
     float centerY = destRect.top + (destRect.bottom - destRect.top) * 0.5f;
@@ -774,8 +816,10 @@ void TextRenderer::RenderTextCached(const std::wstring &text,
     }
     margin = (std::max)(margin, 1.0f);
 
-    const float scaleX = (m_width > 0.0f) ? (m_width / kVirtualWidth) : 1.0f;
-    const float scaleY = (m_height > 0.0f) ? (m_height / kVirtualHeight) : 1.0f;
+    // オフスクリーンのラスタ密度は、実際に画面へ合成する際の一様スケールに
+    // 合わせる（非一様スケールだとレターボックス時の縮小率とズレて滲む）。
+    const float scaleX = ComputeUniformScale();
+    const float scaleY = scaleX;
 
     const UINT32 pxW = static_cast<UINT32>(
         (std::max)(1.0f, std::ceil((width + margin * 2.0f) * scaleX)));

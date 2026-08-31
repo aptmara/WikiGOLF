@@ -1,5 +1,6 @@
 #include "Input.h"
 #include "Logger.h"
+#include <algorithm>
 #include <windowsx.h>
 
 namespace core {
@@ -36,6 +37,29 @@ void Input::Update() {
   m_backspacePressed = false;
 }
 
+namespace {
+// TextRenderer::kVirtualWidth/kVirtualHeight と同じ仮想解像度基準値。
+constexpr float kVirtualWidth = 1280.0f;
+constexpr float kVirtualHeight = 720.0f;
+} // namespace
+
+DirectX::XMINT2 Input::ClientToVirtual(int rawX, int rawY) const {
+  if (m_windowWidth <= 0 || m_windowHeight <= 0) {
+    return {rawX, rawY};
+  }
+  // 縦横同一倍率でスケールし、余白は中央寄せ（レターボックス/ピラーボックス）にする。
+  // TextRenderer::ComputeVirtualToScreenTransform() の逆変換。
+  const float scale = (std::min)(m_windowWidth / kVirtualWidth,
+                                 m_windowHeight / kVirtualHeight);
+  if (scale <= 0.0f) {
+    return {rawX, rawY};
+  }
+  const float offsetX = (m_windowWidth - kVirtualWidth * scale) * 0.5f;
+  const float offsetY = (m_windowHeight - kVirtualHeight * scale) * 0.5f;
+  return {static_cast<int>((rawX - offsetX) / scale),
+          static_cast<int>((rawY - offsetY) / scale)};
+}
+
 void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
   switch (message) {
   // --- キーボード ---
@@ -70,8 +94,7 @@ void Input::ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     {
       int rawX = GET_X_LPARAM(lParam);
       int rawY = GET_Y_LPARAM(lParam);
-      m_mousePosition.x = static_cast<int>(rawX * (1280.0f / m_windowWidth));
-      m_mousePosition.y = static_cast<int>(rawY * (720.0f / m_windowHeight));
+      m_mousePosition = ClientToVirtual(rawX, rawY);
     }
     break;
 
@@ -175,8 +198,8 @@ void Input::SetMouseCursorLocked(bool locked) {
         SetCursorPos(centerX, centerY);
 
         // マウス位置も中央に更新（デルタ計算のため）
-        m_mousePosition.x = static_cast<int>(((clientRect.right - clientRect.left) / 2) * (1280.0f / m_windowWidth));
-        m_mousePosition.y = static_cast<int>(((clientRect.bottom - clientRect.top) / 2) * (720.0f / m_windowHeight));
+        m_mousePosition = ClientToVirtual((clientRect.right - clientRect.left) / 2,
+                                          (clientRect.bottom - clientRect.top) / 2);
       }
     }
     return;
@@ -208,8 +231,8 @@ void Input::SetMouseCursorLocked(bool locked) {
       SetCursorPos(centerX, centerY);
 
       // マウス位置も中央に初期化
-      m_mousePosition.x = static_cast<int>(((clientRect.right - clientRect.left) / 2) * (1280.0f / m_windowWidth));
-      m_mousePosition.y = static_cast<int>(((clientRect.bottom - clientRect.top) / 2) * (720.0f / m_windowHeight));
+      m_mousePosition = ClientToVirtual((clientRect.right - clientRect.left) / 2,
+                                        (clientRect.bottom - clientRect.top) / 2);
     }
 
     // カーソルを非表示

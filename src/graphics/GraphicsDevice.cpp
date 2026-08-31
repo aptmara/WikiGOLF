@@ -40,14 +40,18 @@ std::string WideToUtf8(const wchar_t *value) {
 bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height) {
   m_width = width;
   m_height = height;
+  m_renderWidth = width;
+  m_renderHeight = height;
 
   if (!CreateSwapChainAndDevice(hWnd))
     return false;
   if (!CreateRenderTargetView())
     return false;
-  if (!CreateDepthStencilView())
+  if (!InitializePostProcessResources())
     return false;
-  SetupViewport();
+  if (!CreateSceneRenderTargets())
+    return false;
+  SetupSceneViewport();
 
   m_gpuProfilerAvailable = InitializeGpuProfilerQueries();
   if (!m_gpuProfilerAvailable) {
@@ -59,6 +63,13 @@ bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height) {
 }
 
 void GraphicsDevice::Shutdown() {
+  // 排他フルスクリーンのままSwapChainを破棄するとDXGIが不正状態になるため、
+  // 先にウィンドウモードへ戻す。
+  if (m_isExclusiveFullscreen && m_swapChain) {
+    m_swapChain->SetFullscreenState(FALSE, nullptr);
+    m_isExclusiveFullscreen = false;
+  }
+
   if (m_context) {
     m_context->ClearState();
   }
@@ -76,6 +87,20 @@ void GraphicsDevice::Shutdown() {
   m_depthStencilState.Reset();
   m_depthStencilView.Reset();
   m_depthStencilBuffer.Reset();
+  m_sceneColorTexMS.Reset();
+  m_sceneColorRTVMS.Reset();
+  m_sceneColorTexResolved.Reset();
+  m_sceneColorRTVResolved.Reset();
+  m_sceneColorSRVResolved.Reset();
+  m_fxaaTex.Reset();
+  m_fxaaRTV.Reset();
+  m_fxaaSRV.Reset();
+  m_fullscreenVB.Reset();
+  m_linearSampler.Reset();
+  m_fxaaConstantBuffer.Reset();
+  m_postProcessBlendState.Reset();
+  m_postProcessDepthState.Reset();
+  m_postProcessRasterizerState.Reset();
   m_renderTargetView.Reset();
   m_swapChain.Reset();
   m_context.Reset();
@@ -100,13 +125,100 @@ void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
     }
   }
 
+  // 3D描画（Skybox/メッシュ）は内部描画解像度のオフスクリーンターゲットへ描画する。
+  // MSAA有効時はMSAAカラーターゲットへ、無効時は直接「解決済み」ターゲットへ描画する。
+  ID3D11RenderTargetView *sceneRTV = (m_quality.msaaSamples > 1)
+                                         ? m_sceneColorRTVMS.Get()
+                                         : m_sceneColorRTVResolved.Get();
+
   float clearColor[4] = {r, g, b, a};
-  m_context->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
+  m_context->ClearRenderTargetView(sceneRTV, clearColor);
   m_context->ClearDepthStencilView(m_depthStencilView.Get(),
                                    D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
                                    1.0f, 0);
-  m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(),
-                                m_depthStencilView.Get());
+  m_context->OMSetRenderTargets(1, &sceneRTV, m_depthStencilView.Get());
+  SetupSceneViewport();
+}
+
+void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView *srv,
+                                       ID3D11RenderTargetView *dstRTV,
+                                       uint32_t dstWidth, uint32_t dstHeight,
+                                       bool useFxaaConstants) {
+  if (!shader.IsValid() || !srv || !dstRTV) {
+    return;
+  }
+
+  D3D11_VIEWPORT vp = {};
+  vp.TopLeftX = 0.0f;
+  vp.TopLeftY = 0.0f;
+  vp.Width = static_cast<float>(dstWidth);
+  vp.Height = static_cast<float>(dstHeight);
+  vp.MinDepth = 0.0f;
+  vp.MaxDepth = 1.0f;
+  m_context->RSSetViewports(1, &vp);
+  m_context->OMSetRenderTargets(1, &dstRTV, nullptr);
+
+  shader.Bind(m_context.Get());
+
+  UINT stride = sizeof(DirectX::XMFLOAT3) + sizeof(DirectX::XMFLOAT2);
+  UINT offset = 0;
+  m_context->IASetVertexBuffers(0, 1, m_fullscreenVB.GetAddressOf(), &stride,
+                                &offset);
+  m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+  m_context->PSSetShaderResources(0, 1, &srv);
+  m_context->PSSetSamplers(0, 1, m_linearSampler.GetAddressOf());
+
+  if (useFxaaConstants) {
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    if (SUCCEEDED(m_context->Map(m_fxaaConstantBuffer.Get(), 0,
+                                 D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+      float *data = static_cast<float *>(mapped.pData);
+      data[0] = (m_renderWidth > 0) ? 1.0f / static_cast<float>(m_renderWidth) : 0.0f;
+      data[1] = (m_renderHeight > 0) ? 1.0f / static_cast<float>(m_renderHeight) : 0.0f;
+      data[2] = 0.0f;
+      data[3] = 0.0f;
+      m_context->Unmap(m_fxaaConstantBuffer.Get(), 0);
+    }
+    m_context->PSSetConstantBuffers(0, 1, m_fxaaConstantBuffer.GetAddressOf());
+  }
+
+  m_context->RSSetState(m_postProcessRasterizerState.Get());
+  m_context->OMSetBlendState(m_postProcessBlendState.Get(), nullptr, 0xFFFFFFFF);
+  m_context->OMSetDepthStencilState(m_postProcessDepthState.Get(), 0);
+
+  m_context->Draw(3, 0);
+
+  ID3D11ShaderResourceView *nullSRV = nullptr;
+  m_context->PSSetShaderResources(0, 1, &nullSRV);
+}
+
+void GraphicsDevice::ResolveSceneToBackbuffer() {
+  if (m_quality.msaaSamples > 1 && m_sceneColorTexMS && m_sceneColorTexResolved) {
+    m_context->ResolveSubresource(m_sceneColorTexResolved.Get(), 0,
+                                  m_sceneColorTexMS.Get(), 0,
+                                  DXGI_FORMAT_R8G8B8A8_UNORM);
+  }
+
+  ID3D11ShaderResourceView *sourceSRV = m_sceneColorSRVResolved.Get();
+
+  if (m_quality.fxaaEnabled && m_fxaaRTV && m_fxaaSRV) {
+    RunFullscreenPass(m_fxaaShader, m_sceneColorSRVResolved.Get(),
+                      m_fxaaRTV.Get(), m_renderWidth, m_renderHeight, true);
+    sourceSRV = m_fxaaSRV.Get();
+  }
+
+  // 内部描画解像度 → 出力(バックバッファ)解像度へアップスケール
+  RunFullscreenPass(m_upscaleShader, sourceSRV, m_renderTargetView.Get(),
+                    m_width, m_height, false);
+
+  // 以降のUI(D2D)/ScreenFadeはバックバッファへ直接描画されるため、
+  // 状態を出力解像度基準に戻しておく（深度テストは既定の有効状態へ復帰）。
+  m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), nullptr);
+  m_context->RSSetState(nullptr);
+  m_context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+  m_context->OMSetDepthStencilState(nullptr, 0);
+  SetupBackbufferViewport();
 }
 
 void GraphicsDevice::EndFrame() {
@@ -122,7 +234,7 @@ void GraphicsDevice::EndFrame() {
     m_currentGpuQueryFrame = nullptr;
   }
 
-  m_swapChain->Present(1, 0); // VSync有効
+  m_swapChain->Present(m_vsyncEnabled ? 1 : 0, 0);
   ResolveGpuProfilerQueries();
 }
 
@@ -181,8 +293,6 @@ bool GraphicsDevice::Resize(uint32_t width, uint32_t height) {
 
   m_context->OMSetRenderTargets(0, nullptr, nullptr);
   m_renderTargetView.Reset();
-  m_depthStencilView.Reset();
-  m_depthStencilBuffer.Reset();
 
   HRESULT hr =
       m_swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
@@ -191,11 +301,76 @@ bool GraphicsDevice::Resize(uint32_t width, uint32_t height) {
 
   if (!CreateRenderTargetView())
     return false;
-  if (!CreateDepthStencilView())
+  // 出力解像度が変わったため、内部描画解像度(renderWidth/Height)も併せて再計算する
+  if (!CreateSceneRenderTargets())
     return false;
-  SetupViewport();
+  SetupSceneViewport();
   SetupRenderState();
 
+  return true;
+}
+
+void GraphicsDevice::ApplyQualitySettings(const QualitySettings &settings) {
+  m_quality.renderScale = std::clamp(settings.renderScale, 0.5f, 1.0f);
+  int samples = settings.msaaSamples;
+  if (samples != 1 && samples != 2 && samples != 4 && samples != 8) {
+    samples = 1;
+  }
+  m_quality.msaaSamples = samples;
+  m_quality.fxaaEnabled = settings.fxaaEnabled;
+
+  if (!CreateSceneRenderTargets()) {
+    LOG_ERROR("GraphicsDevice",
+              "ApplyQualitySettings: failed to recreate scene render targets");
+    return;
+  }
+  SetupSceneViewport();
+  SetupRenderState();
+
+  LOG_INFO("GraphicsDevice",
+           "Quality settings applied: renderScale={:.2f} ({}x{}) MSAA={}x FXAA={}",
+           m_quality.renderScale, m_renderWidth, m_renderHeight,
+           m_quality.msaaSamples, m_quality.fxaaEnabled);
+}
+
+bool GraphicsDevice::SetFullscreenExclusive(bool enable, uint32_t width,
+                                            uint32_t height) {
+  if (!m_swapChain) {
+    return false;
+  }
+
+  if (enable) {
+    DXGI_MODE_DESC mode = {};
+    mode.Width = width;
+    mode.Height = height;
+    mode.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    mode.RefreshRate.Numerator = 0;
+    mode.RefreshRate.Denominator = 0;
+    mode.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+    mode.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+
+    HRESULT hr = m_swapChain->ResizeTarget(&mode);
+    if (FAILED(hr)) {
+      LOG_ERROR("GraphicsDevice",
+               "SetFullscreenExclusive: ResizeTarget failed ({:08X})",
+               static_cast<uint32_t>(hr));
+      return false;
+    }
+    hr = m_swapChain->SetFullscreenState(TRUE, nullptr);
+    if (FAILED(hr)) {
+      LOG_ERROR("GraphicsDevice",
+               "SetFullscreenExclusive: SetFullscreenState(TRUE) failed ({:08X})",
+               static_cast<uint32_t>(hr));
+      return false;
+    }
+    m_isExclusiveFullscreen = true;
+    LOG_INFO("GraphicsDevice", "Entered exclusive fullscreen ({}x{})", width,
+             height);
+  } else {
+    m_swapChain->SetFullscreenState(FALSE, nullptr);
+    m_isExclusiveFullscreen = false;
+    LOG_INFO("GraphicsDevice", "Exited exclusive fullscreen");
+  }
   return true;
 }
 
@@ -399,14 +574,24 @@ bool GraphicsDevice::CreateRenderTargetView() {
 }
 
 bool GraphicsDevice::CreateDepthStencilView() {
+  // 深度は3D描画パス専用のため、内部描画解像度(Render Scale適用後)・MSAAサンプル数
+  // に合わせて作成する（出力解像度そのままではない点に注意）。
+  const int samples = (std::max)(1, m_quality.msaaSamples);
+
   D3D11_TEXTURE2D_DESC depthDesc = {};
-  depthDesc.Width = m_width;
-  depthDesc.Height = m_height;
+  depthDesc.Width = m_renderWidth;
+  depthDesc.Height = m_renderHeight;
   depthDesc.MipLevels = 1;
   depthDesc.ArraySize = 1;
   depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-  depthDesc.SampleDesc.Count = 1;
-  depthDesc.SampleDesc.Quality = 0;
+  depthDesc.SampleDesc.Count = static_cast<UINT>(samples);
+  UINT quality = 0;
+  if (samples > 1) {
+    m_device->CheckMultisampleQualityLevels(DXGI_FORMAT_D24_UNORM_S8_UINT,
+                                            depthDesc.SampleDesc.Count,
+                                            &quality);
+  }
+  depthDesc.SampleDesc.Quality = (samples > 1 && quality > 0) ? quality - 1 : 0;
   depthDesc.Usage = D3D11_USAGE_DEFAULT;
   depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
@@ -417,15 +602,203 @@ bool GraphicsDevice::CreateDepthStencilView() {
 
   D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
   dsvDesc.Format = depthDesc.Format;
-  dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-  dsvDesc.Texture2D.MipSlice = 0;
+  dsvDesc.ViewDimension = (samples > 1) ? D3D11_DSV_DIMENSION_TEXTURE2DMS
+                                       : D3D11_DSV_DIMENSION_TEXTURE2D;
+  if (samples <= 1) {
+    dsvDesc.Texture2D.MipSlice = 0;
+  }
 
   hr = m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &dsvDesc,
                                         &m_depthStencilView);
   return SUCCEEDED(hr);
 }
 
-void GraphicsDevice::SetupViewport() {
+bool GraphicsDevice::CreateSceneRenderTargets() {
+  m_sceneColorTexMS.Reset();
+  m_sceneColorRTVMS.Reset();
+  m_sceneColorTexResolved.Reset();
+  m_sceneColorRTVResolved.Reset();
+  m_sceneColorSRVResolved.Reset();
+  m_fxaaTex.Reset();
+  m_fxaaRTV.Reset();
+  m_fxaaSRV.Reset();
+  m_depthStencilView.Reset();
+  m_depthStencilBuffer.Reset();
+
+  m_renderWidth = (std::max)(
+      1u, static_cast<uint32_t>(static_cast<float>(m_width) * m_quality.renderScale));
+  m_renderHeight = (std::max)(
+      1u, static_cast<uint32_t>(static_cast<float>(m_height) * m_quality.renderScale));
+
+  constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+  D3D11_TEXTURE2D_DESC desc = {};
+  desc.Width = m_renderWidth;
+  desc.Height = m_renderHeight;
+  desc.MipLevels = 1;
+  desc.ArraySize = 1;
+  desc.Format = kSceneColorFormat;
+  desc.SampleDesc.Count = 1;
+  desc.SampleDesc.Quality = 0;
+  desc.Usage = D3D11_USAGE_DEFAULT;
+  desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+  HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_sceneColorTexResolved);
+  if (FAILED(hr)) {
+    LOG_ERROR("GraphicsDevice",
+             "CreateSceneRenderTargets: resolved color texture failed ({:08X})",
+             static_cast<uint32_t>(hr));
+    return false;
+  }
+  hr = m_device->CreateRenderTargetView(m_sceneColorTexResolved.Get(), nullptr,
+                                        &m_sceneColorRTVResolved);
+  if (FAILED(hr))
+    return false;
+  hr = m_device->CreateShaderResourceView(m_sceneColorTexResolved.Get(), nullptr,
+                                          &m_sceneColorSRVResolved);
+  if (FAILED(hr))
+    return false;
+
+  const int samples = (std::max)(1, m_quality.msaaSamples);
+  if (samples > 1) {
+    D3D11_TEXTURE2D_DESC msDesc = desc;
+    msDesc.BindFlags = D3D11_BIND_RENDER_TARGET; // MSAAテクスチャは解決元専用（SRV不要）
+    msDesc.SampleDesc.Count = static_cast<UINT>(samples);
+    UINT quality = 0;
+    m_device->CheckMultisampleQualityLevels(kSceneColorFormat,
+                                            msDesc.SampleDesc.Count, &quality);
+    msDesc.SampleDesc.Quality = (quality > 0) ? quality - 1 : 0;
+    hr = m_device->CreateTexture2D(&msDesc, nullptr, &m_sceneColorTexMS);
+    if (FAILED(hr)) {
+      LOG_ERROR("GraphicsDevice",
+               "CreateSceneRenderTargets: MSAA color texture failed ({:08X})",
+               static_cast<uint32_t>(hr));
+      return false;
+    }
+    hr = m_device->CreateRenderTargetView(m_sceneColorTexMS.Get(), nullptr,
+                                          &m_sceneColorRTVMS);
+    if (FAILED(hr))
+      return false;
+  }
+
+  if (!CreateDepthStencilView())
+    return false;
+
+  if (m_quality.fxaaEnabled) {
+    hr = m_device->CreateTexture2D(&desc, nullptr, &m_fxaaTex);
+    if (FAILED(hr))
+      return false;
+    hr = m_device->CreateRenderTargetView(m_fxaaTex.Get(), nullptr, &m_fxaaRTV);
+    if (FAILED(hr))
+      return false;
+    hr = m_device->CreateShaderResourceView(m_fxaaTex.Get(), nullptr, &m_fxaaSRV);
+    if (FAILED(hr))
+      return false;
+  }
+
+  return true;
+}
+
+bool GraphicsDevice::InitializePostProcessResources() {
+  // フルスクリーン三角形（POSITION + TEXCOORD0、PostProcessVS.hlsl準拠）。
+  // クリップ空間全体をはみ出して覆う「巨大三角形」でフルスクリーンクアッドを代用する。
+  struct FullscreenVertex {
+    DirectX::XMFLOAT3 pos;
+    DirectX::XMFLOAT2 uv;
+  };
+  const FullscreenVertex vertices[] = {
+      {{-1.0f, -1.0f, 0.0f}, {0.0f, 1.0f}},
+      {{-1.0f, 3.0f, 0.0f}, {0.0f, -1.0f}},
+      {{3.0f, -1.0f, 0.0f}, {2.0f, 1.0f}},
+  };
+
+  D3D11_BUFFER_DESC vbDesc = {};
+  vbDesc.ByteWidth = sizeof(vertices);
+  vbDesc.Usage = D3D11_USAGE_IMMUTABLE;
+  vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+  D3D11_SUBRESOURCE_DATA vbData = {};
+  vbData.pSysMem = vertices;
+  HRESULT hr = m_device->CreateBuffer(&vbDesc, &vbData, &m_fullscreenVB);
+  if (FAILED(hr)) {
+    LOG_ERROR("GraphicsDevice", "InitializePostProcessResources: vertex buffer failed");
+    return false;
+  }
+
+  const std::vector<D3D11_INPUT_ELEMENT_DESC> layout = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+       D3D11_INPUT_PER_VERTEX_DATA, 0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12,
+       D3D11_INPUT_PER_VERTEX_DATA, 0},
+  };
+
+  if (!m_upscaleShader.LoadFromFile(m_device.Get(), L"Assets/shaders/PostProcessVS.hlsl",
+                                    "main", L"Assets/shaders/UpscalePS.hlsl",
+                                    "main", layout)) {
+    LOG_ERROR("GraphicsDevice", "InitializePostProcessResources: Upscale shader failed");
+    return false;
+  }
+  if (!m_fxaaShader.LoadFromFile(m_device.Get(), L"Assets/shaders/PostProcessVS.hlsl",
+                                 "main", L"Assets/shaders/FXAAPS.hlsl", "main",
+                                 layout)) {
+    LOG_ERROR("GraphicsDevice", "InitializePostProcessResources: FXAA shader failed");
+    return false;
+  }
+
+  D3D11_SAMPLER_DESC sampDesc = {};
+  sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+  sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+  sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+  sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+  hr = m_device->CreateSamplerState(&sampDesc, &m_linearSampler);
+  if (FAILED(hr))
+    return false;
+
+  D3D11_BUFFER_DESC cbDesc = {};
+  cbDesc.ByteWidth = 16; // float4 1個分
+  cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+  cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+  cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  hr = m_device->CreateBuffer(&cbDesc, nullptr, &m_fxaaConstantBuffer);
+  if (FAILED(hr))
+    return false;
+
+  D3D11_BLEND_DESC blendDesc = {};
+  blendDesc.RenderTarget[0].BlendEnable = FALSE;
+  blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+  hr = m_device->CreateBlendState(&blendDesc, &m_postProcessBlendState);
+  if (FAILED(hr))
+    return false;
+
+  D3D11_DEPTH_STENCIL_DESC dsDesc = {};
+  dsDesc.DepthEnable = FALSE;
+  dsDesc.StencilEnable = FALSE;
+  hr = m_device->CreateDepthStencilState(&dsDesc, &m_postProcessDepthState);
+  if (FAILED(hr))
+    return false;
+
+  D3D11_RASTERIZER_DESC rastDesc = {};
+  rastDesc.FillMode = D3D11_FILL_SOLID;
+  rastDesc.CullMode = D3D11_CULL_NONE;
+  rastDesc.DepthClipEnable = TRUE;
+  hr = m_device->CreateRasterizerState(&rastDesc, &m_postProcessRasterizerState);
+  if (FAILED(hr))
+    return false;
+
+  return true;
+}
+
+void GraphicsDevice::SetupSceneViewport() {
+  D3D11_VIEWPORT viewport = {};
+  viewport.TopLeftX = 0.0f;
+  viewport.TopLeftY = 0.0f;
+  viewport.Width = static_cast<float>(m_renderWidth);
+  viewport.Height = static_cast<float>(m_renderHeight);
+  viewport.MinDepth = 0.0f;
+  viewport.MaxDepth = 1.0f;
+  m_context->RSSetViewports(1, &viewport);
+}
+
+void GraphicsDevice::SetupBackbufferViewport() {
   D3D11_VIEWPORT viewport = {};
   viewport.TopLeftX = 0.0f;
   viewport.TopLeftY = 0.0f;

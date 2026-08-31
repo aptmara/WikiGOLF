@@ -26,6 +26,7 @@ class AudioSystem;
 
 namespace core {
 class SceneManager; // 前方宣言
+class DisplaySettings; // 前方宣言
 }
 
 namespace core {
@@ -37,6 +38,7 @@ struct GameContext {
   core::Input &input;
   game::systems::AudioSystem *audio = nullptr; // オーディオシステムへの参照
   core::SceneManager *sceneManager = nullptr;  // シーンマネージャーへの参照
+  core::DisplaySettings *displaySettings = nullptr; // ウィンドウ表示設定への参照
 
   // シーン遷移や終了リクエスト
   bool shouldClose = false;

@@ -1,4 +1,5 @@
 #include "src/audio/AudioSystem.h"
+#include "src/core/DisplaySettings.h"
 #include "src/core/GameContext.h"
 #include "src/core/Input.h"
 #include "src/core/Logger.h"
@@ -21,11 +22,17 @@
 #include <Windows.h>
 #include <chrono>
 #include <filesystem>
+#include <thread>
+#include <timeapi.h>
+#pragma comment(lib, "winmm.lib")
 
 // グローバル入力ポインタ（WndProc用）
 core::Input *g_Input = nullptr;
 // グローバルオーディオポインタ（WndProc用。×閉じるで即座に音を止めるために使う）
 game::systems::AudioSystem *g_Audio = nullptr;
+// グローバルグラフィックス/テキストレンダラポインタ（WndProc用。WM_SIZEでの追従に使う）
+graphics::GraphicsDevice *g_Graphics = nullptr;
+graphics::TextRenderer *g_TextRenderer = nullptr;
 
 // ウィンドウプロシージャ
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
@@ -44,6 +51,38 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
   case WM_KEYDOWN:
     // LOG_DEBUG("WndProc", "WM_KEYDOWN: {}", wParam);
     break;
+  case WM_SIZE: {
+    // 最小化時はクライアントサイズが0x0になるため無視する
+    if (wParam == SIZE_MINIMIZED) {
+      break;
+    }
+    const UINT newWidth = LOWORD(lParam);
+    const UINT newHeight = HIWORD(lParam);
+    if (newWidth == 0 || newHeight == 0) {
+      break;
+    }
+    // graphics/textRenderer/inputの初期化前（ウィンドウ作成直後）に届くWM_SIZEは無視する
+    if (g_Graphics && (newWidth != g_Graphics->GetWidth() ||
+                       newHeight != g_Graphics->GetHeight())) {
+      // D2Dのバックバッファ参照を先に外さないとResizeBuffersが失敗する
+      if (g_TextRenderer) {
+        g_TextRenderer->ReleaseTargetForResize();
+      }
+      if (g_Graphics->Resize(newWidth, newHeight)) {
+        if (g_TextRenderer) {
+          g_TextRenderer->RecreateTargetAfterResize();
+        }
+        if (g_Input) {
+          g_Input->SetResolution(static_cast<int>(newWidth),
+                                static_cast<int>(newHeight));
+        }
+      } else if (g_TextRenderer) {
+        // Resize失敗時も、旧バックバッファへの参照を持ち続けないよう最低限復旧を試みる
+        g_TextRenderer->RecreateTargetAfterResize();
+      }
+    }
+    break;
+  }
   case WM_CLOSE:
     // Profiler::Shutdown()の同期CSV書き出しで実際のプロセス終了までは
     // 数十秒かかることがあるが、ユーザーには即座に閉じたと感じてもらうため
@@ -84,6 +123,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         std::error_code(static_cast<int>(GetLastError()), std::system_category());
   }
 
+  // 表示設定（ウィンドウモード・解像度）の読み込み。
+  // ウィンドウ作成前なので、この時点ではファイルの値のみを保持しウィンドウには反映しない。
+  core::DisplaySettings displaySettings;
+  displaySettings.LoadFromFile();
+  const int initialWidth = displaySettings.GetData().windowedWidth;
+  const int initialHeight = displaySettings.GetData().windowedHeight;
+
   // ウィンドウクラス登録
   WNDCLASSEX wc = {0};
   wc.cbSize = sizeof(WNDCLASSEX);
@@ -94,15 +140,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   wc.lpszClassName = L"DX_GAME_WINDOW";
   RegisterClassEx(&wc);
 
-  // ウィンドウサイズを計算（クライアント領域を1920x1080確保するため）
-  RECT rc = {0, 0, 1920, 1080};
-  AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+  // ウィンドウサイズを計算（保存済み設定のクライアント領域を確保するため）
+  // ボーダーレスモードだった場合も、まずは通常ウィンドウとして作成し、
+  // 各システム初期化完了後にdisplaySettings.ApplyToWindow()で切り替える
+  // （WM_SIZEハンドラがg_Graphics等に依存しているため）。
+  // kWindowedStyleはリサイズ枠・最大化ボタンを持たない
+  // （マウスによるウィンドウサイズ変更を禁止するため）。
+  RECT rc = {0, 0, initialWidth, initialHeight};
+  AdjustWindowRect(&rc, core::DisplaySettings::kWindowedStyle, FALSE);
 
   // ウィンドウ作成
   HWND hWnd =
-      CreateWindowEx(0, L"DX_GAME_WINDOW", L"WikiGolf", WS_OVERLAPPEDWINDOW,
-                     CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left,
-                     rc.bottom - rc.top, nullptr, nullptr, hInstance, nullptr);
+      CreateWindowEx(0, L"DX_GAME_WINDOW", L"WikiGolf",
+                     core::DisplaySettings::kWindowedStyle, CW_USEDEFAULT,
+                     CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top,
+                     nullptr, nullptr, hInstance, nullptr);
 
   if (!hWnd) {
     return -1;
@@ -118,9 +170,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     return -1;
   }
 
+  // FPS上限のSleep精度を上げる（既定の約15.6msだとFPS上限が大きくブレるため）
+  timeBeginPeriod(1);
+
   // システム初期化
   graphics::GraphicsDevice graphics;
-  if (!graphics.Initialize(hWnd, 1920, 1080)) {
+  if (!graphics.Initialize(hWnd, initialWidth, initialHeight)) {
     return -1;
   }
 
@@ -128,7 +183,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ecs::World world;
   core::Input input;
   input.Initialize();
-  input.SetResolution(1920, 1080);
+  input.SetResolution(initialWidth, initialHeight);
   g_Input = &input;
 
   // ログシステム初期化
@@ -155,6 +210,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     return -1;
   }
 
+  // WndProcのWM_SIZEハンドラが追従処理を行えるようにする
+  g_Graphics = &graphics;
+  g_TextRenderer = &textRenderer;
+
+  // ウィンドウハンドル/GraphicsDeviceを登録し、読み込み済みのRender Scale/MSAA/FXAA/
+  // VSyncをgraphicsへ反映する。保存済みモードがボーダーレス/フルスクリーンなら
+  // 今ここで切り替える。ここまでにgraphics/textRenderer/inputが揃っているため、
+  // 発生するWM_SIZEでスワップチェーン等が正しく追従する。
+  displaySettings.Initialize(hWnd, &graphics);
+  if (displaySettings.GetData().mode == core::WindowMode::Borderless ||
+      displaySettings.GetData().mode == core::WindowMode::Fullscreen) {
+    displaySettings.ApplyToWindow();
+  }
+
   // オーディオシステム初期化
   game::systems::AudioSystem audioSystem;
   if (!audioSystem.Initialize()) {
@@ -167,6 +236,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   core::GameContext ctx(resource, world, graphics, input);
   ctx.audio = &audioSystem;
   ctx.textRenderer = &textRenderer;
+  ctx.displaySettings = &displaySettings;
 
   // 同梱フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
   // 用途別に使い分ける（TextStyle.h の各プリセット参照）:
@@ -216,6 +286,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // メインループ
   MSG msg = {0};
   auto lastTime = std::chrono::high_resolution_clock::now();
+  float fpsDisplaySmoothed = 0.0f; // 画面表示用の平滑化FPS（設定画面のFPS表示ON時）
 
   while (msg.message != WM_QUIT && !ctx.shouldClose) {
     if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -228,6 +299,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       lastTime = currentTime;
       ctx.dt = dt;
       ctx.time += dt;
+
+      // 表示用FPSを指数移動平均で平滑化（瞬間値のちらつきを抑える）
+      if (dt > 0.0f) {
+        const float instantFps = 1.0f / dt;
+        fpsDisplaySmoothed = (fpsDisplaySmoothed <= 0.0f)
+                                 ? instantFps
+                                 : fpsDisplaySmoothed * 0.9f + instantFps * 0.1f;
+      }
 
       const char *sceneName = sceneManager.Current()
                                   ? sceneManager.Current()->GetName()
@@ -294,6 +373,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           }
 
           {
+              // 内部描画解像度(Render Scale)のシーンをMSAA解決/FXAA/アップスケール
+              // した上でバックバッファへ転送する。以降のUI/ScreenFadeはこの
+              // バックバッファへ直接描画される。
+              PROFILE_SCOPE("Render.ResolveScene");
+              graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.ResolveScene");
+              graphics.ResolveSceneToBackbuffer();
+          }
+
+          {
               PROFILE_SCOPE("Render_UI");
               {
                   PROFILE_SCOPE("Render.UI2D");
@@ -314,6 +402,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   {
                       PROFILE_SCOPE("Render.UIButton");
                       uiButtonRenderSystem(ctx);
+                  }
+                  if (ctx.displaySettings && ctx.displaySettings->GetData().showFps) {
+                      PROFILE_SCOPE("Render.FpsOverlay");
+                      const int fpsRounded = static_cast<int>(fpsDisplaySmoothed + 0.5f);
+                      graphics::TextStyle fpsStyle = graphics::TextStyle::FPS();
+                      fpsStyle.align = graphics::TextAlign::Right;
+                      textRenderer.RenderText(L"FPS: " + std::to_wstring(fpsRounded),
+                                              D2D1::RectF(960.0f, 8.0f, 1270.0f, 44.0f),
+                                              fpsStyle);
                   }
                   textRenderer.EndDraw();
               }
@@ -341,15 +438,39 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       for (auto &sample : graphics.ConsumeGpuProfileSamples()) {
         profiler.SubmitGpuFrame(std::move(sample));
       }
+
+      // FPS上限（0 = 無制限）。VSync ONの場合はPresentの垂直同期待ちで既に
+      // 概ねフレームレートが制御されるが、無制限/高リフレッシュレート環境でも
+      // 上限を守れるようここで明示的にスリープする。
+      {
+          PROFILE_SCOPE("Frame.FpsLimitSleep");
+          const int fpsLimit = ctx.displaySettings ? ctx.displaySettings->GetData().fpsLimit : 0;
+          if (fpsLimit > 0) {
+              const double targetSeconds = 1.0 / static_cast<double>(fpsLimit);
+              const auto frameEnd = std::chrono::high_resolution_clock::now();
+              const double elapsedSeconds =
+                  std::chrono::duration<double>(frameEnd - currentTime).count();
+              if (elapsedSeconds < targetSeconds) {
+                  std::this_thread::sleep_for(
+                      std::chrono::duration<double>(targetSeconds - elapsedSeconds));
+              }
+          }
+      }
     }
   }
+
+  // タイトル画面の「終了」は WM_CLOSE を経由せず shouldClose で抜けるため、
+  // 重い後片付けより先に画面と音を止め、経路計算へ中断を要求する。
+  game::systems::WikiShortestPath::RequestCancelAll();
+  ShowWindow(hWnd, SW_HIDE);
+  audioSystem.Shutdown();
 
   core::Profiler::Instance().Shutdown();
   textRenderer.Shutdown();
   graphics.Shutdown();
-  audioSystem.Shutdown();
   core::Logger::Instance().Shutdown();
 
+  timeEndPeriod(1);
   CoUninitialize();
 
   return (int)msg.wParam;

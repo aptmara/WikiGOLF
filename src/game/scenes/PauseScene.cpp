@@ -31,6 +31,7 @@ void PauseScene::OnEnter(core::GameContext& ctx) {
   overlay.style.bgColor = {0.02f, 0.03f, 0.06f, 0.68f};
   overlay.visible = true;
   overlay.layer = static_cast<int>(kOverlayLayer);
+  overlay.fullScreenCover = true; // レターボックス余白も含めて画面全体を暗転させる
 
   auto panelEntity = CreateEntity(ctx.world);
   auto& panel = ctx.world.Add<components::UIText>(panelEntity);

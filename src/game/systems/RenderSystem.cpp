@@ -165,7 +165,10 @@ void RenderSystem(core::GameContext &ctx) {
       [&](ecs::Entity, components::Transform &t, components::Camera &c) {
         if (c.isMainCamera || !cameraFound) {
           view = c.GetViewMatrix(t);
-          proj = c.GetProjectionMatrix();
+          // アスペクト比はウィンドウリサイズ・解像度変更に追従させるため、
+          // カメラコンポーネントの保存値ではなく現在の実描画サイズから都度計算する。
+          proj = XMMatrixPerspectiveFovLH(c.fov, ctx.graphics.GetAspectRatio(),
+                                          c.nearZ, c.farZ);
           camPos = {t.position.x, t.position.y, t.position.z, 1.0f};
           cameraFound = true;
         }
@@ -175,7 +178,8 @@ void RenderSystem(core::GameContext &ctx) {
     // フォールバックカメラ
     view = XMMatrixLookAtLH(XMVectorSet(0, 0, -5, 1), XMVectorSet(0, 0, 0, 1),
                             XMVectorSet(0, 1, 0, 0));
-    proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, 16.0f / 9.0f, 0.01f, 100.0f);
+    proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, ctx.graphics.GetAspectRatio(),
+                                    0.01f, 100.0f);
   }
 
   DirectX::BoundingFrustum viewFrustum;

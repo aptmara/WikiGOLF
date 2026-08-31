@@ -24,6 +24,7 @@
 #include "../systems/WikiClient.h"
 #include "../../core/StringUtils.h"
 #include "LoadingScene.h"
+#include "SettingsScene.h"
 #include "WikiGolfScene.h"
 #include <filesystem>
 #include <fstream>
@@ -778,7 +779,10 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
         SetMainMenuVisible(ctx, false);
         SetCourseSelectVisible(ctx, true);
         m_focusIndex = 0;
-      } else if (btn.action == "daily" || btn.action == "option" || btn.action == "ranking" || btn.action == "achievement") {
+      } else if (btn.action == "option") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+        ctx.sceneManager->PushScene(std::make_unique<SettingsScene>());
+      } else if (btn.action == "daily" || btn.action == "ranking" || btn.action == "achievement") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
         auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
         if (ptxt) {

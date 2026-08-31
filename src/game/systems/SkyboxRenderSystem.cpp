@@ -237,7 +237,9 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
       [&](ecs::Entity, components::Transform &t, components::Camera &c) {
         if (!cameraFound) {
           view = c.GetViewMatrix(t);
-          proj = c.GetProjectionMatrix();
+          // RenderSystemと同じく、アスペクト比は現在の実描画サイズから都度計算する。
+          proj = XMMatrixPerspectiveFovLH(c.fov, ctx.graphics.GetAspectRatio(),
+                                          c.nearZ, c.farZ);
           cameraFound = true;
         }
       });

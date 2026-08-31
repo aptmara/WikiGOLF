@@ -60,6 +60,12 @@ public:
   /// @brief 矩形を塗りつぶし
   void FillRect(const D2D1_RECT_F &rect, const DirectX::XMFLOAT4 &color);
 
+  /// @brief 仮想解像度基準のレターボックス変換を無視し、物理画面全体を塗りつぶす。
+  /// @details 画面フェードや暗転オーバーレイなど「アスペクト比に関わらず必ず
+  ///          画面の隅々まで覆いたい」描画専用。通常のUI要素は歪み防止のため
+  ///          仮想解像度でレターボックスされるが、これらは意図的にそれを迂回する。
+  void FillFullScreenRect(const DirectX::XMFLOAT4 &color);
+
   /// @brief 角丸矩形を塗りつぶし
   void FillRoundedRect(const D2D1_RECT_F &rect, float radius,
                        const DirectX::XMFLOAT4 &color);
@@ -99,12 +105,31 @@ public:
   float GetWidth() const { return kVirtualWidth; }
   float GetHeight() const { return kVirtualHeight; }
 
+  /// @brief ウィンドウ/スワップチェーンのリサイズ直前に呼ぶ。
+  ///        バックバッファを参照しているD2Dターゲットを解放する
+  ///        （解放しないとID3D11DXGISwapChain::ResizeBuffersが失敗する）。
+  void ReleaseTargetForResize();
+
+  /// @brief GraphicsDevice::Resize() でスワップチェーンの再生成が終わった後に呼ぶ。
+  ///        新しいバックバッファからD2Dターゲットを作り直す。
+  /// @return 成功なら true
+  bool RecreateTargetAfterResize();
+
   /// @brief 有効かどうか
   bool IsValid() const { return m_d2dContext != nullptr; }
 
 private:
   /// @brief バックバッファを D2D ターゲットとして設定
   HRESULT CreateTargetBitmap(IDXGISwapChain *swapChain);
+
+  /// @brief 仮想解像度(kVirtualWidth x kVirtualHeight)から実バックバッファへの変換行列。
+  /// @details 縦横independentに引き伸ばすとアスペクト比が16:9からずれる解像度で
+  ///          UIが歪むため、縦横同一倍率（アスペクト比維持）でスケールし、
+  ///          余った領域は中央寄せ（レターボックス/ピラーボックス）で吸収する。
+  D2D1::Matrix3x2F ComputeVirtualToScreenTransform() const;
+
+  /// @brief 上記と同じ倍率（スカラー値のみ）
+  float ComputeUniformScale() const;
 
   /// @brief 背景/影/アウトライン/本体を描画する共通コア処理
   /// @details RenderText と RenderTextCached のオフスクリーン生成の両方から呼ばれる。

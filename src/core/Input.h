@@ -69,6 +69,12 @@ public:
   std::wstring GetClipboardText() const;
 
 private:
+  /// @brief クライアント座標(ピクセル)を仮想解像度(1280x720)座標へ変換する。
+  /// @details UI/クリック判定は仮想解像度基準のため、実ウィンドウとのアスペクト比が
+  ///          異なる解像度でもUIが歪まないよう、TextRenderer側の描画変換
+  ///          （縦横同一倍率スケール＋レターボックス）と同じ式で逆変換する。
+  DirectX::XMINT2 ClientToVirtual(int rawX, int rawY) const;
+
   std::array<bool, 256> m_keys;
   std::array<bool, 256> m_keysDown; ///< このフレームで押された
   std::array<bool, 256> m_keysUp;   ///< このフレームで離された

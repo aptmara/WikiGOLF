@@ -1256,16 +1256,10 @@ void LoadingScene::Render(core::GameContext &ctx) {
     return;
   }
 
-  float width = ctx.textRenderer->GetWidth();
-  float height = ctx.textRenderer->GetHeight();
-  if (width <= 0.0f || height <= 0.0f) {
-    width = 1280.0f;
-    height = 720.0f;
-  }
-
   ctx.textRenderer->BeginDraw();
-  ctx.textRenderer->FillRect(D2D1::RectF(0.0f, 0.0f, width, height),
-                             {0.0f, 0.0f, 0.0f, overlayAlpha});
+  // レターボックス（縦横比維持のためのUI縮小表示）で生じる余白も含めて、
+  // 画面全体を確実に覆う（仮想解像度基準だと余白部分が暗転しない）。
+  ctx.textRenderer->FillFullScreenRect({0.0f, 0.0f, 0.0f, overlayAlpha});
   ctx.textRenderer->EndDraw();
 }
 
