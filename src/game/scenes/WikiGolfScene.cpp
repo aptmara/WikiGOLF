@@ -705,6 +705,10 @@ void WikiGolfScene::OpenPauseScene(core::GameContext &ctx) {
  * @brief シーンを抜ける際の後処理を行います。
  */
 void WikiGolfScene::OnExit(core::GameContext &ctx) {
+  if (m_pageLoader) {
+    m_pageLoader->CancelAsyncPathEvaluations();
+  }
+
   // Fix3: シーン離脱時にゲーム中BGMを停止する（タイトルへ戻った際の鳴り続け防止）
   if (ctx.audio) {
     ctx.audio->StopBGM();

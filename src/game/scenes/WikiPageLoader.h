@@ -67,6 +67,11 @@ public:
     ~WikiPageLoader() = default;
 
     /**
+     * @brief 実行中の経路評価へ中断を要求します。
+     */
+    void CancelAsyncPathEvaluations();
+
+    /**
      * @brief 内部システムの参照を設定する（所有権は WikiGolfScene 側が持つ）
      * @param textureGen  テクスチャジェネレータ（非 null 必須）
      * @param terrainSys  地形システム（非 null 必須）
@@ -374,6 +379,7 @@ private:
     std::unordered_map<std::string, int> m_pathHopCache;
     std::future<std::vector<HolePlacementCandidate>> m_pathEvaluationTask;
     std::vector<std::future<std::vector<HolePlacementCandidate>>> m_retiredPathEvaluationTasks;
+    std::shared_ptr<std::atomic<bool>> m_pathEvaluationCancel;
     std::shared_ptr<std::atomic<size_t>> m_pathEvaluationProgress;
     std::shared_ptr<std::atomic<size_t>> m_pathEvaluationTotal;
     std::shared_ptr<std::mutex> m_pathEvaluationPartialMutex;

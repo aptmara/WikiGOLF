@@ -110,7 +110,8 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
                 const char *fieldName,
                 std::unordered_map<int, std::vector<int>> &outLinks,
                 const std::function<void(size_t, size_t)> &onChunkDone =
-                    nullptr) {
+                    nullptr,
+                const std::atomic<bool>* cancelRequested = nullptr) {
   if (pageIds.empty())
     return true;
 
@@ -124,9 +125,11 @@ bool FetchLinks(sqlite3 *db, const std::vector<int> &pageIds,
     std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
     size_t index = 0;
     while (index < pageIds.size()) {
-      if (WikiShortestPath::IsCancelRequested()) {
+      if (WikiShortestPath::IsCancelRequested() ||
+          (cancelRequested &&
+           cancelRequested->load(std::memory_order_relaxed))) {
         LOG_WARN("WikiShortestPath",
-                 "FetchLinks cancelled: field={} chunk={}/{} (window closing)",
+                 "FetchLinks cancelled: field={} chunk={}/{}",
                  fieldName, stats.chunks + 1, totalChunks);
         break;
       }
@@ -416,7 +419,8 @@ int WikiShortestPath::FetchPageId(const std::string &title) {
 std::unordered_map<std::string, int>
 WikiShortestPath::FetchPageIdsBatch(
     const std::vector<std::string>& normalizedTitles,
-    const std::function<void(size_t processed, size_t total)>& onChunkDone) {
+    const std::function<void(size_t processed, size_t total)>& onChunkDone,
+    const std::atomic<bool>* cancelRequested) {
   std::unordered_map<std::string, int> result;
   if (!m_db || normalizedTitles.empty()) {
     return result;
@@ -430,9 +434,11 @@ WikiShortestPath::FetchPageIdsBatch(
   size_t index = 0;
   size_t totalHits = 0;
   while (index < normalizedTitles.size()) {
-    if (WikiShortestPath::IsCancelRequested()) {
+    if (WikiShortestPath::IsCancelRequested() ||
+        (cancelRequested &&
+         cancelRequested->load(std::memory_order_relaxed))) {
       LOG_WARN("WikiShortestPath",
-               "FetchPageIdsBatch cancelled at {}/{} (window closing)", index,
+               "FetchPageIdsBatch cancelled at {}/{}", index,
                normalizedTitles.size());
       break;
     }
@@ -815,7 +821,8 @@ WikiShortestPath::FindShortestPath(const std::string &sourceTitle, int targetId,
 std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     const std::vector<std::string> &sourceTitles, int targetId, int maxDepth,
     std::atomic<size_t> *progressUnits, size_t progressBase,
-    const std::function<void(const std::string&, int)>& onResolved) {
+    const std::function<void(const std::string&, int)>& onResolved,
+    const std::atomic<bool>* cancelRequested) {
   const auto computeStartedAt = std::chrono::steady_clock::now();
   std::unordered_map<std::string, int> distances;
   if (!m_db || targetId < 0 || sourceTitles.empty() || maxDepth < 0) {
@@ -833,6 +840,11 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     if (progressUnits) {
       progressUnits->store(progressBase + units, std::memory_order_relaxed);
     }
+  };
+  const auto isCancelled = [&]() {
+    return IsCancelRequested() ||
+           (cancelRequested &&
+            cancelRequested->load(std::memory_order_relaxed));
   };
 
   std::unordered_map<int, std::vector<std::string>> titlesByPageId;
@@ -873,7 +885,14 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
         const size_t units =
             total > 0 ? (processed * srcSize + total - 1) / total : srcSize;
         storeProgress(units);
-      });
+      },
+      cancelRequested);
+
+  if (isCancelled()) {
+    LOG_WARN("WikiShortestPath",
+             "ComputeDistancesToTarget cancelled during title resolution");
+    return distances;
+  }
 
   // バッチ結果を titlesByPageId / distances / unresolvedPageIds に展開します。
   for (const auto& [normalizedTitle, pageId] : batchIdMap) {
@@ -927,9 +946,9 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
   for (int depth = 1; depth <= maxDepth && !frontier.empty() &&
                       !unresolvedPageIds.empty();
        ++depth) {
-    if (IsCancelRequested()) {
+    if (isCancelled()) {
       LOG_WARN("WikiShortestPath",
-               "ComputeDistancesToTarget cancelled before depth={} (window closing)",
+               "ComputeDistancesToTarget cancelled before depth={}",
                depth);
       break;
     }
@@ -954,7 +973,8 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
               storeProgress(depthBase +
                             std::min(depthUnits,
                                      kPathEvaluationDepthProgressUnits));
-            })) {
+            },
+            cancelRequested)) {
       LOG_ERROR("WikiShortestPath",
                 "ComputeDistancesToTarget BFS failed: depth={} frontier={} elapsed={}ms",
                 depth, frontierBefore, ElapsedMs(depthStartedAt));
@@ -964,7 +984,13 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
 
     std::vector<int> next;
     size_t incomingEdges = 0;
+    bool cancelledDuringTraversal = false;
+    size_t traversedEdges = 0;
     for (int pageId : frontier) {
+      if (isCancelled()) {
+        cancelledDuringTraversal = true;
+        break;
+      }
       const auto linkIt = linkMap.find(pageId);
       if (linkIt == linkMap.end()) {
         continue;
@@ -972,6 +998,10 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
 
       incomingEdges += linkIt->second.size();
       for (int incomingId : linkIt->second) {
+        if ((traversedEdges++ & 4095U) == 0U && isCancelled()) {
+          cancelledDuringTraversal = true;
+          break;
+        }
         if (!visited.insert(incomingId).second) {
           continue;
         }
@@ -989,6 +1019,16 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
 
         next.push_back(incomingId);
       }
+      if (cancelledDuringTraversal) {
+        break;
+      }
+    }
+
+    if (cancelledDuringTraversal) {
+      LOG_WARN("WikiShortestPath",
+               "ComputeDistancesToTarget cancelled while traversing depth={}",
+               depth);
+      break;
     }
 
     frontier = std::move(next);

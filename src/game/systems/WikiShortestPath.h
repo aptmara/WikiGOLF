@@ -97,6 +97,7 @@ public:
    * @param progressUnits 進捗の完了単位数を書き込む先
    * @param progressBase この計算の開始前に完了済みとして扱う単位数
    * @param onResolved タイトルごとの距離が確定した時に呼ばれる通知です。山内陽
+   * @param cancelRequested この計算だけを中断するためのフラグ（nullptr可）
    * @return タイトルごとのリンク数（未到達・未登録記事は含めない）
    */
   std::unordered_map<std::string, int>
@@ -105,7 +106,8 @@ public:
                            std::atomic<size_t> *progressUnits = nullptr,
                            size_t progressBase = 0,
                            const std::function<void(const std::string&, int)>&
-                               onResolved = nullptr);
+                               onResolved = nullptr,
+                           const std::atomic<bool>* cancelRequested = nullptr);
 
 private:
   /// @brief タイトルからページIDを取得
@@ -125,7 +127,8 @@ private:
   FetchPageIdsBatch(
       const std::vector<std::string> &normalizedTitles,
       const std::function<void(size_t processed, size_t total)> &onChunkDone =
-          nullptr);
+          nullptr,
+      const std::atomic<bool>* cancelRequested = nullptr);
 
   /// @brief ページIDからタイトルを取得
   std::string FetchPageTitle(int pageId);

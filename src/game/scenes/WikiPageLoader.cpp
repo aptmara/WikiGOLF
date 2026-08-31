@@ -359,13 +359,26 @@ void WikiPageLoader::RetireActivePathEvaluationTask()
     if (m_pathEvaluationTask.wait_for(std::chrono::milliseconds(0)) ==
         std::future_status::ready) {
         (void)m_pathEvaluationTask.get();
+        m_pathEvaluationCancel.reset();
         return;
+    }
+
+    if (m_pathEvaluationCancel) {
+        m_pathEvaluationCancel->store(true, std::memory_order_relaxed);
     }
 
     LOG_WARN("WikiPageLoader",
              "Path evaluation task retired without blocking: loadId={}",
              m_buildLoadId);
     m_retiredPathEvaluationTasks.push_back(std::move(m_pathEvaluationTask));
+    m_pathEvaluationCancel.reset();
+}
+
+void WikiPageLoader::CancelAsyncPathEvaluations()
+{
+    if (m_pathEvaluationCancel) {
+        m_pathEvaluationCancel->store(true, std::memory_order_relaxed);
+    }
 }
 
 void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
@@ -383,6 +396,7 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
     m_pathEvaluationPartialMutex = std::make_shared<std::mutex>();
     m_pathEvaluationPartialResults =
         std::make_shared<std::vector<HolePlacementCandidate>>();
+    m_pathEvaluationCancel = std::make_shared<std::atomic<bool>>(false);
     m_pathEvaluationConsumedResults = 0;
 
     const uint64_t loadId = m_buildLoadId;
@@ -398,11 +412,12 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
     auto totalUnits = m_pathEvaluationTotal;
     auto partialMutex = m_pathEvaluationPartialMutex;
     auto partialResults = m_pathEvaluationPartialResults;
+    auto cancelRequested = m_pathEvaluationCancel;
     m_pathEvaluationTask = std::async(
         std::launch::async,
         [candidates = std::move(candidates), targetPageId, progress,
          totalUnits, loadId, maxDepth, partialMutex,
-         partialResults,
+         partialResults, cancelRequested,
          candidatesByTarget = std::move(candidatesByTarget)]() mutable {
             const auto taskStartedAt = std::chrono::steady_clock::now();
             LOG_INFO("WikiPageLoader",
@@ -484,7 +499,8 @@ void WikiPageLoader::StartAsyncPathEvaluation(int targetPageId, int maxDepth)
                         resolved.isPlayable = true;
                         partialResults->push_back(std::move(resolved));
                     }
-                });
+                },
+                cancelRequested.get());
             LOG_INFO("WikiPageLoader",
                      "Path evaluation distance map ready: loadId={} uniqueTargets={} "
                      "resolved={} maxDepth={} elapsed={}ms",
@@ -539,6 +555,7 @@ bool WikiPageLoader::TryConsumePathEvaluation(core::GameContext& ctx,
     }
 
     m_buildPathCandidates = m_pathEvaluationTask.get();
+    m_pathEvaluationCancel.reset();
     ApplyPathEvaluationResults(m_buildPathCandidates);
     for (auto& candidate : m_buildHoleCandidates) {
         candidate.isPlayable = true;
