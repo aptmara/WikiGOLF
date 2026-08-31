@@ -159,6 +159,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float3 turfViewDirection = normalize(CameraPos.xyz - input.WorldPos);
     float fairwayOverheadView =
         smoothstep(0.50f, 0.78f, abs(turfViewDirection.y));
+    float greenOverheadView = fairwayOverheadView;
 
     float turfShade =
         fairwayWeight * (fairwayFiber * 0.045f +
@@ -172,7 +173,10 @@ float4 main(PS_INPUT input) : SV_TARGET {
                        broadVariation * 1.4f) +
         greenWeight * (greenFiber * 0.028f + greenFiberFine * 0.020f +
                        greenMowDirection * 0.012f + broadVariation * 0.45f -
-                       0.020f);
+                       0.020f +
+                       greenOverheadView *
+                           (greenFiber * 0.020f +
+                            greenFiberFine * 0.040f - 0.015f));
     baseColor.rgb *= 1.0f + turfShade;
 
     // 3. 法線計算

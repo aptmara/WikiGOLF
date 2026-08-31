@@ -117,15 +117,18 @@ VS_OUTPUT main(VS_INPUT input) {
     float fadeWidth = 5.0f + materialClass * 7.0f;
     float distanceFade = saturate((fadeEnd - cameraDistance) / fadeWidth);
 
-    // フェアウェイは低角度でだけ立体葉を見せる。見下ろし時は地形側の
-    // 密な短芝表現へディザー移行し、点状に見える小さな葉を残さない。
+    // フェアウェイとグリーンは低角度でだけ立体葉を見せる。見下ろし時は
+    // 地形側の密な短芝表現へ移行し、点状に見える小さな葉を残さない。
     float fairwayClass =
         1.0f - smoothstep(0.035f, 0.075f, abs(materialClass - 0.14f));
+    float greenClass =
+        1.0f - smoothstep(0.020f, 0.055f, abs(materialClass - 0.06f));
+    float shortTurfClass = max(fairwayClass, greenClass);
     float3 viewDirection = normalize(CameraPos.xyz - worldPos.xyz);
     float overheadRatio = abs(viewDirection.y);
     float overheadFade = 1.0f - smoothstep(0.55f, 0.75f, overheadRatio);
     output.distanceFade =
-        distanceFade * lerp(1.0f, overheadFade, fairwayClass);
+        distanceFade * lerp(1.0f, overheadFade, shortTurfClass);
     output.materialClass = materialClass;
     return output;
 }

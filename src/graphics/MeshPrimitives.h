@@ -49,10 +49,18 @@ public:
   static Mesh CreateDenseTurfPatch(ID3D11Device *device,
                                    uint32_t variantSeed = 0);
 
+  /// @brief グリーンの接近時LOD用に葉を追加した超高密度芝パッチを生成
+  static Mesh CreateUltraDenseTurfPatch(ID3D11Device *device,
+                                        uint32_t variantSeed = 0);
+
   /// @brief フェアウェイの低角度・近距離LOD用高密度芝パッチを生成
   /// @param variantSeed 個体差を出すためのバリアントID（0以上、値ごとに異なる配置になる）
   static Mesh CreateDenseFairwayTurfPatch(ID3D11Device *device,
                                           uint32_t variantSeed = 0);
+
+  /// @brief フェアウェイの接近時LOD用に葉を追加した超高密度芝パッチを生成
+  static Mesh CreateUltraDenseFairwayTurfPatch(ID3D11Device *device,
+                                               uint32_t variantSeed = 0);
 
   /// @brief 中央の窪みと盛り上がった縁を持つ砂の衝突跡を生成
   static Mesh CreateSandCrater(ID3D11Device *device, int segments = 32);

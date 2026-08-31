@@ -1270,7 +1270,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           newBatch.lodSwitchDistance = lodSwitchDistance;
           newBatch.maxDrawDistance = maxDrawDistance;
           newBatch.maxThreeDOverheadRatio =
-              surface == GrassSurfaceGroup::Fairway ? 0.75f : 1.1f;
+              (surface == GrassSurfaceGroup::Fairway ||
+               surface == GrassSurfaceGroup::Green)
+                  ? 0.75f
+                  : 1.1f;
           newBatch.twoSided = twoSided;
           grassBatches.emplace(key, batchEntity);
           m_entities.push_back(batchEntity);
@@ -1412,11 +1415,23 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       ctx.resource.LoadMesh("builtin/turf_patch_dense_2"),
       ctx.resource.LoadMesh("builtin/turf_patch_dense_3"),
   };
+  resources::MeshHandle ultraDenseTurfMeshVariants[kTurfVariantCount] = {
+      ctx.resource.LoadMesh("builtin/turf_patch_ultra_0"),
+      ctx.resource.LoadMesh("builtin/turf_patch_ultra_1"),
+      ctx.resource.LoadMesh("builtin/turf_patch_ultra_2"),
+      ctx.resource.LoadMesh("builtin/turf_patch_ultra_3"),
+  };
   resources::MeshHandle denseFairwayMeshVariants[kTurfVariantCount] = {
       ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_0"),
       ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_1"),
       ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_2"),
       ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_3"),
+  };
+  resources::MeshHandle ultraDenseFairwayMeshVariants[kTurfVariantCount] = {
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_0"),
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_1"),
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_2"),
+      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_3"),
   };
 
   const float turfHorizontalScale = turfSpacing;
@@ -1469,13 +1484,16 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
 
       const GrassSurfaceGroup surface =
           isGreen ? GrassSurfaceGroup::Green : GrassSurfaceGroup::Fairway;
-      const resources::MeshHandle turfMesh =
+      const resources::MeshHandle nearTurfMesh =
+          isGreen ? ultraDenseTurfMeshVariants[variantIndex]
+                  : ultraDenseFairwayMeshVariants[variantIndex];
+      const resources::MeshHandle midTurfMesh =
           isGreen ? denseTurfMeshVariants[variantIndex]
                   : denseFairwayMeshVariants[variantIndex];
       appendGrassInstance(
           x, terrainHeight + 0.0015f, z, turfHorizontalScale, heightScale,
-          rotation, color, turfMesh, resources::MeshHandle::Invalid(),
-          variantIndex, surface, 0.0f, isGreen ? 19.0f : 22.0f, true);
+          rotation, color, nearTurfMesh, midTurfMesh, variantIndex, surface,
+          isGreen ? 6.0f : 8.0f, isGreen ? 19.0f : 22.0f, true);
       ++turfCreated;
       if (isGreen) {
         ++greenCount;
