@@ -36,6 +36,37 @@ constexpr int kMsaaPresets[] = {1, 2, 4, 8};
 // Render Scaleプリセット（50%〜100%）
 constexpr float kRenderScalePresets[] = {0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f};
 
+std::string WideToUtf8(const std::wstring &value) {
+  if (value.empty()) {
+    return {};
+  }
+  const int required = WideCharToMultiByte(CP_UTF8, 0, value.c_str(), -1,
+                                           nullptr, 0, nullptr, nullptr);
+  if (required <= 1) {
+    return {};
+  }
+  std::string result(static_cast<size_t>(required), '\0');
+  WideCharToMultiByte(CP_UTF8, 0, value.c_str(), -1, result.data(), required,
+                      nullptr, nullptr);
+  result.pop_back(); // 末尾のNUL終端分を除く
+  return result;
+}
+
+std::wstring Utf8ToWide(const std::string &value) {
+  if (value.empty()) {
+    return {};
+  }
+  const int required =
+      MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, nullptr, 0);
+  if (required <= 1) {
+    return {};
+  }
+  std::wstring result(static_cast<size_t>(required), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, result.data(), required);
+  result.pop_back();
+  return result;
+}
+
 void TrimInPlace(std::string &s) {
   while (!s.empty() &&
          (s.back() == '\r' || s.back() == '\n' || s.back() == ' ' ||
@@ -60,6 +91,48 @@ bool ParseBool(const std::string &value, bool defaultValue) {
     return false;
   }
   return defaultValue;
+}
+
+GraphicsPreset ParseGraphicsPreset(const std::string &value) {
+  if (value == "LOW") {
+    return GraphicsPreset::Low;
+  }
+  if (value == "MEDIUM") {
+    return GraphicsPreset::Medium;
+  }
+  if (value == "HIGH") {
+    return GraphicsPreset::High;
+  }
+  if (value == "EXHIGH") {
+    return GraphicsPreset::ExHigh;
+  }
+  if (value == "ULTRA") {
+    return GraphicsPreset::Ultra;
+  }
+  if (value == "CUSTOM") {
+    return GraphicsPreset::Custom;
+  }
+  return GraphicsPreset::Auto;
+}
+
+const char *GraphicsPresetToString(GraphicsPreset preset) {
+  switch (preset) {
+  case GraphicsPreset::Low:
+    return "LOW";
+  case GraphicsPreset::Medium:
+    return "MEDIUM";
+  case GraphicsPreset::High:
+    return "HIGH";
+  case GraphicsPreset::ExHigh:
+    return "EXHIGH";
+  case GraphicsPreset::Ultra:
+    return "ULTRA";
+  case GraphicsPreset::Custom:
+    return "CUSTOM";
+  case GraphicsPreset::Auto:
+  default:
+    return "AUTO";
+  }
 }
 
 template <typename T, size_t N>
@@ -127,6 +200,8 @@ void DisplaySettings::LoadFromFile(const std::string &path) {
           std::max(kMinResolutionHeight, std::atoi(value.c_str()));
     } else if (key == "RenderScale") {
       m_data.renderScale = std::clamp(static_cast<float>(std::atof(value.c_str())), 0.5f, 1.0f);
+    } else if (key == "GraphicsPreset") {
+      m_data.graphicsPreset = ParseGraphicsPreset(value);
     } else if (key == "VSync") {
       m_data.vsync = ParseBool(value, true);
     } else if (key == "FpsLimit") {
@@ -139,6 +214,8 @@ void DisplaySettings::LoadFromFile(const std::string &path) {
       m_data.taaEnabled = ParseBool(value, false);
     } else if (key == "ShowFps") {
       m_data.showFps = ParseBool(value, false);
+    } else if (key == "GPU") {
+      m_data.gpuAdapterName = value;
     }
   }
 
@@ -176,6 +253,8 @@ void DisplaySettings::SaveToFile(const std::string &path) const {
   file << "WindowMode=" << modeStr << "\n";
   file << "Width=" << m_data.windowedWidth << "\n";
   file << "Height=" << m_data.windowedHeight << "\n";
+  file << "GraphicsPreset=" << GraphicsPresetToString(m_data.graphicsPreset)
+       << "\n";
   file << "RenderScale=" << m_data.renderScale << "\n";
   file << "VSync=" << (m_data.vsync ? 1 : 0) << "\n";
   file << "FpsLimit=" << m_data.fpsLimit << "\n";
@@ -183,12 +262,24 @@ void DisplaySettings::SaveToFile(const std::string &path) const {
   file << "MSAA=" << m_data.msaaSamples << "\n";
   file << "TAA=" << (m_data.taaEnabled ? 1 : 0) << "\n";
   file << "ShowFps=" << (m_data.showFps ? 1 : 0) << "\n";
+  file << "GPU=" << m_data.gpuAdapterName << "\n";
+}
+
+std::wstring DisplaySettings::GetGpuAdapterNameWide() const {
+  return Utf8ToWide(m_data.gpuAdapterName);
 }
 
 void DisplaySettings::Initialize(HWND hwnd, graphics::GraphicsDevice *graphicsDevice) {
   m_hwnd = hwnd;
   m_graphics = graphicsDevice;
   m_resolutions = EnumerateResolutions();
+
+  m_gpuNames.clear();
+  for (const auto &adapter : graphics::GraphicsDevice::EnumerateAdapters()) {
+    m_gpuNames.push_back(WideToUtf8(adapter.name));
+  }
+
+  ApplySelectedGraphicsPreset();
 
   // 読み込み済みの画質設定・VSyncを、既に初期化済みのGraphicsDeviceへ反映する
   ApplyQualityToGraphics();
@@ -253,6 +344,52 @@ void DisplaySettings::ApplyQualityToGraphics() {
   quality.msaaSamples = m_data.msaaSamples;
   quality.fxaaEnabled = m_data.fxaaEnabled;
   m_graphics->ApplyQualitySettings(quality);
+}
+
+void DisplaySettings::ApplySelectedGraphicsPreset() {
+  GraphicsPreset effective = m_data.graphicsPreset;
+  if (effective == GraphicsPreset::Auto) {
+    const uint64_t videoMemory =
+        m_graphics ? m_graphics->GetDedicatedVideoMemoryBytes() : 0;
+    effective = InferGraphicsPresetFromVideoMemory(videoMemory);
+  } else if (effective == GraphicsPreset::Custom) {
+    effective = InferCustomVegetationPreset(m_data.renderScale,
+                                            m_data.msaaSamples);
+  }
+
+  m_effectiveGraphicsPreset = effective;
+  if (m_data.graphicsPreset != GraphicsPreset::Custom) {
+    const auto preset = GetGraphicsPresetSettings(effective);
+    m_data.renderScale = preset.renderScale;
+    m_data.msaaSamples = preset.msaaSamples;
+    m_data.fxaaEnabled = preset.fxaaEnabled;
+    if (effective == GraphicsPreset::Ultra) {
+      m_data.vsync = true;
+      m_data.fpsLimit = 0;
+      if (m_graphics) {
+        m_graphics->SetVSync(true);
+      }
+    }
+  }
+
+  const double videoMemoryMiB =
+      m_graphics
+          ? static_cast<double>(m_graphics->GetDedicatedVideoMemoryBytes()) /
+                (1024.0 * 1024.0)
+          : 0.0;
+  LOG_INFO("DisplaySettings",
+           "Graphics preset selected={} effective={} DedicatedVRAM={:.0f}MB "
+           "scale={:.2f} MSAA={}x FXAA={} VSync={} FPSLimit={}",
+           GraphicsPresetToString(m_data.graphicsPreset),
+           GraphicsPresetToString(m_effectiveGraphicsPreset), videoMemoryMiB,
+           m_data.renderScale, m_data.msaaSamples, m_data.fxaaEnabled,
+           m_data.vsync, m_data.fpsLimit);
+}
+
+void DisplaySettings::MarkGraphicsPresetCustom() {
+  m_data.graphicsPreset = GraphicsPreset::Custom;
+  m_effectiveGraphicsPreset =
+      InferCustomVegetationPreset(m_data.renderScale, m_data.msaaSamples);
 }
 
 void DisplaySettings::ApplyToWindow() {
@@ -381,12 +518,46 @@ void DisplaySettings::SetRenderScale(float scale) {
     return;
   }
   m_data.renderScale = clamped;
+  MarkGraphicsPresetCustom();
   ApplyQualityToGraphics();
   SaveToFile();
 }
 
 void DisplaySettings::CycleRenderScale(int direction) {
   SetRenderScale(StepOption(kRenderScalePresets, m_data.renderScale, direction));
+}
+
+void DisplaySettings::SetGraphicsPreset(GraphicsPreset preset) {
+  if (preset == GraphicsPreset::Custom) {
+    return;
+  }
+  m_data.graphicsPreset = preset;
+  ApplySelectedGraphicsPreset();
+  ApplyQualityToGraphics();
+  SaveToFile();
+}
+
+void DisplaySettings::CycleGraphicsPreset(int direction) {
+  static constexpr GraphicsPreset kPresets[] = {
+      GraphicsPreset::Auto, GraphicsPreset::Low, GraphicsPreset::Medium,
+      GraphicsPreset::High, GraphicsPreset::ExHigh, GraphicsPreset::Ultra};
+  size_t index = 0;
+  bool found = false;
+  for (size_t i = 0; i < std::size(kPresets); ++i) {
+    if (kPresets[i] == m_data.graphicsPreset) {
+      index = i;
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    SetGraphicsPreset(GraphicsPreset::Auto);
+    return;
+  }
+  const size_t count = std::size(kPresets);
+  index = direction >= 0 ? (index + 1) % count
+                         : (index + count - 1) % count;
+  SetGraphicsPreset(kPresets[index]);
 }
 
 void DisplaySettings::SetVSync(bool enabled) {
@@ -418,6 +589,7 @@ void DisplaySettings::SetFxaaEnabled(bool enabled) {
     return;
   }
   m_data.fxaaEnabled = enabled;
+  MarkGraphicsPresetCustom();
   ApplyQualityToGraphics();
   SaveToFile();
 }
@@ -430,6 +602,7 @@ void DisplaySettings::SetMsaaSamples(int samples) {
     return;
   }
   m_data.msaaSamples = samples;
+  MarkGraphicsPresetCustom();
   ApplyQualityToGraphics();
   SaveToFile();
 }
@@ -454,6 +627,40 @@ void DisplaySettings::SetShowFps(bool enabled) {
   }
   m_data.showFps = enabled;
   SaveToFile();
+}
+
+void DisplaySettings::SetGpuAdapter(const std::string &adapterName) {
+  if (m_data.gpuAdapterName == adapterName) {
+    return;
+  }
+  m_data.gpuAdapterName = adapterName;
+  // GPU切り替えはデバイス（スワップチェーン・全リソース）の再生成が必要なため、
+  // ここではウィンドウ/GraphicsDeviceには反映せず、次回起動時に適用する。
+  SaveToFile();
+}
+
+void DisplaySettings::CycleGpu(int direction) {
+  // 先頭は「自動」（空文字列）
+  std::vector<std::string> options;
+  options.reserve(m_gpuNames.size() + 1);
+  options.push_back("");
+  options.insert(options.end(), m_gpuNames.begin(), m_gpuNames.end());
+
+  if (options.size() <= 1) {
+    return; // 物理GPUが1つも列挙できない場合は切り替え不可
+  }
+
+  size_t index = 0;
+  for (size_t i = 0; i < options.size(); ++i) {
+    if (options[i] == m_data.gpuAdapterName) {
+      index = i;
+      break;
+    }
+  }
+
+  const size_t count = options.size();
+  index = (index + count + (direction >= 0 ? 1 : -1)) % count;
+  SetGpuAdapter(options[index]);
 }
 
 } // namespace core

@@ -1,24 +1,23 @@
 /**
  * @file PostProcessSystem.h
- * @brief ポストプロセスエフェクトシステム - 霧、色調補正、ビネット
+ * @brief ポストプロセスパラメータ（霧・色調補正・ビネット・ブルーム）の算出
+ * @details 実際のGPU描画（フルスクリーンパス）はgraphics::GraphicsDeviceが担う。
+ *          このクラスはEnvironmentState（記事テーマ由来の環境プリセット等）から
+ *          描画に渡す定数を計算するだけの、GPUリソースを持たない値オブジェクト。
  */
 
 #pragma once
 
-#include "../../core/GameContext.h"
 #include "../components/EnvironmentState.h"
 #include <algorithm>
 #include <DirectXMath.h>
-#include <d3d11.h>
-#include <wrl/client.h>
 
 namespace game::systems {
 
-using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
 /**
- * @brief ポストプロセス定数バッファ
+ * @brief ポストプロセス定数（GraphicsDevice::PostProcessParamsへコピーされる）
  */
 struct PostProcessConstants {
   // 霧
@@ -37,77 +36,10 @@ struct PostProcessConstants {
 };
 
 /**
- * @brief ポストプロセスシステム
+ * @brief ポストプロセスパラメータ算出システム
  */
 class PostProcessSystem {
 public:
-  /**
-   * @brief 初期化
-   */
-  bool Initialize(ID3D11Device *device) {
-    m_device = device;
-
-    // 定数バッファ作成
-    D3D11_BUFFER_DESC cbDesc = {};
-    cbDesc.ByteWidth = sizeof(PostProcessConstants);
-    cbDesc.Usage = D3D11_USAGE_DYNAMIC;
-    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-    HRESULT hr = device->CreateBuffer(&cbDesc, nullptr, &m_constantBuffer);
-    if (FAILED(hr))
-      return false;
-
-    // フルスクリーン三角形用頂点バッファ
-    struct FullscreenVertex {
-      XMFLOAT3 pos;
-      XMFLOAT2 uv;
-    };
-
-    // 巨大な三角形で画面全体をカバー
-    FullscreenVertex vertices[] = {
-        {{-1.0f, -1.0f, 0.0f}, {0.0f, 1.0f}},
-        {{-1.0f, 3.0f, 0.0f}, {0.0f, -1.0f}},
-        {{3.0f, -1.0f, 0.0f}, {2.0f, 1.0f}},
-    };
-
-    D3D11_BUFFER_DESC vbDesc = {};
-    vbDesc.ByteWidth = sizeof(vertices);
-    vbDesc.Usage = D3D11_USAGE_IMMUTABLE;
-    vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-
-    D3D11_SUBRESOURCE_DATA vbData = {};
-    vbData.pSysMem = vertices;
-
-    hr = device->CreateBuffer(&vbDesc, &vbData, &m_vertexBuffer);
-    if (FAILED(hr))
-      return false;
-
-    // サンプラーステート
-    D3D11_SAMPLER_DESC sampDesc = {};
-    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-
-    hr = device->CreateSamplerState(&sampDesc, &m_samplerState);
-    if (FAILED(hr))
-      return false;
-
-    // ブレンドステート（通常）
-    D3D11_BLEND_DESC blendDesc = {};
-    blendDesc.RenderTarget[0].BlendEnable = FALSE;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask =
-        D3D11_COLOR_WRITE_ENABLE_ALL;
-
-    hr = device->CreateBlendState(&blendDesc, &m_blendState);
-    if (FAILED(hr))
-      return false;
-
-    m_initialized = true;
-    return true;
-  }
-
   /**
    * @brief 環境状態から定数を更新
    */
@@ -208,60 +140,12 @@ public:
   }
 
   /**
-   * @brief 定数バッファを更新してバインド
-   */
-  void BindConstants(ID3D11DeviceContext *context) {
-    if (!m_initialized)
-      return;
-
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    if (SUCCEEDED(context->Map(m_constantBuffer.Get(), 0,
-                               D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-      memcpy(mapped.pData, &m_constants, sizeof(m_constants));
-      context->Unmap(m_constantBuffer.Get(), 0);
-    }
-
-    context->PSSetConstantBuffers(1, 1, m_constantBuffer.GetAddressOf());
-    context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
-  }
-
-  /**
    * @brief 現在の定数を取得
    */
   const PostProcessConstants &GetConstants() const { return m_constants; }
 
-  /**
-   * @brief フルスクリーン描画用の準備
-   */
-  void PrepareFullscreenPass(ID3D11DeviceContext *context) {
-    if (!m_initialized)
-      return;
-
-    UINT stride = sizeof(XMFLOAT3) + sizeof(XMFLOAT2);
-    UINT offset = 0;
-    context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride,
-                                &offset);
-    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    context->OMSetBlendState(m_blendState.Get(), nullptr, 0xFFFFFFFF);
-  }
-
-  /**
-   * @brief フルスクリーン三角形を描画
-   */
-  void DrawFullscreenTriangle(ID3D11DeviceContext *context) {
-    if (!m_initialized)
-      return;
-    context->Draw(3, 0);
-  }
-
 private:
-  ID3D11Device *m_device = nullptr;
-  ComPtr<ID3D11Buffer> m_constantBuffer;
-  ComPtr<ID3D11Buffer> m_vertexBuffer;
-  ComPtr<ID3D11SamplerState> m_samplerState;
-  ComPtr<ID3D11BlendState> m_blendState;
   PostProcessConstants m_constants = {};
-  bool m_initialized = false;
 };
 
 } // namespace game::systems

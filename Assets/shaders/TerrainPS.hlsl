@@ -246,10 +246,13 @@ float4 main(PS_INPUT input) : SV_TARGET {
                       float3(0.42f, 0.31f, 0.13f);
     
     // 6. フォグ
+    // CameraPos.w はマップビュー時に0(フォグ無効)、通常時は1になる
+    // (RenderSystem::camPos参照)。俯瞰視点では高高度からの距離が
+    // フォグ終了距離をすぐ超え画面が白く覆われてしまうため無効化する。
     float fogStart = 60.0f;
     float fogEnd = 400.0f;
-    float fogFactor = saturate((dist - fogStart) / (fogEnd - fogStart));
-    float3 fogColor = float3(0.75f, 0.85f, 0.95f); 
+    float fogFactor = saturate((dist - fogStart) / (fogEnd - fogStart)) * CameraPos.w;
+    float3 fogColor = float3(0.75f, 0.85f, 0.95f);
     finalColor.rgb = lerp(finalColor.rgb, fogColor, fogFactor);
     
     return finalColor;

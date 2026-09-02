@@ -6,6 +6,7 @@
 #include "GraphicsDevice.h"
 #include "../core/Logger.h"
 #include <algorithm>
+#include <cstring>
 #include <d3d11.h>
 #include <d3d11_4.h>
 #include <dxgi1_6.h>
@@ -37,11 +38,13 @@ std::string WideToUtf8(const wchar_t *value) {
 
 } // namespace
 
-bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height) {
+bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height,
+                                const std::wstring &preferredAdapterName) {
   m_width = width;
   m_height = height;
   m_renderWidth = width;
   m_renderHeight = height;
+  m_preferredAdapterName = preferredAdapterName;
 
   if (!CreateSwapChainAndDevice(hWnd))
     return false;
@@ -87,6 +90,7 @@ void GraphicsDevice::Shutdown() {
   m_depthStencilState.Reset();
   m_depthStencilView.Reset();
   m_depthStencilBuffer.Reset();
+  m_depthSRV.Reset();
   m_sceneColorTexMS.Reset();
   m_sceneColorRTVMS.Reset();
   m_sceneColorTexResolved.Reset();
@@ -95,9 +99,14 @@ void GraphicsDevice::Shutdown() {
   m_fxaaTex.Reset();
   m_fxaaRTV.Reset();
   m_fxaaSRV.Reset();
+  m_postProcessTex.Reset();
+  m_postProcessRTV.Reset();
+  m_postProcessSRV.Reset();
   m_fullscreenVB.Reset();
   m_linearSampler.Reset();
   m_fxaaConstantBuffer.Reset();
+  m_upscaleConstantBuffer.Reset();
+  m_postProcessConstantBuffer.Reset();
   m_postProcessBlendState.Reset();
   m_postProcessDepthState.Reset();
   m_postProcessRasterizerState.Reset();
@@ -143,7 +152,7 @@ void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
 void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView *srv,
                                        ID3D11RenderTargetView *dstRTV,
                                        uint32_t dstWidth, uint32_t dstHeight,
-                                       bool useFxaaConstants) {
+                                       FullscreenConstants constants) {
   if (!shader.IsValid() || !srv || !dstRTV) {
     return;
   }
@@ -169,7 +178,7 @@ void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView 
   m_context->PSSetShaderResources(0, 1, &srv);
   m_context->PSSetSamplers(0, 1, m_linearSampler.GetAddressOf());
 
-  if (useFxaaConstants) {
+  if (constants == FullscreenConstants::Fxaa) {
     D3D11_MAPPED_SUBRESOURCE mapped;
     if (SUCCEEDED(m_context->Map(m_fxaaConstantBuffer.Get(), 0,
                                  D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
@@ -181,6 +190,21 @@ void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView 
       m_context->Unmap(m_fxaaConstantBuffer.Get(), 0);
     }
     m_context->PSSetConstantBuffers(0, 1, m_fxaaConstantBuffer.GetAddressOf());
+  } else if (constants == FullscreenConstants::Upscale) {
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    if (SUCCEEDED(m_context->Map(m_upscaleConstantBuffer.Get(), 0,
+                                 D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+      float *data = static_cast<float *>(mapped.pData);
+      data[0] = (m_renderWidth > 0) ? 1.0f / static_cast<float>(m_renderWidth) : 0.0f;
+      data[1] = (m_renderHeight > 0) ? 1.0f / static_cast<float>(m_renderHeight) : 0.0f;
+      // Render Scaleで縮小しているほどアップスケールのぼやけが目立つため、
+      // 縮小率に応じてシャープ量を自動調整する（CAS的な軽量アンシャープマスク）。
+      const float downscale = 1.0f - m_quality.renderScale;
+      data[2] = std::clamp(downscale * 1.5f, 0.0f, 0.6f);
+      data[3] = 0.0f;
+      m_context->Unmap(m_upscaleConstantBuffer.Get(), 0);
+    }
+    m_context->PSSetConstantBuffers(0, 1, m_upscaleConstantBuffer.GetAddressOf());
   }
 
   m_context->RSSetState(m_postProcessRasterizerState.Get());
@@ -193,6 +217,55 @@ void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView 
   m_context->PSSetShaderResources(0, 1, &nullSRV);
 }
 
+void GraphicsDevice::RunPostProcessPass(ID3D11ShaderResourceView *colorSRV,
+                                        ID3D11RenderTargetView *dstRTV) {
+  if (!m_postProcessShader.IsValid() || !colorSRV || !dstRTV) {
+    return;
+  }
+
+  D3D11_VIEWPORT vp = {};
+  vp.TopLeftX = 0.0f;
+  vp.TopLeftY = 0.0f;
+  vp.Width = static_cast<float>(m_renderWidth);
+  vp.Height = static_cast<float>(m_renderHeight);
+  vp.MinDepth = 0.0f;
+  vp.MaxDepth = 1.0f;
+  m_context->RSSetViewports(1, &vp);
+  m_context->OMSetRenderTargets(1, &dstRTV, nullptr);
+
+  m_postProcessShader.Bind(m_context.Get());
+
+  UINT stride = sizeof(DirectX::XMFLOAT3) + sizeof(DirectX::XMFLOAT2);
+  UINT offset = 0;
+  m_context->IASetVertexBuffers(0, 1, m_fullscreenVB.GetAddressOf(), &stride,
+                                &offset);
+  m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+  ID3D11ShaderResourceView *srvs[2] = {colorSRV, m_depthSRV.Get()};
+  m_context->PSSetShaderResources(0, 2, srvs);
+  m_context->PSSetSamplers(0, 1, m_linearSampler.GetAddressOf());
+
+  D3D11_MAPPED_SUBRESOURCE mapped;
+  if (SUCCEEDED(m_context->Map(m_postProcessConstantBuffer.Get(), 0,
+                               D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+    PostProcessParams params = m_postProcessParams;
+    // 深度が読めない（MSAA有効）場合は霧を強制的に無効化する
+    params.depthParams.z = IsDepthReadable() ? 1.0f : 0.0f;
+    std::memcpy(mapped.pData, &params, sizeof(PostProcessParams));
+    m_context->Unmap(m_postProcessConstantBuffer.Get(), 0);
+  }
+  m_context->PSSetConstantBuffers(0, 1, m_postProcessConstantBuffer.GetAddressOf());
+
+  m_context->RSSetState(m_postProcessRasterizerState.Get());
+  m_context->OMSetBlendState(m_postProcessBlendState.Get(), nullptr, 0xFFFFFFFF);
+  m_context->OMSetDepthStencilState(m_postProcessDepthState.Get(), 0);
+
+  m_context->Draw(3, 0);
+
+  ID3D11ShaderResourceView *nullSRVs[2] = {nullptr, nullptr};
+  m_context->PSSetShaderResources(0, 2, nullSRVs);
+}
+
 void GraphicsDevice::ResolveSceneToBackbuffer() {
   if (m_quality.msaaSamples > 1 && m_sceneColorTexMS && m_sceneColorTexResolved) {
     m_context->ResolveSubresource(m_sceneColorTexResolved.Get(), 0,
@@ -202,15 +275,19 @@ void GraphicsDevice::ResolveSceneToBackbuffer() {
 
   ID3D11ShaderResourceView *sourceSRV = m_sceneColorSRVResolved.Get();
 
+  // 霧/色調補正/ビネット/ブルームは常時適用する
+  RunPostProcessPass(sourceSRV, m_postProcessRTV.Get());
+  sourceSRV = m_postProcessSRV.Get();
+
   if (m_quality.fxaaEnabled && m_fxaaRTV && m_fxaaSRV) {
-    RunFullscreenPass(m_fxaaShader, m_sceneColorSRVResolved.Get(),
-                      m_fxaaRTV.Get(), m_renderWidth, m_renderHeight, true);
+    RunFullscreenPass(m_fxaaShader, sourceSRV, m_fxaaRTV.Get(), m_renderWidth,
+                      m_renderHeight, FullscreenConstants::Fxaa);
     sourceSRV = m_fxaaSRV.Get();
   }
 
-  // 内部描画解像度 → 出力(バックバッファ)解像度へアップスケール
+  // 内部描画解像度 → 出力(バックバッファ)解像度へアップスケール（+自動シャープ化）
   RunFullscreenPass(m_upscaleShader, sourceSRV, m_renderTargetView.Get(),
-                    m_width, m_height, false);
+                    m_width, m_height, FullscreenConstants::Upscale);
 
   // 以降のUI(D2D)/ScreenFadeはバックバッファへ直接描画されるため、
   // 状態を出力解像度基準に戻しておく（深度テストは既定の有効状態へ復帰）。
@@ -431,8 +508,41 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
   HRESULT hr = E_FAIL;
   ComPtr<IDXGIFactory1> factory;
   if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
+    // 明示的にGPUが指定されていれば、名前が一致するアダプタでの作成を最優先で試す。
+    // 見つからない/作成に失敗した場合は下の自動選択（高性能優先）へフォールバックする。
+    if (!m_preferredAdapterName.empty()) {
+      for (UINT index = 0;; ++index) {
+        ComPtr<IDXGIAdapter1> adapter;
+        const HRESULT enumResult = factory->EnumAdapters1(index, &adapter);
+        if (enumResult == DXGI_ERROR_NOT_FOUND || FAILED(enumResult)) {
+          break;
+        }
+        DXGI_ADAPTER_DESC1 description{};
+        if (FAILED(adapter->GetDesc1(&description)) ||
+            (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+          continue;
+        }
+        if (m_preferredAdapterName != description.Description) {
+          continue;
+        }
+        hr = tryCreateForAdapter(adapter.Get());
+        if (SUCCEEDED(hr)) {
+          LOG_INFO("GraphicsDevice", "Using preferred GPU: '{}'",
+                   WideToUtf8(description.Description));
+        } else {
+          LOG_WARN("GraphicsDevice",
+                   "Preferred GPU creation failed (hr={:08X}); falling back to "
+                   "automatic selection",
+                   static_cast<uint32_t>(hr));
+        }
+        break;
+      }
+    }
+
     ComPtr<IDXGIFactory6> factory6;
-    if (SUCCEEDED(factory.As(&factory6))) {
+    if (SUCCEEDED(hr)) {
+      // 優先GPUでの作成に成功しているため、自動選択ループはスキップする。
+    } else if (SUCCEEDED(factory.As(&factory6))) {
       for (UINT index = 0;; ++index) {
         ComPtr<IDXGIAdapter1> adapter;
         const HRESULT enumResult = factory6->EnumAdapterByGpuPreference(
@@ -537,6 +647,35 @@ bool GraphicsDevice::CreateSwapChainAndDevice(HWND hWnd) {
   return true;
 }
 
+std::vector<AdapterInfo> GraphicsDevice::EnumerateAdapters() {
+  std::vector<AdapterInfo> result;
+
+  ComPtr<IDXGIFactory1> factory;
+  if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
+    return result;
+  }
+
+  for (UINT index = 0;; ++index) {
+    ComPtr<IDXGIAdapter1> adapter;
+    const HRESULT enumResult = factory->EnumAdapters1(index, &adapter);
+    if (enumResult == DXGI_ERROR_NOT_FOUND || FAILED(enumResult)) {
+      break;
+    }
+    DXGI_ADAPTER_DESC1 description{};
+    if (FAILED(adapter->GetDesc1(&description)) ||
+        (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+      continue;
+    }
+    AdapterInfo info;
+    info.name = description.Description;
+    info.dedicatedVideoMemoryBytes =
+        static_cast<uint64_t>(description.DedicatedVideoMemory);
+    result.push_back(std::move(info));
+  }
+
+  return result;
+}
+
 void GraphicsDevice::CaptureAdapterInfo() {
   m_adapterName = "Unknown";
   m_dedicatedVideoMemoryBytes = 0;
@@ -577,13 +716,20 @@ bool GraphicsDevice::CreateDepthStencilView() {
   // 深度は3D描画パス専用のため、内部描画解像度(Render Scale適用後)・MSAAサンプル数
   // に合わせて作成する（出力解像度そのままではない点に注意）。
   const int samples = (std::max)(1, m_quality.msaaSamples);
+  m_depthSRV.Reset();
+
+  // MSAA無効時のみ、ポストプロセスの霧計算用に深度をSRVとしても公開する
+  // （typelessフォーマットでDSV/SRV両対応にする定石パターン）。MSAA有効時は
+  // Texture2DMSの深度読み取りに追加実装が必要になるため、今回は霧を無効化する。
+  const bool wantDepthSRV = (samples <= 1);
 
   D3D11_TEXTURE2D_DESC depthDesc = {};
   depthDesc.Width = m_renderWidth;
   depthDesc.Height = m_renderHeight;
   depthDesc.MipLevels = 1;
   depthDesc.ArraySize = 1;
-  depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+  depthDesc.Format = wantDepthSRV ? DXGI_FORMAT_R24G8_TYPELESS
+                                 : DXGI_FORMAT_D24_UNORM_S8_UINT;
   depthDesc.SampleDesc.Count = static_cast<UINT>(samples);
   UINT quality = 0;
   if (samples > 1) {
@@ -594,6 +740,9 @@ bool GraphicsDevice::CreateDepthStencilView() {
   depthDesc.SampleDesc.Quality = (samples > 1 && quality > 0) ? quality - 1 : 0;
   depthDesc.Usage = D3D11_USAGE_DEFAULT;
   depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+  if (wantDepthSRV) {
+    depthDesc.BindFlags |= D3D11_BIND_SHADER_RESOURCE;
+  }
 
   HRESULT hr =
       m_device->CreateTexture2D(&depthDesc, nullptr, &m_depthStencilBuffer);
@@ -601,7 +750,7 @@ bool GraphicsDevice::CreateDepthStencilView() {
     return false;
 
   D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-  dsvDesc.Format = depthDesc.Format;
+  dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
   dsvDesc.ViewDimension = (samples > 1) ? D3D11_DSV_DIMENSION_TEXTURE2DMS
                                        : D3D11_DSV_DIMENSION_TEXTURE2D;
   if (samples <= 1) {
@@ -610,7 +759,26 @@ bool GraphicsDevice::CreateDepthStencilView() {
 
   hr = m_device->CreateDepthStencilView(m_depthStencilBuffer.Get(), &dsvDesc,
                                         &m_depthStencilView);
-  return SUCCEEDED(hr);
+  if (FAILED(hr))
+    return false;
+
+  if (wantDepthSRV) {
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.MipLevels = 1;
+    hr = m_device->CreateShaderResourceView(m_depthStencilBuffer.Get(), &srvDesc,
+                                            &m_depthSRV);
+    if (FAILED(hr)) {
+      LOG_WARN("GraphicsDevice",
+               "CreateDepthStencilView: depth SRV failed ({:08X}); fog will be disabled",
+               static_cast<uint32_t>(hr));
+      m_depthSRV.Reset();
+    }
+  }
+
+  return true;
 }
 
 bool GraphicsDevice::CreateSceneRenderTargets() {
@@ -622,6 +790,9 @@ bool GraphicsDevice::CreateSceneRenderTargets() {
   m_fxaaTex.Reset();
   m_fxaaRTV.Reset();
   m_fxaaSRV.Reset();
+  m_postProcessTex.Reset();
+  m_postProcessRTV.Reset();
+  m_postProcessSRV.Reset();
   m_depthStencilView.Reset();
   m_depthStencilBuffer.Reset();
 
@@ -684,6 +855,23 @@ bool GraphicsDevice::CreateSceneRenderTargets() {
   if (!CreateDepthStencilView())
     return false;
 
+  // ポストプロセス（霧/色調補正/ビネット/ブルーム）は常時適用するため常に作成する
+  hr = m_device->CreateTexture2D(&desc, nullptr, &m_postProcessTex);
+  if (FAILED(hr)) {
+    LOG_ERROR("GraphicsDevice",
+             "CreateSceneRenderTargets: post-process texture failed ({:08X})",
+             static_cast<uint32_t>(hr));
+    return false;
+  }
+  hr = m_device->CreateRenderTargetView(m_postProcessTex.Get(), nullptr,
+                                        &m_postProcessRTV);
+  if (FAILED(hr))
+    return false;
+  hr = m_device->CreateShaderResourceView(m_postProcessTex.Get(), nullptr,
+                                          &m_postProcessSRV);
+  if (FAILED(hr))
+    return false;
+
   if (m_quality.fxaaEnabled) {
     hr = m_device->CreateTexture2D(&desc, nullptr, &m_fxaaTex);
     if (FAILED(hr))
@@ -743,6 +931,12 @@ bool GraphicsDevice::InitializePostProcessResources() {
     LOG_ERROR("GraphicsDevice", "InitializePostProcessResources: FXAA shader failed");
     return false;
   }
+  if (!m_postProcessShader.LoadFromFile(
+          m_device.Get(), L"Assets/shaders/PostProcessVS.hlsl", "main",
+          L"Assets/shaders/PostProcessPS.hlsl", "main", layout)) {
+    LOG_ERROR("GraphicsDevice", "InitializePostProcessResources: PostProcess shader failed");
+    return false;
+  }
 
   D3D11_SAMPLER_DESC sampDesc = {};
   sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -759,6 +953,18 @@ bool GraphicsDevice::InitializePostProcessResources() {
   cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
   cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
   hr = m_device->CreateBuffer(&cbDesc, nullptr, &m_fxaaConstantBuffer);
+  if (FAILED(hr))
+    return false;
+  hr = m_device->CreateBuffer(&cbDesc, nullptr, &m_upscaleConstantBuffer);
+  if (FAILED(hr))
+    return false;
+
+  D3D11_BUFFER_DESC ppCbDesc = {};
+  ppCbDesc.ByteWidth = sizeof(PostProcessParams); // float4 x 7 = 112バイト
+  ppCbDesc.Usage = D3D11_USAGE_DYNAMIC;
+  ppCbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+  ppCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+  hr = m_device->CreateBuffer(&ppCbDesc, nullptr, &m_postProcessConstantBuffer);
   if (FAILED(hr))
     return false;
 

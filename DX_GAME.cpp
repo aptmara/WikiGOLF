@@ -7,6 +7,8 @@
 #include "src/ecs/World.h"
 #include "src/game/scenes/TitleScene.h"
 #include "src/game/scenes/WikiGolfScene.h"
+#include "src/game/components/Camera.h"
+#include "src/game/systems/PostProcessSystem.h"
 #include "src/game/systems/RenderSystem.h"
 #include "src/game/systems/SkyboxRenderSystem.h"
 #include "src/game/systems/UIBarGaugeRenderSystem.h" // 追加
@@ -173,9 +175,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // FPS上限のSleep精度を上げる（既定の約15.6msだとFPS上限が大きくブレるため）
   timeBeginPeriod(1);
 
-  // システム初期化
+  // システム初期化（保存済みの利用GPU設定があれば優先的に使う。GPU切り替えは
+  // デバイス再生成が必要なため、設定変更自体は次回起動時に反映される）
   graphics::GraphicsDevice graphics;
-  if (!graphics.Initialize(hWnd, initialWidth, initialHeight)) {
+  if (!graphics.Initialize(hWnd, initialWidth, initialHeight,
+                           displaySettings.GetGpuAdapterNameWide())) {
     return -1;
   }
 
@@ -232,11 +236,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   }
   g_Audio = &audioSystem;
 
+  // ポストプロセス（霧/色調補正/ビネット/ブルーム）パラメータ計算。
+  // 記事のスカイボックステーマに応じた環境プリセット(WikiPageLoader)が
+  // UpdateFromEnvironment()経由でここへ反映される。
+  game::systems::PostProcessSystem postProcessSystem;
+  postProcessSystem.ResetToDefaults();
+  postProcessSystem.SetBloom(0.18f, 0.75f, 1.2f); // 常時ごく控えめなハイライトの発光にじみ
+
   // ゲームコンテキスト
   core::GameContext ctx(resource, world, graphics, input);
   ctx.audio = &audioSystem;
   ctx.textRenderer = &textRenderer;
   ctx.displaySettings = &displaySettings;
+  ctx.postProcess = &postProcessSystem;
 
   // 同梱フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
   // 用途別に使い分ける（TextStyle.h の各プリセット参照）:
@@ -373,9 +385,49 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           }
 
           {
-              // 内部描画解像度(Render Scale)のシーンをMSAA解決/FXAA/アップスケール
-              // した上でバックバッファへ転送する。以降のUI/ScreenFadeはこの
-              // バックバッファへ直接描画される。
+              // ポストプロセス（霧/色調補正/ビネット/ブルーム）の定数を、現在の
+              // メインカメラのnear/far（霧の深度線形化に使用）と合わせて渡す。
+              PROFILE_SCOPE("Render.PostProcessParams");
+              float camNear = 0.01f;
+              float camFar = 1000.0f;
+              bool foundMainCamera = false;
+              world.Query<game::components::Camera>().Each(
+                  [&](ecs::Entity, game::components::Camera &c) {
+                      if (c.isMainCamera || !foundMainCamera) {
+                          camNear = c.nearZ;
+                          camFar = c.farZ;
+                          foundMainCamera = true;
+                      }
+                  });
+
+              const auto &pc = postProcessSystem.GetConstants();
+              graphics::PostProcessParams pp;
+              pp.fogColor = pc.fogColor;
+              pp.fogParams = pc.fogParams;
+              pp.colorTint = pc.colorTint;
+              pp.colorParams = pc.colorParams;
+              pp.vignetteParams = pc.vignetteParams;
+              pp.timeParams = {ctx.time, pc.timeParams.y, pc.timeParams.z,
+                               pc.timeParams.w};
+              pp.depthParams = {camNear, camFar, 0.0f, 0.0f}; // zはGraphicsDevice側で決定
+
+              // マップビュー(俯瞰トップビュー)中は、高高度からの距離が
+              // フォグ終了距離をすぐ超えて画面全体が白く覆われてしまうため、
+              // 距離フォグを無効化する(density成分のみ0にし、他の色調補正等は維持)。
+              if (auto *golfState =
+                      world.GetGlobal<game::components::GolfGameState>()) {
+                  if (golfState->isMapView) {
+                      pp.fogColor.w = 0.0f;
+                  }
+              }
+
+              graphics.SetPostProcessParams(pp);
+          }
+
+          {
+              // 内部描画解像度(Render Scale)のシーンをポストプロセス→MSAA解決/FXAA/
+              // アップスケールした上でバックバッファへ転送する。以降のUI/ScreenFadeは
+              // このバックバッファへ直接描画される。
               PROFILE_SCOPE("Render.ResolveScene");
               graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.ResolveScene");
               graphics.ResolveSceneToBackbuffer();

@@ -15,6 +15,7 @@ namespace game::scenes {
 class SettingsScene : public core::Scene {
 public:
   const char *GetName() const override { return "SettingsScene"; }
+  bool BlocksUnderlyingInput() const override { return true; }
 
   void OnEnter(core::GameContext &ctx) override;
   void OnUpdate(core::GameContext &ctx) override;
@@ -24,6 +25,7 @@ private:
   enum class RowId {
     WindowMode = 0,
     Resolution,
+    GraphicsPreset,
     RenderScale,
     VSync,
     FpsLimit,
@@ -31,6 +33,7 @@ private:
     Msaa,
     Taa,
     ShowFps,
+    Gpu,
     Count,
   };
   static constexpr size_t kRowCount = static_cast<size_t>(RowId::Count);

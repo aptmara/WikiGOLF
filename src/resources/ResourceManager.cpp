@@ -481,6 +481,54 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   } else if (path == "builtin/grass_patch_3") {
     mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 3);
     success = true;
+  } else if (path == "builtin/grass_patch_low_0") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 0,
+                                                       6, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_low_1") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 1,
+                                                       6, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_low_2") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 2,
+                                                       6, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_low_3") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 3,
+                                                       6, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_medium_0") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 0,
+                                                       8, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_medium_1") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 1,
+                                                       8, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_medium_2") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 2,
+                                                       8, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_medium_3") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 3,
+                                                       8, 1);
+    success = true;
+  } else if (path == "builtin/grass_patch_ultra_0") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 0,
+                                                       12, 3);
+    success = true;
+  } else if (path == "builtin/grass_patch_ultra_1") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 1,
+                                                       12, 3);
+    success = true;
+  } else if (path == "builtin/grass_patch_ultra_2") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 2,
+                                                       12, 3);
+    success = true;
+  } else if (path == "builtin/grass_patch_ultra_3") {
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 3,
+                                                       12, 3);
+    success = true;
   } else if (path == "builtin/turf_patch_0") {
     mesh = graphics::MeshPrimitives::CreateTurfPatch(m_device.GetDevice(), 0);
     success = true;

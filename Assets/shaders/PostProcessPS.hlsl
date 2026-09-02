@@ -14,15 +14,21 @@ Texture2D sceneTexture : register(t0);
 Texture2D depthTexture : register(t1);
 SamplerState samplerState : register(s0);
 
-// 定数バッファ
-cbuffer PostProcessConstants : register(b1) {
+// 定数バッファ（graphics::PostProcessParamsと1:1対応）
+cbuffer PostProcessConstants : register(b0) {
   float4 fogColor;      // RGB + density
   float4 fogParams;     // start, end, 0, 0
   float4 colorTint;     // RGB + brightness
   float4 colorParams;   // saturation, contrast, 0, 0
   float4 vignetteParams;// intensity, radius, softness, 0
   float4 timeParams;    // time, bloomIntensity, bloomThreshold, bloomSpread
+  float4 depthParams;   // nearZ, farZ, hasDepth(1/0), 0
 };
+
+// LH・zレンジ[0,1]の非線形深度をビュー空間の線形深度へ変換する
+float LinearizeDepth(float depthNDC, float nearZ, float farZ) {
+  return (nearZ * farZ) / (farZ - depthNDC * (farZ - nearZ));
+}
 
 // 彩度調整
 float3 AdjustSaturation(float3 color, float saturation) {
@@ -58,12 +64,15 @@ float4 main(PSInput input) : SV_TARGET {
   float4 sceneColor = sceneTexture.Sample(samplerState, uv);
   float3 color = sceneColor.rgb;
   
-  // === 霧効果（深度バッファがある場合のみ） ===
-  // 注: 深度バッファがない場合は霧はスキップ
-  // float depth = depthTexture.Sample(samplerState, uv).r;
-  // float fogFactor = saturate((depth - fogParams.x) / (fogParams.y - fogParams.x));
-  // color = lerp(color, fogColor.rgb, fogFactor * fogColor.w);
-  
+  // === 霧効果（深度バッファが読める場合のみ。MSAA有効時は常に無効） ===
+  if (depthParams.z > 0.5) {
+    float rawDepth = depthTexture.Sample(samplerState, uv).r;
+    float linearDepth = LinearizeDepth(rawDepth, depthParams.x, depthParams.y);
+    float fogRange = max(fogParams.y - fogParams.x, 0.0001);
+    float fogFactor = saturate((linearDepth - fogParams.x) / fogRange);
+    color = lerp(color, fogColor.rgb, fogFactor * fogColor.w);
+  }
+
   // === 色調補正 ===
   // ティント
   color *= colorTint.rgb;

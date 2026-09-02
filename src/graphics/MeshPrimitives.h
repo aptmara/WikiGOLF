@@ -36,7 +36,8 @@ public:
 
   /// @brief 地表を連続して覆うため、葉を面状に分散した芝パッチを生成
   /// @param variantSeed 個体差を出すためのバリアントID（0以上、値ごとに異なる配置になる）
-  static Mesh CreateGrassPatch(ID3D11Device *device, uint32_t variantSeed = 0);
+  static Mesh CreateGrassPatch(ID3D11Device *device, uint32_t variantSeed = 0,
+                               int gridSize = 9, int bladesPerCell = 2);
 
   /// @brief フェアウェイ/グリーン用の刈り込み芝パッチを生成。
   ///        ラフ用と異なり株の向きのばらつきを小さく抑え、配置側で

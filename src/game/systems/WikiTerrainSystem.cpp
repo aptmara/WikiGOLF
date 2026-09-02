@@ -4,6 +4,8 @@
  */
 
 #include "WikiTerrainSystem.h"
+#include "../utils/GameplayPhysicsConstants.h"
+#include "../../core/DisplaySettings.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
@@ -30,7 +32,6 @@ using namespace game::components;
 
 namespace {
 
-constexpr float kTerrainOverlayHeightOffset = 0.02f;
 constexpr float kTerrainOverlayAlpha = 0.34f;
 constexpr float kTerrainVertexSpacing = 0.8f;
 
@@ -560,7 +561,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     int tileResZ   = cache.tileResZ;
     std::vector<graphics::Vertex> ov = cache.vertices;
     for (size_t i = 0; i < ov.size(); ++i) {
-      ov[i].position.y += kTerrainOverlayHeightOffset;
+      ov[i].position.y += game::physics::kTerrainVisualSurfaceOffset;
       ov[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
       float u      = (float)(i % resX) / (resX - 1);
       int   zIdx   = (int)(i / resX);
@@ -590,7 +591,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     {
       const float zTop = m_buildFieldDepth * (0.5f - cache.vStart);
       const float zBottom = m_buildFieldDepth * (0.5f - cache.vEnd);
-      const float flatY = cache.maxHeight + kTerrainOverlayHeightOffset;
+      const float flatY = game::physics::ToVisualSurfaceHeight(cache.maxHeight);
       std::vector<uint32_t> minimapOvIndices;
       std::vector<graphics::Vertex> minimapOvVerts = BuildMinimapOverlayQuad(
           m_buildFieldWidth, zTop, zBottom, flatY, minimapOvIndices);
@@ -916,7 +917,8 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     // オーバーレイの生成
     std::vector<graphics::Vertex> overlayVertices = vertices;
     for (size_t i = 0; i < overlayVertices.size(); ++i) {
-      overlayVertices[i].position.y += kTerrainOverlayHeightOffset;
+      overlayVertices[i].position.y +=
+          game::physics::kTerrainVisualSurfaceOffset;
       overlayVertices[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
       
       // オーバーレイのUVは元の 0..1 に戻す
@@ -949,7 +951,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
     // ミニマップ専用の平面2三角形メッシュ（本描画用の地形追従メッシュとは別物）
     {
-      const float flatY = tileMaxHeight + kTerrainOverlayHeightOffset;
+      const float flatY = game::physics::ToVisualSurfaceHeight(tileMaxHeight);
       std::vector<uint32_t> minimapOvIndices;
       std::vector<graphics::Vertex> minimapOvVerts = BuildMinimapOverlayQuad(
           width, zTop, zBottom, flatY, minimapOvIndices);
@@ -1076,7 +1078,7 @@ void WikiTerrainSystem::CreateImageObstacles(
 
     auto &col = ctx.world.Add<Collider>(e);
     col.type = ColliderType::Box;
-    col.size = {0.5f, 0.5f, 0.5f};
+    col.size = {1.0f, 1.0f, 1.0f};
 
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
@@ -1146,13 +1148,56 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
     return;
   }
 
+  const core::GraphicsPreset graphicsPreset =
+      ctx.displaySettings
+          ? ctx.displaySettings->GetEffectiveGraphicsPreset()
+          : core::GraphicsPreset::High;
+  if (graphicsPreset == core::GraphicsPreset::Low) {
+    m_grassPatches.clear();
+    ctx.world.SetGlobal(GrassRenderSpatialIndex{});
+    LOG_INFO("WikiTerrain",
+             "Surface grass disabled for LOW graphics preset");
+    return;
+  }
+
+  struct VegetationQuality {
+    float roughSpacing;
+    float maximumRoughPatches;
+    float semiRoughDrawDistance;
+    float roughDrawDistance;
+    float turfSpacing;
+    float maximumTurfPatches;
+    float greenLodDistance;
+    float fairwayLodDistance;
+    float greenDrawDistance;
+    float fairwayDrawDistance;
+  } quality{};
+  switch (graphicsPreset) {
+  case core::GraphicsPreset::Medium:
+    quality = {0.85f, 22000.0f, 40.0f, 52.0f, 1.20f, 11000.0f,
+               4.0f, 5.0f, 16.0f, 19.0f};
+    break;
+  case core::GraphicsPreset::ExHigh:
+    quality = {0.72f, 28000.0f, 46.0f, 60.0f, 1.05f, 14000.0f,
+               6.0f, 8.0f, 19.0f, 22.0f};
+    break;
+  case core::GraphicsPreset::Ultra:
+    quality = {0.50f, 60000.0f, 70.0f, 90.0f, 0.70f, 32000.0f,
+               10.0f, 13.0f, 26.0f, 32.0f};
+    break;
+  case core::GraphicsPreset::High:
+  default:
+    quality = {0.72f, 28000.0f, 46.0f, 60.0f, 1.05f, 14000.0f,
+               5.0f, 6.0f, 18.0f, 20.0f};
+    break;
+  }
+
   // 1パッチ内を高密度の芝床として生成し、パッチ自体は適度に広げて重ねる。
   // 小さな草株を大量に並べる方式より、連続面としてのラフを保ちやすい。
-  constexpr float desiredSpacing = 0.72f;
-  constexpr float maximumPatchCount = 28000.0f;
   const float fieldArea = fieldWidth * fieldDepth;
   const float spacing =
-      std::max(desiredSpacing, std::sqrt(fieldArea / maximumPatchCount));
+      std::max(quality.roughSpacing,
+               std::sqrt(fieldArea / quality.maximumRoughPatches));
   const int columns =
       std::max(1, static_cast<int>(std::ceil(fieldWidth * 0.96f / spacing)));
   const int rows =
@@ -1175,6 +1220,31 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
         resZ - 1);
     return static_cast<TerrainMaterial>(
         m_terrainData->materialMap[gz * resX + gx]);
+  };
+
+  // 芝が生えてよいマテリアルか（バンカー・水・溶岩・氷・石畳などは不可）。
+  auto isGrassCompatibleMaterial = [](TerrainMaterial material) {
+    return material == TerrainMaterial::Fairway ||
+           material == TerrainMaterial::Rough ||
+           material == TerrainMaterial::Green;
+  };
+
+  // パッチはセル中心1点のマテリアルだけで配置を決めるが、実際の描画サイズは
+  // ほぼセル間隔と同じ幅を持つため、中心が芝地でもパッチの四隅がバンカー等の
+  // 隣接セルへはみ出すことがある。四隅を確認し、非対応マテリアルへ食い込む
+  // パッチは配置しない。
+  auto patchOverhangsForeignSurface = [&](float x, float z,
+                                          float halfExtent) {
+    static constexpr float kCornerOffsets[4][2] = {
+        {-1.0f, -1.0f}, {1.0f, -1.0f}, {-1.0f, 1.0f}, {1.0f, 1.0f}};
+    for (const auto &offset : kCornerOffsets) {
+      const TerrainMaterial cornerMaterial = materialAt(
+          x + offset[0] * halfExtent, z + offset[1] * halfExtent);
+      if (!isGrassCompatibleMaterial(cornerMaterial)) {
+        return true;
+      }
+    }
+    return false;
   };
 
   // 近傍の高さから地形の法線を求め、株の「上」をその法線に合わせる
@@ -1206,11 +1276,17 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
   // 同じ形のパッチが並んで見えないよう、配置ごとに複数のメッシュ
   // バリアント（別seedで生成した葉の配置）から選ぶ。
   constexpr int kGrassVariantCount = 4;
+  std::string grassMeshPrefix = "builtin/grass_patch_";
+  if (graphicsPreset == core::GraphicsPreset::Medium) {
+    grassMeshPrefix = "builtin/grass_patch_medium_";
+  } else if (graphicsPreset == core::GraphicsPreset::Ultra) {
+    grassMeshPrefix = "builtin/grass_patch_ultra_";
+  }
   resources::MeshHandle grassMeshVariants[kGrassVariantCount] = {
-      ctx.resource.LoadMesh("builtin/grass_patch_0"),
-      ctx.resource.LoadMesh("builtin/grass_patch_1"),
-      ctx.resource.LoadMesh("builtin/grass_patch_2"),
-      ctx.resource.LoadMesh("builtin/grass_patch_3"),
+      ctx.resource.LoadMesh(grassMeshPrefix + "0"),
+      ctx.resource.LoadMesh(grassMeshPrefix + "1"),
+      ctx.resource.LoadMesh(grassMeshPrefix + "2"),
+      ctx.resource.LoadMesh(grassMeshPrefix + "3"),
   };
   auto grassShader = ctx.resource.LoadShader(
       "Grass", L"Assets/shaders/GrassVS.hlsl",
@@ -1363,6 +1439,9 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       if (!isRough && !isSemiRough) {
         continue;
       }
+      if (patchOverhangsForeignSurface(x, z, horizontalScale * 0.5f)) {
+        continue;
+      }
 
       const float variation = dist01(rng);
       const float heightScale = isSemiRough ? (0.085f + variation * 0.025f)
@@ -1403,47 +1482,66 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           x, terrainHeight + 0.003f, z, horizontalScale, heightScale,
           rotation, color, grassMeshVariants[variantIndex],
           resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
-          isSemiRough ? 46.0f : 60.0f, false);
+          isSemiRough ? quality.semiRoughDrawDistance
+                      : quality.roughDrawDistance,
+          false);
       ++created;
     }
   }
 
   // Fairway / Greenは同寸法のセルを隙間なく並べ、近距離の3D葉から
   // 中遠距離の地表シェーダーへディザーフェードで連続させる。
-  constexpr float desiredTurfSpacing = 1.05f;
-  constexpr float maximumTurfPatchCount = 14000.0f;
   const float turfSpacing =
-      std::max(desiredTurfSpacing,
-               std::sqrt(fieldArea / maximumTurfPatchCount));
+      std::max(quality.turfSpacing,
+               std::sqrt(fieldArea / quality.maximumTurfPatches));
   const int turfColumns = std::max(
       1, static_cast<int>(std::ceil(fieldWidth * 0.96f / turfSpacing)));
   const int turfRows = std::max(
       1, static_cast<int>(std::ceil(fieldDepth * 0.96f / turfSpacing)));
   constexpr int kTurfVariantCount = 4;
+  resources::MeshHandle baseTurfMeshVariants[kTurfVariantCount] = {
+      ctx.resource.LoadMesh("builtin/turf_patch_0"),
+      ctx.resource.LoadMesh("builtin/turf_patch_1"),
+      ctx.resource.LoadMesh("builtin/turf_patch_2"),
+      ctx.resource.LoadMesh("builtin/turf_patch_3"),
+  };
+  const resources::MeshHandle invalid = resources::MeshHandle::Invalid();
   resources::MeshHandle denseTurfMeshVariants[kTurfVariantCount] = {
-      ctx.resource.LoadMesh("builtin/turf_patch_dense_0"),
-      ctx.resource.LoadMesh("builtin/turf_patch_dense_1"),
-      ctx.resource.LoadMesh("builtin/turf_patch_dense_2"),
-      ctx.resource.LoadMesh("builtin/turf_patch_dense_3"),
+      invalid, invalid, invalid, invalid,
   };
   resources::MeshHandle ultraDenseTurfMeshVariants[kTurfVariantCount] = {
-      ctx.resource.LoadMesh("builtin/turf_patch_ultra_0"),
-      ctx.resource.LoadMesh("builtin/turf_patch_ultra_1"),
-      ctx.resource.LoadMesh("builtin/turf_patch_ultra_2"),
-      ctx.resource.LoadMesh("builtin/turf_patch_ultra_3"),
+      invalid, invalid, invalid, invalid,
   };
   resources::MeshHandle denseFairwayMeshVariants[kTurfVariantCount] = {
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_0"),
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_1"),
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_2"),
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_dense_3"),
+      invalid, invalid, invalid, invalid,
   };
   resources::MeshHandle ultraDenseFairwayMeshVariants[kTurfVariantCount] = {
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_0"),
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_1"),
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_2"),
-      ctx.resource.LoadMesh("builtin/fairway_turf_patch_ultra_3"),
+      invalid, invalid, invalid, invalid,
   };
+
+  if (graphicsPreset != core::GraphicsPreset::Low) {
+    for (int i = 0; i < kTurfVariantCount; ++i) {
+      denseTurfMeshVariants[i] = ctx.resource.LoadMesh(
+          "builtin/turf_patch_dense_" + std::to_string(i));
+    }
+  }
+  if (graphicsPreset == core::GraphicsPreset::High ||
+      graphicsPreset == core::GraphicsPreset::ExHigh ||
+      graphicsPreset == core::GraphicsPreset::Ultra) {
+    for (int i = 0; i < kTurfVariantCount; ++i) {
+      denseFairwayMeshVariants[i] = ctx.resource.LoadMesh(
+          "builtin/fairway_turf_patch_dense_" + std::to_string(i));
+    }
+  }
+  if (graphicsPreset == core::GraphicsPreset::ExHigh ||
+      graphicsPreset == core::GraphicsPreset::Ultra) {
+    for (int i = 0; i < kTurfVariantCount; ++i) {
+      ultraDenseTurfMeshVariants[i] = ctx.resource.LoadMesh(
+          "builtin/turf_patch_ultra_" + std::to_string(i));
+      ultraDenseFairwayMeshVariants[i] = ctx.resource.LoadMesh(
+          "builtin/fairway_turf_patch_ultra_" + std::to_string(i));
+    }
+  }
 
   const float turfHorizontalScale = turfSpacing;
   const float turfStartX =
@@ -1462,6 +1560,9 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       const TerrainMaterial material = materialAt(x, z);
       if (material != TerrainMaterial::Fairway &&
           material != TerrainMaterial::Green) {
+        continue;
+      }
+      if (patchOverhangsForeignSurface(x, z, turfHorizontalScale * 0.5f)) {
         continue;
       }
 
@@ -1495,16 +1596,28 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
 
       const GrassSurfaceGroup surface =
           isGreen ? GrassSurfaceGroup::Green : GrassSurfaceGroup::Fairway;
-      const resources::MeshHandle nearTurfMesh =
-          isGreen ? ultraDenseTurfMeshVariants[variantIndex]
-                  : ultraDenseFairwayMeshVariants[variantIndex];
-      const resources::MeshHandle midTurfMesh =
-          isGreen ? denseTurfMeshVariants[variantIndex]
-                  : denseFairwayMeshVariants[variantIndex];
+      resources::MeshHandle nearTurfMesh = baseTurfMeshVariants[variantIndex];
+      resources::MeshHandle midTurfMesh = resources::MeshHandle::Invalid();
+      if (graphicsPreset == core::GraphicsPreset::Medium) {
+        nearTurfMesh = denseTurfMeshVariants[variantIndex];
+        midTurfMesh = baseTurfMeshVariants[variantIndex];
+      } else if (graphicsPreset == core::GraphicsPreset::High) {
+        nearTurfMesh = isGreen ? denseTurfMeshVariants[variantIndex]
+                               : denseFairwayMeshVariants[variantIndex];
+        midTurfMesh = baseTurfMeshVariants[variantIndex];
+      } else if (graphicsPreset == core::GraphicsPreset::ExHigh ||
+                 graphicsPreset == core::GraphicsPreset::Ultra) {
+        nearTurfMesh = isGreen ? ultraDenseTurfMeshVariants[variantIndex]
+                               : ultraDenseFairwayMeshVariants[variantIndex];
+        midTurfMesh = isGreen ? denseTurfMeshVariants[variantIndex]
+                              : denseFairwayMeshVariants[variantIndex];
+      }
       appendGrassInstance(
           x, terrainHeight + 0.0015f, z, turfHorizontalScale, heightScale,
           rotation, color, nearTurfMesh, midTurfMesh, variantIndex, surface,
-          isGreen ? 6.0f : 8.0f, isGreen ? 19.0f : 22.0f, true);
+          isGreen ? quality.greenLodDistance : quality.fairwayLodDistance,
+          isGreen ? quality.greenDrawDistance : quality.fairwayDrawDistance,
+          true);
       ++turfCreated;
       if (isGreen) {
         ++greenCount;

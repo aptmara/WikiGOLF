@@ -5,6 +5,7 @@
  *        FXAA/MSAA/TAA）の管理と永続化
  */
 
+#include "GraphicsPreset.h"
 #include <Windows.h>
 #include <string>
 #include <utility>
@@ -32,6 +33,8 @@ struct DisplaySettingsData {
   int windowedWidth = 1920;
   int windowedHeight = 1080;
 
+  GraphicsPreset graphicsPreset = GraphicsPreset::Auto;
+
   float renderScale = 1.0f; ///< 内部描画解像度の倍率 (0.5〜1.0)
   bool vsync = true;        ///< Present同期
   int fpsLimit = 60;        ///< フレームレート上限。0 = 無制限
@@ -42,6 +45,10 @@ struct DisplaySettingsData {
   bool taaEnabled = false;
 
   bool showFps = false; ///< 画面右上へのFPS表示
+
+  // 利用GPU（DXGI_ADAPTER_DESC1::Descriptionと一致させて選択する）。
+  // 空文字列 = 自動選択（高性能優先）。デバイス再生成が必要なため、変更は次回起動時に反映される。
+  std::string gpuAdapterName;
 };
 
 /// @brief 表示・画質設定の読み書きとウィンドウ/GraphicsDeviceへの反映を行う
@@ -87,6 +94,15 @@ public:
   void SetRenderScale(float scale);
   void CycleRenderScale(int direction);
 
+  /// @brief 画質テンプレートを選択し、描画品質を一括適用する。
+  void SetGraphicsPreset(GraphicsPreset preset);
+  /// @brief AUTO/LOW/MEDIUM/HIGH/EXHIGH/ULTRAを前後に移動する。
+  void CycleGraphicsPreset(int direction);
+  /// @brief AUTO解決後、またはCUSTOMから推定した芝描画用プリセット。
+  GraphicsPreset GetEffectiveGraphicsPreset() const {
+    return m_effectiveGraphicsPreset;
+  }
+
   void SetVSync(bool enabled);
 
   void SetFpsLimit(int fps); ///< 0 = 無制限
@@ -102,6 +118,20 @@ public:
 
   /// @brief 画面右上のFPS表示の有効/無効を設定する
   void SetShowFps(bool enabled);
+
+  /// @brief 利用GPUを設定し保存する。空文字列で自動選択に戻す。
+  /// @details デバイス再生成が必要なため、実際の切り替えは次回起動時に反映される。
+  void SetGpuAdapter(const std::string &adapterName);
+  /// @brief 「自動」+ 列挙済みGPU一覧の中で前後に移動する（UIの矢印ボタン用）
+  void CycleGpu(int direction);
+  /// @brief 選択可能なGPU名一覧（WARP/ソフトウェアアダプタを除く物理GPUのみ）
+  const std::vector<std::string> &GetAvailableGpuNames() const {
+    return m_gpuNames;
+  }
+
+  /// @brief GetData().gpuAdapterNameをワイド文字列に変換して返す
+  ///        （GraphicsDevice::Initialize()のpreferredAdapterName引数用）。
+  std::wstring GetGpuAdapterNameWide() const;
 
   const DisplaySettingsData &GetData() const { return m_data; }
   const std::vector<std::pair<int, int>> &GetAvailableResolutions() const {
@@ -120,11 +150,15 @@ private:
   RECT GetMonitorRect(bool workAreaOnly) const;
   void RefreshCurrentResolution();
   void ApplyQualityToGraphics();
+  void ApplySelectedGraphicsPreset();
+  void MarkGraphicsPresetCustom();
 
   HWND m_hwnd = nullptr;
   graphics::GraphicsDevice *m_graphics = nullptr;
   DisplaySettingsData m_data;
   std::vector<std::pair<int, int>> m_resolutions;
+  std::vector<std::string> m_gpuNames;
+  GraphicsPreset m_effectiveGraphicsPreset = GraphicsPreset::High;
   int m_currentWidth = 0;
   int m_currentHeight = 0;
 };

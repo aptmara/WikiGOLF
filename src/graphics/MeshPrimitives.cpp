@@ -330,15 +330,16 @@ Mesh MeshPrimitives::CreateGrassClump(ID3D11Device *device) {
 }
 
 Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
-                                      uint32_t variantSeed) {
+                                       uint32_t variantSeed, int gridSize,
+                                       int bladesPerCell) {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
   // ゴルフ場のラフは独立した草株の集合ではなく、地表全体を覆う芝床から
   // 細い葉が高密度に立ち上がる。各セルに葉を分散し、根元を共有する
   // 放射状クランプや、葉のない大きな隙間を作らない。
-  constexpr int gridSize = 9;
-  constexpr int bladesPerCell = 2;
-  constexpr int cellCount = gridSize * gridSize;
+  gridSize = std::max(gridSize, 2);
+  bladesPerCell = std::max(bladesPerCell, 1);
+  const int cellCount = gridSize * gridSize;
   constexpr float pi = 3.14159265358979f;
   const float variantOffset = static_cast<float>(variantSeed) * 811.87f;
 

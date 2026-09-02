@@ -68,10 +68,13 @@ float4 main(PS_INPUT input) : SV_TARGET {
     finalColor += lightColor * leafSheen * baseColor;
 
     // 地形と統一したフォグ
+    // CameraPos.w はマップビュー時に0(フォグ無効)、通常時は1になる
+    // (RenderSystem::camPos参照)。俯瞰視点では高高度からの距離が
+    // フォグ終了距離をすぐ超え画面が白く覆われてしまうため無効化する。
     float dist = distance(CameraPos.xyz, input.worldPos);
     float fogStart = 60.0f;
     float fogEnd = 400.0f;
-    float fogFactor = saturate((dist - fogStart) / (fogEnd - fogStart));
+    float fogFactor = saturate((dist - fogStart) / (fogEnd - fogStart)) * CameraPos.w;
     float3 fogColor = float3(0.75f, 0.85f, 0.95f);
     finalColor = lerp(finalColor, fogColor, fogFactor);
 

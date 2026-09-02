@@ -3,6 +3,7 @@
 #include "../../core/DisplaySettings.h"
 #include "../../core/Input.h"
 #include "../../core/SceneManager.h"
+#include "../../graphics/GraphicsDevice.h"
 #include "../components/UIButton.h"
 #include "../components/UIText.h"
 #include <cstdlib>
@@ -13,19 +14,19 @@ namespace game::scenes {
 namespace {
 constexpr int kOverlayLayer = 900;
 constexpr float kPanelX = 240.0f;
-constexpr float kPanelY = 20.0f;
+constexpr float kPanelY = 10.0f;
 constexpr float kPanelWidth = 800.0f;
-constexpr float kPanelHeight = 620.0f;
+constexpr float kPanelHeight = 700.0f;
 
 constexpr float kSectionX = kPanelX + 40.0f;
 constexpr float kSectionWidth = kPanelWidth - 80.0f;
 constexpr float kLabelWidth = 220.0f;
 constexpr float kArrowWidth = 44.0f;
 constexpr float kValueWidth = kSectionWidth - kLabelWidth - kArrowWidth * 2.0f;
-constexpr float kRowHeight = 42.0f;
-constexpr float kRowStep = 50.0f;
+constexpr float kRowHeight = 38.0f;
+constexpr float kRowStep = 45.0f;
 constexpr float kFirstRowY = kPanelY + 70.0f;
-constexpr float kCloseY = kFirstRowY + 9.0f * kRowStep + 10.0f;
+constexpr float kCloseY = kFirstRowY + 11.0f * kRowStep + 28.0f;
 
 const DirectX::XMFLOAT4 kNormalColor = {0.15f, 0.21f, 0.34f, 0.96f};
 const DirectX::XMFLOAT4 kHoverColor = {0.24f, 0.36f, 0.56f, 0.98f};
@@ -59,6 +60,58 @@ std::wstring FormatFpsLimit(int fps) {
 
 std::wstring FormatMsaa(int samples) {
   return samples <= 1 ? L"OFF" : (std::to_wstring(samples) + L"x");
+}
+
+const wchar_t *FormatGraphicsPresetName(core::GraphicsPreset preset) {
+  switch (preset) {
+  case core::GraphicsPreset::Low:
+    return L"LOW";
+  case core::GraphicsPreset::Medium:
+    return L"MEDIUM";
+  case core::GraphicsPreset::High:
+    return L"HIGH";
+  case core::GraphicsPreset::ExHigh:
+    return L"EXHIGH";
+  case core::GraphicsPreset::Ultra:
+    return L"ULTRA";
+  case core::GraphicsPreset::Custom:
+    return L"CUSTOM";
+  case core::GraphicsPreset::Auto:
+  default:
+    return L"AUTO";
+  }
+}
+
+std::wstring FormatGraphicsPreset(core::GraphicsPreset selected,
+                                  core::GraphicsPreset effective) {
+  if (selected == core::GraphicsPreset::Auto) {
+    return std::wstring(L"AUTO (") + FormatGraphicsPresetName(effective) +
+           L")";
+  }
+  return FormatGraphicsPresetName(selected);
+}
+
+std::wstring Utf8ToWString(const std::string &value) {
+  if (value.empty()) {
+    return L"";
+  }
+  const int required =
+      MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, nullptr, 0);
+  if (required <= 1) {
+    return L"";
+  }
+  std::wstring result(static_cast<size_t>(required), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, result.data(), required);
+  result.pop_back();
+  return result;
+}
+
+std::wstring FormatGpu(const std::string &selectedName,
+                      const std::string &activeName) {
+  if (selectedName.empty()) {
+    return L"自動（" + Utf8ToWString(activeName) + L"）";
+  }
+  return Utf8ToWString(selectedName);
 }
 } // namespace
 
@@ -113,7 +166,9 @@ void SettingsScene::CreateSettingRow(core::GameContext &ctx, size_t rowIndex,
   valueText.y = y;
   valueText.width = kValueWidth;
   valueText.height = kRowHeight;
-  valueText.style.fontSize = 22.0f;
+  // GPU名は長くなりがちなため、その行だけ小さめのフォントにする
+  valueText.style.fontSize =
+      (rowIndex == static_cast<size_t>(RowId::Gpu)) ? 14.0f : 22.0f;
   valueText.style.align = graphics::TextAlign::Center;
   valueText.style.valign = graphics::TextVAlign::Middle;
   valueText.style.color = {0.95f, 0.95f, 0.95f, 1.0f};
@@ -165,6 +220,7 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
   const struct { RowId id; const wchar_t *label; } kRows[] = {
       {RowId::WindowMode, L"ウィンドウモード"},
       {RowId::Resolution, L"解像度"},
+      {RowId::GraphicsPreset, L"画質テンプレート"},
       {RowId::RenderScale, L"描画解像度"},
       {RowId::VSync, L"VSync"},
       {RowId::FpsLimit, L"FPS上限"},
@@ -172,11 +228,25 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
       {RowId::Msaa, L"MSAA"},
       {RowId::Taa, L"TAA"},
       {RowId::ShowFps, L"FPS表示"},
+      {RowId::Gpu, L"利用GPU"},
   };
   for (const auto &row : kRows) {
     const size_t index = static_cast<size_t>(row.id);
     CreateSettingRow(ctx, index, row.label, kFirstRowY + index * kRowStep);
   }
+
+  auto gpuHintEntity = CreateEntity(ctx.world);
+  auto &gpuHint = ctx.world.Add<components::UIText>(gpuHintEntity);
+  gpuHint.text = L"※GPU設定の変更は次回起動時に反映されます";
+  gpuHint.x = kSectionX;
+  gpuHint.y = kFirstRowY + static_cast<float>(kRowCount) * kRowStep - 4.0f;
+  gpuHint.width = kSectionWidth;
+  gpuHint.height = 22.0f;
+  gpuHint.style.fontSize = 13.0f;
+  gpuHint.style.align = graphics::TextAlign::Center;
+  gpuHint.style.color = {0.6f, 0.66f, 0.74f, 1.0f};
+  gpuHint.visible = true;
+  gpuHint.layer = kOverlayLayer + 2;
 
   m_closeButton = CreateArrowButton(ctx, L"閉じる", "close", kSectionX, kCloseY,
                                     kSectionWidth, 48.0f);
@@ -205,6 +275,9 @@ void SettingsScene::RefreshDisplay(core::GameContext &ctx) {
                                   ? FormatResolution(ctx.displaySettings->GetCurrentWidth(),
                                                      ctx.displaySettings->GetCurrentHeight())
                                   : FormatResolution(data.windowedWidth, data.windowedHeight));
+  setValue(RowId::GraphicsPreset,
+           FormatGraphicsPreset(data.graphicsPreset,
+                                ctx.displaySettings->GetEffectiveGraphicsPreset()));
   setValue(RowId::RenderScale, FormatPercent(data.renderScale));
   setValue(RowId::VSync, FormatOnOff(data.vsync));
   setValue(RowId::FpsLimit, FormatFpsLimit(data.fpsLimit));
@@ -212,6 +285,7 @@ void SettingsScene::RefreshDisplay(core::GameContext &ctx) {
   setValue(RowId::Msaa, FormatMsaa(data.msaaSamples));
   setValue(RowId::Taa, data.taaEnabled ? L"ON（未実装）" : L"OFF");
   setValue(RowId::ShowFps, FormatOnOff(data.showFps));
+  setValue(RowId::Gpu, FormatGpu(data.gpuAdapterName, ctx.graphics.GetAdapterName()));
 
   // 解像度はBorderless中はモニタ解像度に固定されるため矢印を無効化する
   if (auto *t = ctx.world.Get<components::UIText>(m_valueTexts[static_cast<size_t>(RowId::Resolution)])) {
@@ -287,6 +361,9 @@ void SettingsScene::OnUpdate(core::GameContext &ctx) {
             ds->CycleResolution(direction);
           }
           break;
+        case RowId::GraphicsPreset:
+          ds->CycleGraphicsPreset(direction);
+          break;
         case RowId::RenderScale:
           ds->CycleRenderScale(direction);
           break;
@@ -307,6 +384,9 @@ void SettingsScene::OnUpdate(core::GameContext &ctx) {
           break;
         case RowId::ShowFps:
           ds->SetShowFps(!ds->GetData().showFps);
+          break;
+        case RowId::Gpu:
+          ds->CycleGpu(direction);
           break;
         default:
           break;

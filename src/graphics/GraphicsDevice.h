@@ -29,11 +29,35 @@ struct QualitySettings {
   bool fxaaEnabled = false; ///< 最終画面へのFXAA適用
 };
 
+/// @brief ポストプロセス（霧/色調補正/ビネット/ブルーム）のGPU定数バッファ相当。
+/// @details game::systems::PostProcessConstantsの6項目をそのままコピーし、
+///          描画側だけが知る深度線形化パラメータ(depthParams)を追加したもの。
+struct PostProcessParams {
+  DirectX::XMFLOAT4 fogColor{0.7f, 0.75f, 0.8f, 0.0f};      // RGB + density
+  DirectX::XMFLOAT4 fogParams{100.0f, 500.0f, 0.0f, 0.0f};  // start, end, -, -
+  DirectX::XMFLOAT4 colorTint{1.0f, 1.0f, 1.0f, 1.0f};      // RGB + brightness
+  DirectX::XMFLOAT4 colorParams{1.0f, 1.0f, 0.0f, 0.0f};    // saturation, contrast, -, -
+  DirectX::XMFLOAT4 vignetteParams{0.25f, 0.7f, 0.5f, 0.0f};// intensity, radius, softness, -
+  DirectX::XMFLOAT4 timeParams{0.0f, 0.0f, 0.72f, 1.0f};    // time, bloomIntensity, bloomThreshold, bloomSpread
+  // x=nearZ, y=farZ（霧の深度線形化用）, z=depth利用可否(1/0。MSAA時は常に0), w=未使用
+  DirectX::XMFLOAT4 depthParams{0.01f, 1000.0f, 0.0f, 0.0f};
+};
+
+/// @brief 利用可能なGPUアダプタの情報（GPU選択UI用）
+struct AdapterInfo {
+  std::wstring name;
+  uint64_t dedicatedVideoMemoryBytes = 0;
+};
+
 /// @brief DirectX11グラフィックスデバイス
 class GraphicsDevice {
 public:
   GraphicsDevice() = default;
   ~GraphicsDevice() = default;
+
+  /// @brief 利用可能な物理GPU（WARP/ソフトウェアアダプタを除く）を列挙する。
+  ///        デバイス作成前でも呼び出し可能（GPU選択UI用）。
+  static std::vector<AdapterInfo> EnumerateAdapters();
 
   // コピー禁止
   GraphicsDevice(const GraphicsDevice &) = delete;
@@ -43,8 +67,12 @@ public:
   /// @param hWnd ウィンドウハンドル
   /// @param width ウィンドウ幅
   /// @param height ウィンドウ高さ
+  /// @param preferredAdapterName 優先的に使用するGPUのアダプタ名（DXGI_ADAPTER_DESC1::
+  ///        Descriptionと一致するもの）。空、または一致するアダプタが無い/作成に
+  ///        失敗した場合は既定の自動選択（高性能優先）にフォールバックする。
   /// @return 成功ならtrue
-  bool Initialize(HWND hWnd, uint32_t width, uint32_t height);
+  bool Initialize(HWND hWnd, uint32_t width, uint32_t height,
+                  const std::wstring &preferredAdapterName = L"");
 
   /// @brief シャットダウン
   void Shutdown();
@@ -78,6 +106,15 @@ public:
   /// @brief Render Scale / MSAA / FXAA を変更し、内部レンダーターゲットを再生成する
   void ApplyQualitySettings(const QualitySettings &settings);
   const QualitySettings &GetQualitySettings() const { return m_quality; }
+
+  /// @brief ポストプロセス（霧/色調補正/ビネット/ブルーム）パラメータを更新する。
+  ///        次回のResolveSceneToBackbuffer()から反映される。
+  void SetPostProcessParams(const PostProcessParams &params) {
+    m_postProcessParams = params;
+  }
+
+  /// @brief 深度バッファがシェーダーから読める状態か（MSAA有効時はfalse）
+  bool IsDepthReadable() const { return m_depthSRV != nullptr; }
 
   /// @brief VSync有効/無効を設定（Present時に反映）
   void SetVSync(bool enabled) { m_vsyncEnabled = enabled; }
@@ -128,9 +165,14 @@ private:
   void CaptureAdapterInfo();
   bool InitializeGpuProfilerQueries();
   void ResolveGpuProfilerQueries();
+  /// @brief フルスクリーンパスで使う定数バッファの種類
+  enum class FullscreenConstants { None, Fxaa, Upscale };
   void RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView *srv,
                          ID3D11RenderTargetView *dstRTV, uint32_t dstWidth,
-                         uint32_t dstHeight, bool useFxaaConstants);
+                         uint32_t dstHeight, FullscreenConstants constants);
+  /// @brief 霧/色調補正/ビネット/ブルームのパス（シーンカラー+深度 → 出力）
+  void RunPostProcessPass(ID3D11ShaderResourceView *colorSRV,
+                          ID3D11RenderTargetView *dstRTV);
 
   struct GpuTimestampQueries {
     std::string name;
@@ -156,6 +198,7 @@ private:
   ComPtr<ID3D11RenderTargetView> m_renderTargetView; ///< 実バックバッファ（出力解像度）
   ComPtr<ID3D11DepthStencilView> m_depthStencilView; ///< シーン用深度（内部描画解像度・MSAA）
   ComPtr<ID3D11Texture2D> m_depthStencilBuffer;
+  ComPtr<ID3D11ShaderResourceView> m_depthSRV; ///< 深度SRV。MSAA有効時はnullptr（未対応）
 
   // レンダラーステート
   ComPtr<ID3D11RasterizerState> m_rasterizerState;
@@ -173,16 +216,25 @@ private:
   ComPtr<ID3D11RenderTargetView> m_fxaaRTV;
   ComPtr<ID3D11ShaderResourceView> m_fxaaSRV;
 
-  // アップスケール/FXAA用の共有リソース
+  // ポストプロセス（霧/色調補正/ビネット/ブルーム）出力先。常時使用（内部描画解像度）
+  ComPtr<ID3D11Texture2D> m_postProcessTex;
+  ComPtr<ID3D11RenderTargetView> m_postProcessRTV;
+  ComPtr<ID3D11ShaderResourceView> m_postProcessSRV;
+
+  // アップスケール/FXAA/ポストプロセス用の共有リソース
   Shader m_upscaleShader;
   Shader m_fxaaShader;
+  Shader m_postProcessShader;
   ComPtr<ID3D11Buffer> m_fullscreenVB; ///< 画面全体を覆う巨大三角形（POSITION+TEXCOORD0）
   ComPtr<ID3D11SamplerState> m_linearSampler;
   ComPtr<ID3D11Buffer> m_fxaaConstantBuffer;
+  ComPtr<ID3D11Buffer> m_upscaleConstantBuffer;      ///< テクセルサイズ+シャープ強度
+  ComPtr<ID3D11Buffer> m_postProcessConstantBuffer;  ///< PostProcessParams本体
   ComPtr<ID3D11BlendState> m_postProcessBlendState;     ///< ブレンド無効
   ComPtr<ID3D11DepthStencilState> m_postProcessDepthState; ///< 深度テスト無効
   ComPtr<ID3D11RasterizerState> m_postProcessRasterizerState; ///< カリング無効
 
+  PostProcessParams m_postProcessParams;
   QualitySettings m_quality;
   bool m_vsyncEnabled = true;
   bool m_isExclusiveFullscreen = false;
@@ -195,6 +247,7 @@ private:
   D3D_FEATURE_LEVEL m_featureLevel = D3D_FEATURE_LEVEL_11_0;
   std::string m_adapterName = "Unknown";
   uint64_t m_dedicatedVideoMemoryBytes = 0;
+  std::wstring m_preferredAdapterName; ///< 空なら自動選択（高性能優先）
 
   static constexpr size_t kGpuQueryBufferCount = 8;
   std::array<GpuFrameQueries, kGpuQueryBufferCount> m_gpuQueryFrames;

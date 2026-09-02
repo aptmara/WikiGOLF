@@ -22,6 +22,7 @@ class Input;
 }
 namespace game::systems {
 class AudioSystem;
+class PostProcessSystem;
 }
 
 namespace core {
@@ -48,6 +49,7 @@ struct GameContext {
   float time = 0.0f; // ゲーム開始からの経過時間 (秒)
 
   graphics::TextRenderer *textRenderer = nullptr; // テキスト・D2D描画
+  game::systems::PostProcessSystem *postProcess = nullptr; // 霧/色調補正/ビネット/ブルームのパラメータ
 
   // コンストラクタ
   GameContext(resources::ResourceManager &r, ecs::World &w,
