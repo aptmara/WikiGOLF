@@ -45,7 +45,7 @@ struct Collider {
   ColliderType type = ColliderType::Sphere; ///< コライダーの形状
   float radius = 0.5f;                      ///< 半径 (Sphere用)
   DirectX::XMFLOAT3 size = {1.0f, 1.0f,
-                            1.0f}; ///< ハーフサイズ (Box用の各軸の半分の長さ)
+                            1.0f}; ///< ローカル空間での全寸法 (Box用)
   DirectX::XMFLOAT3 offset = {0.0f, 0.0f, 0.0f}; ///< 中心からのオフセット位置
 };
 

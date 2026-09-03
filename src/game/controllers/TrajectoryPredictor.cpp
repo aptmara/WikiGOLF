@@ -7,6 +7,9 @@
 #include "../components/WikiComponents.h"
 #include "../systems/PhysicsFriction.h"
 #include "../systems/WikiTerrainSystem.h"
+#include "../utils/CarryDistanceTable.h"
+#include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/TrajectorySimulation.h"
 #include <algorithm>
 #include <cmath>
 
@@ -84,14 +87,18 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
       ? XMFLOAT4{0.20f, 0.75f, 1.00f, 0.00f}  // アイドル: 透明へフェード
       : XMFLOAT4{1.00f, 0.40f, 0.05f, 0.00f}; // ショット: オレンジ》透明
 
-  float initialSpeed = params.maxPower * effectivePowerRatio;
+  const float targetDistance = params.baseCarryDistance * effectivePowerRatio;
+  const float initialSpeed =
+      params.carryTable
+          ? game::utils::LookupSpeedForDistance(*params.carryTable, targetDistance)
+          : targetDistance; // テーブル未設定時のフォールバック
   XMVECTOR dirXZ = XMLoadFloat3(&params.shotDirection);
   float rad = XMConvertToRadians(params.launchAngle);
   float vy = std::sin(rad) * initialSpeed;
   float vxz = std::cos(rad) * initialSpeed;
 
-  XMVECTOR vel = XMVectorScale(dirXZ, vxz);
-  vel = XMVectorSetY(vel, vy);
+  XMVECTOR initialVel = XMVectorScale(dirXZ, vxz);
+  initialVel = XMVectorSetY(initialVel, vy);
 
   auto *ballT = ctx.world.Get<Transform>(params.ballEntity);
   if (!ballT) {
@@ -99,23 +106,48 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
   }
   XMVECTOR pos = XMLoadFloat3(&ballT->position);
 
+  auto *ballCollider = ctx.world.Get<Collider>(params.ballEntity);
+  const float ballRadius =
+      ballCollider ? ballCollider->radius : game::physics::kBallRadius;
+
   if (params.terrainSystem) {
     float startX = XMVectorGetX(pos);
     float startZ = XMVectorGetZ(pos);
-    float startGroundY = params.terrainSystem->GetHeight(startX, startZ);
-    float ballRadius = 0.2f;
+    float startGroundY = game::physics::ToVisualSurfaceHeight(
+        params.terrainSystem->GetHeight(startX, startZ));
     pos = XMVectorSetY(pos, startGroundY + ballRadius);
   }
 
+  // 実際の弾道シミュレーション(ClubControllerのキャリー距離テーブル生成・
+  // マップビュー着弾点プレビューと同一のStepBallSimulation)を使うことで、
+  // 予測線・着弾マーカーが実際のショット結果と整合する。
   auto *rb = ctx.world.Get<RigidBody>(params.ballEntity);
-  float drag = rb ? rb->drag : 0.30f;
-  float restitution = rb ? rb->restitution : 0.35f;
-  float mass = rb ? rb->mass : 0.0459f;
-
   auto *golfState = ctx.world.GetGlobal<GolfGameState>();
+
+  game::physics::BallPhysicsParams ballParams;
+  ballParams.drag = rb ? rb->drag : 0.30f;
+  ballParams.restitution = rb ? rb->restitution : 0.35f;
+  ballParams.mass = rb ? rb->mass : 0.0459f;
+  ballParams.ballRadius = ballRadius;
+  ballParams.rollingFrictionScale =
+      golfState ? golfState->rollingFrictionScale : 1.0f;
+  if (!std::isfinite(ballParams.rollingFrictionScale) ||
+      ballParams.rollingFrictionScale < 0.05f) {
+    ballParams.rollingFrictionScale = 1.0f;
+  }
+
+  game::physics::WindParams wind;
+  if (golfState) {
+    wind.windSpeed = golfState->windSpeed;
+    wind.windDirection = golfState->windDirection;
+  }
+
+  const game::physics::FlatGroundParams flatGround; // 地形が無ければ自由落下のまま(既存挙動を維持)
+
   auto terrainData =
       params.terrainSystem ? params.terrainSystem->GetTerrainData() : nullptr;
 
+  // 着地点マーカーの高さ計算にのみ使用(物理積分自体はStepBallSimulationに委譲)
   auto getMaterial = [&](float x, float z) -> TerrainMaterial {
     if (!terrainData || terrainData->materialMap.empty()) {
       return TerrainMaterial::Fairway;
@@ -133,8 +165,6 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     return static_cast<TerrainMaterial>(id);
   };
 
-  XMVECTOR prevPos = pos;
-
   auto safeLength = [](XMVECTOR v) {
     float lenSq = XMVectorGetX(XMVector3LengthSq(v));
     if (lenSq < 0.0f || !std::isfinite(lenSq)) {
@@ -143,8 +173,14 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     return std::sqrt(lenSq);
   };
 
-  const XMVECTOR gravity = XMVectorSet(0.0f, -9.8f, 0.0f, 0.0f);
-  float frameDt = std::clamp(ctx.dt, 0.008f, 0.033f);
+  game::physics::BallSimState simState;
+  XMStoreFloat3(&simState.position, pos);
+  XMStoreFloat3(&simState.velocity, initialVel);
+
+  XMVECTOR prevPos = pos;
+
+  float frameDt = std::clamp(ctx.dt, 0.008f,
+                             game::physics::kMaxSimulationDeltaTime);
   const int physicsSubSteps = 4;
   float subDt = frameDt / static_cast<float>(physicsSubSteps);
   const int simSubStepsPerDot = 12;
@@ -174,142 +210,31 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     const float baseThicknessMax = params.isMapView ? 0.36f : 0.22f;
     const float thicknessForDot  = baseThicknessMax + (baseThicknessMin - baseThicknessMax) * nt;
 
-    XMVECTOR currentPos = prevPos;
-
     for (int step = 0; step < simSubStepsPerDot; ++step) {
-      XMVECTOR acc = gravity;
-
-      float groundY = 0.0f;
-      XMVECTOR groundNormal = XMVectorSet(0, 1, 0, 0);
-      bool isGrounded = false;
-
-      if (params.terrainSystem) {
-        float px = XMVectorGetX(currentPos);
-        float pz = XMVectorGetZ(currentPos);
-        groundY = params.terrainSystem->GetHeight(px, pz);
-
-        float hX = params.terrainSystem->GetHeight(px + 0.1f, pz);
-        float hZ = params.terrainSystem->GetHeight(px, pz + 0.1f);
-        float gradX = (hX - groundY) / 0.1f;
-        float gradZ = (hZ - groundY) / 0.1f;
-        XMVECTOR slopeVec = XMVectorSet(-gradX, 1.0f, -gradZ, 0.0f);
-        groundNormal = XMVector3Normalize(slopeVec);
-
-        float ballBottom = XMVectorGetY(currentPos);
-        float penetration = groundY - ballBottom;
-
-        if (penetration > 0.0f) {
-          currentPos = XMVectorSetY(currentPos, groundY);
-
-          float vn = XMVectorGetX(XMVector3Dot(vel, groundNormal));
-          if (vn < 0.0f) {
-            vel = XMVectorSubtract(
-                vel, XMVectorScale(groundNormal, vn * (1.0f + restitution)));
-          }
-
-          isGrounded = true;
-        } else if (penetration > -0.1f) {
-          isGrounded = true;
-        }
-      }
-
-      if (isGrounded) {
-        XMVECTOR normalComponent = XMVectorScale(
-            groundNormal, XMVectorGetX(XMVector3Dot(acc, groundNormal)));
-        acc = XMVectorSubtract(acc, normalComponent);
-      }
-
-      if (isGrounded) {
-        float vn = XMVectorGetX(XMVector3Dot(vel, groundNormal));
-        if (vn < 0.0f) {
-          vel = XMVectorSubtract(vel, XMVectorScale(groundNormal, vn));
-        }
-
-        float currentSpeed = safeLength(vel);
-        float terrainScale = terrainData ? terrainData->config.friction : 1.0f;
-        TerrainMaterial mat =
-            getMaterial(XMVectorGetX(currentPos), XMVectorGetZ(currentPos));
-        float ny = std::clamp(XMVectorGetY(groundNormal), 0.0f, 1.0f);
-        float frictionAccel = game::systems::ComputeGrassRollingAcceleration(
-            currentSpeed, ny, mat, terrainScale);
-
-        if (golfState) {
-          float scale = golfState->rollingFrictionScale;
-          if (!std::isfinite(scale) || scale < 0.05f) {
-            scale = 1.0f;
-          }
-          frictionAccel *= scale;
-        }
-
-        float tangentialAcc = safeLength(acc);
-        float staticLimit = frictionAccel * 1.2f;
-
-        if (currentSpeed < 0.05f && tangentialAcc < staticLimit) {
-          vel = XMVectorZero();
-          acc = XMVectorZero();
-        } else if (currentSpeed > 0.0001f) {
-          // ハイブリッド減衰（PhysicsSystemと同期）
-          float t = std::clamp((currentSpeed - 1.0f) / 4.0f, 0.0f, 1.0f);
-
-          float k = frictionAccel;
-          float expRatio = std::exp(-k * subDt);
-
-          float linearDrop = frictionAccel * subDt;
-          float linearRatio = (currentSpeed > linearDrop) ? (currentSpeed - linearDrop) / currentSpeed : 0.0f;
-
-          float finalRatio = t * expRatio + (1.0f - t) * linearRatio;
-          vel = XMVectorScale(vel, finalRatio);
-
-          if (safeLength(vel) < 0.02f) {
-            vel = XMVectorZero();
-          }
-        }
-
-        float speedAfter = safeLength(vel);
-        float slopeFlatness = XMVectorGetY(groundNormal);
-        if (speedAfter < 0.03f && slopeFlatness > 0.90f) {
-          vel = XMVectorZero();
-        }
-      }
-
-      float speed = safeLength(vel);
-      if (speed > 0.001f) {
-        float K = 0.000876f;
-        float dragForce = K * drag * speed * speed;
-        float dragAccMag = dragForce / std::max(mass, 0.001f);
-
-        XMVECTOR dragDir = XMVectorScale(vel, -1.0f / speed);
-        XMVECTOR dragAcc = XMVectorScale(dragDir, dragAccMag);
-
-        acc = XMVectorAdd(acc, dragAcc);
-      }
-
-      if (golfState && golfState->windSpeed > 0.0f) {
-        float windForce = golfState->windSpeed * 0.1f;
-        XMVECTOR windVec =
-            XMVectorSet(golfState->windDirection.x, 0, golfState->windDirection.y, 0);
-        acc = XMVectorAdd(acc, XMVectorScale(windVec, windForce));
-      }
-
-      vel = XMVectorAdd(vel, XMVectorScale(acc, subDt));
-      currentPos = XMVectorAdd(currentPos, XMVectorScale(vel, subDt));
-
-      float speedFinal = safeLength(vel);
-      float slopeFlatnessFinal = XMVectorGetY(groundNormal);
-      if (speedFinal < 0.008f && isGrounded && slopeFlatnessFinal > 0.98f) {
-        vel = XMVectorZero();
-      }
+      game::physics::StepBallSimulation(simState, params.terrainSystem,
+                                        flatGround, ballParams, wind, subDt);
     }
 
-    float finalSpeed = safeLength(vel);
+    XMVECTOR currentPos = XMLoadFloat3(&simState.position);
+    XMVECTOR currentVel = XMLoadFloat3(&simState.velocity);
+
+    float finalSpeed = safeLength(currentVel);
     float currentGroundY = 0.0f;
     if (params.terrainSystem) {
       float px = XMVectorGetX(currentPos);
       float pz = XMVectorGetZ(currentPos);
-      currentGroundY = params.terrainSystem->GetHeight(px, pz);
+      const float surfaceHeight = game::physics::ToVisualSurfaceHeight(
+          params.terrainSystem->GetHeight(px, pz));
+      const TerrainMaterial material = getMaterial(px, pz);
+      const float sinkDepth = game::systems::ComputeSurfaceSinkDepth(
+          material, std::max(0.0f, -XMVectorGetY(currentVel)), finalSpeed,
+          ballRadius);
+      currentGroundY = surfaceHeight - sinkDepth;
     }
 
-    bool isOnGround = XMVectorGetY(currentPos) <= currentGroundY + 0.01f;
+    bool isOnGround =
+        XMVectorGetY(currentPos) - ballRadius <=
+        currentGroundY + std::max(0.002f, ballRadius * 0.15f);
     if (finalSpeed < 0.008f && isOnGround) {
       mr->isVisible = false;
       // 着地点マーカーをこの位置に表示
@@ -319,7 +244,7 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
         if (lmr && lt) {
           XMFLOAT3 lp;
           XMStoreFloat3(&lp, currentPos);
-          lp.y = currentGroundY + 0.05f; // 地面に蛻りつく変位
+          lp.y = currentGroundY + 0.003f;
           lt->position = lp;
           lt->scale = {0.55f, 0.08f, 0.55f};
           // アイドル時は点滅する白円、ショット時は黄オレンジ
@@ -349,10 +274,11 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     if (params.terrainSystem) {
       float midX = XMVectorGetX(midPoint);
       float midZ = XMVectorGetZ(midPoint);
-      float midGroundY = params.terrainSystem->GetHeight(midX, midZ);
+      float midGroundY = game::physics::ToVisualSurfaceHeight(
+          params.terrainSystem->GetHeight(midX, midZ));
       float midY = XMVectorGetY(midPoint);
-      if (midY < midGroundY + 0.1f) {
-        midPoint = XMVectorSetY(midPoint, midGroundY + 0.1f);
+      if (midY < midGroundY + ballRadius) {
+        midPoint = XMVectorSetY(midPoint, midGroundY + ballRadius);
       }
     }
 

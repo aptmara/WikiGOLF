@@ -169,7 +169,12 @@ void RenderSystem(core::GameContext &ctx) {
           // カメラコンポーネントの保存値ではなく現在の実描画サイズから都度計算する。
           proj = XMMatrixPerspectiveFovLH(c.fov, ctx.graphics.GetAspectRatio(),
                                           c.nearZ, c.farZ);
-          camPos = {t.position.x, t.position.y, t.position.z, 1.0f};
+          // w成分はどのシェーダーでも位置として使われないため、
+          // マップビュー中に距離フォグを無効化するフラグとして流用する
+          // (1.0=通常のフォグ有効, 0.0=マップビュー中でフォグ無効)。
+          const float fogEnabledFlag =
+              (golfState && golfState->isMapView) ? 0.0f : 1.0f;
+          camPos = {t.position.x, t.position.y, t.position.z, fogEnabledFlag};
           cameraFound = true;
         }
       });
@@ -750,7 +755,7 @@ void RenderSystem(core::GameContext &ctx) {
   const bool isSlowFrame =
       elapsedUs >= 4000 &&
       (s_lastSlowStatsLogAt == std::chrono::steady_clock::time_point::min() ||
-       now - s_lastSlowStatsLogAt >= std::chrono::seconds(1));
+       now - s_lastSlowStatsLogAt >= std::chrono::seconds(5));
   const bool isPeriodicLog =
       s_lastStatsLogAt == std::chrono::steady_clock::time_point::min() ||
       now - s_lastStatsLogAt >= std::chrono::seconds(5);

@@ -11,6 +11,7 @@
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../utils/TrajectorySimulation.h"
 #include <algorithm>
 #include <cmath>
 
@@ -207,6 +208,19 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   m_availableClubs.push_back({"PW", 40.0f, 32.0f, "Assets/textures/Club_07_PW_PitchingWedge.png", 1.5f, "PW", "Wedge"});
   m_availableClubs.push_back({"SW", 25.0f, 38.0f, "Assets/textures/Club_08_SW_SandWedge.png", 2.5f, "SW", "Wedge"});
   m_availableClubs.push_back({"パター", 10.0f, 0.0f, "Assets/textures/Club_09_PT_Putter.png", 1.0f, "PT", "Putter"});
+
+  // 各クラブの基準飛距離(平坦・無風フェアウェイ基準)を動的に算出する。
+  // ExecuteShotとTrajectoryPredictorはこの表を通じて「目標飛距離→初速」を
+  // 逆引きするため、maxPower/launchAngleを調整すればここも自動で追従する。
+  for (auto &club : m_availableClubs) {
+    game::physics::BallPhysicsParams ballParams;
+    ballParams.rollingFrictionScale = club.rollingFrictionScale;
+    club.carryTable = game::physics::BuildCarryDistanceTable(
+        club.maxPower, club.launchAngle, ballParams);
+    club.baseCarryDistance = club.carryTable.distances.empty()
+                                 ? 0.0f
+                                 : club.carryTable.distances.back();
+  }
 
   m_currentClubIndex = 0;
   m_currentClub = m_availableClubs[0];

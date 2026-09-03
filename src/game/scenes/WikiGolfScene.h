@@ -23,7 +23,6 @@
 #include "../controllers/TutorialOverlayController.h"
 
 #include "../systems/ParticleSystem.h"
-#include "../systems/PostProcessSystem.h"
 #include "../systems/TimeOfDaySystem.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
@@ -95,6 +94,10 @@ private:
   /// @brief プロシージャル旗のなびきと旗粒子を更新します。山内陽
   void UpdateProceduralFlagEffects(core::GameContext &ctx, float dt);
 
+  /// @brief トップビューの着弾点プレビュー(現在クラブのフルスイング着弾予測)を
+  /// 計算し、MinimapControllerへ反映します。
+  void RefreshLandingPreview(core::GameContext &ctx);
+
   ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;
   ecs::Entity m_cameraEntity = UINT32_MAX;
@@ -142,7 +145,6 @@ private:
   // === Environment システム（環境効果） ===
   game::systems::EnvironmentParticleSystem m_particleSystem;
   game::systems::ParticleRenderSystem m_particleRenderSystem;
-  game::systems::PostProcessSystem m_postProcess;
   game::systems::TimeOfDaySystem m_timeOfDay;
   graphics::SkyboxTheme m_currentSkyboxTheme = graphics::SkyboxTheme::Default;
 

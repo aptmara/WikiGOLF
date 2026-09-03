@@ -76,6 +76,15 @@ public:
   /// @brief マップビュー状態のトグル
   void ToggleMapView(core::GameContext &ctx, ecs::Entity skyboxEntity);
 
+  /// @brief トップビュー上に着弾点プレビュー(中心マーカー+ばらつき範囲円)を
+  /// 表示・更新する。マップビューが無効な間は描画されない。
+  /// @param landingCenter 着弾(最終静止)予測位置のワールド座標
+  /// @param dispersionRadius ばらつき範囲の半径(ワールド単位)
+  /// @param visible 表示するかどうか
+  void SetLandingPreview(core::GameContext &ctx,
+                        const DirectX::XMFLOAT3 &landingCenter,
+                        float dispersionRadius, bool visible);
+
   /// @brief 現在マップビュー状態かどうか
   bool IsMapView() const { return m_isMapView; }
   void* GetMapSRV() const { return m_minimapRenderer ? m_minimapRenderer->GetSRV() : nullptr; }
@@ -147,6 +156,13 @@ private:
   ecs::Entity m_minimapFlagMarkerEntity = UINT32_MAX;  ///< ターゲットピン用パルスマーカー（🚩）
   std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）
   ecs::Entity m_minimapHelpEntity = UINT32_MAX;
+
+  // 着弾点プレビュー(トップビュー専用)
+  ecs::Entity m_landingPreviewRangeEntity = UINT32_MAX;  ///< ばらつき範囲円（大きな○）
+  ecs::Entity m_landingPreviewCenterEntity = UINT32_MAX; ///< 着弾中心マーカー
+  bool m_landingPreviewVisible = false;
+  DirectX::XMFLOAT3 m_landingPreviewCenter = {0.0f, 0.0f, 0.0f};
+  float m_landingPreviewRadius = 0.0f;
 
   // マップビュー追加UI
   ecs::Entity m_mapZoomIndicatorBg = UINT32_MAX;

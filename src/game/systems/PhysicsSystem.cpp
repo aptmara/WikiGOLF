@@ -18,6 +18,7 @@
 #include "../components/WikiComponents.h"
 #include "GameJuiceSystem.h" // 演出効果用
 #include "PhysicsFriction.h"
+#include "../utils/GameplayPhysicsConstants.h"
 #include "TerrainGenerator.h"
 #include <algorithm>
 #include <array>
@@ -442,8 +443,8 @@ struct StaticBodySpatialGrid {
           collider->type != ColliderType::Box) {
         continue;
       }
-      float halfX = std::abs(collider->size.x * transform->scale.x);
-      float halfZ = std::abs(collider->size.z * transform->scale.z);
+      float halfX = std::abs(collider->size.x * transform->scale.x) * 0.5f;
+      float halfZ = std::abs(collider->size.z * transform->scale.z) * 0.5f;
       int minX = GridCoord(transform->position.x - halfX, cellSize);
       int maxX = GridCoord(transform->position.x + halfX, cellSize);
       int minZ = GridCoord(transform->position.z - halfZ, cellSize);
@@ -517,7 +518,8 @@ static float GetJitterFromTable(uint32_t &cursor, float amplitude) {
 void PhysicsSystem(core::GameContext &ctx, float dt) {
   PROFILE_SCOPE("Physics.Update");
   // DTキャップ（ラグスパイク対策）
-  float clampedDt = std::min(dt, 0.033f); // 最大30FPS分
+  float clampedDt =
+      std::min(dt, game::physics::kMaxSimulationDeltaTime); // 最大30FPS分
 
   // 重力
   const XMVECTOR gravity = XMVectorSet(0.0f, -9.8f, 0.0f, 0.0f);
@@ -550,21 +552,20 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
     ballEntity = static_cast<ecs::Entity>(golfState->ballEntity);
   }
 
-  bool skipPhysics = false;
-  if (golfState && golfState->canShoot) {
+  float ballSpeedForSubsteps = 0.0f;
+  if (golfState && ballEntity != UINT32_MAX) {
+    golfState->isBallGrounded = false;
     if (auto *ballRb = ctx.world.Get<RigidBody>(ballEntity)) {
-      XMVECTOR ballVel = XMLoadFloat3(&ballRb->velocity);
-      skipPhysics = SafeLengthSq(ballVel) < 0.000001f;
+      ballSpeedForSubsteps = SafeLength(XMLoadFloat3(&ballRb->velocity));
     }
+    golfState->currentBallSpeed = ballSpeedForSubsteps;
   }
 
   // サブステップ（速度に応じて可変化）
   int subSteps = 4;
-  if (skipPhysics) {
-    subSteps = 0;
-  } else if (golfState && golfState->currentBallSpeed < 0.75f) {
+  if (ballSpeedForSubsteps < 0.75f) {
     subSteps = 1;
-  } else if (golfState && golfState->currentBallSpeed < 8.0f) {
+  } else if (ballSpeedForSubsteps < 8.0f) {
     subSteps = 2;
   }
   float subDt = subSteps > 0 ? clampedDt / static_cast<float>(subSteps) : 0.0f;
@@ -702,12 +703,6 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         XMStoreFloat4(&t.rotation, q);
       });
 
-  if (subSteps == 0) {
-    if (ctx.audio && ballEntity != UINT32_MAX) {
-      ctx.audio->SetLoopingSE(ctx, "BallRoll", "", 0.0f);
-    }
-  }
-
   // サブステップループ
   for (int step = 0; step < subSteps; ++step) {
     // 動的オブジェクトの更新
@@ -806,7 +801,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         });
 
         if (terrainSample.valid) {
-          terrainH = terrainSample.height;
+          terrainH = game::physics::ToVisualSurfaceHeight(terrainSample.height);
           const float visualSurfaceHeight = terrainH;
           terrainN = terrainSample.normal;
           if (insideHole) {
@@ -876,7 +871,7 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
                     ctx.world.GetGlobal<GameJuiceSystem *>();
                 if (juiceSlot && *juiceSlot) {
                   XMFLOAT3 impactPosition = {XMVectorGetX(pos),
-                                             visualSurfaceHeight + 0.006f,
+                                             visualSurfaceHeight,
                                              XMVectorGetZ(pos)};
                   (*juiceSlot)->TriggerMaterialEffect(
                       ctx, impactPosition, static_cast<TerrainMaterial>(mat),
@@ -921,7 +916,8 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
             isGrounded = true;
             groundNormal = terrainN;
-          } else if (penetration > -0.1f) {
+          } else if (penetration >
+                     -std::max(0.002f, col.radius * 0.15f)) {
             // 接地マージン
             isGrounded = true;
             groundNormal = terrainN;
@@ -1039,13 +1035,6 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
           frictionAccel *= scale;
         }
 
-        // 環境状態の保存（ボールのみ対象）
-        if (golfState && body.entity == ballEntity) {
-          golfState->isBallGrounded = true;
-          golfState->currentMaterial = static_cast<TerrainMaterial>(mat);
-          golfState->currentBallSpeed = currentSpeed;
-        }
-
         // 接線方向の重力成分に対する静止摩擦チェック
         float tangentialAcc = SafeLength(acc);
         float staticLimit = frictionAccel * 1.2f;
@@ -1131,6 +1120,14 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       // 値を書き戻す
       XMStoreFloat3(&t.position, pos);
       XMStoreFloat3(&rb.velocity, vel);
+
+      if (golfState && body.entity == ballEntity && step == subSteps - 1) {
+        golfState->isBallGrounded = isGrounded;
+        golfState->currentBallSpeed = speedFinal;
+        if (isGrounded) {
+          golfState->currentMaterial = static_cast<TerrainMaterial>(mat);
+        }
+      }
 
       // 接地中の走行音 (Rolling SE)
       if (ctx.audio && body.entity == ballEntity && step == subSteps - 1 &&

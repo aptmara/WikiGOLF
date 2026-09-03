@@ -8,6 +8,7 @@
  */
 
 #include "TutorialOverlayController.h"
+#include "../utils/GameplayPhysicsConstants.h"
 #include "CameraController.h"
 #include "ClubController.h"
 #include "ShotController.h"
@@ -497,7 +498,11 @@ void TutorialOverlayController::NextStep(core::GameContext& ctx) {
             
             if (golfState->ballEntity != UINT32_MAX) {
                 if (auto* tr = ctx.world.Get<components::Transform>(golfState->ballEntity)) {
-                    tr->position = {0.0f, 0.022f, -32.0f}; // ティー位置へリセット
+                    tr->position = {
+                        0.0f,
+                        game::physics::kTerrainVisualSurfaceOffset +
+                            game::physics::kBallRadius,
+                        -32.0f};
                 }
                 if (auto* rb = ctx.world.Get<components::RigidBody>(golfState->ballEntity)) {
                     rb->velocity = {0.0f, 0.0f, 0.0f};

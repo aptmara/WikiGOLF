@@ -6,6 +6,7 @@
 #include "../components/WikiComponents.h"
 #include "../components/Transform.h"
 #include "../systems/TimeOfDaySystem.h"
+#include "../utils/CarryDistanceTable.h"
 #include "../utils/JudgeFeedback.h"
 #include "../utils/ShotGaugeRules.h"
 #include "../utils/UIConstants.h"
@@ -137,8 +138,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
 void ShotController::ExecuteShot(core::GameContext& ctx,
                                  ecs::Entity ballEntity,
                                  const DirectX::XMFLOAT3& shotDir,
-                                 float clubPower,
-                                 float clubAngle,
+                                 const ClubController::Club& club,
                                  game::systems::TimeOfDaySystem* timeOfDay,
                                  WikiGolfHUD* hud) {
     auto* state = ctx.world.GetGlobal<game::components::GolfGameState>();
@@ -148,24 +148,27 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     state->shotCount++;
 
     auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
-    float powerMultiplier = 1.0f;
     float curveAmount = 0.0f;
 
-    if (shot->judgement == game::components::ShotJudgement::Special) {
-        powerMultiplier = 1.05f;
-    } else if (shot->judgement == game::components::ShotJudgement::Nice) {
-        powerMultiplier = 0.8f;
+    if (shot->judgement == game::components::ShotJudgement::Nice) {
         curveAmount = 0.1f;
     } else if (shot->judgement == game::components::ShotJudgement::Miss) {
-        powerMultiplier = 0.5f;
         curveAmount = 0.3f;
     }
 
-    const float powerRatio = game::utils::ClampGaugeValue(
+    // 「基本飛距離からの変位」でショットの強さを決定する。
+    // ゲージ比率と判定結果を距離の倍率として基準飛距離に掛け、
+    // 目標飛距離をクラブごとのキャリー距離テーブルで初速へ逆引きする。
+    const float distanceRatio = game::utils::ClampGaugeValue(
         shot->confirmedPower > 0.0f ? shot->confirmedPower : shot->powerGaugePos);
-    float power = clubPower * powerRatio * powerMultiplier;
+    const float judgementMultiplier =
+        game::utils::GetJudgementDistanceMultiplier(shot->judgement);
+    const float targetDistance =
+        club.baseCarryDistance * distanceRatio * judgementMultiplier;
+    const float power =
+        game::utils::LookupSpeedForDistance(club.carryTable, targetDistance);
 
-    float angleRad = DirectX::XMConvertToRadians(clubAngle);
+    float angleRad = DirectX::XMConvertToRadians(club.launchAngle);
     float vy = power * std::sin(angleRad);
     float vxz = power * std::cos(angleRad);
 
@@ -180,6 +183,8 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
         rb->velocity = {finalDir.x * vxz, vy, finalDir.z * vxz};
         rb->angularVelocity = {0.0f, 0.0f, 0.0f}; // simplified
     }
+    state->isBallGrounded = false;
+    state->currentBallSpeed = power;
 
     shot->phase = game::components::ShotState::Phase::Executing;
 

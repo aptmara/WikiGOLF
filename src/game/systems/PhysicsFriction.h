@@ -210,8 +210,8 @@ inline float ComputeSurfaceSinkDepth(
                                                  : 0.0f;
   const float impactRatio = std::clamp((impact - 0.25f) / 9.0f, 0.0f, 1.0f);
   const float rollRatio = std::clamp(speed / 12.0f, 0.0f, 1.0f);
-  const float radiusRatio = 1.0f + impactRatio * 0.38f + rollRatio * 0.17f;
-  return ballRadius * std::min(radiusRatio, 1.55f);
+  const float radiusRatio = 0.08f + impactRatio * 0.18f + rollRatio * 0.05f;
+  return ballRadius * std::min(radiusRatio, 0.31f);
 }
 
 /// @brief バンカー着地時に砂へ吸収されず残る接線方向速度の割合を返す

@@ -6,6 +6,7 @@
  */
 
 #include "../../ecs/Entity.h"
+#include "../utils/CarryDistanceTable.h"
 #include "TrajectoryPredictor.h"
 #include <DirectXMath.h>
 #include <string>
@@ -34,6 +35,12 @@ public:
     float rollingFrictionScale = 1.0f;
     std::string shortName;   // e.g. "1W"
     std::string categoryEN;  // e.g. "Driver"
+
+    /// @brief 平坦・無風フェアウェイでのフルスイング基準キャリー飛距離(ヤード)。
+    /// Initialize時にmaxPower/launchAngleから動的に算出する。
+    float baseCarryDistance = 0.0f;
+    /// @brief 「目標飛距離→初速」を求めるための対応表(基準飛距離と同時に算出)。
+    game::utils::CarryDistanceTable carryTable;
   };
 
   struct InputParams {

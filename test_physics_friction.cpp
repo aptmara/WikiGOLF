@@ -106,7 +106,7 @@ int main() {
 
   // 7) バンカーだけが速度に応じて沈み、半径内に収まる
   {
-    constexpr float ballRadius = 0.02135f;
+    constexpr float ballRadius = 0.04f;
     float fairway = game::systems::ComputeSurfaceSinkDepth(
         game::components::TerrainMaterial::Fairway, 8.0f, 12.0f,
         ballRadius);
@@ -119,12 +119,12 @@ int main() {
     CHECK_CLOSE(fairway, 0.0f, 1e-6f,
                 "Fairway does not sink the ball");
     CHECK(restingSand > 0.0f, "Resting ball settles slightly into bunker");
-    CHECK(restingSand >= ballRadius * 0.95f,
-          "Resting ball is buried halfway into bunker sand");
+    CHECK_CLOSE(restingSand, ballRadius * 0.08f, 1e-6f,
+                "Resting ball is only slightly embedded in bunker sand");
     CHECK(impactSand > restingSand,
           "Hard bunker impact sinks deeper than a resting ball");
-    CHECK(impactSand <= ballRadius * 1.55f + 1e-6f,
-          "Bunker sink depth remains bounded by the ball radius");
+    CHECK(impactSand <= ballRadius * 0.31f + 1e-6f,
+          "Bunker sink depth keeps most of the ball above the sand");
   }
 
   // 8) バンカー着地時だけ横方向の運動量を砂へ大きく吸収する

@@ -21,6 +21,7 @@ struct ClubUIData {
     std::string shortName;
     std::string categoryEN;
     float maxPower = 0.0f;
+    float baseCarryDistance = 0.0f; ///< 基準キャリー飛距離(ヤード)
 };
 
 class WikiGolfHUD {
@@ -64,6 +65,10 @@ public:
         std::vector<ecs::Entity> clubArrowEntities;
         ecs::Entity clubScrollUpEntity      = UINT32_MAX; // 上にも切替可能ヒント(▲)
         ecs::Entity clubScrollDownEntity    = UINT32_MAX; // 下にも切替可能ヒント(▼)
+
+        // クラブ選択パネル横: 着弾点プレビュー(トップビュー)トグルボタン
+        ecs::Entity landingPreviewBtnBgEntity   = UINT32_MAX;
+        ecs::Entity landingPreviewBtnTextEntity = UINT32_MAX;
 
         // 右下: ショットボタン
         ecs::Entity shotButtonBgEntity      = UINT32_MAX; 
@@ -153,10 +158,18 @@ public:
     /// @param visible true=表示, false=非表示
     void SetVisible(core::GameContext& ctx, bool visible);
 
+    /// @brief 着弾点プレビュー(トップビュー)トグルボタンの見た目を更新します。
+    /// @param hovered マウスがボタン上にあるか
+    /// @param active トップビュー(マップビュー)が現在有効か
+    /// @param enabled ボタンを操作可能な状態か(ショット中などは無効化)
+    void UpdateLandingPreviewButton(core::GameContext& ctx, bool hovered,
+                                    bool active, bool enabled);
+
 private:
     void InitializeCourseInfoPanel(core::GameContext& ctx);
     void InitializeWindCard(core::GameContext& ctx);
     void InitializeClubSelectList(core::GameContext& ctx);
+    void InitializeLandingPreviewButton(core::GameContext& ctx);
     void InitializeShotButton(core::GameContext& ctx);
     void InitializeControlHint(core::GameContext& ctx);
     void InitializeShotGaugePanel(core::GameContext& ctx);

@@ -219,6 +219,24 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
     m_minimapGuideDotEntities.push_back(dotEntity);
   }
 
+  // 着弾点プレビュー: ばらつき範囲円(大きな薄い○) + 中心マーカー
+  m_landingPreviewRangeEntity = ctx.world.CreateEntity();
+  auto &landingRange = ctx.world.Add<UIText>(m_landingPreviewRangeEntity);
+  landingRange.text = L"○";
+  landingRange.style = graphics::TextStyle::Guide();
+  landingRange.style.color = {1.0f, 0.75f, 0.15f, 0.55f}; // 半透明アンバー
+  landingRange.layer = game::ui::kLayerMarker;
+  landingRange.visible = false;
+
+  m_landingPreviewCenterEntity = ctx.world.CreateEntity();
+  auto &landingCenter = ctx.world.Add<UIText>(m_landingPreviewCenterEntity);
+  landingCenter.text = L"⛳";
+  landingCenter.style = graphics::TextStyle::Guide();
+  landingCenter.style.fontSize = 22.0f;
+  landingCenter.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  landingCenter.layer = game::ui::kLayerMarker + 1;
+  landingCenter.visible = false;
+
   // ズームインジケーター背景の生成（マップビューでのズーム率表示用）
   m_mapZoomIndicatorBg = ctx.world.CreateEntity();
   auto &zoomBg = ctx.world.Add<UIText>(m_mapZoomIndicatorBg);
@@ -412,7 +430,11 @@ void MinimapController::UpdateHoleIconEvaluation(
  */
 void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skyboxEntity) {
   m_isMapView = !m_isMapView;
-  
+
+  if (auto *golfState = ctx.world.GetGlobal<GolfGameState>()) {
+    golfState->isMapView = m_isMapView;
+  }
+
   if (ctx.world.IsAlive(skyboxEntity)) {
     auto* skybox = ctx.world.Get<components::Skybox>(skyboxEntity);
     if (skybox) {
@@ -453,6 +475,27 @@ void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skybox
     // 復帰直後は変化駆動判定に関わらず必ず1回再描画する。
     m_minimapHasRenderedOnce = false;
     m_lastRenderedMoveCount = -1;
+  }
+}
+
+/**
+ * @brief トップビュー上の着弾点プレビュー(中心マーカー+ばらつき範囲円)の
+ * 表示状態を設定します。実際の画面座標への配置はUpdateMinimap内で行う。
+ */
+void MinimapController::SetLandingPreview(core::GameContext &ctx,
+                                          const DirectX::XMFLOAT3 &landingCenter,
+                                          float dispersionRadius, bool visible) {
+  m_landingPreviewVisible = visible;
+  m_landingPreviewCenter = landingCenter;
+  m_landingPreviewRadius = std::max(dispersionRadius, 0.0f);
+
+  if (!visible) {
+    if (auto *range = ctx.world.Get<UIText>(m_landingPreviewRangeEntity)) {
+      range->visible = false;
+    }
+    if (auto *center = ctx.world.Get<UIText>(m_landingPreviewCenterEntity)) {
+      center->visible = false;
+    }
   }
 }
 
@@ -688,6 +731,37 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     }
   }
 
+  // 着弾点プレビュー(トップビュー専用): 着弾中心マーカー + ばらつき範囲円
+  {
+    auto *rangeTxt  = ctx.world.Get<UIText>(m_landingPreviewRangeEntity);
+    auto *centerTxt = ctx.world.Get<UIText>(m_landingPreviewCenterEntity);
+    float u = 0.5f, v = 0.5f;
+    const bool inView = m_isMapView && m_landingPreviewVisible &&
+        ProjectToMinimap(m_landingPreviewCenter.x, m_landingPreviewCenter.z, params, u, v);
+
+    if (inView) {
+      if (centerTxt) {
+        const float cs = centerTxt->style.fontSize;
+        centerTxt->x = mapBounds.x + u * mapBounds.width - cs * 0.5f;
+        centerTxt->y = mapBounds.y + v * mapBounds.height - cs * 0.5f;
+        centerTxt->visible = true;
+      }
+      if (rangeTxt && clipWidth > 0.0f) {
+        // ○グリフの見た目上の直径にほぼ相当するフォントサイズを、
+        // ワールド半径をマップ画面スケールへ換算して求める。
+        const float pixelRadius = (m_landingPreviewRadius / clipWidth) * mapBounds.width;
+        const float ringSize = std::clamp(pixelRadius * 2.0f, 16.0f, 480.0f);
+        rangeTxt->x = mapBounds.x + u * mapBounds.width - ringSize * 0.5f;
+        rangeTxt->y = mapBounds.y + v * mapBounds.height - ringSize * 0.5f;
+        rangeTxt->style.fontSize = ringSize;
+        rangeTxt->visible = true;
+      }
+    } else {
+      if (centerTxt) centerTxt->visible = false;
+      if (rangeTxt) rangeTxt->visible = false;
+    }
+  }
+
   // 座標および距離表示
   if (m_isMapView && ballT) {
     int mouseX = ctx.input.GetMousePosition().x;
@@ -869,6 +943,9 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
   // マップビューの操作処理
   if (ctx.input.GetKeyDown(VK_ESCAPE)) {
     m_isMapView = false;
+    if (auto *golfState = ctx.world.GetGlobal<GolfGameState>()) {
+      golfState->isMapView = false;
+    }
     m_mapOpenHintTimer = 0.0f;
     if (auto* openBg = ctx.world.Get<UIText>(m_mapOpenHintBg)) openBg->visible = false;
     if (auto* openTxt = ctx.world.Get<UIText>(m_mapOpenHintText)) openTxt->visible = false;

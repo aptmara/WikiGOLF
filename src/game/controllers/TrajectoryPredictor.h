@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../ecs/Entity.h"
+#include "../utils/CarryDistanceTable.h"
 #include <DirectXMath.h>
 #include <cstddef>
 #include <vector>
@@ -21,7 +22,10 @@ public:
     ecs::Entity ballEntity = UINT32_MAX;
     ecs::Entity arrowEntity = UINT32_MAX;
     DirectX::XMFLOAT3 shotDirection = {0.0f, 0.0f, 1.0f};
-    float maxPower = 0.0f;
+    /// @brief 平坦・無風フェアウェイでのフルスイング基準キャリー飛距離(ヤード)
+    float baseCarryDistance = 0.0f;
+    /// @brief 「目標飛距離→初速」を求めるためのクラブ別対応表への参照
+    const game::utils::CarryDistanceTable *carryTable = nullptr;
     float launchAngle = 0.0f;
     bool isMapView = false;
     game::systems::WikiTerrainSystem *terrainSystem = nullptr;

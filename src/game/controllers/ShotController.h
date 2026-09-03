@@ -6,6 +6,7 @@
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
+#include "ClubController.h"
 #include <DirectXMath.h>
 
 namespace game::systems {
@@ -43,16 +44,14 @@ public:
      * @param ctx ゲームコンテキスト
      * @param ballEntity ボールのエンティティ
      * @param shotDir ショットの方向
-     * @param clubPower 選択中クラブの最大パワー
-     * @param clubAngle 選択中クラブの打ち出し角度(度)
+     * @param club 選択中クラブ(基準飛距離・キャリー距離テーブルを含む)
      * @param timeOfDay 時間経過を反映するための TimeOfDaySystem
      * @param hud 判定結果などを表示するための HUD
      */
     void ExecuteShot(core::GameContext& ctx,
                      ecs::Entity ballEntity,
                      const DirectX::XMFLOAT3& shotDir,
-                     float clubPower,
-                     float clubAngle,
+                     const ClubController::Club& club,
                      game::systems::TimeOfDaySystem* timeOfDay,
                      WikiGolfHUD* hud);
 };

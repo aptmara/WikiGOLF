@@ -126,6 +126,15 @@ constexpr float kClubNameFontSize   = 17.0f;
 constexpr float kClubIconSize       = 44.0f;
 
 // =========================================================
+// 着弾点プレビューボタン (クラブ選択パネルの右横) - 1280x720固定
+// =========================================================
+constexpr float kLandingPreviewBtnX      = kClubPanelX + kClubItemW + 10.0f;
+constexpr float kLandingPreviewBtnY      = kClubPanelY;
+constexpr float kLandingPreviewBtnW      = 120.0f;
+constexpr float kLandingPreviewBtnH      = kClubItemH;
+constexpr float kLandingPreviewBtnFontSize = 13.0f;
+
+// =========================================================
 // ショットボタン (右下) - 1280x720固定
 // =========================================================
 constexpr float kShotBtnX           = 1030.0f;
