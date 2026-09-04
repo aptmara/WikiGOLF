@@ -21,6 +21,7 @@ public:
              ActionCallback returnToPreviousPage);
 
   const char* GetName() const override { return "PauseScene"; }
+  bool BlocksUnderlyingInput() const override { return true; }
 
   void OnEnter(core::GameContext& ctx) override;
   void OnUpdate(core::GameContext& ctx) override;

@@ -7,6 +7,7 @@
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
+#include "../../core/SceneManager.h"
 #include "../../ecs/World.h"
 #include "../components/UIButton.h"
 #include <functional>
@@ -31,9 +32,19 @@ public:
     float my = static_cast<float>(mousePos.y);
     bool lmbDown = ctx.input.GetMouseButton(0);
     bool lmbPressed = ctx.input.GetMouseButtonDown(0);
+    const core::Scene *inputScene =
+        ctx.sceneManager ? ctx.sceneManager->Current() : nullptr;
+    const bool blocksUnderlyingInput =
+        inputScene && inputScene->BlocksUnderlyingInput();
 
     ctx.world.Query<components::UIButton>().Each(
-        [&](ecs::Entity, components::UIButton &btn) {
+        [&](ecs::Entity entity, components::UIButton &btn) {
+          if (blocksUnderlyingInput && !inputScene->OwnsEntity(entity)) {
+            if (btn.state != components::ButtonState::Disabled) {
+              btn.state = components::ButtonState::Normal;
+            }
+            return;
+          }
           if (!btn.visible || btn.state == components::ButtonState::Disabled)
             return;
 

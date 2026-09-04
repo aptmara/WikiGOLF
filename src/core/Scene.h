@@ -6,6 +6,7 @@
 
 #include "../ecs/Entity.h"
 #include "../ecs/World.h"
+#include <algorithm>
 #include <vector>
 
 
@@ -37,6 +38,15 @@ public:
 
   /// @brief BeginFrame直後・Skybox/メインメッシュ描画前に呼ばれるオフスクリーン描画（オプション）
   virtual void RenderOffscreen(GameContext &ctx) {}
+
+  /// @brief trueの場合、このシーンの背面にあるUIへの入力を遮断する。
+  virtual bool BlocksUnderlyingInput() const { return false; }
+
+  /// @brief 指定エンティティがこのシーンで作成されたものか。
+  bool OwnsEntity(ecs::Entity entity) const {
+    return std::find(m_entities.begin(), m_entities.end(), entity) !=
+           m_entities.end();
+  }
 
 protected:
   /// @brief エンティティを作成し、追跡リストに追加
