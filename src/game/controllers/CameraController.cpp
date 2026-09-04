@@ -65,17 +65,18 @@ bool IntersectRayOBB(XMVECTOR rayOrigin, XMVECTOR rayDir, float maxDist,
 
   float tMin = 0.0f;
   float tMax = maxDist;
+  const XMVECTOR halfSize = XMVectorScale(boxSize, 0.5f);
 
   if (!IntersectRayAABBSlab(XMVectorGetX(localOrigin), XMVectorGetX(localDir),
-                             -XMVectorGetX(boxSize), XMVectorGetX(boxSize),
+                             -XMVectorGetX(halfSize), XMVectorGetX(halfSize),
                              tMin, tMax))
     return false;
   if (!IntersectRayAABBSlab(XMVectorGetY(localOrigin), XMVectorGetY(localDir),
-                             -XMVectorGetY(boxSize), XMVectorGetY(boxSize),
+                             -XMVectorGetY(halfSize), XMVectorGetY(halfSize),
                              tMin, tMax))
     return false;
   if (!IntersectRayAABBSlab(XMVectorGetZ(localOrigin), XMVectorGetZ(localDir),
-                             -XMVectorGetZ(boxSize), XMVectorGetZ(boxSize),
+                             -XMVectorGetZ(halfSize), XMVectorGetZ(halfSize),
                              tMin, tMax))
     return false;
 

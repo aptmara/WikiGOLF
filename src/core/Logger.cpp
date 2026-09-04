@@ -46,7 +46,7 @@ void Logger::Initialize(const std::string& filename) {
         if (m_fileStream.is_open()) {
             m_fileStream << "=== Game Log Started at "
                          << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S")
-                         << " ===" << std::endl;
+                         << " ===\n";
         }
     }
 }
@@ -54,7 +54,7 @@ void Logger::Initialize(const std::string& filename) {
 void Logger::Shutdown() {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_fileStream.is_open()) {
-        m_fileStream << "=== Game Log Ended ===" << std::endl;
+        m_fileStream << "=== Game Log Ended ===\n";
         m_fileStream.close();
     }
     if (m_warningFileStream.is_open()) m_warningFileStream.close();
@@ -98,7 +98,7 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
 
     // ファイル出力処理
     if (m_initialized && m_fileStream.is_open()) {
-        m_fileStream << fullMessage << std::endl;
+        m_fileStream << fullMessage << '\n';
         if (level == LogLevel::Error) m_fileStream.flush();
     }
     if (m_initialized && m_warningFileStream.is_open() &&
@@ -107,7 +107,9 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
         m_warningFileStream.flush();
     }
 
-    // デバッグ出力処理
+    // デバッガ/コンソール出力は開発時だけに限定する。Releaseではファイル出力を
+    // 維持しつつ、OutputDebugStringと標準出力の同期コストを避ける。
+#ifdef _DEBUG
     std::string debugOutput = fullMessage + "\n";
     OutputDebugStringA(debugOutput.c_str());
 
@@ -118,6 +120,7 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
         std::cout << fullMessage << std::endl;
         SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE); // Reset
     }
+#endif
 }
 
 } // namespace core
