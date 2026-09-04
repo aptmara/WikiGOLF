@@ -4,6 +4,7 @@
  */
 
 #include "GameJuiceSystem.h"
+#include "../utils/GameplayPhysicsConstants.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../ecs/World.h"
@@ -285,7 +286,7 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
-    mr.shader = ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
+    mr.shader = ctx.resource.LoadShader("Trail", L"shaders/TrailVS.hlsl",
                                         L"shaders/ParticlePS.hlsl");
     mr.isTransparent = true;
 
@@ -343,6 +344,7 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
 void GameJuiceSystem::ResetTrail() {
   m_trailWriteIndex = 0;
   m_trailUpdateTimer = 0.0f;
+  m_hasLastTrailTargetPosition = false;
   for (auto &pos : m_trailPositions) {
     pos = {0, -100, 0};
   }
@@ -356,6 +358,13 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
   auto *targetT = ctx.world.Get<Transform>(targetEntity);
   if (!targetT)
     return;
+
+  const float effectDt =
+      std::min(ctx.dt, game::physics::kMaxSimulationDeltaTime);
+  if (!m_hasLastTrailTargetPosition) {
+    m_lastTrailTargetPosition = targetT->position;
+    m_hasLastTrailTargetPosition = true;
+  }
 
   // ボールが動いているかチェック
   auto *rb = ctx.world.Get<components::RigidBody>(targetEntity);
@@ -378,6 +387,8 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
         }
       }
     }
+    m_trailUpdateTimer = 0.0f;
+    m_lastTrailTargetPosition = targetT->position;
     return;
   }
 
@@ -389,21 +400,51 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
   components::ShotJudgement judgement =
       shotState ? shotState->judgement : components::ShotJudgement::None;
 
-  // 一定間隔で位置を記録
-  m_trailUpdateTimer += ctx.dt;
-  if (m_trailUpdateTimer >= kTrailUpdateInterval) {
-    m_trailUpdateTimer = 0.0f;
+  const float moveX = targetT->position.x - m_lastTrailTargetPosition.x;
+  const float moveY = targetT->position.y - m_lastTrailTargetPosition.y;
+  const float moveZ = targetT->position.z - m_lastTrailTargetPosition.z;
+  const float frameDistance =
+      std::sqrt(moveX * moveX + moveY * moveY + moveZ * moveZ);
+  const float measuredSpeed =
+      effectDt > 0.0f ? frameDistance / effectDt : 0.0f;
+  const float spatialInterval =
+      measuredSpeed > 0.001f ? kTrailMaxSpacing / measuredSpeed
+                             : kTrailUpdateInterval;
+  const float sampleInterval =
+      std::clamp(std::min(kTrailUpdateInterval, spatialInterval),
+                 effectDt / static_cast<float>(kTrailCount),
+                 kTrailUpdateInterval);
 
-    // リングバッファに書き込み
-    m_trailPositions[m_trailWriteIndex] = targetT->position;
+  // フレーム内の移動区間を補間し、描画FPSと速度に依存しない密度で位置を記録する。
+  const float elapsedBeforeFrame =
+      std::min(m_trailUpdateTimer, sampleInterval);
+  const float accumulated = elapsedBeforeFrame + effectDt;
+  float sampleTime = sampleInterval - elapsedBeforeFrame;
+  while (sampleTime <= effectDt + 1e-6f) {
+    const float ratio = effectDt > 0.0f
+                            ? std::clamp(sampleTime / effectDt, 0.0f, 1.0f)
+                            : 1.0f;
+    DirectX::XMFLOAT3 samplePosition = {
+        m_lastTrailTargetPosition.x +
+            (targetT->position.x - m_lastTrailTargetPosition.x) * ratio,
+        m_lastTrailTargetPosition.y +
+            (targetT->position.y - m_lastTrailTargetPosition.y) * ratio,
+        m_lastTrailTargetPosition.z +
+            (targetT->position.z - m_lastTrailTargetPosition.z) * ratio};
+    m_trailPositions[m_trailWriteIndex] = samplePosition;
     m_trailWriteIndex = (m_trailWriteIndex + 1) % kTrailCount;
+    sampleTime += sampleInterval;
   }
+  m_trailUpdateTimer = std::fmod(accumulated, sampleInterval);
+  m_lastTrailTargetPosition = targetT->position;
 
-  // トレイルエンティティの位置とスケールを更新
+  // 先端は必ず現在のボール中心へ置き、残りを新しい履歴から過去方向へ並べる。
+  // m_trailWriteIndex は次の書き込み先なので、直前の履歴は writeIndex - 1。
   for (int i = 0; i < kTrailCount; ++i) {
-    // リングバッファのインデックス計算（古い順）
-    int posIndex = (m_trailWriteIndex + i) % kTrailCount;
-    auto &pos = m_trailPositions[posIndex];
+    const int historyIndex =
+        (m_trailWriteIndex - i + kTrailCount) % kTrailCount;
+    const DirectX::XMFLOAT3 pos =
+        i == 0 ? targetT->position : m_trailPositions[historyIndex];
 
     auto e = m_trailEntities[i];
     auto *t = ctx.world.Get<Transform>(e);
@@ -412,14 +453,14 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
     if (t && mr) {
       t->position = pos;
 
-      // 古いほど小さく
+      // 現在位置を最大・不透明にし、古い履歴ほど小さく透明にする。
       float ratio = (float)i / (float)(kTrailCount - 1);
       float fade = std::pow(1.0f - ratio, 1.5f);
       float sizeEase = 0.65f + 0.45f * std::pow(1.0f - ratio, 2.3f);
       float scaleBase = (0.07f + speedNormalized * 0.05f) * sizeEase;
       t->scale = {scaleBase, scaleBase, scaleBase};
 
-      DirectX::XMFLOAT4 baseColor = m_trailBaseColors[posIndex];
+      DirectX::XMFLOAT4 baseColor = m_trailBaseColors[i];
       DirectX::XMFLOAT3 tint = {1.0f, 0.5f + speedNormalized * 0.5f, 0.15f};
       if (judgement == components::ShotJudgement::Great) {
         tint = {1.2f, 1.0f, 0.35f};
@@ -755,12 +796,14 @@ void GameJuiceSystem::TriggerShotEffect(core::GameContext &ctx,
 
 void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
   const float gravity = 15.0f;
+  const float effectDt =
+      std::min(ctx.dt, game::physics::kMaxSimulationDeltaTime);
 
   for (auto &p : m_impactParticles) {
     if (p.lifetime <= 0.0f)
       continue;
 
-    p.lifetime -= ctx.dt;
+    p.lifetime -= effectDt;
 
     float particleGravity = gravity;
     float drag = 0.98f;
@@ -788,7 +831,7 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
     }
 
     // 物理更新
-    p.velocity.y -= particleGravity * ctx.dt;
+    p.velocity.y -= particleGravity * effectDt;
     p.velocity.x *= drag; // 空気抵抗
     p.velocity.z *= drag;
 
@@ -796,9 +839,9 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
 
     if (t) {
-      t->position.x += p.velocity.x * ctx.dt;
-      t->position.y += p.velocity.y * ctx.dt;
-      t->position.z += p.velocity.z * ctx.dt;
+      t->position.x += p.velocity.x * effectDt;
+      t->position.y += p.velocity.y * effectDt;
+      t->position.z += p.velocity.z * effectDt;
 
       // 縮小しながらフェードアウト
       float lifeRatio = std::max(0.0f, p.lifetime / p.maxLifetime);
@@ -835,8 +878,8 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
       XMVECTOR rot = XMLoadFloat4(&t->rotation);
       XMVECTOR angVel = XMLoadFloat3(&p.angularVelocity);
       XMVECTOR deltaRot = XMQuaternionRotationRollPitchYaw(
-          angVel.m128_f32[0] * ctx.dt, angVel.m128_f32[1] * ctx.dt,
-          angVel.m128_f32[2] * ctx.dt);
+          angVel.m128_f32[0] * effectDt, angVel.m128_f32[1] * effectDt,
+          angVel.m128_f32[2] * effectDt);
       rot = XMQuaternionMultiply(rot, deltaRot);
       XMStoreFloat4(&t->rotation, rot);
     }
@@ -914,7 +957,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
 
     if (t && mr) {
       t->position = position;
-      t->position.y += isBunker ? 0.012f : 0.1f;
+      t->position.y += isBunker ? 0.012f : 0.01f;
 
       mr->isVisible = true;
       mr->customFlags = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -1154,11 +1197,13 @@ void GameJuiceSystem::SpawnSandImprint(core::GameContext &ctx,
 
 void GameJuiceSystem::UpdateSandSurfaceEffects(core::GameContext &ctx,
                                                ecs::Entity targetEntity) {
+  const float effectDt =
+      std::min(ctx.dt, game::physics::kMaxSimulationDeltaTime);
   for (SandImprint &imprint : m_sandImprints) {
     if (imprint.lifetime <= 0.0f) {
       continue;
     }
-    imprint.lifetime = std::max(0.0f, imprint.lifetime - ctx.dt);
+    imprint.lifetime = std::max(0.0f, imprint.lifetime - effectDt);
     const float lifeRatio = imprint.lifetime / imprint.maxLifetime;
     if (auto *renderer = ctx.world.Get<MeshRenderer>(imprint.entity)) {
       const float fade = std::pow(std::clamp(lifeRatio, 0.0f, 1.0f), 1.8f);
@@ -1213,7 +1258,7 @@ void GameJuiceSystem::UpdateSandSurfaceEffects(core::GameContext &ctx,
   }
 
   if (speed > 0.35f) {
-    m_sandTrackTimer += ctx.dt;
+    m_sandTrackTimer += effectDt;
     const float interval = std::clamp(0.11f - speed * 0.002f, 0.045f, 0.11f);
     if (m_sandTrackTimer >= interval) {
       m_sandTrackTimer = 0.0f;
@@ -1258,7 +1303,9 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
     return;
   }
 
-  m_envEmitTimer += ctx.dt;
+  const float effectDt =
+      std::min(ctx.dt, game::physics::kMaxSimulationDeltaTime);
+  m_envEmitTimer += effectDt;
   // 速度が速いほどたくさん出す
   const float speed01 =
       std::clamp(state->currentBallSpeed / 28.0f, 0.0f, 1.0f);
@@ -1294,23 +1341,21 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
       auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
 
       if (t && mr) {
-        t->position = targetT->position;
-        p.groundHeight = targetT->position.y - 0.02f;
-        if (state->currentMaterial == TerrainMaterial::Bunker) {
-          auto *collider = ctx.world.Get<Collider>(targetEntity);
-          auto *body = ctx.world.Get<RigidBody>(targetEntity);
-          if (collider) {
-            const float verticalImpact =
-                body ? std::max(0.0f, -body->velocity.y) : 0.0f;
-            const float sink = ComputeSurfaceSinkDepth(
-                TerrainMaterial::Bunker, verticalImpact,
-                state->currentBallSpeed, collider->radius);
-            p.groundHeight = targetT->position.y - collider->radius + sink;
-          }
-          t->position.y = p.groundHeight + 0.012f;
-        } else {
-          t->position.y += 0.05f;
+        auto *collider = ctx.world.Get<Collider>(targetEntity);
+        auto *body = ctx.world.Get<RigidBody>(targetEntity);
+        float sink = 0.0f;
+        if (collider && state->currentMaterial == TerrainMaterial::Bunker) {
+          const float verticalImpact =
+              body ? std::max(0.0f, -body->velocity.y) : 0.0f;
+          sink = ComputeSurfaceSinkDepth(
+              TerrainMaterial::Bunker, verticalImpact,
+              state->currentBallSpeed, collider->radius);
         }
+        const float radius = collider ? collider->radius
+                                      : game::physics::kBallRadius;
+        p.groundHeight = targetT->position.y - radius + sink;
+        t->position = {targetT->position.x, p.groundHeight + 0.01f,
+                       targetT->position.z};
 
         mr->isVisible = true;
         mr->isTransparent = true;
@@ -1455,26 +1500,28 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
 void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
                                                  ecs::Entity targetEntity) {
   const float gravity = 9.8f;
+  const float effectDt =
+      std::min(ctx.dt, game::physics::kMaxSimulationDeltaTime);
 
   for (auto &p : m_envParticles) {
     if (p.lifetime <= 0.0f)
       continue;
 
-    p.lifetime -= ctx.dt;
+    p.lifetime -= effectDt;
 
     auto *t = ctx.world.Get<Transform>(p.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
 
     if (t) {
       if (p.kind == EnvironmentParticleKind::SandDust) {
-        const float drag = std::exp(-1.9f * ctx.dt);
+        const float drag = std::exp(-1.9f * effectDt);
         p.velocity.x *= drag;
-        p.velocity.y += (0.16f - p.velocity.y) * 1.35f * ctx.dt;
+        p.velocity.y += (0.16f - p.velocity.y) * 1.35f * effectDt;
         p.velocity.z *= drag;
 
-        t->position.x += p.velocity.x * ctx.dt;
-        t->position.y += p.velocity.y * ctx.dt;
-        t->position.z += p.velocity.z * ctx.dt;
+        t->position.x += p.velocity.x * effectDt;
+        t->position.y += p.velocity.y * effectDt;
+        t->position.z += p.velocity.z * effectDt;
 
         float progress = 1.0f - (p.lifetime / p.maxLifetime);
         float scale = p.baseScale * (1.0f + progress * 2.8f);
@@ -1490,21 +1537,21 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
           particleGravity = 11.5f;
           drag = 0.55f;
         }
-        const float dragRatio = std::exp(-drag * ctx.dt);
+        const float dragRatio = std::exp(-drag * effectDt);
         p.velocity.x *= dragRatio;
-        p.velocity.y -= particleGravity * ctx.dt;
+        p.velocity.y -= particleGravity * effectDt;
         p.velocity.z *= dragRatio;
 
-        t->position.x += p.velocity.x * ctx.dt;
-        t->position.y += p.velocity.y * ctx.dt;
-        t->position.z += p.velocity.z * ctx.dt;
+        t->position.x += p.velocity.x * effectDt;
+        t->position.y += p.velocity.y * effectDt;
+        t->position.z += p.velocity.z * effectDt;
 
         // 回転更新
         XMVECTOR rot = XMLoadFloat4(&t->rotation);
         XMVECTOR angVel = XMLoadFloat3(&p.angularVelocity);
         XMVECTOR deltaRot = XMQuaternionRotationRollPitchYaw(
-            angVel.m128_f32[0] * ctx.dt, angVel.m128_f32[1] * ctx.dt,
-            angVel.m128_f32[2] * ctx.dt);
+            angVel.m128_f32[0] * effectDt, angVel.m128_f32[1] * effectDt,
+            angVel.m128_f32[2] * effectDt);
         rot = XMQuaternionMultiply(rot, deltaRot);
         XMStoreFloat4(&t->rotation, rot);
 
@@ -1648,7 +1695,7 @@ void GameJuiceSystem::TriggerRippleEffect(core::GameContext &ctx,
 
   if (auto *t = ctx.world.Get<Transform>(r.entity)) {
     t->position = position;
-    t->position.y += 0.02f; // 地面より少し上
+    t->position.y += 0.003f;
     t->scale = {r.startScale, 0.02f, r.startScale};
   }
 
@@ -1659,11 +1706,13 @@ void GameJuiceSystem::TriggerRippleEffect(core::GameContext &ctx,
 }
 
 void GameJuiceSystem::UpdateRipples(core::GameContext &ctx) {
+  const float effectDt =
+      std::min(ctx.dt, game::physics::kMaxSimulationDeltaTime);
   for (auto &r : m_ripples) {
     if (r.lifetime <= 0.0f)
       continue;
 
-    r.lifetime -= ctx.dt;
+    r.lifetime -= effectDt;
     float progress = 1.0f - (r.lifetime / r.maxLifetime);
     float ease = std::pow(progress, 0.85f);
 

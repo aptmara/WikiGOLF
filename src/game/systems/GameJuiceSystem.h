@@ -161,8 +161,11 @@ private:
   std::vector<DirectX::XMFLOAT4> m_trailBaseColors;
   int m_trailWriteIndex = 0;
   float m_trailUpdateTimer = 0.0f;
+  DirectX::XMFLOAT3 m_lastTrailTargetPosition = {0.0f, 0.0f, 0.0f};
+  bool m_hasLastTrailTargetPosition = false;
   static constexpr int kTrailCount = 24;                ///< 軌跡プール数です。山内陽
   static constexpr float kTrailUpdateInterval = 0.025f; ///< 軌跡更新間隔です。山内陽
+  static constexpr float kTrailMaxSpacing = 0.10f;
 
   // --- インパクトエフェクト ---
   enum class ImpactParticleKind {
