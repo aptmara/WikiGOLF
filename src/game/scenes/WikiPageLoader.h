@@ -11,6 +11,7 @@
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
+#include <DirectXMath.h>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -37,6 +38,16 @@ class MinimapController;
 namespace game::scenes {
 
 /**
+ * @brief 近隣ホール用サムネイル取得（バックグラウンドスレッド）の結果
+ */
+struct PendingHoleThumbnail {
+    bool found = false;
+    std::vector<uint8_t> pixelsBGRA;
+    uint32_t width = 0;
+    uint32_t height = 0;
+};
+
+/**
  * @brief ページロードの結果
  */
 struct PageLoadResult {
@@ -54,6 +65,7 @@ struct PageDataAsyncResult {
     std::string articleText;
     std::vector<game::WikiLink> allLinks;
     std::vector<std::string> pageCategories;
+    std::vector<graphics::PendingWikiImage> pendingImages;
     bool hasData = false;
 };
 
@@ -165,6 +177,32 @@ public:
     void SetPreloadedData(std::vector<game::WikiLink> links, std::string extract);
 
     /**
+     * @brief 目的記事の代表サムネイルをGPUテクスチャ化して保持します。
+     *        以降のCreateHole呼び出し（ページ遷移のたびに再生成される目的ホール）で
+     *        使い回され、追加のAPI通信は発生しません。
+     * @param ctx ゲームコンテキスト（D3D11デバイスアクセス用）
+     * @param pixelsBGRA デコード済み32bpp BGRAピクセル列
+     * @param width 画像幅
+     * @param height 画像高さ
+     */
+    void SetTargetThumbnail(core::GameContext& ctx,
+                            const std::vector<uint8_t>& pixelsBGRA,
+                            uint32_t width, uint32_t height);
+
+    /**
+     * @brief ボール付近のホールに対し、記事サムネイル看板を遅延ロードします。
+     *        毎フレーム呼び出す想定。範囲内の未取得ホールのみ非同期フェッチを開始し
+     *        （同時実行数は上限あり）、完了済みのものを看板として反映、
+     *        既存の全看板をカメラの方向へビルボード回転させます。
+     * @param ctx ゲームコンテキスト
+     * @param ballPos ボールのワールド座標（距離判定の基準）
+     * @param cameraEntity ビルボード回転の基準にするカメラエンティティ
+     */
+    void UpdateNearbyHoleSignboards(core::GameContext& ctx,
+                                    const DirectX::XMFLOAT3& ballPos,
+                                    ecs::Entity cameraEntity);
+
+    /**
      * @brief ホールを生成します。
      */
     void CreateHole(core::GameContext& ctx, float x, float z,
@@ -198,6 +236,18 @@ private:
     /// @brief テクスチャのリンク領域からホールを一括配置する
     void CreateLinksFromTexture(core::GameContext& ctx);
 
+    /// @brief デコード済みBGRAピクセル列からD3D11 SRVを作成する（失敗時nullptr）
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> CreateSRVFromPixels(
+        core::GameContext& ctx, const std::vector<uint8_t>& pixelsBGRA,
+        uint32_t width, uint32_t height);
+
+    /// @brief 記事サムネイル看板（ビルボード）を旗ポールの真上に1枚生成する。
+    ///        額縁の色・演出強度はhopsToTarget（GetHoleColorと同じ配色）で決まる。
+    ecs::Entity CreateHoleSignboardEntity(
+        core::GameContext& ctx, float x, float z, float terrainH,
+        bool isTargetHole, int hopsToTarget, ID3D11ShaderResourceView* srv,
+        float aspect);
+
     // ---- 借用ポインタ（非所有） ----
     graphics::WikiTextureGenerator*    m_textureGenerator = nullptr;
     game::systems::WikiTerrainSystem*  m_terrainSystem    = nullptr;
@@ -207,6 +257,30 @@ private:
 
     // ---- 所有リソース ----
     std::unique_ptr<graphics::WikiTextureResult> m_wikiTexture;
+
+    // ---- 目的記事サムネイル（ゲーム開始時に1回だけ生成し使い回す） ----
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_targetThumbnailSRV;
+    float m_targetThumbnailAspect = 1.0f; // width / height
+    bool m_hasTargetThumbnail = false;
+
+    /**
+     * @brief 記事タイトルごとのサムネイル取得状況（ゲームセッション全体で使い回すキャッシュ）。
+     */
+    struct HoleThumbnailState {
+        enum class Status { Fetching, Ready, Failed };
+        Status status = Status::Fetching;
+        std::future<PendingHoleThumbnail> future;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
+        float aspect = 1.0f;
+    };
+    std::unordered_map<std::string, HoleThumbnailState> m_holeThumbnailCache;
+    int m_activeThumbnailFetches = 0;
+    static constexpr int kMaxConcurrentThumbnailFetches = 3;
+    static constexpr float kThumbnailLoadRadius = 45.0f;
+    // 距離判定・フェッチ管理・キャッシュ走査は毎フレームではなくこの間隔でのみ実行する
+    // （ビルボード回転自体は毎フレーム行うので見た目の滑らかさは変わらない）
+    float m_signboardScanTimer = 0.0f;
+    static constexpr float kSignboardScanInterval = 0.5f;
 
     // ---- フィールドサイズ（LoadPage 後に確定） ----
     float m_fieldWidth = 80.0f;

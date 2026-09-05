@@ -100,6 +100,36 @@ else()
     message(WARNING "tools/SkyboxGen.cpp not found; skipping SkyboxGen target.")
 endif()
 
+# Wiki記事の画像float+wrapレイアウトを実データで確認するプレビューツール（手動実行用）
+if(EXISTS "${CMAKE_SOURCE_DIR}/tools/WikiImagePreview.cpp")
+    add_executable(WikiImagePreview
+        tools/WikiImagePreview.cpp
+        src/graphics/WikiTextureGenerator.cpp
+        src/graphics/Shader.cpp
+        src/graphics/Mesh.cpp
+        src/graphics/MeshPrimitives.cpp
+        src/graphics/TangentGenerator.cpp
+        src/game/systems/WikiClient.cpp
+        src/core/Logger.cpp
+        src/core/StringUtils.cpp
+    )
+    target_include_directories(WikiImagePreview PRIVATE src)
+    target_link_libraries(WikiImagePreview
+        d3d11
+        d2d1
+        dwrite
+        dxguid
+        windowscodecs
+        winhttp
+        d3dcompiler
+    )
+    if(MSVC)
+        target_compile_definitions(WikiImagePreview PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                              -DWIN32_LEAN_AND_MEAN)
+        target_compile_options(WikiImagePreview PRIVATE /utf-8 /Zc:__cplusplus)
+    endif()
+endif()
+
 # シンプルなユニットテスト（CupIn判定）
 add_executable(test_cupin_utils test_cupin_utils.cpp)
 target_precompile_headers(test_cupin_utils PRIVATE src/pch.h)
@@ -204,6 +234,16 @@ if(MSVC)
 endif()
 add_test(NAME physics_friction COMMAND test_physics_friction)
 
+add_executable(test_trajectory_simulation test_trajectory_simulation.cpp)
+target_precompile_headers(test_trajectory_simulation PRIVATE src/pch.h)
+target_include_directories(test_trajectory_simulation PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_trajectory_simulation PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                              -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_trajectory_simulation PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME trajectory_simulation COMMAND test_trajectory_simulation)
+
 add_executable(test_shot_gauge_rules test_shot_gauge_rules.cpp)
 target_precompile_headers(test_shot_gauge_rules PRIVATE src/pch.h)
 target_include_directories(test_shot_gauge_rules PRIVATE src)
@@ -246,6 +286,16 @@ if(MSVC)
     target_compile_options(test_terrain_generation PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME terrain_generation COMMAND test_terrain_generation)
+
+add_executable(test_graphics_preset test_graphics_preset.cpp)
+target_precompile_headers(test_graphics_preset PRIVATE src/pch.h)
+target_include_directories(test_graphics_preset PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_graphics_preset PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                               -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_graphics_preset PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME graphics_preset COMMAND test_graphics_preset)
 
 add_executable(test_logger_warning_output test_logger_warning_output.cpp
                                           src/core/Logger.cpp)

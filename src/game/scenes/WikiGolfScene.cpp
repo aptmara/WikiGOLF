@@ -25,7 +25,10 @@
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
 #include "../utils/JudgeFeedback.h"
+#include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/TrajectorySimulation.h"
 #include "../utils/PageHistoryUtils.h"
+#include "../utils/UIConstants.h"
 #include "../utils/ProceduralFlag.h"
 #include "PauseScene.h"
 #include "CupInUtils.h"
@@ -212,9 +215,9 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
 
   // 環境効果システムの初期化
+  // ポストプロセス(霧/色調補正/ビネット/ブルーム)はctx.postProcessとしてグローバルに
+  // 保持されており、記事ロード時にWikiPageLoaderがUpdateFromEnvironment()で更新する。
   m_timeOfDay.Initialize(8.0f); // 朝8時スタート
-  m_postProcess.Initialize(ctx.graphics.GetDevice());
-  m_postProcess.ResetToDefaults();
 
   m_particleRenderSystem.Initialize(ctx.graphics.GetDevice());
 
@@ -277,6 +280,12 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
       m_pageLoader->SetPreloadedData(preloadedData->cachedLinks, preloadedData->cachedExtract);
     }
 
+    if (!preloadedData->targetThumbnailPixelsBGRA.empty()) {
+      m_pageLoader->SetTargetThumbnail(ctx, preloadedData->targetThumbnailPixelsBGRA,
+                                       preloadedData->targetThumbnailWidth,
+                                       preloadedData->targetThumbnailHeight);
+    }
+
     game::components::WikiGlobalData consumedData;
     ctx.world.SetGlobal(std::move(consumedData));
     LOG_INFO("WikiGolf", "Consumed preloaded WikiGlobalData and reset startup state");
@@ -318,6 +327,20 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     if (startPage == targetPage) {
       targetPage = wikiClient.FetchTargetPageTitle();
       targetId = -1; // 再取得のためID不明
+    }
+
+    // 目的記事の代表サムネイルを取得（ゴール看板表示用、追加1リクエストのみ）
+    if (!targetPage.empty()) {
+      std::string thumbUrl = wikiClient.FetchPageThumbnail(targetPage, 256);
+      if (!thumbUrl.empty()) {
+        std::string thumbBytes = wikiClient.DownloadBinary(thumbUrl);
+        std::vector<uint8_t> pixels;
+        uint32_t thumbW = 0, thumbH = 0;
+        if (!thumbBytes.empty() &&
+            graphics::DecodeWikiImageFromMemory(thumbBytes, pixels, thumbW, thumbH)) {
+          m_pageLoader->SetTargetThumbnail(ctx, pixels, thumbW, thumbH);
+        }
+      }
     }
   }
 
@@ -491,6 +514,56 @@ void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
 }
 
 /**
+ * @brief トップビューの着弾点プレビューを、現在選択中クラブのフルスイングで
+ * 計算し直し、MinimapControllerへ反映します。
+ * @details 実際の地形・風を考慮した弾道シミュレーション(TrajectoryPredictorと
+ * 同じ物理ロジック)を使うため、着弾点は実際のショット結果と整合する。
+ * クラブ切り替えはマップビュー中は行えないため、マップビューに入った
+ * 瞬間に1回計算すれば十分。
+ */
+void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
+  if (!m_minimapController) return;
+
+  if (!m_clubController || !ctx.world.IsAlive(m_ballEntity)) {
+    m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
+    return;
+  }
+
+  const auto &club = m_clubController->GetCurrentClub();
+  auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
+  if (!ballT || club.baseCarryDistance <= 0.0f) {
+    m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
+    return;
+  }
+
+  const DirectX::XMFLOAT3 shotDir =
+      m_cameraController ? m_cameraController->GetShotDirection()
+                         : DirectX::XMFLOAT3(0, 0, 1);
+
+  game::physics::BallPhysicsParams ballParams;
+  ballParams.rollingFrictionScale = club.rollingFrictionScale;
+
+  game::physics::WindParams wind;
+  if (auto *golfState =
+          ctx.world.GetGlobal<game::components::GolfGameState>()) {
+    wind.windSpeed = golfState->windSpeed;
+    wind.windDirection = golfState->windDirection;
+  }
+
+  game::physics::FlatGroundParams flatGroundUnused; // enabled=false: 実地形を使う
+
+  const auto result = game::physics::SimulateCarryDistance(
+      club.maxPower, club.launchAngle, shotDir, ballT->position,
+      m_terrainSystem.get(), flatGroundUnused, ballParams, wind);
+
+  // ばらつき範囲は基準飛距離の一定割合(ミート精度による左右・距離ブレの
+  // ざっくりした目安)とする。
+  const float dispersionRadius = club.baseCarryDistance * 0.06f;
+  m_minimapController->SetLandingPreview(ctx, result.landingPosition,
+                                         dispersionRadius, true);
+}
+
+/**
  * @brief フィールド（床・壁）を作成します。
  */
 void WikiGolfScene::CreateField(core::GameContext &ctx) {
@@ -570,9 +643,11 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
 
   m_ballEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_ballEntity);
-  t.position = {0.0f, 0.022f,
-                -8.0f * kFieldScale}; // 地面(0.0) + 半径(0.02135) + マージン
-  t.scale = {0.08f, 0.08f, 0.08f};
+  t.position = {0.0f, game::physics::kBallRadius,
+                -8.0f * kFieldScale};
+  t.scale = {game::physics::kBallVisualScale,
+             game::physics::kBallVisualScale,
+             game::physics::kBallVisualScale};
   LOG_DEBUG("WikiGolf", "Ball spawned at: ({}, {}, {})", t.position.x,
             t.position.y, t.position.z);
 
@@ -592,7 +667,7 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
 
   auto &c = ctx.world.Add<Collider>(m_ballEntity);
   c.type = ColliderType::Sphere;
-  c.radius = 0.02135f; // 規定半径 21.35mm
+  c.radius = game::physics::kBallRadius;
 
   auto *state = ctx.world.GetGlobal<GolfGameState>();
   if (state)
@@ -788,6 +863,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   if (m_pageLoader) {
       PROFILE_SCOPE("WikiGolf.PageLoaderAsync");
       m_pageLoader->UpdateAsyncPathEvaluation(ctx);
+
+      if (m_phase == ScenePhase::Playing) {
+          if (auto* ballT = ctx.world.Get<game::components::Transform>(m_ballEntity)) {
+              m_pageLoader->UpdateNearbyHoleSignboards(ctx, ballT->position, m_cameraEntity);
+          }
+      }
   }
 
   if (m_phase == ScenePhase::Transitioning && m_transitionController) {
@@ -872,6 +953,30 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       isMapView = m_minimapController->IsMapView();
   }
 
+  // クラブ選択パネル横: 着弾点プレビュー(トップビュー)トグルボタン
+  if (m_hud && m_minimapController && !tutorialInputLocked) {
+      PROFILE_SCOPE("WikiGolf.LandingPreviewButton");
+      const bool btnEnabled = !isMapView && state->canShoot &&
+          shot->phase == game::components::ShotState::Phase::Idle;
+      const bool hovered =
+          mouseX >= game::ui::kLandingPreviewBtnX &&
+          mouseX <= game::ui::kLandingPreviewBtnX + game::ui::kLandingPreviewBtnW &&
+          mouseY >= game::ui::kLandingPreviewBtnY &&
+          mouseY <= game::ui::kLandingPreviewBtnY + game::ui::kLandingPreviewBtnH;
+
+      if ((btnEnabled || isMapView) && hovered && ctx.input.GetMouseButtonDown(0)) {
+          m_minimapController->ToggleMapView(ctx, m_skyboxEntity);
+          isMapView = m_minimapController->IsMapView();
+          if (isMapView) {
+              RefreshLandingPreview(ctx);
+          } else {
+              m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
+          }
+      }
+
+      m_hud->UpdateLandingPreviewButton(ctx, hovered, isMapView, btnEnabled || isMapView);
+  }
+
   const bool escapeHandledByMapView =
       wasMapView && ctx.input.GetKeyDown(VK_ESCAPE);
   if (!tutorialInputLocked && !escapeHandledByMapView &&
@@ -908,7 +1013,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   if (m_cameraController && !tutorialInputLocked && !isMapView) {
       PROFILE_SCOPE("WikiGolf.Camera");
       m_cameraController->ProcessInput(ctx, mouseX, mouseY);
-      m_cameraController->Update(ctx);
   }
 
   // ショット処理
@@ -918,10 +1022,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (event.shotFired) {
           state->canShoot = false;
           if (m_cameraController) m_cameraController->OnShotStart(ctx, shot->confirmedPower);
-          float clubPower = m_clubController ? m_clubController->GetCurrentClub().maxPower : 30.0f;
-          float clubAngle = m_clubController ? m_clubController->GetCurrentClub().launchAngle : 30.0f;
-          DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
-          m_shotController->ExecuteShot(ctx, m_ballEntity, shotDir, clubPower, clubAngle, &m_timeOfDay, m_hud.get());
+          if (m_clubController) {
+              DirectX::XMFLOAT3 shotDir = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
+              m_shotController->ExecuteShot(ctx, m_ballEntity, shotDir, m_clubController->GetCurrentClub(), &m_timeOfDay, m_hud.get());
+          }
 
           // 打球判定の演出表示（着地地形の演出とは別エンティティ・別カーブ）
           auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
@@ -955,6 +1059,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   
   // 物理更新
   game::systems::PhysicsSystem(ctx, dt);
+
+  // 物理後のボール位置を使い、追従カメラの1フレーム遅延を防ぐ。
+  if (m_cameraController && !tutorialInputLocked && !isMapView) {
+      PROFILE_SCOPE("WikiGolf.CameraFollow");
+      m_cameraController->Update(ctx);
+  }
   
   // カップイン判定を地形判定の前に行う（遷移時は以降の処理をスキップ）
   if (CheckCupIn(ctx)) return;
@@ -966,7 +1076,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           float speed = std::sqrt(rb->velocity.x * rb->velocity.x +
                                   rb->velocity.y * rb->velocity.y +
                                   rb->velocity.z * rb->velocity.z);
-          if (speed < 0.1f) {
+          if (speed < 0.1f && state->isBallGrounded) {
               rb->velocity = {0, 0, 0};
               std::string terrainTex = "";
               bool treatAsOB = false;
@@ -1140,8 +1250,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       tParams.ballEntity    = m_ballEntity;
       tParams.arrowEntity   = m_arrowEntity;
       tParams.shotDirection = m_cameraController ? m_cameraController->GetShotDirection() : DirectX::XMFLOAT3(0,0,1);
-      tParams.maxPower      = m_clubController ? m_clubController->GetCurrentClub().maxPower : 30.0f;
-      tParams.launchAngle   = m_clubController ? m_clubController->GetCurrentClub().launchAngle : 30.0f;
+      if (m_clubController) {
+          const auto& currentClub = m_clubController->GetCurrentClub();
+          tParams.baseCarryDistance = currentClub.baseCarryDistance;
+          tParams.carryTable        = &currentClub.carryTable;
+          tParams.launchAngle       = currentClub.launchAngle;
+      } else {
+          tParams.launchAngle = 30.0f;
+      }
       tParams.isMapView     = false;
       tParams.terrainSystem = m_terrainSystem.get();
 
@@ -1149,7 +1265,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (shot->phase == game::components::ShotState::Phase::PowerCharging) {
           powerRatio = shot->powerGaugePos;
       } else if (shot->phase == game::components::ShotState::Phase::ImpactTiming) {
-          powerRatio = (shot->confirmedPower > 0.0f) ? shot->confirmedPower : shot->powerGaugePos;
+          // パワー決定後はゲージ値に関わらずクラブの基準飛距離(フルスイング相当)を
+          // 固定表示する。実際の飛距離への反映はExecuteShot時の判定倍率で行う。
+          powerRatio = 1.0f;
       } else if (shot->confirmedPower > 0.0f) {
           powerRatio = shot->confirmedPower;
       }
@@ -1264,7 +1382,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (m_clubController) {
               const auto& clubs = m_clubController->GetAllClubs();
               for (const auto& c : clubs) {
-                  clubDataList.push_back({c.name, c.iconTexture, c.shortName, c.categoryEN, c.maxPower});
+                  clubDataList.push_back({c.name, c.iconTexture, c.shortName, c.categoryEN, c.maxPower, c.baseCarryDistance});
               }
               clubIdx = m_clubController->GetCurrentClubIndex();
           }
@@ -1672,7 +1790,14 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       if (m_isTutorial) {
         LOG_INFO("WikiGolf", "[Tutorial] Non-target hole cupin. Resetting ball.");
         if (auto *ballT = ctx.world.Get<Transform>(m_ballEntity)) {
-          ballT->position = {0.0f, 0.022f, -32.0f};
+          const float terrainHeight =
+              m_terrainSystem ? m_terrainSystem->GetHeight(0.0f, -32.0f)
+                              : 0.0f;
+          ballT->position = {
+              0.0f,
+              game::physics::ToVisualSurfaceHeight(terrainHeight) +
+                  game::physics::kBallRadius,
+              -32.0f};
         }
         if (auto *ballRb = ctx.world.Get<RigidBody>(m_ballEntity)) {
           ballRb->velocity = {0.0f, 0.0f, 0.0f};

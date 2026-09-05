@@ -9,6 +9,7 @@
 #include "../../core/Logger.h"
 #include "../../core/SceneManager.h"
 #include "../../graphics/TextRenderer.h"
+#include "../../graphics/WikiTextureGenerator.h"
 #include "../components/Camera.h"
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
@@ -283,6 +284,25 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       }
       setProgress(0.9f);
       logStage("path-check-ready", 0.9f);
+    }
+
+    // 目的記事の代表サムネイルを取得（ゴール看板表示用）。
+    // ゲーム1回につき最大1回だけ（URL取得1リクエスト＋画像DL1回）。
+    if (!data->targetPage.empty()) {
+      const auto thumbStartedAt = std::chrono::steady_clock::now();
+      std::string thumbUrl = wikiClient.FetchPageThumbnail(data->targetPage, 256);
+      if (!thumbUrl.empty()) {
+        std::string thumbBytes = wikiClient.DownloadBinary(thumbUrl);
+        if (!thumbBytes.empty()) {
+          graphics::DecodeWikiImageFromMemory(
+              thumbBytes, data->targetThumbnailPixelsBGRA,
+              data->targetThumbnailWidth, data->targetThumbnailHeight);
+        }
+      }
+      LOG_INFO("LoadingScene",
+               "AsyncLoad target thumbnail: url={} decodedSize={}x{} elapsed={}ms",
+               !thumbUrl.empty(), data->targetThumbnailWidth,
+               data->targetThumbnailHeight, ElapsedMs(thumbStartedAt));
     }
 
     // 初回ページのデータを先行ロード（通信ラグ解消）

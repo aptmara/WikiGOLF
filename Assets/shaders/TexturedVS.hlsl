@@ -5,7 +5,8 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View;
     matrix Projection;
     float4 Color;
-    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap (unused here)
+    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap(unused), z: fadeFactor(1=表示,0=消去), w: effectIntensity(枠演出の強さ 0-1)
+    float4 LightDir;      // w: 経過時間（秒）。枠のシマー/パルス演出に使用
 };
 
 struct VS_INPUT {
@@ -21,18 +22,24 @@ struct PS_INPUT {
     float3 Normal : NORMAL;
     float2 TexCoord : TEXCOORD0;
     float4 Color : COLOR;
+    float FadeFactor : TEXCOORD1;
+    float Time : TEXCOORD2;
+    float EffectIntensity : TEXCOORD3;
 };
 
 PS_INPUT main(VS_INPUT input) {
     PS_INPUT output;
-    
+
     float4 worldPos = mul(float4(input.Pos, 1.0f), World);
     float4 viewPos = mul(worldPos, View);
     output.Pos = mul(viewPos, Projection);
-    
+
     output.Normal = mul(input.Normal, (float3x3)World);
     output.TexCoord = input.TexCoord;
     output.Color = Color;
-    
+    output.FadeFactor = MaterialFlags.z;
+    output.Time = LightDir.w;
+    output.EffectIntensity = MaterialFlags.w;
+
     return output;
 }

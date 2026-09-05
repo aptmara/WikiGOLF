@@ -8,6 +8,7 @@
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include <DirectXMath.h>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -94,6 +95,11 @@ struct WikiGlobalData {
   bool hasCachedData = false;
   std::vector<game::WikiLink> cachedLinks;
   std::string cachedExtract;
+
+  // 目的記事の代表サムネイル（LoadingSceneでデコード済み、ゴール看板表示用）
+  std::vector<uint8_t> targetThumbnailPixelsBGRA;
+  uint32_t targetThumbnailWidth = 0;
+  uint32_t targetThumbnailHeight = 0;
 };
 
 /**
@@ -194,6 +200,10 @@ struct GolfGameState {
   float currentBallSpeed = 0.0f;
   bool isBallGrounded = false;
   float rollingFrictionScale = 1.0f; ///< クラブごとの摩擦スケール
+
+  /// @brief マップビュー(俯瞰トップビュー)中かどうか。
+  /// RenderSystemが距離フォグを無効化するために参照する。
+  bool isMapView = false;
 
   // OB（アウトオブバウンズ）
   bool isOB = false;                              ///< OBフラグ
@@ -296,7 +306,13 @@ struct GolfHole {
   uint32_t flagClothEntity = 0; ///< プロシージャル旗布エンティティ
   std::vector<uint32_t> flagEntities; ///< 旗を構成する全エンティティ
   std::vector<uint32_t> particleEntities; ///< 旗周辺の常時粒子エンティティ
+  uint32_t signboardEntity = 0; ///< リンク先記事サムネイル看板（ビルボード）
 };
+
+/**
+ * @brief 常にカメラの方向へヨー回転するビルボード用タグ
+ */
+struct Billboard {};
 
 /**
  * @brief ホールの旗モデル用タグ

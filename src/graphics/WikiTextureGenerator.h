@@ -7,6 +7,7 @@
  * リンク位置も座標として記録する。
  */
 
+#include <cstdint>
 #include <d2d1_1.h>
 #include <d3d11.h>
 #include <dwrite.h>
@@ -47,6 +48,33 @@ struct HeadingRegion {
 };
 
 /**
+ * @brief テクスチャ生成に渡す、デコード済み画像1件分の情報。
+ *        ネットワーク取得・WICデコードはメインスレッド（D3D/D2Dデバイスに
+ *        触れない範囲）で事前に済ませておける。
+ */
+struct PendingWikiImage {
+  std::vector<uint8_t> pixelsBGRA; ///< 32bpp BGRA（premultiplied alpha）ピクセルデータ
+  uint32_t pixelWidth = 0;
+  uint32_t pixelHeight = 0;
+  std::wstring caption;
+  bool isLead = false;      ///< 記事先頭の代表画像（インフォボックス相当）か
+  std::wstring headingText; ///< 対応する見出しテキスト（isLead=falseの場合に使用）
+};
+
+/**
+ * @brief バイト列からPendingWikiImage用のピクセルデータをデコードします。
+ *        D3D/D2Dデバイスに依存しないため、バックグラウンドスレッドから呼べます。
+ * @param bytes ファイルバイト列（jpg/png/gif等、WICが対応する形式）
+ * @param outPixelsBGRA デコード結果（32bpp BGRA, premultiplied alpha）
+ * @param outWidth デコードされた画像の幅
+ * @param outHeight デコードされた画像の高さ
+ * @return 成功したらtrue
+ */
+bool DecodeWikiImageFromMemory(const std::string &bytes,
+                               std::vector<uint8_t> &outPixelsBGRA,
+                               uint32_t &outWidth, uint32_t &outHeight);
+
+/**
  * @brief Wikipedia風テクスチャ生成結果
  */
 struct WikiTextureResult {
@@ -70,10 +98,32 @@ struct WikiTextureResult {
   std::vector<HeadingRegion> headings;
 };
 
+/**
+ * @brief 本文レイアウトの1区画。float画像の左右でレイアウト幅が変わるため、
+ *        本文全体を単一のIDWriteTextLayoutではなく複数区画に分けて保持する。
+ */
+struct WikiTextSegment {
+  ComPtr<IDWriteTextLayout> layout;
+  float yTop = 0.0f;       ///< テクスチャ全体（連続座標）でのY開始位置
+  size_t textStart = 0;    ///< state.articleText内でのグローバル開始位置
+  size_t textLength = 0;
+};
+
+/**
+ * @brief 実際にテクスチャへ配置された画像1件（キャプション込み）。
+ */
+struct WikiPlacedImage {
+  ComPtr<ID2D1Bitmap> bitmap;
+  ComPtr<IDWriteTextLayout> captionLayout;
+  float x = 0.0f, y = 0.0f;
+  float width = 0.0f, height = 0.0f;
+};
+
 struct WikiTextureGenerationState {
   std::wstring title;
   std::wstring articleText;
   std::vector<std::pair<std::wstring, std::string>> links;
+  std::vector<PendingWikiImage> pendingImages;
   std::string targetPage;
   uint32_t requestedWidth = 0;
   uint32_t requestedHeight = 0;
@@ -86,8 +136,17 @@ struct WikiTextureGenerationState {
   float marginX = 40.0f;
   float currentY = 140.0f;
 
-  DWRITE_TEXT_METRICS textMetrics = {};
-  ComPtr<IDWriteTextLayout> textLayout;
+  // タイトル領域（本文とオーバーラップしないよう、実測した高さから動的に決定する）
+  float titleTopY = 30.0f;
+  float separatorY = 0.0f;
+  DWRITE_TEXT_METRICS titleMetrics = {};
+  ComPtr<IDWriteTextLayout> titleLayout;
+
+  // 本文（float画像の左右で幅の異なる区画に分割される）
+  std::vector<WikiTextSegment> textSegments;
+  std::vector<WikiPlacedImage> placedImages;
+  float contentEndY = 0.0f; ///< 本文（画像込み）が終わるY位置
+
   std::vector<bool> linkMatched;
   bool brushesInitialized = false;
   bool drawingEffectsApplied = false;
@@ -131,18 +190,21 @@ public:
   /// @param targetPage 目標ページ名
   /// @param width テクスチャ幅
   /// @param height テクスチャ高さ
+  /// @param pendingImages 見出し・リードに対応付けて埋め込む画像（デコード済み）
   /// @return 生成結果
   WikiTextureResult GenerateTexture(
       const std::wstring &title, const std::wstring &articleText,
       const std::vector<std::pair<std::wstring, std::string>> &links,
-      const std::string &targetPage, uint32_t width, uint32_t height);
+      const std::string &targetPage, uint32_t width, uint32_t height,
+      std::vector<PendingWikiImage> pendingImages = {});
 
   /// @brief インクリメンタル生成の開始
   bool BeginGenerateTexture(
       WikiTextureGenerationState &state, const std::wstring &title,
       const std::wstring &articleText,
       const std::vector<std::pair<std::wstring, std::string>> &links,
-      const std::string &targetPage, uint32_t width, uint32_t height);
+      const std::string &targetPage, uint32_t width, uint32_t height,
+      std::vector<PendingWikiImage> pendingImages = {});
 
   /// @brief 次のタイルを生成。完了時は true を返す
   bool GenerateNextTile(WikiTextureGenerationState &state);
@@ -151,6 +213,10 @@ private:
   /// @brief D2Dオフスクリーンターゲット作成
   bool CreateOffscreenTarget(uint32_t width, uint32_t height);
 
+  /// @brief デコード済みBGRAピクセル列からD2Dビットマップを作成する
+  ComPtr<ID2D1Bitmap> CreateBitmapFromPixels(const uint8_t *bgra,
+                                            uint32_t width, uint32_t height);
+
   // D2D/DWrite オブジェクト
   ComPtr<ID2D1Factory1> m_d2dFactory;
   ComPtr<ID2D1DeviceContext> m_d2dContext;
@@ -158,6 +224,7 @@ private:
   ComPtr<IDWriteFactory> m_dwriteFactory;
   ComPtr<IDWriteTextFormat> m_titleFormat;
   ComPtr<IDWriteTextFormat> m_bodyFormat;
+  ComPtr<IDWriteTextFormat> m_captionFormat;
 
   // D3D11 オブジェクト
   ComPtr<ID3D11Device> m_d3dDevice;

@@ -197,11 +197,136 @@ void ParseRenderedPageLinks(const std::string &response,
   }
 }
 
+/**
+ * @brief JSONオブジェクト内の真偽値フィールドを取得します。
+ */
+bool ExtractJsonBoolField(const std::string &json, const std::string &key,
+                          size_t searchFrom, size_t searchLimit,
+                          bool &value) {
+  size_t keyPos = json.find(key, searchFrom);
+  if (keyPos == std::string::npos || keyPos >= searchLimit) {
+    return false;
+  }
+
+  size_t pos = keyPos + key.length();
+  while (pos < json.length() && std::isspace(static_cast<unsigned char>(json[pos]))) {
+    ++pos;
+  }
+
+  if (json.compare(pos, 4, "true") == 0) {
+    value = true;
+    return true;
+  }
+  if (json.compare(pos, 5, "false") == 0) {
+    value = false;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @brief posが指すJSON値（文字列/オブジェクト/配列/その他リテラル）の終端の
+ *        直後の位置を返します。ネストした{}/[]や文字列中の"も正しく無視します。
+ */
+size_t SkipJsonValue(const std::string &json, size_t pos) {
+  if (pos >= json.size()) {
+    return pos;
+  }
+
+  char c = json[pos];
+  if (c == '{' || c == '[') {
+    const char open = c;
+    const char close = (c == '{') ? '}' : ']';
+    int depth = 0;
+    bool inString = false;
+    bool escaped = false;
+    for (size_t i = pos; i < json.size(); ++i) {
+      char ch = json[i];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch == '\\') {
+          escaped = true;
+        } else if (ch == '"') {
+          inString = false;
+        }
+        continue;
+      }
+      if (ch == '"') {
+        inString = true;
+      } else if (ch == open) {
+        ++depth;
+      } else if (ch == close) {
+        --depth;
+        if (depth == 0) {
+          return i + 1;
+        }
+      }
+    }
+    return json.size();
+  }
+
+  if (c == '"') {
+    bool escaped = false;
+    for (size_t i = pos + 1; i < json.size(); ++i) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (json[i] == '\\') {
+        escaped = true;
+        continue;
+      }
+      if (json[i] == '"') {
+        return i + 1;
+      }
+    }
+    return json.size();
+  }
+
+  size_t i = pos;
+  while (i < json.size() && json[i] != ',' && json[i] != '}' && json[i] != ']') {
+    ++i;
+  }
+  return i;
+}
+
+/**
+ * @brief 簡易的にHTMLタグとよく使う実体参照を取り除きます（見出しテキスト整形用）。
+ */
+std::string StripHtmlTags(const std::string &html) {
+  std::string result;
+  result.reserve(html.size());
+  bool inTag = false;
+  for (char c : html) {
+    if (c == '<') {
+      inTag = true;
+      continue;
+    }
+    if (c == '>') {
+      inTag = false;
+      continue;
+    }
+    if (!inTag) {
+      result += c;
+    }
+  }
+  result = ReplaceAll(result, "&amp;", "&");
+  result = ReplaceAll(result, "&lt;", "<");
+  result = ReplaceAll(result, "&gt;", ">");
+  result = ReplaceAll(result, "&quot;", "\"");
+  result = ReplaceAll(result, "&#39;", "'");
+  return result;
+}
+
 } // namespace
 
 WikiClient::WikiClient() {
+  // Wikimedia の User-Agent ポリシーに従い、連絡可能な識別情報を含める。
+  // https://meta.wikimedia.org/wiki/User-Agent_policy
   m_hSession =
-      WinHttpOpen(L"WikiPinball/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+      WinHttpOpen(L"WikiGOLF/1.0 (https://github.com/aptmara/WikiGOLF)",
+                  WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                   WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
   if (!m_hSession) {
     LOG_ERROR("WikiClient", "Failed to open WinHttp session");
@@ -221,19 +346,49 @@ WikiClient::WikiClient() {
 }
 
 WikiClient::~WikiClient() {
+  for (auto &kv : m_hostConnections) {
+    if (kv.second)
+      WinHttpCloseHandle(kv.second);
+  }
   if (m_hConnect)
     WinHttpCloseHandle(m_hConnect);
   if (m_hSession)
     WinHttpCloseHandle(m_hSession);
 }
 
+HINTERNET WikiClient::GetOrCreateConnection(const std::wstring &server) {
+  if (server == L"ja.wikipedia.org") {
+    return m_hConnect;
+  }
+
+  auto it = m_hostConnections.find(server);
+  if (it != m_hostConnections.end()) {
+    return it->second;
+  }
+
+  if (!m_hSession) {
+    return nullptr;
+  }
+
+  HINTERNET conn = WinHttpConnect(m_hSession, server.c_str(),
+                                  INTERNET_DEFAULT_HTTPS_PORT, 0);
+  if (!conn) {
+    LOG_ERROR("WikiClient", "Failed to connect to host");
+    return nullptr;
+  }
+
+  m_hostConnections[server] = conn;
+  return conn;
+}
+
 std::string WikiClient::PerformGetRequest(const std::wstring &server,
                                           const std::wstring &path) {
-  if (!m_hConnect)
+  HINTERNET hConnect = GetOrCreateConnection(server);
+  if (!hConnect)
     return "";
 
   HINTERNET hRequest = WinHttpOpenRequest(
-      m_hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
+      hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
       WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
   if (!hRequest) {
     LOG_ERROR("WikiClient", "Failed to open request");
@@ -501,24 +656,76 @@ WikiClient::FetchPageCategories(const std::string &title) {
   return categories;
 }
 
-std::string WikiClient::FetchTargetPageTitle() {
-  std::string response = PerformGetRequest(
-      L"ja.wikipedia.org",
-      L"/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=5&format="
-      L"json&formatversion=2");
+WikiTargetPage WikiClient::FetchTargetPage(int thumbSize) {
+  WikiTargetPage result;
+  result.title = "Japan";
 
-  size_t titlePos = response.find("\"title\":\"");
-  if (titlePos != std::string::npos) {
-    size_t start = titlePos + 9;
-    size_t end = response.find("\"", start);
-    if (end != std::string::npos) {
-      std::string title = response.substr(start, end - start);
-      title = ReplaceAll(title, "\\\"", "\"");
-      title = ReplaceAll(title, "\\/", "/");
-      return title;
-    }
+  // list=random ではなく generator=random にすることで、ランダム選定と
+  // 代表サムネイル取得(prop=pageimages)を1リクエストにまとめる。
+  std::wstring path =
+      L"/w/api.php?action=query&generator=random&grnnamespace=0&grnlimit=5&"
+      L"prop=pageimages&piprop=thumbnail&pithumbsize=" +
+      std::to_wstring(thumbSize) + L"&format=json&formatversion=2";
+  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+  if (response.empty()) {
+    return result;
   }
-  return "Japan";
+
+  size_t pagesPos = response.find("\"pages\":");
+  if (pagesPos == std::string::npos) {
+    return result;
+  }
+  size_t bracketPos = response.find('[', pagesPos);
+  size_t objStart = (bracketPos != std::string::npos)
+                        ? response.find('{', bracketPos)
+                        : std::string::npos;
+  if (bracketPos == std::string::npos || objStart == std::string::npos) {
+    return result;
+  }
+  const size_t arrEnd = SkipJsonValue(response, bracketPos);
+  const size_t objEnd = std::min(SkipJsonValue(response, objStart), arrEnd);
+
+  std::string title;
+  size_t nextPos = 0;
+  if (ExtractJsonStringField(response, "\"title\":\"", objStart, objEnd, title,
+                             nextPos)) {
+    result.title = title;
+  }
+
+  std::string thumbSrc;
+  if (ExtractJsonStringField(response, "\"source\":\"", objStart, objEnd,
+                             thumbSrc, nextPos)) {
+    result.thumbnailUrl = thumbSrc;
+  }
+
+  LOG_INFO("WikiClient", "FetchTargetPage: title='{}' hasThumbnail={}",
+           result.title, !result.thumbnailUrl.empty());
+  return result;
+}
+
+std::string WikiClient::FetchTargetPageTitle() { return FetchTargetPage().title; }
+
+std::string WikiClient::FetchPageThumbnail(const std::string &title,
+                                           int thumbSize) {
+  std::string encodedTitle = UrlEncode(title);
+  std::wstring wtitle = core::ToWString(encodedTitle);
+
+  std::wstring path = L"/w/api.php?action=query&titles=" + wtitle +
+                      L"&prop=pageimages&piprop=thumbnail&pithumbsize=" +
+                      std::to_wstring(thumbSize) +
+                      L"&format=json&formatversion=2";
+  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+  if (response.empty()) {
+    return "";
+  }
+
+  std::string thumbSrc;
+  size_t nextPos = 0;
+  if (ExtractJsonStringField(response, "\"source\":\"", 0, response.size(),
+                             thumbSrc, nextPos)) {
+    return thumbSrc;
+  }
+  return "";
 }
 
 std::string WikiClient::FetchPageExtract(const std::string &title,
@@ -527,9 +734,12 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
 
   std::wstring wtitle = core::ToWString(encodedTitle);
 
+  // exsectionformat=wiki を指定することで、プレーンテキスト抽出でも
+  // 見出し記法「== 見出し ==」が保持される（見出し解析・強調表示に利用）。
   std::wstring path =
       L"/w/"
-      L"api.php?action=query&prop=extracts&explaintext&redirects=1&format=json&"
+      L"api.php?action=query&prop=extracts&explaintext&exsectionformat=wiki&"
+      L"redirects=1&format=json&"
       L"formatversion=2&titles=" +
       wtitle;
 
@@ -575,6 +785,153 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
     }
   }
   return "(Failed to fetch extract)";
+}
+
+std::vector<WikiImageInfo> WikiClient::FetchPageImages(const std::string &title,
+                                                       int maxImages) {
+  std::vector<WikiImageInfo> result;
+  std::string encodedTitle = UrlEncode(title);
+  std::wstring wtitle = core::ToWString(encodedTitle);
+
+  // REST API: UIアイコン等を除いた実コンテンツ画像のみを、キャプション・
+  // 所属節番号・解像度別URL付きで返す。
+  std::wstring path = L"/api/rest_v1/page/media-list/" + wtitle;
+  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+  if (response.empty()) {
+    return result;
+  }
+
+  size_t itemsPos = response.find("\"items\":");
+  if (itemsPos == std::string::npos) {
+    return result;
+  }
+  size_t bracketPos = response.find('[', itemsPos);
+  if (bracketPos == std::string::npos) {
+    return result;
+  }
+  size_t arrEnd = SkipJsonValue(response, bracketPos);
+
+  size_t pos = bracketPos + 1;
+  while (pos < arrEnd && static_cast<int>(result.size()) < maxImages) {
+    size_t objStart = response.find('{', pos);
+    if (objStart == std::string::npos || objStart >= arrEnd) {
+      break;
+    }
+    size_t objEnd = std::min(SkipJsonValue(response, objStart), arrEnd);
+
+    std::string type;
+    size_t nextPos = 0;
+    ExtractJsonStringField(response, "\"type\":\"", objStart, objEnd, type, nextPos);
+
+    if (type == "image") {
+      WikiImageInfo info;
+      ExtractJsonStringField(response, "\"title\":\"", objStart, objEnd,
+                             info.fileTitle, nextPos);
+      ExtractJsonBoolField(response, "\"leadImage\":", objStart, objEnd,
+                          info.leadImage);
+      ExtractJsonIntField(response, "\"section_id\":", objStart, objEnd,
+                         info.sectionId);
+      ExtractJsonStringField(response, "\"text\":\"", objStart, objEnd,
+                             info.caption, nextPos);
+
+      std::string src;
+      if (ExtractJsonStringField(response, "\"src\":\"", objStart, objEnd, src,
+                                 nextPos)) {
+        if (src.rfind("//", 0) == 0) {
+          src = "https:" + src;
+        }
+        info.thumbUrl = src;
+      }
+
+      if (!info.thumbUrl.empty()) {
+        result.push_back(std::move(info));
+      }
+    }
+
+    pos = objEnd;
+  }
+
+  LOG_INFO("WikiClient", "Fetched {} images for {}", result.size(), title);
+  return result;
+}
+
+std::vector<WikiSectionInfo> WikiClient::FetchPageSections(const std::string &title) {
+  std::vector<WikiSectionInfo> result;
+  std::string encodedTitle = UrlEncode(title);
+  std::wstring wtitle = core::ToWString(encodedTitle);
+
+  std::wstring path =
+      L"/w/api.php?action=parse&prop=tocdata&format=json&formatversion=2&page=" +
+      wtitle;
+  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+  if (response.empty()) {
+    return result;
+  }
+
+  size_t secPos = response.find("\"sections\":");
+  if (secPos == std::string::npos) {
+    return result;
+  }
+  size_t bracketPos = response.find('[', secPos);
+  if (bracketPos == std::string::npos) {
+    return result;
+  }
+  size_t arrEnd = SkipJsonValue(response, bracketPos);
+
+  size_t pos = bracketPos + 1;
+  while (pos < arrEnd) {
+    size_t objStart = response.find('{', pos);
+    if (objStart == std::string::npos || objStart >= arrEnd) {
+      break;
+    }
+    size_t objEnd = std::min(SkipJsonValue(response, objStart), arrEnd);
+
+    WikiSectionInfo info;
+    ExtractJsonIntField(response, "\"hLevel\":", objStart, objEnd, info.level);
+
+    std::string indexStr;
+    size_t nextPos = 0;
+    if (ExtractJsonStringField(response, "\"index\":\"", objStart, objEnd,
+                               indexStr, nextPos)) {
+      info.index = std::atoi(indexStr.c_str());
+    }
+
+    std::string line;
+    if (ExtractJsonStringField(response, "\"line\":\"", objStart, objEnd, line,
+                               nextPos)) {
+      info.heading = StripHtmlTags(line);
+    }
+
+    if (!info.heading.empty()) {
+      result.push_back(std::move(info));
+    }
+
+    pos = objEnd;
+  }
+
+  LOG_INFO("WikiClient", "Fetched {} sections for {}", result.size(), title);
+  return result;
+}
+
+std::string WikiClient::DownloadBinary(const std::string &url) {
+  std::string u = url;
+  if (u.rfind("https://", 0) == 0) {
+    u = u.substr(8);
+  } else if (u.rfind("http://", 0) == 0) {
+    u = u.substr(7);
+  }
+
+  size_t slashPos = u.find('/');
+  if (slashPos == std::string::npos) {
+    LOG_ERROR("WikiClient", "DownloadBinary: invalid URL");
+    return "";
+  }
+
+  std::wstring host = core::ToWString(u.substr(0, slashPos));
+  std::wstring path = core::ToWString(u.substr(slashPos));
+  std::string data = PerformGetRequest(host, path);
+  LOG_INFO("WikiClient", "Downloaded binary: {} bytes", data.size());
+  return data;
 }
 
 } // namespace game::systems
