@@ -99,6 +99,19 @@ public:
   std::string FetchPageExtract(const std::string &title, int lengthLimit = 0);
 
   /**
+   * @brief 記事内の表・インフォボックスのテキストを取得します
+   * @details FetchPageExtract（explaintext）は仕様上テーブル・インフォボックスを
+   *          問答無用で除去してしまうため、そこにしか出現しないリンク
+   *          （パイプリンクの表示名違い等を含む）が本文一致判定・クリック領域
+   *          生成の両方から漏れてしまう。action=parse のレンダリング済みHTMLから
+   *          <table>...</table> ブロックだけを抜き出し、タグを除去した
+   *          プレーンテキストとして返す。articleText の末尾に連結して使う想定。
+   * @param title 記事タイトル
+   * @return 表・インフォボックスのテキスト（見つからなければ空文字列）
+   */
+  std::string FetchPageTableText(const std::string &title);
+
+  /**
    * @brief 記事に埋め込まれた画像一覧を取得します（UIアイコン等は除外済み）
    * @param title 記事タイトル
    * @param maxImages 取得する最大件数

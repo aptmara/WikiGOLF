@@ -134,9 +134,11 @@ struct TextStyle {
   }
 
   /// @brief ガイド表示用（白文字 + 太黒縁 + 影） - どんな背景でも読める最強設定
+  /// @note 3Dシーン上に直接重ねる文字（判定テキスト・ミニマップの記号等）に
+  ///       使うため、白文字+黒縁のコントラスト設計はそのまま維持する。
   static TextStyle Guide() {
     TextStyle s;
-    s.fontFamily = "Kiwi Maru Medium"; // 操作ガイド等は日本語主体のため丸ゴシック
+    s.fontFamily = "Meiryo"; // 操作ガイド等は日本語主体のため、Wikipedia本文相当のフラットなゴシック
     s.fontSize = 24.0f; // 読みやすく小さめに
     s.color = {1.0f, 1.0f, 1.0f, 1.0f};
     s.align = TextAlign::Center;
@@ -191,14 +193,11 @@ struct TextStyle {
   /// @brief HUDの見出しテキスト: 現在ページ名・パネルタイトル用
   static TextStyle BrowserURL() {
     TextStyle s;
-    s.fontFamily = "Kiwi Maru Medium";
+    s.fontFamily = "Meiryo";
     s.fontSize = 20.0f;
-    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
+    s.color = {0.125f, 0.129f, 0.133f, 1.0f}; // #202122 紙面上の本文色
     s.align = TextAlign::Left;
-    s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
-    s.shadowOffsetX = 0.0f;
-    s.shadowOffsetY = 1.0f;
+    s.hasShadow = false;
     return s;
   }
 
@@ -207,12 +206,9 @@ struct TextStyle {
     TextStyle s;
     s.fontFamily = "Barlow Condensed Medium";
     s.fontSize = 12.0f;
-    s.color = {0.620f, 0.660f, 0.700f, 1.0f};
+    s.color = {0.329f, 0.349f, 0.365f, 1.0f}; // #54595d
     s.align = TextAlign::Left;
-    s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
-    s.shadowOffsetX = 0.0f;
-    s.shadowOffsetY = 1.0f;
+    s.hasShadow = false;
     return s;
   }
 
@@ -221,37 +217,31 @@ struct TextStyle {
     TextStyle s;
     s.fontFamily = "Barlow Condensed SemiBold";
     s.fontSize = 12.0f;
-    s.color = {0.620f, 0.660f, 0.700f, 1.0f};
+    s.color = {0.329f, 0.349f, 0.365f, 1.0f}; // #54595d
     s.align = TextAlign::Left;
     s.hasShadow = false;
     return s;
   }
 
-  /// @brief カード数値: 風速・距離等の主要数値（大・白）
+  /// @brief カード数値: 風速・距離等の主要数値（大・紙面上の本文色）
   static TextStyle CardValue() {
     TextStyle s;
-    s.fontFamily = "Share Tech Mono";
+    s.fontFamily = "Consolas";
     s.fontSize = 26.0f;
-    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
+    s.color = {0.125f, 0.129f, 0.133f, 1.0f}; // #202122
     s.align = TextAlign::Left;
-    s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
-    s.shadowOffsetX = 0.0f;
-    s.shadowOffsetY = 1.0f;
+    s.hasShadow = false;
     return s;
   }
 
-  /// @brief 目的地強調: ターゲットページ名専用（金色はこの用途にのみ使う）
+  /// @brief 目的地強調: ターゲットページ名専用（秀逸な記事の星色をこの用途にのみ使う）
   static TextStyle GoalHighlight() {
     TextStyle s;
-    s.fontFamily = "Mamelon 5 Hi";
+    s.fontFamily = "Times New Roman";
     s.fontSize = 20.0f;
-    s.color = {0.980f, 0.780f, 0.260f, 1.0f};
+    s.color = {0.624f, 0.518f, 0.204f, 1.0f}; // #9f8434
     s.align = TextAlign::Left;
-    s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
-    s.shadowOffsetX = 0.0f;
-    s.shadowOffsetY = 1.0f;
+    s.hasShadow = false;
     return s;
   }
 
@@ -260,7 +250,7 @@ struct TextStyle {
     TextStyle s;
     s.fontFamily = "Barlow Condensed SemiBold";
     s.fontSize = 12.0f;
-    s.color = {0.620f, 0.660f, 0.700f, 1.0f};
+    s.color = {0.329f, 0.349f, 0.365f, 1.0f}; // #54595d
     s.align = TextAlign::Left;
     s.hasShadow = false;
     return s;
@@ -269,28 +259,22 @@ struct TextStyle {
   /// @brief ショットパネル値: パーセント等の主要数値
   static TextStyle ShotPanelValue() {
     TextStyle s;
-    s.fontFamily = "Share Tech Mono";
+    s.fontFamily = "Consolas";
     s.fontSize = 22.0f;
-    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
+    s.color = {0.125f, 0.129f, 0.133f, 1.0f}; // #202122
     s.align = TextAlign::Right;
-    s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
-    s.shadowOffsetX = 0.0f;
-    s.shadowOffsetY = 1.0f;
+    s.hasShadow = false;
     return s;
   }
 
-  /// @brief クラブ名テキスト（カード内・白・中央揃え）
+  /// @brief クラブ名テキスト（カード内・紙面上の本文色・中央揃え）
   static TextStyle ClubName() {
     TextStyle s;
-    s.fontFamily = "Kiwi Maru Medium";
+    s.fontFamily = "Meiryo";
     s.fontSize = 16.0f;
-    s.color = {0.960f, 0.965f, 0.975f, 1.0f};
+    s.color = {0.125f, 0.129f, 0.133f, 1.0f}; // #202122
     s.align = TextAlign::Center;
-    s.hasShadow = true;
-    s.shadowColor = {0.0f, 0.0f, 0.0f, 0.35f};
-    s.shadowOffsetX = 0.0f;
-    s.shadowOffsetY = 1.0f;
+    s.hasShadow = false;
     return s;
   }
 };

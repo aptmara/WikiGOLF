@@ -9,6 +9,7 @@
 #include "../systems/TerrainGenerator.h"
 #include <d3d11.h>
 #include <wrl/client.h>
+#include <deque>
 #include <future>
 #include <memory>
 #include <string>
@@ -98,6 +99,10 @@ private:
   ecs::Entity m_floorEntity = 0xFFFFFFFF;
   std::shared_ptr<TerrainData> m_terrainData;
   bool m_tutorialMode = false;
+
+  // ボールが通った軌跡（一定距離ぶんだけ保持し、草の倒れ込みに反映する）。
+  // 先頭が最も古いサンプル、末尾が最新のボール位置。
+  std::deque<DirectX::XMFLOAT3> m_ballTrail;
 
   /// @brief 床作成（同期版 / BuildFieldから呼ぶ）
   void CreateFloor(core::GameContext &ctx,

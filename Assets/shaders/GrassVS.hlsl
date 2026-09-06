@@ -65,15 +65,15 @@ VS_OUTPUT main(VS_INPUT input) {
 
     // --- ボール接触による倒れ込み ---
     float2 fromContact = worldPos.xz - inst.Flags.xy;
-    float responseRadius = lerp(0.55f, 1.05f, materialClass);
+    float responseRadius = lerp(0.30f, 0.55f, materialClass);
     float contactFalloff = saturate(1.0f - length(fromContact) / responseRadius);
     contactFalloff = contactFalloff * contactFalloff * (3.0f - 2.0f * contactFalloff);
     float bend = saturate(inst.Flags.w) * contactFalloff * tipWeight;
     float2 bendDirection = float2(cos(inst.Flags.z), sin(inst.Flags.z));
     float flexibility = materialClass * materialClass;
-    float displacement = lerp(0.002f, 0.15f, flexibility) * bend;
+    float displacement = lerp(0.01f, 0.30f, flexibility) * bend;
     worldPos.xz += bendDirection * displacement;
-    worldPos.y -= lerp(0.001f, 0.075f, flexibility) * bend * bend;
+    worldPos.y -= lerp(0.01f, 0.16f, flexibility) * bend * bend;
 
     // ゲーム内の風向・風速へ連動する。無風時は葉先が完全に静止して見える
     // 不自然さだけを避ける、ごく弱い揺れに留める。
@@ -104,9 +104,9 @@ VS_OUTPUT main(VS_INPUT input) {
                                      normalize(world3x3[1]),
                                      normalize(world3x3[2]));
     float3 normal = normalize(mul(input.normal, rotationOnly));
-    float2 leanTotal = bendDirection * bend * 0.42f + windDir * windSway * 3.6f;
+    float2 leanTotal = bendDirection * bend * 0.85f + windDir * windSway * 3.6f;
     normal = normalize(normal + float3(-leanTotal.x,
-                                       (bend + abs(windSway)) * 0.18f,
+                                       (bend + abs(windSway)) * 0.3f,
                                        -leanTotal.y));
     output.normal = normal;
     output.texCoord = input.texCoord;

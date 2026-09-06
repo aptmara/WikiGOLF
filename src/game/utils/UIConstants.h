@@ -10,39 +10,41 @@
 namespace game::ui {
 
 // =========================================================
-// 共通カラーパレット
+// 共通カラーパレット（Wikipedia/MediaWikiのVectorスキンに準拠）
 // すべてのパネルはここで定義した色だけを共有する。
 // 個別パネルで独自のグラデーション/枠線色を作らないことで、
 // 画面全体の統一感を保つ。
 // =========================================================
 const DirectX::XMFLOAT4 kColorWhite            = {1.000f, 1.000f, 1.000f, 1.000f};
-const DirectX::XMFLOAT4 kColorBgDark          = {0.055f, 0.063f, 0.075f, 0.940f}; // 標準パネル面（単色・グラデーションなし）
-const DirectX::XMFLOAT4 kColorBgPanel         = {0.055f, 0.063f, 0.075f, 0.940f}; // kColorBgDark と同一。互換のため名称のみ維持
-const DirectX::XMFLOAT4 kColorSurfaceRaised   = {0.098f, 0.112f, 0.132f, 0.970f}; // 選択中/強調状態の面
-const DirectX::XMFLOAT4 kColorBorder          = {1.000f, 1.000f, 1.000f, 0.080f}; // 全パネル共通の極細ハイライン
-const DirectX::XMFLOAT4 kColorAccent          = {0.250f, 0.780f, 0.820f, 1.000f}; // 操作・選択・照準（インタラクティブ要素で唯一使うアクセント）
-const DirectX::XMFLOAT4 kColorTextSub         = {0.620f, 0.660f, 0.700f, 1.000f}; // 副情報（全パネル共通の1トーン）
-const DirectX::XMFLOAT4 kColorSuccess         = {0.320f, 0.820f, 0.480f, 1.000f}; // 良好なライ・成功（意味用途限定）
-const DirectX::XMFLOAT4 kColorWarning         = {1.000f, 0.700f, 0.220f, 1.000f}; // 警告・注意（意味用途限定）
-const DirectX::XMFLOAT4 kColorError           = {0.940f, 0.280f, 0.280f, 1.000f}; // 危険・OB（意味用途限定）
-const DirectX::XMFLOAT4 kColorSpecial         = {0.980f, 0.780f, 0.260f, 1.000f}; // 目的地・最高評価専用（他の用途に流用しない）
-const DirectX::XMFLOAT4 kColorClubSelected    = {0.098f, 0.112f, 0.132f, 0.970f}; // kColorSurfaceRaised と同値
-const DirectX::XMFLOAT4 kColorClubNormal      = {0.055f, 0.063f, 0.075f, 0.940f}; // kColorBgDark と同値
-const DirectX::XMFLOAT4 kColorShotBtn         = {0.070f, 0.340f, 0.380f, 0.970f};
-const DirectX::XMFLOAT4 kColorShotBtnBorder   = {0.250f, 0.780f, 0.820f, 0.950f}; // kColorAccent と同値
-const DirectX::XMFLOAT4 kColorGaugeTick       = {1.000f, 1.000f, 1.000f, 0.300f}; // パワーゲージの閾値目盛り線専用
+const DirectX::XMFLOAT4 kColorTextPrimary     = {0.125f, 0.129f, 0.133f, 1.000f}; // #202122 本文色（白紙パネル上の主要文字用）
+const DirectX::XMFLOAT4 kColorBgDark          = {0.973f, 0.976f, 0.980f, 0.950f}; // #f8f9fa 標準パネル面（単色・グラデーションなし、紙面調）
+const DirectX::XMFLOAT4 kColorBgPanel         = {0.973f, 0.976f, 0.980f, 0.950f}; // kColorBgDark と同一。互換のため名称のみ維持
+const DirectX::XMFLOAT4 kColorSurfaceRaised   = {0.918f, 0.949f, 1.000f, 0.980f}; // 選択中/強調状態の面（淡い水色ハイライト）
+const DirectX::XMFLOAT4 kColorBorder          = {0.635f, 0.663f, 0.694f, 0.900f}; // #a2a9b1 全パネル共通の極細ハイライン
+const DirectX::XMFLOAT4 kColorAccent          = {0.200f, 0.400f, 0.800f, 1.000f}; // #3366cc Wikipediaリンク青（操作・選択・照準で唯一使うアクセント）
+const DirectX::XMFLOAT4 kColorTextSub         = {0.329f, 0.349f, 0.365f, 1.000f}; // #54595d 副情報（全パネル共通の1トーン）
+const DirectX::XMFLOAT4 kColorSuccess         = {0.078f, 0.525f, 0.427f, 1.000f}; // #14866d 良好なライ・成功（意味用途限定）
+const DirectX::XMFLOAT4 kColorWarning         = {0.871f, 0.400f, 0.000f, 1.000f}; // #de6600 警告・注意（意味用途限定）
+const DirectX::XMFLOAT4 kColorError            = {0.867f, 0.200f, 0.200f, 1.000f}; // #dd3333 危険・OB（意味用途限定）
+const DirectX::XMFLOAT4 kColorSpecial         = {0.624f, 0.518f, 0.204f, 1.000f}; // #9f8434 秀逸な記事の星色。目的地・最高評価専用（他の用途に流用しない）
+const DirectX::XMFLOAT4 kColorClubSelected    = {0.918f, 0.949f, 1.000f, 0.980f}; // kColorSurfaceRaised と同値
+const DirectX::XMFLOAT4 kColorClubNormal      = {0.973f, 0.976f, 0.980f, 0.950f}; // kColorBgDark と同値
+const DirectX::XMFLOAT4 kColorShotBtn         = {1.000f, 1.000f, 1.000f, 1.000f}; // 実物のWikipediaボタン相当（白地+グレー枠の控えめな見た目）
+const DirectX::XMFLOAT4 kColorShotBtnBorder   = {0.635f, 0.663f, 0.694f, 0.900f}; // kColorBorder と同値
+const DirectX::XMFLOAT4 kColorGaugeTick       = {0.000f, 0.000f, 0.000f, 0.350f}; // パワーゲージの閾値目盛り線専用
 
 // =========================================================
 // 形状トークン
 // 角丸半径・枠線幅・影は種類ごとに1値のみを使う。
 // パネルの用途が変わっても見た目の"文法"は変えない。
+// Wikipedia本来のフラットな見た目に寄せ、角丸・影ともに控えめにする。
 // =========================================================
-constexpr float kRadiusPanel       = 12.0f; // 主要パネル（背景カード全般）
-constexpr float kRadiusChip        = 8.0f;  // バッジ・行・ボタン
-constexpr float kRadiusBar         = 6.0f;  // ゲージ・バー
+constexpr float kRadiusPanel       = 4.0f;  // 主要パネル（背景カード全般）
+constexpr float kRadiusChip        = 3.0f;  // バッジ・行・ボタン
+constexpr float kRadiusBar         = 3.0f;  // ゲージ・バー
 constexpr float kBorderWidthThin   = 1.0f;  // 全パネル共通の枠線幅
-const DirectX::XMFLOAT4 kShadowColor = {0.000f, 0.000f, 0.000f, 0.450f}; // 全パネル共通の影色
-constexpr float kShadowOffsetY     = 3.0f;  // 全パネル共通の影オフセット
+const DirectX::XMFLOAT4 kShadowColor = {0.000f, 0.000f, 0.000f, 0.160f}; // 全パネル共通の影色（紙が浮いた程度の弱さ）
+constexpr float kShadowOffsetY     = 1.5f;  // 全パネル共通の影オフセット
 
 // =========================================================
 // レイヤー設定（Z順）
@@ -179,9 +181,14 @@ constexpr float kMapHelpPanelH       = 220.0f; ///< 操作ヘルプパネルの�
 // 判定テキスト & ロジック
 // =========================================================
 constexpr float kJudgeTextX         = 540.0f;
-constexpr float kJudgeTextY         = 250.0f;
+constexpr float kJudgeTextY         = 100.0f; // 画面中央ではなく上部に表示する
 constexpr float kJudgeFontSize      = 30.0f;
 constexpr float kJudgeDisplayTime   = 1.1f;
+
+// 打球判定スタンプ画像（Perfect/Great/Nice/Miss）の表示中心Y座標。
+// 実際に表示されるのはこの画像であり、上の kJudgeTextY 系はテキストが
+// 常に空文字のまま使われていないため、位置を変える場合はこちらを使う。
+constexpr float kJudgeImageCenterY  = 150.0f; // 画面中央ではなく上部に表示する
 
 // インパクト精度しきい値 (0.5が中心)
 constexpr float kThresholdSpecial   = 0.015f;

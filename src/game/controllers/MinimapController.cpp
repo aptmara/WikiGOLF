@@ -244,7 +244,7 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   zoomBg.y = game::ui::kMinimapY + 10.0f;
   zoomBg.width = 65.0f;
   zoomBg.height = 24.0f;
-  zoomBg.style.bgColor = {0.05f, 0.1f, 0.15f, 0.8f};
+  zoomBg.style.bgColor = game::ui::kColorBgDark;
   zoomBg.style.borderColor = game::ui::kColorBorder;
   zoomBg.style.borderWidth = 1.0f;
   zoomBg.style.cornerRadius = 4.0f;
@@ -262,6 +262,10 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   zoomTxt.style = graphics::TextStyle::Guide();
   zoomTxt.style.fontSize = 14.0f;
   zoomTxt.style.align = graphics::TextAlign::Center;
+  zoomTxt.style.color = game::ui::kColorTextPrimary; // 紙面調のズーム表示パネル上に表示するため本文色にする
+  // 紙面パネル上では Guide() の黒縁取り+影が小さい文字を滲ませて見せてしまうため外す。
+  zoomTxt.style.hasOutline = false;
+  zoomTxt.style.hasShadow = false;
   zoomTxt.visible = false;
   zoomTxt.layer = game::ui::kLayerMinimap + 3;
 
@@ -311,6 +315,9 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   helpTitle.style.fontSize = 20.0f;
   helpTitle.style.color = game::ui::kColorAccent;
   helpTitle.style.align = graphics::TextAlign::Center;
+  // 紙面パネル上では Guide() の黒縁取り+影が文字を滲ませて見せてしまうため外す。
+  helpTitle.style.hasOutline = false;
+  helpTitle.style.hasShadow = false;
   helpTitle.visible = false;
   helpTitle.layer = game::ui::kLayerOverlay + 1;
 
@@ -338,6 +345,10 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
     line.style = graphics::TextStyle::Guide();
     line.style.fontSize = 14.0f;
     line.style.align = graphics::TextAlign::Left;
+    line.style.color = game::ui::kColorTextPrimary; // 紙面調のヘルプパネル上に表示するため本文色にする
+    // 紙面パネル上では Guide() の黒縁取り+影が小さい文字を滲ませて見せてしまうため外す。
+    line.style.hasOutline = false;
+    line.style.hasShadow = false;
     line.visible = false;
     line.layer = game::ui::kLayerOverlay + 1;
     m_mapHelpLines.push_back(e);
@@ -350,7 +361,7 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   openBg.y = 665.0f;
   openBg.width = 800.0f;
   openBg.height = 36.0f;
-  openBg.style.bgColor = {0.035f, 0.055f, 0.090f, 0.85f};
+  openBg.style.bgColor = game::ui::kColorBgDark;
   openBg.style.borderColor = game::ui::kColorBorder;
   openBg.style.borderWidth = 1.0f;
   openBg.style.cornerRadius = 6.0f;
@@ -368,6 +379,10 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   openTxt.style = graphics::TextStyle::Guide();
   openTxt.style.fontSize = 13.0f;
   openTxt.style.align = graphics::TextAlign::Center;
+  openTxt.style.color = game::ui::kColorTextPrimary; // 紙面調のヒントバー上に表示するため本文色にする
+  // 紙面パネル上では Guide() の黒縁取り+影が小さい文字を滲ませて見せてしまうため外す。
+  openTxt.style.hasOutline = false;
+  openTxt.style.hasShadow = false;
   openTxt.visible = false;
   openTxt.layer = game::ui::kLayerOverlay + 1;
 }

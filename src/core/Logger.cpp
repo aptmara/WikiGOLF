@@ -7,6 +7,7 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
 #include <iomanip>
@@ -36,7 +37,15 @@ void Logger::Initialize(const std::string& filename) {
     warningPath.replace_filename(warningFilename);
     m_warningFileStream.open(warningPath, std::ios::out | std::ios::trunc);
 
-    m_initialized = m_fileStream.is_open() || m_warningFileStream.is_open();
+    std::filesystem::path perfPath(filename);
+    const std::string perfFilename =
+        perfPath.stem().string() + "_perf" +
+        perfPath.extension().string();
+    perfPath.replace_filename(perfFilename);
+    m_perfFileStream.open(perfPath, std::ios::out | std::ios::trunc);
+
+    m_initialized = m_fileStream.is_open() || m_warningFileStream.is_open() ||
+                     m_perfFileStream.is_open();
     if (m_initialized) {
         auto now = std::chrono::system_clock::now();
         auto in_time_t = std::chrono::system_clock::to_time_t(now);
@@ -58,6 +67,7 @@ void Logger::Shutdown() {
         m_fileStream.close();
     }
     if (m_warningFileStream.is_open()) m_warningFileStream.close();
+    if (m_perfFileStream.is_open()) m_perfFileStream.close();
     m_initialized = false;
 }
 
@@ -96,10 +106,18 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
+    // "Perf" は毎秒フレーム統計を吐くため、本編ログに混ぜると他のイベントが
+    // 埋もれてしまう（詳細な内訳は Profiler が別途CSVへも出力済みで冗長）。
+    // 専用ファイルへ分離する。
+    const bool isPerf = std::strcmp(category, "Perf") == 0;
+
     // ファイル出力処理
-    if (m_initialized && m_fileStream.is_open()) {
+    if (m_initialized && m_fileStream.is_open() && !isPerf) {
         m_fileStream << fullMessage << '\n';
         if (level == LogLevel::Error) m_fileStream.flush();
+    }
+    if (m_initialized && m_perfFileStream.is_open() && isPerf) {
+        m_perfFileStream << fullMessage << '\n';
     }
     if (m_initialized && m_warningFileStream.is_open() &&
         (level == LogLevel::Warning || level == LogLevel::Error)) {

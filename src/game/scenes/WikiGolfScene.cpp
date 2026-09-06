@@ -645,17 +645,43 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
   auto &t = ctx.world.Add<Transform>(m_ballEntity);
   t.position = {0.0f, game::physics::kBallRadius,
                 -8.0f * kFieldScale};
-  t.scale = {game::physics::kBallVisualScale,
-             game::physics::kBallVisualScale,
-             game::physics::kBallVisualScale};
-  LOG_DEBUG("WikiGolf", "Ball spawned at: ({}, {}, {})", t.position.x,
-            t.position.y, t.position.z);
+
+  auto ballMeshHandle = ctx.resource.LoadMesh("Assets/models/golfball.glb");
+
+  // golfball.glb と builtin/sphere ではメッシュの内部スケールが異なるため、
+  // 決め打ちの係数ではなく、ロード済みメッシュの実際のバウンディング半径から
+  // 見た目の半径(kBallVisualScale基準)に必要な Transform.scale を逆算する。
+  const float ballVisualRadius = game::physics::kBallVisualScale * 0.5f;
+  float ballGlbScale = ballVisualRadius; // メッシュ取得に失敗した場合の保険
+  float debugNativeRadius = -1.0f;
+  DirectX::XMFLOAT3 debugBoundsCenter = {0.0f, 0.0f, 0.0f};
+  if (auto *ballMesh = ctx.resource.GetMesh(ballMeshHandle)) {
+    debugNativeRadius = ballMesh->GetBounds().Radius;
+    debugBoundsCenter = ballMesh->GetBounds().Center;
+    if (debugNativeRadius > 0.0001f) {
+      ballGlbScale = ballVisualRadius / debugNativeRadius;
+    }
+  }
+  t.scale = {ballGlbScale, ballGlbScale, ballGlbScale};
+  LOG_INFO("WikiGolf",
+           "Ball spawned at: ({}, {}, {}) scale={} nativeRadius={} "
+           "boundsCenter=({}, {}, {})",
+           t.position.x, t.position.y, t.position.z, ballGlbScale,
+           debugNativeRadius, debugBoundsCenter.x, debugBoundsCenter.y,
+           debugBoundsCenter.z);
 
   auto &mr = ctx.world.Add<MeshRenderer>(m_ballEntity);
-  mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
-  mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                      L"Assets/shaders/BasicPS.hlsl");
-  mr.color = {1.0f, 0.6f, 0.2f, 1.0f}; // 少しオレンジで視認性アップ
+  mr.mesh = ballMeshHandle;
+  // ディンプルを強調した専用ピクセルシェーダーを使う（BasicPS.hlsl 共有だと
+  // ロード画面の演出用ボールや建物にも強調が及んでしまうため分離している）。
+  // 注意: RenderSystem.cpp 側のインスタンス化対応シェーダー一覧にも
+  // "GolfBall" を登録しておく必要がある（そうしないと非インスタンス経路に
+  // 落ちて実質描画されない）。
+  mr.shader = ctx.resource.LoadShader("GolfBall", L"Assets/shaders/BasicVS.hlsl",
+                                      L"Assets/shaders/GolfBallPS.hlsl");
+  mr.color = {1.0f, 1.0f, 1.0f, 1.0f};
+  mr.normalMapSRV = ctx.resource.LoadTextureSRV("Assets/models/golfball_n.png");
+  mr.hasNormalMap = static_cast<bool>(mr.normalMapSRV);
 
   auto &rb = ctx.world.Add<RigidBody>(m_ballEntity);
   rb.isStatic = false;
@@ -783,6 +809,12 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
   if (m_pageLoader) {
     m_pageLoader->CancelAsyncPathEvaluations();
   }
+
+  // ゲーム終了（タイトルへ戻る等）時に、ターゲット記事単位の最短経路
+  // プロセス内キャッシュ（逆方向BFS到達済みノード・確定済み距離）を破棄する。
+  // 次のゲームで別のターゲットに切り替わっても自動的に破棄されるが、
+  // 明示的に後始末しておく。
+  game::systems::WikiShortestPath::ClearProcessCaches();
 
   // Fix3: シーン離脱時にゲーム中BGMを停止する（タイトルへ戻った際の鳴り続け防止）
   if (ctx.audio) {
@@ -1039,7 +1071,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   ui->height = 0.0f;
                   ui->rotation = 0.0f;
                   ui->x = 1280.0f * 0.5f;
-                  ui->y = 720.0f * 0.5f;
+                  ui->y = game::ui::kJudgeImageCenterY;
                   m_judgeDisplayTimer = feedback.displaySeconds;
                   m_judgeDisplayTotal  = feedback.displaySeconds;
                   m_judgeDisplayTargetW = feedback.width;
@@ -1620,7 +1652,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   ui->height = targetH * scale;
                   ui->rotation = rotDeg; // D2D1::Matrix3x2F::Rotation は度数指定
                   ui->x = (1280.0f - ui->width) * 0.5f + offsetX;
-                  ui->y = (720.0f - ui->height) * 0.5f + offsetY;
+                  ui->y = game::ui::kJudgeImageCenterY - ui->height * 0.5f + offsetY;
               }
           }
       }

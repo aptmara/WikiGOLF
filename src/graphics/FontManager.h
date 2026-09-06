@@ -30,6 +30,27 @@ using Microsoft::WRL::ComPtr;
 /// IDWriteFontCollection を組み立て、CreateTextFormat にそのコレクションを
 /// 明示的に渡すことで確実に解決させる。
 class FontManager {
+    /// @brief LoadFont() に渡す複合ファミリー名 -> 実際の解決先の対応
+    /// @details 同梱フォントのビルド済みコレクション内では、DirectWriteが
+    ///          OS/2テーブルの usWidthClass/usWeightClass と一致する語
+    ///          （"Condensed" "Medium" 等）をファミリー名から取り除くため、
+    ///          複合名（"Barlow Condensed Medium"）ではファミリーが見つからない。
+    struct BundledFamilyOverride {
+        std::string baseFamily;
+        DWRITE_FONT_WEIGHT weight;
+        DWRITE_FONT_STRETCH stretch;
+    };
+    static const std::unordered_map<std::string, BundledFamilyOverride>& GetBundledFamilyOverrides() {
+        static const std::unordered_map<std::string, BundledFamilyOverride> table = {
+            {"Barlow Condensed",          {"Barlow", DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STRETCH_CONDENSED}},
+            {"Barlow Condensed Medium",   {"Barlow", DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_STRETCH_CONDENSED}},
+            {"Barlow Condensed SemiBold", {"Barlow", DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STRETCH_CONDENSED}},
+            {"Barlow Condensed Black",    {"Barlow", DWRITE_FONT_WEIGHT_BLACK, DWRITE_FONT_STRETCH_CONDENSED}},
+            {"Kiwi Maru Medium",          {"Kiwi Maru", DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_STRETCH_NORMAL}},
+        };
+        return table;
+    }
+
 public:
     /// @brief 初期化
     /// @param factory DirectWrite ファクトリ
@@ -101,6 +122,8 @@ public:
 
         std::wstring wFontName(fontName.begin(), fontName.end());
         ComPtr<IDWriteTextFormat> format;
+        DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_NORMAL;
+        DWRITE_FONT_STRETCH stretch = DWRITE_FONT_STRETCH_NORMAL;
 
         // 同梱フォントの専用コレクションにこの名前があれば、そちらを明示指定する。
         // 見つからない場合は nullptr（システムコレクション）のままにする。
@@ -111,19 +134,38 @@ public:
             UINT32 index = 0;
             if (SUCCEEDED(bundled->FindFamilyName(wFontName.c_str(), &index, &exists)) && exists) {
                 collectionToUse = bundled;
-            } else if (m_missingBundledFamilyWarnings.insert(fontName).second) {
-                LOG_WARN("FontManager",
-                        "'{}' not found in bundled font collection. Using system collection.",
-                        fontName);
+            } else {
+                // DirectWriteはOS/2テーブルの usWidthClass/usWeightClass と一致する
+                // "Condensed"/"Medium" 等の語をファミリー名から取り除き、weight/stretch
+                // 側の属性へ変換してしまう（例: "Barlow Condensed Medium" は
+                // ファミリー"Barlow" + Weight=Medium + Stretch=Condensed になる）。
+                // そのため既知の複合名は基底ファミリー名 + 明示的な weight/stretch で
+                // 引き直す。
+                const auto& overrides = GetBundledFamilyOverrides();
+                auto ov = overrides.find(fontName);
+                if (ov != overrides.end()) {
+                    std::wstring wBase(ov->second.baseFamily.begin(), ov->second.baseFamily.end());
+                    if (SUCCEEDED(bundled->FindFamilyName(wBase.c_str(), &index, &exists)) && exists) {
+                        collectionToUse = bundled;
+                        wFontName = wBase;
+                        weight = ov->second.weight;
+                        stretch = ov->second.stretch;
+                    }
+                }
+                if (!collectionToUse && m_missingBundledFamilyWarnings.insert(fontName).second) {
+                    LOG_WARN("FontManager",
+                            "'{}' not found in bundled font collection. Using system collection.",
+                            fontName);
+                }
             }
         }
 
         HRESULT hr = m_factory->CreateTextFormat(
             wFontName.c_str(),
             collectionToUse,
-            DWRITE_FONT_WEIGHT_NORMAL,
+            weight,
             DWRITE_FONT_STYLE_NORMAL,
-            DWRITE_FONT_STRETCH_NORMAL,
+            stretch,
             size,
             L"ja-JP",
             &format

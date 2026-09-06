@@ -53,6 +53,7 @@ private:
 
     std::ofstream m_fileStream;
     std::ofstream m_warningFileStream;
+    std::ofstream m_perfFileStream; // "Perf" カテゴリ専用（毎秒出力され本編ログを埋めるため分離）
     std::mutex m_mutex;
     bool m_initialized = false;
 };

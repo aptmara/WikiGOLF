@@ -203,6 +203,10 @@ void RenderSystem(core::GameContext &ctx) {
   auto particleHandle = ctx.resource.FindShader("Particle");
   auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
   auto grassHandle = ctx.resource.FindShader("Grass");
+  // GolfBall は BasicVS.hlsl をそのまま使うピクセルシェーダーのみの派生なので、
+  // Basic と同じくインスタンス化対応として扱う必要がある（含めないと
+  // g_instances がバインドされない非インスタンス経路に落ち、実質描画されない）。
+  auto golfBallHandle = ctx.resource.FindShader("GolfBall");
 
   // インスタンス構造体の定義
   struct InstanceData {
@@ -600,7 +604,8 @@ void RenderSystem(core::GameContext &ctx) {
 
     const bool supportsInstancing =
         (key.shader == basicHandle || key.shader == particleHandle ||
-         key.shader == flagClothHandle || key.shader == grassHandle);
+         key.shader == flagClothHandle || key.shader == grassHandle ||
+         key.shader == golfBallHandle);
 
     if (supportsInstancing) {
       checkInstancedBuffer(instances.size());

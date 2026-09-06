@@ -253,6 +253,49 @@ std::vector<int> BuildPath(int meet,
   return left;
 }
 
+/**
+ * @brief ゴール記事（ターゲット）起点の逆方向BFS結果をプロセス内で使い回すキャッシュです。 山内陽
+ * @details 1プレイ中はゲーム開始時に決まったターゲット記事を目指してページ
+ *          （＝ホール）を渡り歩くため、ページ移動のたびに ComputeDistancesToTarget
+ *          が呼ばれても target->incoming_links の探索結果は不変。前回到達済みの
+ *          ノード集合とその境界フロンティアを保持して使い回す。新しいゲームで
+ *          別のターゲットを目指すことになったら破棄する。1ターゲット分だけ
+ *          保持すれば十分（同時に複数のターゲットを探索することはない）。
+ */
+struct BackwardBfsCache {
+  std::mutex mutex;
+  int targetId = -1;
+  std::unordered_map<int, int> depthByPageId; // 到達済みノード -> ターゲットまでの距離
+  std::vector<int> frontier;                  // 次に展開すべき境界ノード
+};
+
+BackwardBfsCache &GetBackwardBfsCache() {
+  static BackwardBfsCache cache;
+  return cache;
+}
+
+/**
+ * @brief 特定ページからターゲットまでの「確定済み距離」をプロセス内で
+ *        使い回すキャッシュです。 山内陽
+ * @details BackwardBfsCache は逆方向BFSの到達済みノード（探索の途中経過）を
+ *          保持するだけなので、双方向BFSで forward 側との合流によって解決した
+ *          ソース自身の最終距離までは保持できない。同じ記事へのリンクは
+ *          コース中の複数ページに何度も登場するため、一度解決した
+ *          （リンク先ページID, 距離）は個別に憶えておき、次に同じリンクが
+ *          別のページに出てきた時はBFSを一切行わずに即答する。
+ *          ターゲットが変わったら破棄する。
+ */
+struct ResolvedDistanceCache {
+  std::mutex mutex;
+  int targetId = -1;
+  std::unordered_map<int, int> distanceByPageId; // ページID -> ターゲットまでの距離
+};
+
+ResolvedDistanceCache &GetResolvedDistanceCache() {
+  static ResolvedDistanceCache cache;
+  return cache;
+}
+
 } // namespace
 
 WikiShortestPath::~WikiShortestPath() {
@@ -276,6 +319,22 @@ void WikiShortestPath::RequestCancelAll() {
 
 bool WikiShortestPath::IsCancelRequested() {
   return g_cancelRequested.load(std::memory_order_relaxed);
+}
+
+void WikiShortestPath::ClearProcessCaches() {
+  {
+    auto &cache = GetBackwardBfsCache();
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    cache.targetId = -1;
+    cache.depthByPageId.clear();
+    cache.frontier.clear();
+  }
+  {
+    auto &cache = GetResolvedDistanceCache();
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    cache.targetId = -1;
+    cache.distanceByPageId.clear();
+  }
 }
 
 bool WikiShortestPath::Initialize(const std::string &dbPath,
@@ -939,12 +998,138 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
     return distances;
   }
 
-  std::vector<int> frontier = {targetId};
-  std::unordered_set<int> visited;
-  visited.insert(targetId);
+  // 双方向BFS: ターゲット1点から incoming_links だけで外側へ広げると、
+  // ターゲットが入次数の大きいハブ記事（都道府県・国等）の場合、2〜3ホップ目で
+  // グラフのほぼ全体（実測で数百万〜億単位のエッジ）に達してしまい、致命的に遅い。
+  // そのため、未解決の複数ソース側からも outgoing_links で広げ、毎ラウンド
+  // 「フロンティアが小さい側」だけを1段広げる（単一ペア用の FindShortestPath と
+  // 同じ発想）。forward側は複数ソースの合流探索になるため、各ノードへ
+  // 「最初に到達した起点ソース」を記録しておき、backward側と出会った時点で
+  // そのソースの距離を確定させる。
+  struct ForwardNode {
+    int originSourceId; ///< このノードへ最初に到達した起点ソースのページID
+    int depth;          ///< 起点ソースからの距離
+  };
 
-  for (int depth = 1; depth <= maxDepth && !frontier.empty() &&
-                      !unresolvedPageIds.empty();
+  const auto resolveSource = [&](int sourceId, int depth) {
+    if (unresolvedPageIds.find(sourceId) == unresolvedPageIds.end()) {
+      return;
+    }
+    if (auto titleIt = titlesByPageId.find(sourceId);
+        titleIt != titlesByPageId.end()) {
+      for (const auto &title : titleIt->second) {
+        distances[title] = depth;
+        if (onResolved) {
+          onResolved(title, depth);
+        }
+      }
+    }
+    unresolvedPageIds.erase(sourceId);
+
+    // このページからターゲットまでの距離を確定できたので、同じターゲットを
+    // 目指している間は別のページに同じリンクが出てきても即答できるように憶えておく。
+    auto &resolvedCache = GetResolvedDistanceCache();
+    std::lock_guard<std::mutex> resolvedCacheLock(resolvedCache.mutex);
+    if (resolvedCache.targetId == targetId) {
+      resolvedCache.distanceByPageId[sourceId] = depth;
+    }
+  };
+
+  // 確定済み距離キャッシュ: 同じリンク先ページは複数のページに何度も登場するため、
+  // 一度解決した（ページID, 距離）を憶えておき、再登場時はBFSを一切行わず即答する。
+  // 注意: resolveSource() 自体が内部で resolvedCache.mutex をロックするため、
+  // ここでロックを保持したまま resolveSource() を呼ぶと同一スレッドによる
+  // 二重ロック（std::mutex は非再帰なので未定義動作）になる。そのため
+  // ヒット候補の収集とロック解放を先に済ませてから resolveSource() を呼ぶ。
+  {
+    const size_t distancesBeforeResolvedCache = distances.size();
+    std::vector<std::pair<int, int>> cacheHits; // (pageId, depth)
+    size_t cachedEntryCount = 0;
+    {
+      auto &resolvedCache = GetResolvedDistanceCache();
+      std::lock_guard<std::mutex> resolvedCacheLock(resolvedCache.mutex);
+      if (resolvedCache.targetId != targetId) {
+        resolvedCache.targetId = targetId;
+        resolvedCache.distanceByPageId.clear();
+      }
+      for (int srcId : unresolvedPageIds) {
+        if (auto it = resolvedCache.distanceByPageId.find(srcId);
+            it != resolvedCache.distanceByPageId.end()) {
+          cacheHits.emplace_back(srcId, it->second);
+        }
+      }
+      cachedEntryCount = resolvedCache.distanceByPageId.size();
+    }
+    for (const auto &[srcId, depth] : cacheHits) {
+      resolveSource(srcId, depth);
+    }
+    if (const size_t resolvedCacheHits =
+            distances.size() - distancesBeforeResolvedCache;
+        resolvedCacheHits > 0) {
+      LOG_INFO("WikiShortestPath",
+               "ComputeDistancesToTarget resolved-distance cache reused: "
+               "cachedEntries={} immediateHits={}",
+               cachedEntryCount, resolvedCacheHits);
+    }
+  }
+  if (unresolvedPageIds.empty()) {
+    storeProgress(sourceTitles.size() + static_cast<size_t>(maxDepth) *
+                                            kPathEvaluationDepthProgressUnits);
+    LOG_INFO("WikiShortestPath",
+             "ComputeDistancesToTarget completed via resolved-distance cache: "
+             "resolved={} elapsed={}ms",
+             distances.size(), ElapsedMs(computeStartedAt));
+    return distances;
+  }
+
+  // ターゲット起点のBFSキャッシュから引き継ぐ。同じゲーム内で同じターゲットを
+  // 目指している間はページ移動のたびに incoming_links を再探索せずに済む
+  // （ターゲットが変わっていればここでリセットされる）。
+  std::vector<int> frontierBackward;
+  std::unordered_map<int, int> backwardDepth;
+  {
+    auto &cache = GetBackwardBfsCache();
+    std::lock_guard<std::mutex> cacheLock(cache.mutex);
+    if (cache.targetId != targetId) {
+      cache.targetId = targetId;
+      cache.depthByPageId = {{targetId, 0}};
+      cache.frontier = {targetId};
+    }
+    backwardDepth = cache.depthByPageId;
+    frontierBackward = cache.frontier;
+  }
+  const size_t backwardCacheHitNodes = backwardDepth.size();
+  const size_t distancesBeforeCacheHits = distances.size();
+
+  // キャッシュに既に含まれているソースはDBに触れずその場で解決する。
+  {
+    const std::vector<int> unresolvedSnapshot(unresolvedPageIds.begin(),
+                                              unresolvedPageIds.end());
+    for (int srcId : unresolvedSnapshot) {
+      if (auto it = backwardDepth.find(srcId); it != backwardDepth.end()) {
+        resolveSource(srcId, it->second);
+      }
+    }
+  }
+  if (const size_t cachedHits = distances.size() - distancesBeforeCacheHits;
+      cachedHits > 0) {
+    LOG_INFO("WikiShortestPath",
+             "ComputeDistancesToTarget backward cache reused: cachedNodes={} "
+             "immediateHits={}",
+             backwardCacheHitNodes, cachedHits);
+  }
+
+  std::vector<int> frontierForward;
+  frontierForward.reserve(unresolvedPageIds.size());
+  std::unordered_map<int, ForwardNode> forwardInfo;
+  forwardInfo.reserve(unresolvedPageIds.size() * 2);
+  for (int srcId : unresolvedPageIds) {
+    forwardInfo[srcId] = ForwardNode{srcId, 0};
+    frontierForward.push_back(srcId);
+  }
+
+  for (int depth = 1; depth <= maxDepth && !unresolvedPageIds.empty() &&
+                      !frontierForward.empty() && !frontierBackward.empty();
        ++depth) {
     if (isCancelled()) {
       LOG_WARN("WikiShortestPath",
@@ -952,17 +1137,24 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
                depth);
       break;
     }
-    std::unordered_map<int, std::vector<int>> linkMap;
+
+    const bool expandForward =
+        frontierForward.size() <= frontierBackward.size();
+    const auto &expandingFrontier =
+        expandForward ? frontierForward : frontierBackward;
     const auto depthStartedAt = std::chrono::steady_clock::now();
-    const size_t frontierBefore = frontier.size();
+    const size_t frontierBefore = expandingFrontier.size();
     const size_t unresolvedBefore = unresolvedPageIds.size();
     const size_t resolvedBefore = distances.size();
     const auto fetchStartedAt = std::chrono::steady_clock::now();
     const size_t depthBase =
         sourceTitles.size() +
         static_cast<size_t>(depth - 1) * kPathEvaluationDepthProgressUnits;
+
+    std::unordered_map<int, std::vector<int>> linkMap;
     if (!FetchLinks(
-            m_db, frontier, "incoming_links", linkMap,
+            m_db, expandingFrontier,
+            expandForward ? "outgoing_links" : "incoming_links", linkMap,
             [&](size_t processedChunks, size_t totalChunks) {
               if (totalChunks == 0) {
                 return;
@@ -976,52 +1168,88 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
             },
             cancelRequested)) {
       LOG_ERROR("WikiShortestPath",
-                "ComputeDistancesToTarget BFS failed: depth={} frontier={} elapsed={}ms",
-                depth, frontierBefore, ElapsedMs(depthStartedAt));
+                "ComputeDistancesToTarget BFS failed: depth={} side={} "
+                "frontier={} elapsed={}ms",
+                depth, expandForward ? "forward" : "backward", frontierBefore,
+                ElapsedMs(depthStartedAt));
       return distances;
     }
     const long long fetchMs = ElapsedMs(fetchStartedAt);
 
-    std::vector<int> next;
-    size_t incomingEdges = 0;
+    size_t traversedLinks = 0;
     bool cancelledDuringTraversal = false;
     size_t traversedEdges = 0;
-    for (int pageId : frontier) {
-      if (isCancelled()) {
-        cancelledDuringTraversal = true;
-        break;
-      }
-      const auto linkIt = linkMap.find(pageId);
-      if (linkIt == linkMap.end()) {
-        continue;
-      }
 
-      incomingEdges += linkIt->second.size();
-      for (int incomingId : linkIt->second) {
-        if ((traversedEdges++ & 4095U) == 0U && isCancelled()) {
+    if (expandForward) {
+      std::vector<int> next;
+      for (int pageId : frontierForward) {
+        if (isCancelled()) {
           cancelledDuringTraversal = true;
           break;
         }
-        if (!visited.insert(incomingId).second) {
+        const auto parentIt = forwardInfo.find(pageId);
+        const auto linkIt = linkMap.find(pageId);
+        if (parentIt == forwardInfo.end() || linkIt == linkMap.end()) {
           continue;
         }
-
-        if (auto titleIt = titlesByPageId.find(incomingId);
-            titleIt != titlesByPageId.end()) {
-          for (const auto &title : titleIt->second) {
-            distances[title] = depth;
-            if (onResolved) {
-              onResolved(title, depth);
-            }
+        const ForwardNode parent = parentIt->second;
+        const int nextDepth = parent.depth + 1;
+        traversedLinks += linkIt->second.size();
+        for (int nb : linkIt->second) {
+          if ((traversedEdges++ & 4095U) == 0U && isCancelled()) {
+            cancelledDuringTraversal = true;
+            break;
           }
-          unresolvedPageIds.erase(incomingId);
+          const auto [it, inserted] = forwardInfo.try_emplace(
+              nb, ForwardNode{parent.originSourceId, nextDepth});
+          if (inserted) {
+            next.push_back(nb);
+          }
+          if (const auto bIt = backwardDepth.find(nb);
+              bIt != backwardDepth.end()) {
+            resolveSource(it->second.originSourceId,
+                          it->second.depth + bIt->second);
+          }
         }
-
-        next.push_back(incomingId);
+        if (cancelledDuringTraversal) {
+          break;
+        }
       }
-      if (cancelledDuringTraversal) {
-        break;
+      frontierForward = std::move(next);
+    } else {
+      std::vector<int> next;
+      for (int pageId : frontierBackward) {
+        if (isCancelled()) {
+          cancelledDuringTraversal = true;
+          break;
+        }
+        const auto depthIt = backwardDepth.find(pageId);
+        const auto linkIt = linkMap.find(pageId);
+        if (depthIt == backwardDepth.end() || linkIt == linkMap.end()) {
+          continue;
+        }
+        const int nextDepth = depthIt->second + 1;
+        traversedLinks += linkIt->second.size();
+        for (int nb : linkIt->second) {
+          if ((traversedEdges++ & 4095U) == 0U && isCancelled()) {
+            cancelledDuringTraversal = true;
+            break;
+          }
+          const auto [it, inserted] = backwardDepth.try_emplace(nb, nextDepth);
+          if (inserted) {
+            next.push_back(nb);
+          }
+          resolveSource(nb, it->second);
+          if (const auto fIt = forwardInfo.find(nb); fIt != forwardInfo.end()) {
+            resolveSource(fIt->second.originSourceId,
+                          fIt->second.depth + it->second);
+          }
+        }
+        if (cancelledDuringTraversal) {
+          break;
+        }
       }
+      frontierBackward = std::move(next);
     }
 
     if (cancelledDuringTraversal) {
@@ -1031,21 +1259,34 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
       break;
     }
 
-    frontier = std::move(next);
     storeProgress(sourceTitles.size() + static_cast<size_t>(depth) *
                                             kPathEvaluationDepthProgressUnits);
     LOG_INFO("WikiShortestPath",
-             "ComputeDistancesToTarget depth={} frontier={} rows={} incomingEdges={} "
-             "next={} visited={} resolvedDelta={} resolved={} unresolvedDelta={} "
-             "unresolved={} fetch={}ms elapsed={}ms",
-             depth, frontierBefore, linkMap.size(), incomingEdges,
-             frontier.size(), visited.size(), distances.size() - resolvedBefore,
+             "ComputeDistancesToTarget depth={} side={} frontier={} rows={} "
+             "links={} forwardFrontier={} backwardFrontier={} resolvedDelta={} "
+             "resolved={} unresolvedDelta={} unresolved={} fetch={}ms elapsed={}ms",
+             depth, expandForward ? "forward" : "backward", frontierBefore,
+             linkMap.size(), traversedLinks, frontierForward.size(),
+             frontierBackward.size(), distances.size() - resolvedBefore,
              distances.size(), unresolvedBefore - unresolvedPageIds.size(),
              unresolvedPageIds.size(), fetchMs, ElapsedMs(depthStartedAt));
   }
 
   storeProgress(sourceTitles.size() + static_cast<size_t>(maxDepth) *
                                           kPathEvaluationDepthProgressUnits);
+
+  // backward側で新たに到達したノードをキャッシュへ書き戻す。次に同じ
+  // ターゲットで呼ばれたときはこの続きから再開できる。ターゲットが
+  // 既に切り替わっていれば（別ホールの呼び出しが割り込んでいれば）書き戻さない。
+  if (backwardDepth.size() > backwardCacheHitNodes) {
+    auto &cache = GetBackwardBfsCache();
+    std::lock_guard<std::mutex> cacheLock(cache.mutex);
+    if (cache.targetId == targetId &&
+        backwardDepth.size() > cache.depthByPageId.size()) {
+      cache.depthByPageId = backwardDepth;
+      cache.frontier = frontierBackward;
+    }
+  }
 
   LOG_INFO("WikiShortestPath",
            "Computed target distances: sources={}, resolved={}, targetId={}, "

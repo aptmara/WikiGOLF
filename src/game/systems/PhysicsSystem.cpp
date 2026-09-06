@@ -1121,6 +1121,26 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
       XMStoreFloat3(&t.position, pos);
       XMStoreFloat3(&rb.velocity, vel);
 
+      // ボールが実際に転がって見えるよう、水平方向の移動速度に応じて
+      // 見た目の半径(kBallVisualScale基準)で転がり回転を積算する。
+      // 当たり判定の半径(Collider::radius)は見た目より小さいため、
+      // そちらを使うと接地点が滑っているように見えてしまう。
+      if (body.entity == ballEntity) {
+        XMVECTOR horizVel = XMVectorSetY(vel, 0.0f);
+        float horizSpeed = XMVectorGetX(XMVector3Length(horizVel));
+        if (horizSpeed > 0.001f) {
+          const float renderRadius = game::physics::kBallVisualScale * 0.5f;
+          XMVECTOR axis = XMVector3Normalize(XMVector3Cross(
+              XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f), horizVel));
+          float angle = (horizSpeed * subDt) / renderRadius;
+          XMVECTOR deltaRot = XMQuaternionRotationAxis(axis, angle);
+          XMVECTOR curRot = XMLoadFloat4(&t.rotation);
+          XMVECTOR newRot =
+              XMQuaternionNormalize(XMQuaternionMultiply(curRot, deltaRot));
+          XMStoreFloat4(&t.rotation, newRot);
+        }
+      }
+
       if (golfState && body.entity == ballEntity && step == subSteps - 1) {
         golfState->isBallGrounded = isGrounded;
         golfState->currentBallSpeed = speedFinal;

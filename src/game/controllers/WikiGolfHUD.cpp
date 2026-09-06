@@ -223,17 +223,32 @@ void WikiGolfHUD::InitializeCourseInfoPanel(core::GameContext& ctx) {
         m_ui.browserTargetEntity = e;
     }
 
-    // Shots: N / Par N / Route N（下部キャプション行。ここは互換用に
+    // 打数・目安リンク数・移動数（下部キャプション行。ここは互換用に
     // browserShotInfoEntity として使い続けるが、パネル外の余白に配置する）
+    // 他パネルから浮いた文字だけにならないよう、小さな背景チップを敷く。
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
-        t.text  = L"SHOT 0   PAR ?   ROUTE 0";
+        t.text  = L"";
+        t.x     = x;
+        t.y     = y + panelH + 4.0f;
+        t.width = panelW;
+        t.height = 26.0f;
+        ApplySurfaceStyle(t.style, game::ui::kRadiusChip);
+        t.visible = true;
+        t.layer   = game::ui::kLayerBrowser - 1;
+        m_ui.browserShotInfoBgEntity = e;
+    }
+    {
+        auto e = ctx.world.CreateEntity();
+        auto& t = ctx.world.Add<game::components::UIText>(e);
+        t.text  = L"打数 0　目標まで目安5リンク　移動 0";
         t.x     = x + 14.0f;
         t.y     = y + panelH + 8.0f;
         t.width = panelW - 28.0f;
         t.height = 18.0f;
         t.style  = graphics::TextStyle::BrowserSub();
+        t.style.fontFamily = "Meiryo"; // 日本語主体の文章のためフラットな和文ゴシックにする
         t.style.fontSize = game::ui::kBrowserSubFontSize;
         t.visible = true;
         t.layer   = game::ui::kLayerBrowser;
@@ -457,9 +472,11 @@ void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
         t.y = my + mh + 5.0f;
         t.width = 72.0f;
         t.height = 20.0f;
-        t.style = graphics::TextStyle::Guide();
+        t.style.fontFamily = "Meiryo";
         t.style.fontSize = 12.0f;
-        t.style.color = {0.18f, 0.85f, 1.0f, 1.0f};
+        // 紙面調の帯の上に乗るため、Guide() の黒縁+影は使わずフラットな
+        // 文字にする（縁取り込みだと小さい文字が滲んで見えるため）。
+        t.style.color = game::ui::kColorAccent;
         t.style.align = graphics::TextAlign::Left;
         t.visible = true;
         t.layer = layer;
@@ -475,9 +492,9 @@ void WikiGolfHUD::InitializeMinimapUI(core::GameContext& ctx) {
         t.y = my + mh + 5.0f;
         t.width = 80.0f;
         t.height = 20.0f;
-        t.style = graphics::TextStyle::Guide();
+        t.style.fontFamily = "Meiryo";
         t.style.fontSize = 12.0f;
-        t.style.color = {1.0f, 0.2f, 0.2f, 1.0f};
+        t.style.color = game::ui::kColorError;
         t.style.align = graphics::TextAlign::Left;
         t.visible = true;
         t.layer = layer;
@@ -530,7 +547,7 @@ void WikiGolfHUD::InitializeLandingPreviewButton(core::GameContext& ctx) {
         t.style  = graphics::TextStyle::BrowserSub();
         t.style.fontSize = game::ui::kLandingPreviewBtnFontSize;
         t.style.align    = graphics::TextAlign::Center;
-        t.style.color    = game::ui::kColorWhite;
+        t.style.color    = game::ui::kColorTextPrimary;
         t.style.bgColor  = {0.0f, 0.0f, 0.0f, 0.0f};
         t.style.borderWidth = 0.0f;
         t.visible = true;
@@ -548,7 +565,8 @@ void WikiGolfHUD::InitializeShotButton(core::GameContext& ctx) {
     const float bw = game::ui::kShotBtnW;
     const float bh = game::ui::kShotBtnH;
 
-    // 背景（唯一の主操作なのでアクセント色の面を使う。常時明滅はさせない）
+    // 背景（実物のWikipediaボタン＝白地+グレー枠の控えめな見た目にする。
+    // 常時明滅はさせない）
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
@@ -559,19 +577,16 @@ void WikiGolfHUD::InitializeShotButton(core::GameContext& ctx) {
         t.height = bh;
         t.style.bgColor      = game::ui::kColorShotBtn;
         t.style.useGradient  = false;
-        t.style.cornerRadius = game::ui::kRadiusPanel;
-        t.style.borderWidth  = 2.0f;
+        t.style.cornerRadius = game::ui::kRadiusChip;
+        t.style.borderWidth  = game::ui::kBorderWidthThin;
         t.style.borderColor  = game::ui::kColorShotBtnBorder;
-        t.style.hasShadow    = true;
-        t.style.shadowColor  = game::ui::kShadowColor;
-        t.style.shadowOffsetX = 0.0f;
-        t.style.shadowOffsetY = game::ui::kShadowOffsetY;
+        t.style.hasShadow    = false;
         t.visible = true;
         t.layer   = game::ui::kLayerShotButton;
         m_ui.shotButtonBgEntity = e;
     }
 
-    // テキスト "SHOT" とサブテキスト
+    // テキスト "SHOT" とサブテキスト（縁取り・影のないフラットな本文色）
     {
         auto e = ctx.world.CreateEntity();
         auto& t = ctx.world.Add<game::components::UIText>(e);
@@ -580,14 +595,12 @@ void WikiGolfHUD::InitializeShotButton(core::GameContext& ctx) {
         t.y     = by + 22.0f;
         t.width = bw;
         t.height = 30.0f;
-        t.style  = graphics::TextStyle::Guide();
+        t.style.fontFamily = "Meiryo";
         t.style.fontSize  = game::ui::kShotBtnFontSize;
         t.style.align     = graphics::TextAlign::Center;
-        t.style.color     = {1.0f, 1.0f, 1.0f, 1.0f};
-        t.style.hasShadow = true;
-        t.style.shadowColor = {0.0f, 0.0f, 0.0f, 0.8f};
-        t.style.shadowOffsetX = 1.0f;
-        t.style.shadowOffsetY = 2.0f;
+        t.style.color     = game::ui::kColorTextPrimary;
+        t.style.hasShadow = false;
+        t.style.hasOutline = false;
         t.style.bgColor   = {0.0f, 0.0f, 0.0f, 0.0f};
         t.style.borderWidth = 0.0f;
         t.visible = true;
@@ -649,7 +662,7 @@ void WikiGolfHUD::InitializeShotGaugePanel(core::GameContext& ctx) {
         t.style = graphics::TextStyle::ShotPanelLabel();
         t.style.align = graphics::TextAlign::Center;
         t.style.fontSize = game::ui::kShotLabelFontSize;
-        t.style.color = game::ui::kColorWhite;
+        t.style.color = game::ui::kColorTextPrimary;
         t.style.bgColor = game::ui::kColorSurfaceRaised;
         t.style.borderColor = game::ui::kColorAccent;
         t.style.borderColor.w = 0.75f;
@@ -853,8 +866,13 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
         m_previousShotPhase = shotPhase;
         m_phaseTransition = 0.0f;
 
-        // ImpactTiming を抜けた瞬間（=インパクト確定）だけ保持+フェードタイマーを起動する。
-        if (previousPhase == game::components::ShotState::Phase::ImpactTiming) {
+        // ImpactTiming を抜けてショット実行に進んだ瞬間（=インパクト確定）
+        // だけ保持+フェードタイマーを起動する。右クリックでキャンセルした
+        // 場合は Idle に戻るだけなので、ここでタイマーを起動してしまうと
+        // ResetShotUI が即座に隠したはずのゲージバーだけがこのタイマーで
+        // 再表示され、パネル本体より遅れて消えるように見えてしまう。
+        if (previousPhase == game::components::ShotState::Phase::ImpactTiming &&
+            shotPhase == game::components::ShotState::Phase::Executing) {
             m_gaugeDismissRemaining =
                 game::ui::kGaugeHoldDuration + game::ui::kGaugeFadeDuration;
         }
@@ -988,7 +1006,7 @@ void WikiGolfHUD::UpdateShotPhasePanel(
         setText(m_ui.shotPanelPowerValueEntity, L"0y");
         setText(m_ui.shotPanelAccuracyLabelEntity, L"正確性");
         setText(m_ui.shotPanelAccuracyValueEntity, L"待機");
-        setColor(m_ui.shotPanelPowerValueEntity, game::ui::kColorWhite);
+        setColor(m_ui.shotPanelPowerValueEntity, game::ui::kColorTextPrimary);
         setColor(m_ui.shotPanelAccuracyValueEntity, game::ui::kColorTextSub);
     }
     // それ以外(Executing/ShowResult/RestoringCamera でフェードが既に完了
@@ -1142,9 +1160,9 @@ void WikiGolfHUD::UpdateCourseInfoPanel(core::GameContext& ctx,
         ctx.world.Has<game::components::UIText>(m_ui.browserShotInfoEntity))
     {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.browserShotInfoEntity);
-        SetTextIfChanged(*t, L"SHOT " + std::to_wstring(state.shotCount) +
-                                  L"   PAR " + std::to_wstring(state.par) +
-                                  L"   ROUTE " + std::to_wstring(state.moveCount));
+        SetTextIfChanged(*t, L"打数 " + std::to_wstring(state.shotCount) +
+                                  L"　目標まで目安" + std::to_wstring(state.par) +
+                                  L"リンク　移動 " + std::to_wstring(state.moveCount));
     }
 }
 
@@ -1239,7 +1257,7 @@ void WikiGolfHUD::UpdateWindUI(core::GameContext& ctx,
         } else if (windSpeed >= 5.0f) {
             SetColorIfChanged(t->style.color, game::ui::kColorWarning);
         } else {
-            SetColorIfChanged(t->style.color, game::ui::kColorWhite);
+            SetColorIfChanged(t->style.color, game::ui::kColorTextPrimary);
         }
     }
     for (auto e : m_ui.windValueWaveChars) {
@@ -1303,11 +1321,11 @@ void WikiGolfHUD::UpdateLandingPreviewButton(core::GameContext& ctx, bool hovere
         bg->style.bgColor     = game::ui::kColorBgDark;
         bg->style.bgColor.w   = 0.95f;
         bg->style.borderColor = game::ui::kColorBorder;
-        txt->style.color      = game::ui::kColorWhite;
+        txt->style.color      = game::ui::kColorTextPrimary;
     } else {
         bg->style.bgColor     = game::ui::kColorBgDark;
         bg->style.borderColor = game::ui::kColorBorder;
-        txt->style.color      = enabled ? game::ui::kColorWhite : game::ui::kColorTextSub;
+        txt->style.color      = enabled ? game::ui::kColorTextPrimary : game::ui::kColorTextSub;
     }
 }
 
@@ -1383,9 +1401,9 @@ void WikiGolfHUD::UpdateClubSelectList(core::GameContext& ctx,
                 t.width = w - h - 30.0f;
                 t.height = 18.0f;
                 t.style  = graphics::TextStyle::BrowserSub();
-                t.style.fontFamily = "Kiwi Maru Medium"; // 日本語のクラブ名なので丸ゴシックで表示
+                t.style.fontFamily = "Meiryo"; // 日本語のクラブ名。Wikipedia本文相当のフラットなゴシックで表示
                 t.style.fontSize = game::ui::kClubNameFontSize;
-                t.style.color    = game::ui::kColorWhite;
+                t.style.color    = game::ui::kColorTextPrimary;
                 t.style.align    = graphics::TextAlign::Left;
                 t.visible = true;
                 t.layer   = game::ui::kLayerClubSelect + 1;
@@ -1684,7 +1702,7 @@ void WikiGolfHUD::ResetShotUI(core::GameContext& ctx) {
     {
         auto* t = ctx.world.Get<game::components::UIText>(m_ui.shotPanelAccuracyValueEntity);
         t->text = L"---";
-        t->style.color = game::ui::kColorWhite;
+        t->style.color = game::ui::kColorTextPrimary;
     }
     if (m_ui.gaugeBarEntity != UINT32_MAX &&
         ctx.world.Has<game::components::UIBarGauge>(m_ui.gaugeBarEntity))
@@ -1762,6 +1780,8 @@ void WikiGolfHUD::SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase) 
     setVis(m_ui.shotButtonTextEntity, !shotPhase);
     setVis(m_ui.controlHintEntity,    !shotPhase);
     setVis(m_ui.clubHeaderEntity,     !shotPhase);
+    setVis(m_ui.landingPreviewBtnBgEntity,   !shotPhase);
+    setVis(m_ui.landingPreviewBtnTextEntity, !shotPhase);
 
     const bool bottomInfoVisible = !shotPhase;
     setVis(m_ui.liePanelBgEntity, bottomInfoVisible);
@@ -1769,7 +1789,9 @@ void WikiGolfHUD::SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase) 
     setVis(m_ui.lieValueEntity, bottomInfoVisible);
     setVis(m_ui.lieCondValueEntity, bottomInfoVisible);
 
-    // クラブリスト: ショット時は選択中だけ残して視界を整理。
+    // クラブリスト: ショット時はクラブ名がショットパネル内に既に表示される
+    // ため、選択中の行も含めてクラブ選択リストは完全に隠し、他のパネル
+    // (操作ヘルプ・着弾予測ボタン等)と同じように視界を整理する。
     // 非ショット時に戻す行の可視性は m_clubRowWindowVisible
     // (UpdateClubSelectList が前後3行の窓として毎フレーム更新している
     // キャッシュ)からその場で決定的に復元する。以前はここを
@@ -1783,7 +1805,7 @@ void WikiGolfHUD::SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase) 
                               ctx.world.Get<game::components::UIText>(m_ui.clubArrowEntities[i]) &&
                               ctx.world.Get<game::components::UIText>(m_ui.clubArrowEntities[i])->visible;
         const bool rowVisible = shotPhase
-            ? selected
+            ? false
             : (i < m_clubRowWindowVisible.size() ? m_clubRowWindowVisible[i] : selected);
 
         setVis(m_ui.clubBgEntities[i], rowVisible);
@@ -1859,12 +1881,15 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
     setVis(m_ui.browserTargetLabelEntity, visible);
     setVis(m_ui.browserTargetEntity,      visible);
     setVis(m_ui.browserShotInfoEntity,    visible);
+    setVis(m_ui.browserShotInfoBgEntity,  visible);
     setVis(m_ui.browserHistoryEntity,     visible);
     setVis(m_ui.clubHeaderEntity,         visible);
     setVis(m_ui.headerEntity,             visible);
     setVis(m_ui.shotCountEntity,          visible);
     setVis(m_ui.infoEntity,              visible);
     setVis(m_ui.pathEntity,              visible);
+    setVis(m_ui.landingPreviewBtnBgEntity,   visible);
+    setVis(m_ui.landingPreviewBtnTextEntity, visible);
 
     // 風カード
     setVis(m_ui.windEntity,           visible);

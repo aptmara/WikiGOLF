@@ -38,6 +38,7 @@ public:
         ecs::Entity browserTargetLabelEntity  = UINT32_MAX; // "TARGET" ラベル
         ecs::Entity browserTargetEntity     = UINT32_MAX; // 目的地表示（値）
         ecs::Entity browserShotInfoEntity   = UINT32_MAX; // スコア情報
+        ecs::Entity browserShotInfoBgEntity = UINT32_MAX; // スコア情報の背景チップ
         ecs::Entity browserHistoryEntity    = UINT32_MAX; // 経路履歴
         
         ecs::Entity clubHeaderEntity        = UINT32_MAX; // ヘッダー

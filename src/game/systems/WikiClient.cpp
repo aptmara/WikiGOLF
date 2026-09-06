@@ -198,6 +198,172 @@ void ParseRenderedPageLinks(const std::string &response,
 }
 
 /**
+ * @brief Unicodeコードポイントを UTF-8 バイト列として追記します。 山内陽
+ */
+void AppendUtf8(std::string &out, unsigned long codepoint) {
+  if (codepoint <= 0x7F) {
+    out += static_cast<char>(codepoint);
+  } else if (codepoint <= 0x7FF) {
+    out += static_cast<char>(0xC0 | (codepoint >> 6));
+    out += static_cast<char>(0x80 | (codepoint & 0x3F));
+  } else if (codepoint <= 0xFFFF) {
+    out += static_cast<char>(0xE0 | (codepoint >> 12));
+    out += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+    out += static_cast<char>(0x80 | (codepoint & 0x3F));
+  } else {
+    out += static_cast<char>(0xF0 | (codepoint >> 18));
+    out += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+    out += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+    out += static_cast<char>(0x80 | (codepoint & 0x3F));
+  }
+}
+
+/**
+ * @brief HTML実体参照（&amp; &nbsp; &#12345; &#xAB; 等）をデコードします。 山内陽
+ */
+std::string DecodeHtmlEntities(const std::string &text) {
+  std::string out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size();) {
+    if (text[i] != '&') {
+      out += text[i++];
+      continue;
+    }
+    size_t semi = text.find(';', i);
+    if (semi == std::string::npos || semi - i > 12) {
+      out += text[i++];
+      continue;
+    }
+    const std::string entity = text.substr(i, semi - i + 1);
+    if (entity == "&amp;") { out += '&'; }
+    else if (entity == "&lt;") { out += '<'; }
+    else if (entity == "&gt;") { out += '>'; }
+    else if (entity == "&quot;") { out += '"'; }
+    else if (entity == "&apos;" || entity == "&#39;") { out += '\''; }
+    else if (entity == "&nbsp;") { out += ' '; }
+    else if (entity.size() > 3 && entity[1] == '#') {
+      const bool isHex = (entity[2] == 'x' || entity[2] == 'X');
+      const std::string digits =
+          entity.substr(isHex ? 3 : 2, entity.size() - (isHex ? 4 : 3));
+      try {
+        unsigned long codepoint =
+            std::stoul(digits, nullptr, isHex ? 16 : 10);
+        AppendUtf8(out, codepoint);
+      } catch (...) {
+        out += entity; // 解釈できなければそのまま残す
+      }
+    } else {
+      out += entity; // 未知の実体参照はそのまま残す
+    }
+    i = semi + 1;
+  }
+  return out;
+}
+
+/**
+ * @brief HTML断片からタグを除去し、読める平文へ変換します。 山内陽
+ * @details テーブル/インフォボックスの中身を articleText 相当のテキストへ
+ *          変換するための簡易ストリッパー。<script>/<style> は中身ごと除去し、
+ *          ブロック的なタグ（tr/table/p/div/li/br/見出し等）は改行、
+ *          それ以外のタグは単語がくっつかないよう半角スペースへ変換する。
+ */
+std::string StripHtmlToPlainText(const std::string &html) {
+  static const std::unordered_set<std::string> kBlockTags = {
+      "tr", "table", "p",  "div", "li", "ul", "ol",
+      "br", "h1", "h2", "h3", "h4", "h5", "h6", "dd", "dt", "caption"};
+
+  std::string out;
+  out.reserve(html.size());
+  size_t i = 0;
+  while (i < html.size()) {
+    if (html[i] != '<') {
+      out += html[i++];
+      continue;
+    }
+
+    const size_t tagEnd = html.find('>', i);
+    if (tagEnd == std::string::npos) {
+      break; // 末尾が壊れている場合はそこで打ち切る
+    }
+
+    const std::string tag = html.substr(i + 1, tagEnd - i - 1);
+    size_t nameStart = (!tag.empty() && tag[0] == '/') ? 1 : 0;
+    size_t nameEnd = nameStart;
+    while (nameEnd < tag.size() &&
+           !std::isspace(static_cast<unsigned char>(tag[nameEnd])) &&
+           tag[nameEnd] != '/') {
+      ++nameEnd;
+    }
+    std::string tagName = tag.substr(nameStart, nameEnd - nameStart);
+    std::transform(tagName.begin(), tagName.end(), tagName.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    if (tagName == "script" || tagName == "style") {
+      const std::string closeTag = "</" + tagName;
+      size_t closePos = html.find(closeTag, tagEnd + 1);
+      if (closePos == std::string::npos) {
+        break;
+      }
+      size_t closeEnd = html.find('>', closePos);
+      i = (closeEnd == std::string::npos) ? html.size() : closeEnd + 1;
+      continue;
+    }
+
+    if (kBlockTags.count(tagName)) {
+      if (!out.empty() && out.back() != '\n') {
+        out += '\n';
+      }
+    } else if (!out.empty() && out.back() != ' ' && out.back() != '\n') {
+      out += ' ';
+    }
+    i = tagEnd + 1;
+  }
+
+  return DecodeHtmlEntities(out);
+}
+
+/**
+ * @brief HTML文字列から <table>...</table> ブロック（入れ子考慮）を抜き出します。 山内陽
+ */
+std::vector<std::string> ExtractTableBlocks(const std::string &html) {
+  std::vector<std::string> blocks;
+  size_t i = 0;
+  while (i < html.size()) {
+    size_t start = html.find("<table", i);
+    if (start == std::string::npos) {
+      break;
+    }
+    size_t cursor = html.find('>', start);
+    if (cursor == std::string::npos) {
+      break;
+    }
+    ++cursor;
+
+    int depth = 1;
+    while (depth > 0) {
+      size_t nextOpen = html.find("<table", cursor);
+      size_t nextClose = html.find("</table>", cursor);
+      if (nextClose == std::string::npos) {
+        depth = 0;
+        cursor = html.size(); // 壊れている場合はそこまでを1ブロック扱いにする
+        break;
+      }
+      if (nextOpen != std::string::npos && nextOpen < nextClose) {
+        ++depth;
+        size_t openEnd = html.find('>', nextOpen);
+        cursor = (openEnd == std::string::npos) ? html.size() : openEnd + 1;
+      } else {
+        --depth;
+        cursor = nextClose + 8; // strlen("</table>")
+      }
+    }
+    blocks.push_back(html.substr(start, cursor - start));
+    i = cursor;
+  }
+  return blocks;
+}
+
+/**
  * @brief JSONオブジェクト内の真偽値フィールドを取得します。
  */
 bool ExtractJsonBoolField(const std::string &json, const std::string &key,
@@ -785,6 +951,61 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
     }
   }
   return "(Failed to fetch extract)";
+}
+
+std::string WikiClient::FetchPageTableText(const std::string &title) {
+  std::string encodedTitle = UrlEncode(title);
+  std::wstring wtitle = core::ToWString(encodedTitle);
+
+  std::wstring path = L"/w/api.php?action=parse&page=" + wtitle +
+                      L"&prop=text&redirects=1&format=json&formatversion=2";
+
+  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+  if (response.empty() ||
+      response.find("\"missing\":true") != std::string::npos) {
+    return "";
+  }
+
+  const std::string key = "\"text\":\"";
+  size_t pos = response.find(key);
+  if (pos == std::string::npos) {
+    return "";
+  }
+
+  const size_t start = pos + key.length();
+  size_t end = std::string::npos;
+  bool escaped = false;
+  for (size_t i = start; i < response.length(); ++i) {
+    if (escaped) {
+      escaped = false;
+    } else if (response[i] == '\\') {
+      escaped = true;
+    } else if (response[i] == '"') {
+      end = i;
+      break;
+    }
+  }
+  if (end == std::string::npos) {
+    return "";
+  }
+
+  std::string html = response.substr(start, end - start);
+  html = DecodeUnicodeEscape(html);
+  html = ReplaceAll(html, "\\n", "\n");
+  html = ReplaceAll(html, "\\t", "\t");
+  html = ReplaceAll(html, "\\\"", "\"");
+  html = ReplaceAll(html, "\\/", "/");
+
+  const auto tableBlocks = ExtractTableBlocks(html);
+  std::string combined;
+  for (const auto &block : tableBlocks) {
+    combined += StripHtmlToPlainText(block);
+    combined += '\n';
+  }
+
+  LOG_INFO("WikiClient", "Table text fetched: {} bytes from {} table(s)",
+           combined.length(), tableBlocks.size());
+  return combined;
 }
 
 std::vector<WikiImageInfo> WikiClient::FetchPageImages(const std::string &title,

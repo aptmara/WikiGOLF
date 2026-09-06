@@ -58,7 +58,6 @@ constexpr float kMinFieldWidth  = 20.0f * kFieldScale;
 constexpr float kMinFieldDepth  = 30.0f * kFieldScale;
 constexpr float kMaxSafeDepth   = 20000.0f;
 constexpr float kMaxSafeWidth   = 20000.0f;
-constexpr float kMinLinkHoleDistance = 4.0f;
 constexpr float kMinMapIconDistance = 8.0f;
 constexpr size_t kMaxMapHoleIcons = 160;
 constexpr int kPathEvaluationMaxDepth = 4;
@@ -798,6 +797,21 @@ PageDataAsyncResult WikiPageLoader::FetchPageDataAsync(const std::string& pageNa
                  pageName, res.pageCategories.size(), ElapsedMs(categoryStartedAt));
     }
 
+    // プレーンテキスト抽出（explaintext）は表・インフォボックスを問答無用で
+    // 除去してしまい、そこにしか出現しないリンク（パイプリンク等）が本文一致
+    // 判定・クリック領域生成の両方から漏れる。表由来のテキストを本文末尾へ
+    // 連結しておくことで、既存の「本文にタイトル文字列が含まれるか」判定
+    // （WikiTextureGenerator側の検索も含む）がそのまま機能するようにする。
+    const auto tableTextStartedAt = std::chrono::steady_clock::now();
+    std::string tableText = wikiClient.FetchPageTableText(pageName);
+    if (!tableText.empty()) {
+        res.articleText += "\n== 表・インフォボックス ==\n";
+        res.articleText += tableText;
+    }
+    LOG_INFO("WikiPageLoader",
+             "FetchPageData table text page='{}' bytes={} elapsed={}ms",
+             pageName, tableText.size(), ElapsedMs(tableTextStartedAt));
+
     const auto imagesStartedAt = std::chrono::steady_clock::now();
     res.pendingImages = FetchAndDecodeWikiImages(wikiClient, pageName);
     LOG_INFO("WikiPageLoader",
@@ -1530,8 +1544,6 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
         if (gameplayLinks.empty() ||
             m_nextHoleIndex >= gameplayLinks.size()) {
-            m_buildHoleCandidates =
-                FilterHoleCandidatesByMinDistance(m_buildHoleCandidates);
             m_buildMapHoleCandidates =
                 SelectMapHoleIconCandidates(m_buildHoleCandidates);
             m_buildPathCandidates = m_buildHoleCandidates;
@@ -2197,50 +2209,6 @@ WikiPageLoader::SelectMapHoleIconCandidates(
 }
 
 /**
- * @brief 物理ホール候補を最小間隔で間引きます。 R-06対応。
- * @details ミニマップ用のSelectMapHoleIconCandidatesと同じ選抜ロジックを、
- *          実際に物理ホールとして生成する候補集合そのものへ適用する。
- *          target候補は間引き対象から常に除外する。
- */
-std::vector<WikiPageLoader::HolePlacementCandidate>
-WikiPageLoader::FilterHoleCandidatesByMinDistance(
-    const std::vector<HolePlacementCandidate>& candidates) const
-{
-    std::vector<HolePlacementCandidate> sorted = candidates;
-    std::stable_sort(sorted.begin(), sorted.end(),
-        [](const HolePlacementCandidate& lhs,
-           const HolePlacementCandidate& rhs) {
-            if (lhs.isTarget != rhs.isTarget) {
-                return lhs.isTarget;
-            }
-            return lhs.originalIndex < rhs.originalIndex;
-        });
-
-    std::vector<HolePlacementCandidate> selected;
-    selected.reserve(sorted.size());
-    for (const auto& candidate : sorted) {
-        if (candidate.isTarget ||
-            IsFarEnoughFromSelected(selected, candidate, kMinLinkHoleDistance)) {
-            selected.push_back(candidate);
-        }
-    }
-
-    std::sort(selected.begin(), selected.end(),
-        [](const HolePlacementCandidate& lhs,
-           const HolePlacementCandidate& rhs) {
-            return lhs.originalIndex < rhs.originalIndex;
-        });
-
-    if (selected.size() != candidates.size()) {
-        LOG_INFO("WikiPageLoader",
-                 "Physical hole candidates filtered by min distance: "
-                 "candidates={}, selected={}, minDistance={:.1f}",
-                 candidates.size(), selected.size(), kMinLinkHoleDistance);
-    }
-    return selected;
-}
-
-/**
  * @brief 経路評価結果を全ホール候補とマップ候補へ反映します。 山内陽
  */
 void WikiPageLoader::ApplyPathEvaluationResults(
@@ -2373,7 +2341,6 @@ void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
             BuildHolePlacementCandidate(gameplayLinks[i], i));
     }
 
-    candidates = FilterHoleCandidatesByMinDistance(candidates);
     m_buildMapHoleCandidates = SelectMapHoleIconCandidates(candidates);
     m_buildHoleCandidates = candidates;
     m_buildPathCandidates = m_buildHoleCandidates;

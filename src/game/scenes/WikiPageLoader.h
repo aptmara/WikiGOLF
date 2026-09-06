@@ -382,13 +382,6 @@ private:
         const std::vector<HolePlacementCandidate>& candidates) const;
 
     /**
-     * @brief 物理ホール候補を最小間隔(kMinLinkHoleDistance)で間引きます。
-     *        target候補は間引き対象から常に除外します。
-     */
-    std::vector<HolePlacementCandidate> FilterHoleCandidatesByMinDistance(
-        const std::vector<HolePlacementCandidate>& candidates) const;
-
-    /**
      * @brief 評価結果を同じリンク候補へ反映します。 山内陽
      */
     void ApplyPathEvaluationResults(

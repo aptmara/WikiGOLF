@@ -174,6 +174,16 @@ public:
    */
   static bool IsCancelRequested();
 
+  /**
+   * @brief ターゲット記事単位のプロセス内キャッシュ（逆方向BFS到達済みノード・
+   *        解決済み距離）を破棄します。
+   * @details 同じゴールを目指している間はページ移動のたびにキャッシュを
+   *          使い回すが、ゲーム終了時（タイトルへ戻る等）にはこの関数で
+   *          明示的に破棄する。次にターゲットが変わった時点でも自動的に
+   *          破棄されるが、後始末として呼んでおくとメモリ保持期間が短くなる。
+   */
+  static void ClearProcessCaches();
+
 private:
   sqlite3 *m_db = nullptr;
   std::vector<int> m_popularPageIds; ///< 人気記事IDのキャッシュ
