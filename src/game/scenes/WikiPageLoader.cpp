@@ -2047,11 +2047,12 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     h.isTarget   = isTargetHole;
     h.hopsToTarget = hopsToTarget;
 
-    // 目的地、または1〜2ホップの近いホールのみプロシージャル旗を生成する（ドローコール削減とFPS向上のため）
-    if (isTargetHole || (hopsToTarget >= 1 && hopsToTarget <= 2)) {
+    // すべてのリンクホールにプロシージャル旗を生成する
+    // （遠距離のパーツはmaxDrawDistanceで描画カリングされるため負荷は限定的）
+    {
         game::utils::ProceduralFlagOptions options;
         options.holeEntity = static_cast<uint32_t>(e);
-        options.large = isTargetHole;
+        options.large = isTargetHole || hopsToTarget == 1;
         options.createParticles = (isTargetHole || hopsToTarget == 1);
         options.animationWeight = isTargetHole ? 1.0f : 0.72f;
 
