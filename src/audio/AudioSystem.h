@@ -79,15 +79,34 @@ public:
                     const std::string &name, float volume = 1.0f,
                     float pitch = 0.0f);
 
+  /// @brief 着地バウンドSEを再生
+  /// @param name ファイル名
+  /// @param volume 音量
+  /// @param pitch ピッチ
+  /// @param maxDuration 最大再生時間（秒）
+  void PlayLandingSE(core::GameContext &ctx, const std::string &name,
+                     float volume = 1.0f, float pitch = 0.0f,
+                     float maxDuration = 0.6f);
+
+  /// @brief 着地バウンドSEを停止
+  /// @param fadeSeconds フェード時間（秒）
+  void StopLandingSE(float fadeSeconds = 0.1f);
+
 private:
   Microsoft::WRL::ComPtr<IXAudio2> m_xaudio2;
   IXAudio2MasteringVoice *m_masterVoice = nullptr;
 
   struct ActiveVoice {
-    IXAudio2SourceVoice *voice;
+    IXAudio2SourceVoice *voice = nullptr;
     VoiceCallback callback;
     std::string debugName;
-    std::string currentFile; // ループ用：現在流しているファイル名
+    std::string currentFile;
+    float currentVolume = 1.0f;
+    float targetVolume = 1.0f;
+    float fadeSpeed = 0.0f;
+    float durationTimer = 0.0f;
+    float maxDuration = -1.0f;
+    bool isStopping = false;
   };
 
   // SE用プール（再生中リスト）
@@ -98,6 +117,12 @@ private:
 
   // ラベル付き一回再生音声
   std::map<std::string, std::unique_ptr<ActiveVoice>> m_oneShotVoices;
+
+  // フェードアウト中ボイス
+  std::vector<std::unique_ptr<ActiveVoice>> m_fadingVoices;
+
+  // 着地バウンド専用ボイス
+  std::unique_ptr<ActiveVoice> m_landingVoice;
 
   // BGM用
   IXAudio2SourceVoice *m_bgmVoice = nullptr;
