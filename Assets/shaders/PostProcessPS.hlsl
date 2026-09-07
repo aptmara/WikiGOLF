@@ -3,52 +3,81 @@
  * @brief ポストプロセス ピクセルシェーダー - 霧、色調補正、ビネット
  */
 
-// 入力
+/**
+ * @struct PSInput
+ * @brief ピクセルシェーダー入力
+ */
 struct PSInput {
-  float4 position : SV_POSITION;
-  float2 texCoord : TEXCOORD0;
+  float4 position : SV_POSITION; /**< 射影座標 */
+  float2 texCoord : TEXCOORD0;   /**< UV座標 */
 };
 
-// テクスチャ
-Texture2D sceneTexture : register(t0);
-Texture2D depthTexture : register(t1);
-SamplerState samplerState : register(s0);
+Texture2D sceneTexture : register(t0);    /**< シーンレンダリング結果カラー */
+Texture2D depthTexture : register(t1);    /**< 深度バッファ */
+SamplerState samplerState : register(s0); /**< サンプラーステート */
 
-// 定数バッファ（graphics::PostProcessParamsと1:1対応）
 cbuffer PostProcessConstants : register(b0) {
-  float4 fogColor;      // RGB + density
-  float4 fogParams;     // start, end, 0, 0
-  float4 colorTint;     // RGB + brightness
-  float4 colorParams;   // saturation, contrast, 0, 0
-  float4 vignetteParams;// intensity, radius, softness, 0
-  float4 timeParams;    // time, bloomIntensity, bloomThreshold, bloomSpread
-  float4 depthParams;   // nearZ, farZ, hasDepth(1/0), 0
+  float4 fogColor;       /**< RGB + density */
+  float4 fogParams;      /**< start, end, 0, 0 */
+  float4 colorTint;      /**< RGB + brightness */
+  float4 colorParams;    /**< saturation, contrast, 0, 0 */
+  float4 vignetteParams; /**< intensity, radius, softness, 0 */
+  float4 timeParams;     /**< time, bloomIntensity, bloomThreshold, bloomSpread */
+  float4 depthParams;    /**< nearZ, farZ, hasDepth(1/0), 0 */
 };
 
-// LH・zレンジ[0,1]の非線形深度をビュー空間の線形深度へ変換する
+/**
+ * @brief NDC深度値をビュー空間の線形深度[m]へ変換します。
+ * @param depthNDC NDC深度 (0～1)
+ * @param nearZ 近クリップ面距離
+ * @param farZ 遠クリップ面距離
+ * @return 線形距離
+ */
 float LinearizeDepth(float depthNDC, float nearZ, float farZ) {
   return (nearZ * farZ) / (farZ - depthNDC * (farZ - nearZ));
 }
 
-// 彩度調整
+/**
+ * @brief カラーの彩度を調整します。
+ * @param color 入力RGBカラー
+ * @param saturation 彩度倍率
+ * @return 調整後RGBカラー
+ */
 float3 AdjustSaturation(float3 color, float saturation) {
   float luminance = dot(color, float3(0.299, 0.587, 0.114));
   return lerp(float3(luminance, luminance, luminance), color, saturation);
 }
 
-// コントラスト調整
+/**
+ * @brief カラーのコントラストを調整します。
+ * @param color 入力RGBカラー
+ * @param contrast コントラスト係数
+ * @return 調整後RGBカラー
+ */
 float3 AdjustContrast(float3 color, float contrast) {
   return (color - 0.5) * contrast + 0.5;
 }
 
-// ブルーム用の明るい色抽出
+/**
+ * @brief ブルーム抽出用の高輝度領域を抽出します。
+ * @param color 入力RGBカラー
+ * @param threshold 輝度閾値
+ * @return 抽出された発光成分
+ */
 float3 ExtractBloom(float3 color, float threshold) {
   float brightness = max(color.r, max(color.g, color.b));
   float amount = saturate((brightness - threshold) / max(1.0 - threshold, 0.001));
   return color * amount;
 }
 
-// ビネット効果
+/**
+ * @brief 画面四隅の減光（ビネット）係数を計算します。
+ * @param uv スクリーンUV座標
+ * @param intensity 効果強度
+ * @param radius 開始半径
+ * @param softness 減衰の滑らかさ
+ * @return ビネット減光係数 (0～1)
+ */
 float ComputeVignette(float2 uv, float intensity, float radius, float softness) {
   float2 center = uv - 0.5;
   float dist = length(center);
@@ -56,7 +85,11 @@ float ComputeVignette(float2 uv, float intensity, float radius, float softness) 
   return lerp(1.0, vignette, intensity);
 }
 
-// メイン
+/**
+ * @brief ポストプロセスピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 色調補正・フォグ・ビネット適用済み最終カラー
+ */
 float4 main(PSInput input) : SV_TARGET {
   float2 uv = input.texCoord;
   

@@ -2,7 +2,7 @@
 /**
  * @file LiePanel.h
  * @brief ボールが停止している地形状態を表示するHUDパネル
- */
+*/
 
 #include "../../../ecs/Entity.h"
 #include "../../../ecs/EntityOwner.h"
@@ -14,20 +14,20 @@ struct GameContext;
 
 namespace game::controllers::hud {
 
-/** @brief 地形種別からライ名、状態説明、意味色を決定します。 */
+/** @brief 地形種別からライ名、状態説明、意味色を決定します。*/
 class LiePanel {
 public:
-  /** @brief 必要ならEntityを生成し、現在のライを表示へ反映します。 */
+  /** @brief 必要ならEntityを生成し、現在のライを表示へ反映します。*/
   void Update(core::GameContext &ctx,
               game::components::TerrainMaterial material);
 
-  /** @brief ショット中の表示状態を切り替えます。 */
+  /** @brief ショット中の表示状態を切り替えます。*/
   void SetShotPhaseVisible(core::GameContext &ctx, bool shotPhase);
 
-  /** @brief パネル全体の表示状態を変更します。 */
+  /** @brief パネル全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
-  /** @brief 生成したすべてのEntityを破棄します。 */
+  /** @brief 生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 
 private:

@@ -2,7 +2,7 @@
 /**
  * @file SkyboxTextureGenerator.h
  * @brief ページテーマに基づいたスカイボックステクスチャ生成
- */
+*/
 
 #include <DirectXMath.h>
 #include <cstdint>
@@ -16,12 +16,12 @@ namespace graphics {
 
 /**
  * @brief スカイボックスの各面に対応するファイル接尾辞
- */
+*/
 extern const wchar_t *kSkyboxFaceSuffixes[6];
 
 /**
  * @brief スカイボックステーマ定義
- */
+*/
 enum class SkyboxTheme {
 // ... (omitting intermediate lines for brevity in instruction, will provide full replacement)
   Default,        // デフォルト青空
@@ -54,7 +54,7 @@ enum class SkyboxTheme {
 
 /**
  * @brief スカイボックステクスチャジェネレーター
- */
+*/
 class SkyboxTextureGenerator {
 public:
   SkyboxTextureGenerator() = default;
@@ -67,7 +67,7 @@ public:
    * @param pageExtract ページ抜粋（カテゴリ判定用）
    * @param outSRV 生成されたキューブマップSRV（出力）
    * @return 成功ならtrue
-   */
+*/
   bool
   GenerateCubemap(ID3D11Device *device, const std::string &pageTitle,
                   const std::string &pageExtract,
@@ -79,7 +79,7 @@ public:
    * @param theme スカイボックステーマ
    * @param outSRV 生成されたキューブマップSRV（出力）
    * @return 成功ならtrue
-   */
+*/
   bool GenerateCubemapFromTheme(
       ID3D11Device *device, SkyboxTheme theme,
       Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);
@@ -92,7 +92,7 @@ public:
    * @param baseFilePath 保存先のベースパス（_px.pngなどを付与して保存）
    * @param outSRV 生成されたキューブマップSRV
    * @return 成功ならtrue
-   */
+*/
   bool GenerateCubemapToFiles(
       ID3D11Device *device, const std::string &pageTitle,
       const std::string &pageExtract, const std::wstring &baseFilePath,
@@ -104,7 +104,7 @@ public:
    * @param theme スカイボックステーマ
    * @param baseFilePath 保存先のベースパス（_px.pngなどを付与して保存）
    * @return 成功ならtrue
-   */
+*/
   bool GenerateCubemapFromThemeToFiles(
       ID3D11Device *device, SkyboxTheme theme, const std::wstring &baseFilePath);
 
@@ -114,7 +114,7 @@ public:
    * @param baseFilePath ベースパス（_px.pngなどを付与して読み込む）
    * @param outSRV 生成されたキューブマップSRV
    * @return 成功ならtrue
-   */
+*/
   bool LoadCubemapFromFiles(
       ID3D11Device *device, const std::wstring &baseFilePath,
       Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);
@@ -125,7 +125,7 @@ public:
    * @param filePath ファイルパス
    * @param outSRV 生成されたキューブマップSRV
    * @return 成功ならtrue
-   */
+*/
   bool LoadCubemapFromSingleFile(
       ID3D11Device *device, const std::wstring &filePath,
       Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);
@@ -135,7 +135,7 @@ public:
    * @param pageTitle ページタイトル
    * @param pageExtract ページ抜粋
    * @return 判定されたテーマ
-   */
+*/
   SkyboxTheme DetermineTheme(const std::string &pageTitle,
                              const std::string &pageExtract);
 
@@ -143,7 +143,7 @@ public:
    * @brief テーマからファイル名用文字列を取得
    * @param theme スカイボックステーマ
    * @return ファイル名用の文字列
-   */
+*/
   static std::wstring GetThemeFileName(SkyboxTheme theme);
 
 private:
@@ -153,7 +153,7 @@ private:
    * @param outTopColor 天頂色（出力）
    * @param outHorizonColor 地平線色（出力）
    * @param outBottomColor 天底色（出力）
-   */
+*/
   void GetThemeColors(SkyboxTheme theme, DirectX::XMFLOAT3 &outTopColor,
                       DirectX::XMFLOAT3 &outHorizonColor,
                       DirectX::XMFLOAT3 &outBottomColor);
@@ -166,7 +166,7 @@ private:
    * @param faceSize 各面のサイズ（ピクセル）
    * @param outData 生成されたテクスチャデータ（6面分）
    * @param theme スカイボックステーマ（エフェクト適用用）
-   */
+*/
   void GenerateFaceData(const DirectX::XMFLOAT3 &topColor,
                         const DirectX::XMFLOAT3 &horizonColor,
                         const DirectX::XMFLOAT3 &bottomColor, int faceSize,
@@ -180,7 +180,7 @@ private:
    * @param faceSize 各面のサイズ
    * @param outSRV 生成されたSRV（出力）
    * @return 成功ならtrue
-   */
+*/
   bool CreateCubemapTexture(
       ID3D11Device *device, const std::vector<std::vector<uint8_t>> &faceData,
       int faceSize, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> &outSRV);

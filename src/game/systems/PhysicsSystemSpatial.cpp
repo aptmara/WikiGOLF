@@ -1,7 +1,7 @@
 /**
  * @file PhysicsSystemSpatial.cpp
  * @brief 物理システムの空間キャッシュ実装
- */
+*/
 
 #include "PhysicsSystemInternals.h"
 #include <array>

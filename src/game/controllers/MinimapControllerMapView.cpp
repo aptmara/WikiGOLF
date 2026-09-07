@@ -1,3 +1,8 @@
+/**
+ * @file MinimapControllerMapView.cpp
+ * @brief MinimapControllerMapView の実装
+*/
+
 #include "MinimapController.h"
 #include "MinimapControllerInternals.h"
 #include "../components/Transform.h"
@@ -26,7 +31,7 @@ using namespace game::components;
 
 /**
  * @brief マップビュー（全体俯瞰表示）のトグルを切り替えます。
- */
+*/
 void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skyboxEntity) {
   m_isMapView = !m_isMapView;
 
@@ -55,7 +60,7 @@ void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skybox
 
     ctx.input.SetMouseCursorVisible(true);
     ctx.input.SetMouseCursorLocked(false);
-    
+
     m_mapCenter.x = 0.0f;
     m_mapCenter.y = 0.0f;
     if (auto* ballT = ctx.world.Get<Transform>(m_cfg.ballEntity)) {
@@ -80,7 +85,7 @@ void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skybox
 /**
  * @brief トップビュー上の着弾点プレビュー(中心マーカー+ばらつき範囲円)の
  * 表示状態を設定します。実際の画面座標への配置はUpdateMinimap内で行う。
- */
+*/
 void MinimapController::SetLandingPreview(core::GameContext &ctx,
                                           const DirectX::XMFLOAT3 &landingCenter,
                                           float dispersionRadius, bool visible) {
@@ -100,7 +105,7 @@ void MinimapController::SetLandingPreview(core::GameContext &ctx,
 
 /**
  * @brief マップビュー有効時のカメラ位置を更新します。
- */
+*/
 void MinimapController::UpdateMapCamera(core::GameContext &ctx, float fieldWidth, float fieldDepth) {
   if (!ctx.world.IsAlive(m_cfg.cameraEntity))
     return;
@@ -124,7 +129,7 @@ void MinimapController::UpdateMapCamera(core::GameContext &ctx, float fieldWidth
   // 現在位置から滑らかに補間
   XMVECTOR currentPos = XMLoadFloat3(&camT->position);
   XMVECTOR newPos =
-      XMVectorLerp(currentPos, targetPos, game::ui::kLerpSpeedCamera * ctx.dt); 
+      XMVectorLerp(currentPos, targetPos, game::ui::kLerpSpeedCamera * ctx.dt);
   XMStoreFloat3(&camT->position, newPos);
 
   // 斜め下を向く（ピッチ70度）

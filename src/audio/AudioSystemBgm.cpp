@@ -1,7 +1,7 @@
 /**
  * @file AudioSystem.cpp
  * @brief XAudio2実装
- */
+*/
 
 #include "AudioSystem.h"
 #include "AudioSystemInternals.h"

@@ -2,7 +2,7 @@
 /**
  * @file PauseScene.h
  * @brief ゲームプレイ上に重ねるポーズシーンです。
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../core/Scene.h"
@@ -12,7 +12,7 @@ namespace game::scenes {
 
 /**
  * @brief インゲーム用のポーズメニューです。
- */
+*/
 class PauseScene : public core::Scene {
 public:
   using ActionCallback = std::function<void(core::GameContext&)>;
@@ -27,7 +27,7 @@ public:
   void OnUpdate(core::GameContext& ctx) override;
 
 private:
-  /// @brief ボタン見出しを生成します。
+  /** @brief ボタン見出しを生成します。*/
   void CreateButton(core::GameContext& ctx, const std::wstring& label,
                     const std::string& action, float x, float y, float width,
                     bool enabled);

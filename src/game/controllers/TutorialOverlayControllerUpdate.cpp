@@ -5,7 +5,7 @@
  * 入力: GameContext・各コントローラーへのポインタ
  * 変更: チュートリアルステップ進行・UI 更新・STEP 5 イベントカメラ制御
  * 出力: IsDone()/IsInputLocked() の状態変化・カメラ Transform の強制更新
- */
+*/
 
 #include "TutorialOverlayController.h"
 #include "../utils/GameplayPhysicsConstants.h"
@@ -79,9 +79,7 @@ void TutorialOverlayController::UpdateEventCamera(core::GameContext& ctx) {
 // -------------------------------------------------------
 /**
  * @brief チュートリアル演出による入力ロック状態を返します。
- * @return イベントカメラ説明または説明間のチェック演出中ならtrueです。
- * @author 山内陽
- */
+ * @return イベントカメラ説明または説明間のチェック演出中ならtrueです。*/
 bool TutorialOverlayController::IsInputLocked() const {
     if (m_inputLocked) return true;
     if (m_step == TutorialStep::FlagEvent && !m_flagEventCamTargets.empty()) {
@@ -95,7 +93,7 @@ bool TutorialOverlayController::IsInputLocked() const {
 // -------------------------------------------------------
 // Update（毎フレーム）
 // -------------------------------------------------------
-void TutorialOverlayController::Update(core::GameContext& ctx, 
+void TutorialOverlayController::Update(core::GameContext& ctx,
                                        CameraController* cameraCtrl,
                                        ClubController* clubCtrl,
                                        ShotController* shotCtrl,
@@ -166,13 +164,13 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
 // -------------------------------------------------------
 // CheckCompletion
 // -------------------------------------------------------
-void TutorialOverlayController::CheckCompletion(core::GameContext& ctx, 
+void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
                                                 CameraController* cameraCtrl,
                                                 ClubController* clubCtrl,
                                                 ShotController* shotCtrl,
                                                 MinimapController* minimapCtrl) {
     auto* shotState = ctx.world.GetGlobal<components::ShotState>();
-    
+
     switch (m_step) {
         case TutorialStep::Camera:
             if (m_initialCameraYaw == 0.0f && cameraCtrl) {
@@ -373,13 +371,13 @@ void TutorialOverlayController::NextStep(core::GameContext& ctx) {
     // TerrainEvent から脱出するときは必ずロックを解除
     if (m_step == TutorialStep::TerrainEvent) {
         m_inputLocked = false;
-        
+
         // 打ってみようの時にボールが遠くに行き過ぎたり、不意にゴールに入ってしまった場合に備え、
         // ボールの位置・速度、およびクリアフラグをリセットする
         auto* golfState = ctx.world.GetGlobal<components::GolfGameState>();
         if (golfState) {
             golfState->gameCleared = false;
-            
+
             if (golfState->ballEntity != UINT32_MAX) {
                 if (auto* tr = ctx.world.Get<components::Transform>(golfState->ballEntity)) {
                     tr->position = {

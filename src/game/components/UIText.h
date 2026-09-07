@@ -2,7 +2,7 @@
 /**
  * @file UIText.h
  * @brief UIテキストコンポーネント（拡張版）
- */
+*/
 
 #include <string>
 #include <DirectXMath.h>
@@ -10,8 +10,10 @@
 
 namespace game::components {
 
-/// @brief UIテキストコンポーネント
-/// @details 画面上にテキストを描画するためのデータ。レイヤーで描画順を制御可能。
+/**
+ * @brief UIテキストコンポーネント
+ * @details 画面上にテキストを描画するためのデータ。レイヤーで描画順を制御可能。
+*/
 struct UIText {
     std::wstring text;          ///< 表示テキスト
     float x = 0.0f;             ///< X座標（スクリーン座標）
@@ -24,11 +26,13 @@ struct UIText {
     bool visible = true;        ///< 可視性（false なら描画スキップ）
     int layer = 0;              ///< レイヤー（大きいほど前面に描画）
 
-    /// @brief trueの場合、x/y/width/heightを無視し、style.bgColorで物理画面全体
-    ///        （レターボックスの余白含む）を塗りつぶす。フェード/暗転オーバーレイ用。
+    /**
+     * @brief trueの場合、x/y/width/heightを無視し、style.bgColorで物理画面全体
+     *        （レターボックスの余白含む）を塗りつぶす。フェード/暗転オーバーレイ用。
+*/
     bool fullScreenCover = false;
 
-    /// @brief 簡易コンストラクタ
+    /** @brief 簡易コンストラクタ*/
     static UIText Create(const std::wstring& text, float x, float y, const graphics::TextStyle& style = graphics::TextStyle::Default()) {
         UIText ui;
         ui.text = text;
@@ -38,7 +42,7 @@ struct UIText {
         return ui;
     }
 
-    /// @brief FPS表示用プリセット
+    /** @brief FPS表示用プリセット*/
     static UIText FPS(float x = 10.0f, float y = 10.0f) {
         UIText ui;
         ui.text = L"FPS: --";

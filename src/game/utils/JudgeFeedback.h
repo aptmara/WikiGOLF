@@ -2,7 +2,7 @@
 /**
  * @file JudgeFeedback.h
  * @brief 判定演出（画像・サウンド）の共通設定
- */
+*/
 
 #include "../components/WikiComponents.h"
 #include <string>
@@ -26,7 +26,7 @@ struct JudgeFeedback {
   bool HasSound() const { return !soundPath.empty(); }
 };
 
-/// @brief 判定種類に応じた演出設定を返す
+/** @brief 判定種類に応じた演出設定を返す*/
 JudgeFeedback BuildJudgeFeedback(ShotJudgement judgement);
 
 } // namespace game::utils

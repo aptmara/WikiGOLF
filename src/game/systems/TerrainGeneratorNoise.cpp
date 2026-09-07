@@ -1,3 +1,8 @@
+/**
+ * @file TerrainGeneratorNoise.cpp
+ * @brief TerrainGeneratorNoise の実装
+*/
+
 #include "TerrainGeneratorInternals.h"
 #include "TerrainGenerator.h"
 #include "../../core/Logger.h"
@@ -143,7 +148,7 @@ uint8_t HazardMaterialForBiome(int biome, float roll) {
 
 /**
  * @brief 地形チ（�（タを生成します、（
- */
+*/
 void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
                                              const std::string &text) {
   std::seed_seq seed(text.begin(), text.end());
@@ -455,6 +460,6 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
 
 /**
  * @brief ホ�（ル周辺に平らなプラチ（��フォームを作�（します、（
- */
+*/
 
 } // namespace game::systems

@@ -1,3 +1,8 @@
+/**
+ * @file WikiGameSystem.cpp
+ * @brief WikiGameSystem の実装
+*/
+
 #include "WikiGameSystem.h"
 #include "../../core/Logger.h"
 #include "../../ecs/World.h"

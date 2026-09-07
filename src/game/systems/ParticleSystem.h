@@ -1,7 +1,7 @@
 /**
  * @file ParticleSystem.h
  * @brief 環壁面��ーチ（��クルシステム�� - 大気効果（塵、雪��、蛍等）
- */
+*/
 
 #pragma once
 
@@ -20,7 +20,7 @@ using Microsoft::WRL::ComPtr;
 
 /**
  * @brief 単一パ�（チ（��クル
- */
+*/
 struct Particle {
   XMFLOAT3 position;
   XMFLOAT3 velocity;
@@ -34,7 +34,7 @@ struct Particle {
 
 /**
  * @brief パ�（チ（��クルシステム��設定
- */
+*/
 struct ParticleConfig {
   int maxParticles = 500;
   float spawnRadius = 50.0f;             // 発生範囲
@@ -55,7 +55,7 @@ struct ParticleConfig {
 
 /**
  * @brief プリセチ（��からパ�（チ（��クル設定を取得
- */
+*/
 inline ParticleConfig GetParticleConfig(components::ParticlePreset preset) {
   ParticleConfig config;
 
@@ -244,14 +244,14 @@ inline ParticleConfig GetParticleConfig(components::ParticlePreset preset) {
 
 /**
  * @brief 環壁面��ーチ（��クルシステム��
- */
+*/
 class EnvironmentParticleSystem {
 public:
   EnvironmentParticleSystem() : m_rng(std::random_device{}()) {}
 
   /**
    * @brief パ�（チ（��クル設定を適用
-   */
+*/
   void Configure(const ParticleConfig &config) {
     m_config = config;
     m_particles.clear();
@@ -263,7 +263,7 @@ public:
    * @param dt チ（��タタイム
    * @param cameraPos カメラ位置
    * @param windDir 鬚ｨ蜷代″
-   */
+*/
   void Update(float dt, const XMFLOAT3 &cameraPos, const XMFLOAT3 &windDir) {
     if (m_config.maxParticles <= 0)
       return;
@@ -325,12 +325,12 @@ public:
 
   /**
    * @brief パ�（チ（��クルリスト取得
-   */
+*/
   const std::vector<Particle> &GetParticles() const { return m_particles; }
 
   /**
    * @brief アクチ（��ブパーチ（��クル数
-   */
+*/
   size_t GetActiveCount() const { return m_particles.size(); }
 
 private:

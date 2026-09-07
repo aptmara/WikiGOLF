@@ -1,7 +1,7 @@
 /**
  * @file Scene.cpp
  * @brief シーン基底クラスの実装
- */
+*/
 
 #include "Scene.h"
 #include "GameContext.h"

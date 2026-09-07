@@ -2,7 +2,7 @@
 /**
  * @file HolePlacementPlanner.h
  * @brief Wikipediaリンク領域からホール配置候補を計画するクラス
- */
+*/
 
 #include "../../graphics/WikiTextureGenerator.h"
 #include <cstddef>
@@ -12,7 +12,7 @@
 
 namespace game::scenes {
 
-/** @brief テクスチャ上のリンクから作るワールド配置候補です。 */
+/** @brief テクスチャ上のリンクから作るワールド配置候補です。*/
 struct HolePlacementCandidate {
   float x = 0.0f;
   float z = 0.0f;
@@ -27,21 +27,21 @@ struct HolePlacementCandidate {
  * @brief リンク座標変換とミニマップ用候補選抜を担当します。
  * @details 同じ記事上の近接リンクを間引きつつ、目的地リンクを必ず残し、
  *          最後に記事内の元順序へ戻します。
- */
+*/
 class HolePlacementPlanner {
 public:
-  /** @brief リンク矩形の中心をフィールド上の候補へ変換します。 */
+  /** @brief リンク矩形の中心をフィールド上の候補へ変換します。*/
   HolePlacementCandidate BuildCandidate(
       const graphics::LinkRegion &link, std::size_t originalIndex,
       std::uint32_t textureWidth, std::uint32_t textureHeight,
       float fieldWidth, float fieldDepth) const;
 
-  /** @brief ミニマップへ表示する候補を間隔と上限に従って選抜します。 */
+  /** @brief ミニマップへ表示する候補を間隔と上限に従って選抜します。*/
   std::vector<HolePlacementCandidate> SelectMapCandidates(
       const std::vector<HolePlacementCandidate> &candidates) const;
 
 private:
-  /** @brief 選抜済み候補すべてから指定距離以上離れているか判定します。 */
+  /** @brief 選抜済み候補すべてから指定距離以上離れているか判定します。*/
   bool IsFarEnoughFromSelected(
       const std::vector<HolePlacementCandidate> &selected,
       const HolePlacementCandidate &candidate, float minDistance) const;

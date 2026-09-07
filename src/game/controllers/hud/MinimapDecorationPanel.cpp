@@ -1,7 +1,7 @@
 /**
  * @file MinimapDecorationPanel.cpp
  * @brief ミニマップ装飾パネルの実装
- */
+*/
 
 #include "MinimapDecorationPanel.h"
 #include "HudStyles.h"

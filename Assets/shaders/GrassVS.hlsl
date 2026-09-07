@@ -44,12 +44,22 @@ struct VS_OUTPUT {
     float materialClass : TEXCOORD3;
 };
 
+/**
+ * @brief 2D座標から疑似乱数を生成します。
+ * @param p 入力座標
+ * @return 0～1の乱数値
+ */
 float Hash21(float2 p) {
     p = frac(p * float2(123.34f, 456.21f));
     p += dot(p, p + 45.32f);
     return frac(p.x * p.y);
 }
 
+/**
+ * @brief 芝生頂点シェーダーメインエントリ
+ * @param input 頂点入力情報
+ * @return 風・曲がり変形適用後の頂点出力
+ */
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
     InstanceData inst = g_instances[input.instanceID];

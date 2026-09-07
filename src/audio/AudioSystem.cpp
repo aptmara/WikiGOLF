@@ -1,7 +1,7 @@
 /**
  * @file AudioSystem.cpp
  * @brief XAudio2実装
- */
+*/
 
 #include "AudioSystem.h"
 #include "AudioSystemInternals.h"
@@ -38,7 +38,7 @@ bool AudioSystem::Initialize() {
 #ifdef _DEBUG
   XAUDIO2_DEBUG_CONFIGURATION debug = {};
   debug.TraceMask = XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
-  /// @brief 山内陽: Debug実行時にXAudio2の診断ブレークでプロセスが終了しないようにする。
+  /** @brief : Debug実行時にXAudio2の診断ブレークでプロセスが終了しないようにする。 */
   debug.BreakMask = 0;
   m_xaudio2->SetDebugConfiguration(&debug, 0);
 #endif

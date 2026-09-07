@@ -1,7 +1,7 @@
 /**
  * @file ProceduralFlag.cpp
  * @brief プロシージャル旗生成ユーティリティ実装
- */
+*/
 
 #include "ProceduralFlag.h"
 #include "../../core/GameContext.h"
@@ -32,7 +32,7 @@ constexpr float kClothMeshThickness = 0.018f;
 
 /**
  * @brief エンティティを生成して共通リストへ登録します。
- */
+*/
 ecs::Entity CreateTrackedEntity(core::GameContext &ctx,
                                 ProceduralFlagResult &result) {
   ecs::Entity entity = ctx.world.CreateEntity();
@@ -42,14 +42,14 @@ ecs::Entity CreateTrackedEntity(core::GameContext &ctx,
 
 /**
  * @brief 色を少し暗くします。
- */
+*/
 XMFLOAT4 Darken(const XMFLOAT4 &color, float factor, float alpha) {
   return {color.x * factor, color.y * factor, color.z * factor, alpha};
 }
 
 /**
  * @brief 旗布メッシュ頂点を追加します。
- */
+*/
 void AddClothVertex(std::vector<graphics::Vertex> &vertices, float u, float v,
                     float z, const XMFLOAT3 &normal) {
   const float anchoredU = u * u;
@@ -69,7 +69,7 @@ void AddClothVertex(std::vector<graphics::Vertex> &vertices, float u, float v,
 
 /**
  * @brief GPU変形用の一枚旗布メッシュを生成します。
- */
+*/
 resources::MeshHandle GetOrCreateFlagClothMesh(core::GameContext &ctx) {
   constexpr const char *kSharedMeshName = "ProceduralFlagClothGpu_Shared";
   const auto cached = ctx.resource.FindMesh(kSharedMeshName);
@@ -178,7 +178,7 @@ ProceduralFlagResult CreateProceduralFlag(
   poleMr.shader = basicShader;
   poleMr.color = {0.16f, 0.15f, 0.13f, 1.0f};
   poleMr.maxDrawDistance = options.large ? 0.0f : 220.0f;
-  
+
   auto &poleFlag = ctx.world.Add<HoleFlag>(poleEntity);
   poleFlag.holeEntity = options.holeEntity;
   poleFlag.kind = HoleFlag::Kind::Accent;

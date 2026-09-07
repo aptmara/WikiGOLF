@@ -1,3 +1,8 @@
+/**
+ * @file SkyboxRenderSystem.cpp
+ * @brief SkyboxRenderSystem の実装
+*/
+
 #include "SkyboxRenderSystem.h"
 #include "../../ecs/World.h"
 #include "../../graphics/GraphicsDevice.h"
@@ -19,7 +24,7 @@ namespace {
 
 /**
  * @brief スカイボックス用定数バッファ
- */
+*/
 struct SkyboxConstants {
   XMMATRIX view;
   XMMATRIX projection;
@@ -34,7 +39,7 @@ struct SkyboxConstants {
 
 /**
  * @brief スカイボックスレンダリング用グローバルステート
- */
+*/
 struct SkyboxRenderState {
   ComPtr<ID3D11Buffer> constantBuffer;
   ComPtr<ID3D11Buffer> vertexBuffer;
@@ -48,7 +53,7 @@ struct SkyboxRenderState {
 
 /**
  * @brief スカイボックス用キューブメッシュ初期化
- */
+*/
 bool InitializeSkyboxMesh(ID3D11Device *device, SkyboxRenderState &state) {
   // キューブの頂点（中心原点）
   using graphics::Vertex;
@@ -146,7 +151,7 @@ bool InitializeSkyboxMesh(ID3D11Device *device, SkyboxRenderState &state) {
 
 /**
  * @brief スカイボックス用ステート初期化
- */
+*/
 bool InitializeSkyboxStates(ID3D11Device *device, SkyboxRenderState &state) {
   // 定数バッファ
   D3D11_BUFFER_DESC cbDesc = {};

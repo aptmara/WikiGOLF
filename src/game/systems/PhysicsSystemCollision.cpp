@@ -1,7 +1,7 @@
 /**
  * @file PhysicsSystemCollision.cpp
  * @brief 物理更新で利用する安全な演算と衝突判定
- */
+*/
 #include "PhysicsSystemInternals.h"
 #include <algorithm>
 #include <cmath>
@@ -15,7 +15,7 @@ bool IsNaN(float v) { return v != v; }
 
 /**
  * @brief ベクトルがNaNを含むかチェチ（��
- */
+*/
 bool IsVectorNaN(XMVECTOR v) {
   float x = XMVectorGetX(v);
   float y = XMVectorGetY(v);
@@ -25,7 +25,7 @@ bool IsVectorNaN(XMVECTOR v) {
 
 /**
  * @brief 安�（なベクトル正規化�（�ゼロベクトル対策）
- */
+*/
 XMVECTOR SafeNormalize(XMVECTOR v, XMVECTOR fallback) {
   float lenSq = XMVectorGetX(XMVector3LengthSq(v));
   if (lenSq < 0.0001f) {
@@ -36,7 +36,7 @@ XMVECTOR SafeNormalize(XMVECTOR v, XMVECTOR fallback) {
 
 /**
  * @brief 値を安�（な範囲��にクランチ（
- */
+*/
 float SafeClamp(float v, float minVal, float maxVal) {
   if (IsNaN(v))
     return 0.0f;
@@ -45,7 +45,7 @@ float SafeClamp(float v, float minVal, float maxVal) {
 
 /**
  * @brief ベクトルの長さを安�（に取得
- */
+*/
 float SafeLength(XMVECTOR v) {
   float lenSq = XMVectorGetX(XMVector3LengthSq(v));
   if (lenSq < 0.0f || IsNaN(lenSq))

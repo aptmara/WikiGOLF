@@ -1,3 +1,8 @@
+/**
+ * @file SettingsScene.cpp
+ * @brief SettingsScene の実装
+*/
+
 #include "SettingsScene.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/DisplaySettings.h"

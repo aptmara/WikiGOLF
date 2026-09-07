@@ -1,3 +1,8 @@
+/**
+ * @file TerrainGeneratorPostProcess.cpp
+ * @brief TerrainGeneratorPostProcess の実装
+*/
+
 #include "TerrainGeneratorInternals.h"
 #include "TerrainGenerator.h"
 #include "../../core/Logger.h"
@@ -41,7 +46,7 @@ void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
 
 /**
  * @brief 小さな孤立地形を周囲へなじませます。
- */
+*/
 void TerrainGenerator::ApplyMaterialCleanup(TerrainData &data) {
   const int resX = data.config.resolutionX;
   const int resZ = data.config.resolutionZ;
@@ -138,7 +143,7 @@ void TerrainGenerator::GenerateVisualMaterialColors(TerrainData &data) {
 
 /**
  * @brief 地形の法線を計算します、（
- */
+*/
 void TerrainGenerator::CalculateNormals(TerrainData &data) {
   int resX = data.config.resolutionX;
   int resZ = data.config.resolutionZ;
@@ -153,13 +158,13 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
 
       float hL = GetHeight(data, x, z);
       if (x > 0) hL = GetHeight(data, x - 1, z);
-      
+
       float hR = GetHeight(data, x, z);
       if (x < resX - 1) hR = GetHeight(data, x + 1, z);
-      
+
       float hD = GetHeight(data, x, z);
       if (z > 0) hD = GetHeight(data, x, z - 1);
-      
+
       float hU = GetHeight(data, x, z);
       if (z < resZ - 1) hU = GetHeight(data, x, z + 1);
 
@@ -178,6 +183,6 @@ void TerrainGenerator::CalculateNormals(TerrainData &data) {
 
 /**
  * @brief 地形メチ（��ュを生成します、（
- */
+*/
 
 } // namespace game::systems

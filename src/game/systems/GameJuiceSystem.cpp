@@ -1,7 +1,7 @@
 /**
  * @file GameJuiceSystem.cpp
  * @brief ゲームの演出効果（Game Juice）システム実装
- */
+*/
 
 #include "GameJuiceSystem.h"
 #include "GameJuiceVisualRules.h"

@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file GraphicsPreset.h
+ * @brief GraphicsPreset クラスおよび関連インターフェースの定義
+*/
 
 #include <cstdint>
 

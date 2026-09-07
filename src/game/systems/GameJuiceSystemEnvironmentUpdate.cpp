@@ -1,7 +1,7 @@
 /**
  * @file GameJuiceSystemEnvironmentUpdate.cpp
  * @brief Game Juiceの責務別実装です。
- */
+*/
 
 #include "GameJuiceSystem.h"
 #include "GameJuiceVisualRules.h"

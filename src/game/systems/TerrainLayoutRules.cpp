@@ -1,7 +1,7 @@
 /**
  * @file TerrainLayoutRules.cpp
  * @brief 地形レイアウト計算を実装します。
- */
+*/
 
 #include "TerrainLayoutRules.h"
 #include <algorithm>

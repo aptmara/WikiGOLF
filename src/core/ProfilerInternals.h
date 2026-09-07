@@ -2,7 +2,7 @@
 /**
  * @file ProfilerInternals.h
  * @brief Profiler実装で共有する計算処理
- */
+*/
 
 #include <Windows.h>
 #include <algorithm>

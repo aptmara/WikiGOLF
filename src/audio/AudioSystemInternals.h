@@ -2,7 +2,7 @@
 /**
  * @file AudioSystemInternals.h
  * @brief オーディオ実装で共有する内部処理
- */
+*/
 
 #include <fstream>
 #include <string>
@@ -12,7 +12,7 @@ namespace game::systems::audio_detail {
 
 /**
  * @brief 音声ファイルを既定のアセットパスから探索します。
- */
+*/
 inline std::string FindAudioPath(const std::string &filename) {
   const char *searchPaths[] = {"Assets/sounds/"};
   for (const char *prefix : searchPaths) {
@@ -37,7 +37,7 @@ inline std::string FindAudioPath(const std::string &filename) {
 
 /**
  * @brief XAudio2ボイスを停止して破棄します。
- */
+*/
 inline void StopAndDestroyVoice(IXAudio2SourceVoice *&voice) {
   if (!voice) {
     return;

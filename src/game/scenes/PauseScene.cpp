@@ -1,3 +1,8 @@
+/**
+ * @file PauseScene.cpp
+ * @brief PauseScene の実装
+*/
+
 #include "PauseScene.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/Input.h"

@@ -1,7 +1,7 @@
 /**
  * @file HoleVisualRules.cpp
  * @brief ホール表示色の規則を実装します。
- */
+*/
 
 #include "HoleVisualRules.h"
 

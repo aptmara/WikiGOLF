@@ -2,7 +2,7 @@
 /**
  * @file PhysicsFriction.h
  * @brief 転がり摩擦の共通計算ヘルパー
- */
+*/
 
 #include "../components/WikiComponents.h"
 #include <algorithm>
@@ -10,10 +10,12 @@
 
 namespace game::systems {
 
-/// @brief 摩擦係数と時間から速度減少量を計算する
-/// @param frictionCoeff 摩擦係数 (無次元)
-/// @param dtSeconds 経過時間 (秒)
-/// @return このフレームで減少する速度量
+/**
+ * @brief 摩擦係数と時間から速度減少量を計算する
+ * @param frictionCoeff 摩擦係数 (無次元)
+ * @param dtSeconds 経過時間 (秒)
+ * @return このフレームで減少する速度量
+*/
 inline float ComputeRollingFrictionDrop(float frictionCoeff, float dtSeconds) {
   if (dtSeconds <= 0.0f || !std::isfinite(dtSeconds)) {
     return 0.0f;
@@ -28,11 +30,13 @@ inline float ComputeRollingFrictionDrop(float frictionCoeff, float dtSeconds) {
   return coeff * gravity * dtSeconds;
 }
 
-/// @brief 転がり摩擦を適用した後の速度を返す
-/// @param speed 現在の速度量
-/// @param frictionCoeff 摩擦係数
-/// @param dtSeconds 経過時間 (秒)
-/// @return 摩擦適用後の速度量
+/**
+ * @brief 転がり摩擦を適用した後の速度を返す
+ * @param speed 現在の速度量
+ * @param frictionCoeff 摩擦係数
+ * @param dtSeconds 経過時間 (秒)
+ * @return 摩擦適用後の速度量
+*/
 inline float ApplyRollingFriction(float speed, float frictionCoeff,
                                   float dtSeconds) {
   if (speed <= 0.0f || !std::isfinite(speed)) {
@@ -62,12 +66,14 @@ inline float ApplyRollingFriction(float speed, float frictionCoeff,
   return speed - drop;
 }
 
-/// @brief 静止摩擦で速度を止められるか判定する
-/// @param speed 現在速度
-/// @param frictionCoeff 摩擦係数
-/// @param tangentialAccel 接地面に沿った加速度の大きさ
-/// @param dtSeconds 経過時間 (秒)
-/// @param stickSpeedThreshold 静止とみなす速度上限
+/**
+ * @brief 静止摩擦で速度を止められるか判定する
+ * @param speed 現在速度
+ * @param frictionCoeff 摩擦係数
+ * @param tangentialAccel 接地面に沿った加速度の大きさ
+ * @param dtSeconds 経過時間 (秒)
+ * @param stickSpeedThreshold 静止とみなす速度上限
+*/
 inline bool CanStaticFrictionHold(float speed, float frictionCoeff,
                                   float tangentialAccel, float dtSeconds,
                                   float stickSpeedThreshold = 0.35f) {
@@ -97,7 +103,7 @@ inline bool CanStaticFrictionHold(float speed, float frictionCoeff,
  * @brief ゴルフ用の芝フリクション設定
  *
  * ベース係数と速度に応じたブーストをまとめて管理する。
- */
+*/
 struct SurfaceFrictionSettings {
   float baseRollingFriction = 0.14f;
   float slowSpeedReference = 4.0f;
@@ -140,7 +146,7 @@ GetMaterialFrictionMultiplier(game::components::TerrainMaterial mat,
   }
 }
 
-/// @brief 低速域で粘るための非線形スケールを計算
+/** @brief 低速域で粘るための非線形スケールを計算*/
 inline float
 ComputeSlowRollMultiplier(float speed,
                           const SurfaceFrictionSettings &settings) {
@@ -151,7 +157,7 @@ ComputeSlowRollMultiplier(float speed,
          (1.0f - settings.slowFrictionMinMultiplier) * eased;
 }
 
-/// @brief 高速時の摩擦ブーストを計算
+/** @brief 高速時の摩擦ブーストを計算*/
 inline float ComputeHighSpeedBoost(float speed,
                                    const SurfaceFrictionSettings &settings) {
   float over = speed - settings.highSpeedBoostStart;
@@ -160,7 +166,7 @@ inline float ComputeHighSpeedBoost(float speed,
   return std::clamp(boost, 0.0f, settings.highSpeedBoostScale);
 }
 
-/// @brief 斜面に応じた摩擦スケールを計算 (ny=1で1.0)
+/** @brief 斜面に応じた摩擦スケールを計算 (ny=1で1.0)*/
 inline float ComputeSlopeScale(float normalY,
                                const SurfaceFrictionSettings &settings) {
   float ny = std::clamp(normalY, 0.0f, 1.0f);
@@ -168,7 +174,7 @@ inline float ComputeSlopeScale(float normalY,
          (1.0f - settings.slopeFrictionFloor) * ny;
 }
 
-/// @brief ゴルフボールの芝上減速 [m/s^2] を計算
+/** @brief ゴルフボールの芝上減速 [m/s^2] を計算*/
 inline float
 ComputeGrassRollingAcceleration(float speed, float normalY,
                                 game::components::TerrainMaterial mat,
@@ -193,7 +199,7 @@ ComputeGrassRollingAcceleration(float speed, float normalY,
   return frictionAccel + brake;
 }
 
-/// @brief 柔らかいバンカー表面へボールが沈む深さを返す
+/** @brief 柔らかいバンカー表面へボールが沈む深さを返す*/
 inline float ComputeSurfaceSinkDepth(
     game::components::TerrainMaterial material, float verticalImpactSpeed,
     float totalSpeed, float ballRadius) {
@@ -214,7 +220,7 @@ inline float ComputeSurfaceSinkDepth(
   return ballRadius * std::min(radiusRatio, 0.31f);
 }
 
-/// @brief バンカー着地時に砂へ吸収されず残る接線方向速度の割合を返す
+/** @brief バンカー着地時に砂へ吸収されず残る接線方向速度の割合を返す*/
 inline float ComputeSurfaceImpactTangentialRetention(
     game::components::TerrainMaterial material, float verticalImpactSpeed,
     float totalSpeed) {

@@ -1,7 +1,7 @@
 /**
  * @file ShotGaugePanel.cpp
  * @brief ショットゲージパネルの実装
- */
+*/
 
 #include "ShotGaugePanel.h"
 #include "ShotGaugePanelInternals.h"

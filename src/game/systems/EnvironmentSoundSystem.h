@@ -1,7 +1,7 @@
 /**
  * @file EnvironmentSoundSystem.h
  * @brief 環境音システム - テーマ別アンビエントサウンド管理（3Dオーディオなし）
- */
+*/
 
 #pragma once
 
@@ -16,7 +16,7 @@ namespace game::systems {
 
 /**
  * @brief 環境音プリセット
- */
+*/
 struct EnvironmentSoundPreset {
   std::string ambientPath; // 環境音ループパス
   std::string weatherPath; // 天候音パス（オプション）
@@ -27,7 +27,7 @@ struct EnvironmentSoundPreset {
 
 /**
  * @brief テーマ別環境音プリセット取得
- */
+*/
 inline EnvironmentSoundPreset GetSoundPreset(graphics::SkyboxTheme theme) {
   EnvironmentSoundPreset preset;
 
@@ -113,12 +113,12 @@ inline EnvironmentSoundPreset GetSoundPreset(graphics::SkyboxTheme theme) {
 /**
  * @brief 環境音システム
  * @note 既存のAudioSystemと連携して環境音を管理
- */
+*/
 class EnvironmentSoundSystem {
 public:
   /**
    * @brief 初期化
-   */
+*/
   void Initialize(AudioSystem *audioSystem) {
     m_audioSystem = audioSystem;
     m_currentTheme = graphics::SkyboxTheme::Default;
@@ -129,7 +129,7 @@ public:
    * @brief テーマ変更
    * @param theme 新しいテーマ
    * @param fadeTime フェード時間（秒）
-   */
+*/
   void ChangeTheme(graphics::SkyboxTheme theme, float fadeTime = 2.0f) {
     if (theme == m_currentTheme)
       return;
@@ -148,7 +148,7 @@ public:
   /**
    * @brief 更新
    * @param dt デルタタイム
-   */
+*/
   void Update(float dt) {
     if (!m_isTransitioning)
       return;
@@ -165,17 +165,17 @@ public:
 
   /**
    * @brief 現在のテーマ取得
-   */
+*/
   graphics::SkyboxTheme GetCurrentTheme() const { return m_currentTheme; }
 
   /**
    * @brief トランジション中かどうか
-   */
+*/
   bool IsTransitioning() const { return m_isTransitioning; }
 
   /**
    * @brief トランジション進捗取得
-   */
+*/
   float GetTransitionProgress() const { return m_transitionProgress; }
 
 private:

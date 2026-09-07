@@ -1,7 +1,7 @@
 /**
  * @file ResourceManager.cpp
  * @brief 統合リソース管理クラスの実装
- */
+*/
 
 #include "ResourceManager.h"
 #include "ResourceManagerInternals.h"

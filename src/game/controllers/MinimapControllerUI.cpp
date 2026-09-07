@@ -1,3 +1,8 @@
+/**
+ * @file MinimapControllerUI.cpp
+ * @brief MinimapControllerUI の実装
+*/
+
 #include "MinimapController.h"
 #include "MinimapControllerInternals.h"
 #include "../components/Transform.h"
@@ -26,7 +31,7 @@ using namespace game::components;
 
 /**
  * @brief ミニマップのUI表示用エンティティを生成します。
- */
+*/
 void MinimapController::InitializeUI(core::GameContext &ctx) {
   if (!m_minimapRenderer) return;
 
@@ -270,7 +275,7 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
 
 /**
  * @brief ミニマップ上のすべてのホールアイコンを削除します。
- */
+*/
 void MinimapController::ClearHoleIcons(core::GameContext &ctx) {
   for (auto &icon : m_mapHoleIcons) {
     ctx.world.DestroyEntity(icon.iconEntity);
@@ -280,14 +285,14 @@ void MinimapController::ClearHoleIcons(core::GameContext &ctx) {
 
 /**
  * @brief ミニマップ上にホールアイコンを追加します。
- */
+*/
 void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
                                     const std::string& linkTarget,
                                     bool isTargetHole, bool isPlayableHole,
                                     int hopsToTarget) {
   auto iconEntity = m_entityOwner.Create(ctx.world);
   auto &ui = ctx.world.Add<UIImage>(iconEntity);
-  
+
   ui = UIImage::Create("golf_hole_icon_transparent.png", 0.0f, 0.0f);
   if (isTargetHole) {
     ui.width = 34.0f;
@@ -308,7 +313,7 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
     ui.layer = game::ui::kLayerMarker;
   }
   ui.visible = false;
-  
+
   MapHoleIcon mapIcon{};
   mapIcon.iconEntity = iconEntity;
   mapIcon.worldPos = {x, z};
@@ -320,8 +325,8 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
 }
 
 /**
- * @brief 経路評価後のホールアイコン情報を更新します。山内陽
- */
+ * @brief 経路評価後のホールアイコン情報を更新します。
+*/
 void MinimapController::UpdateHoleIconEvaluation(
     const std::string& linkTarget, bool isPlayableHole, int hopsToTarget) {
   for (auto& icon : m_mapHoleIcons) {

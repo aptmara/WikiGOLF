@@ -6,7 +6,7 @@
  * TrajectoryPredictor(予測線描画)と ClubController のキャリー距離テーブル
  * 算出で共用する1サブステップ分の物理更新処理をまとめる。両者が同じ関数を
  * 参照することで、予測線・着弾マーカーと実際の弾道結果を一致させる。
- */
+*/
 
 #include "../components/WikiComponents.h"
 #include "../systems/PhysicsFriction.h"
@@ -19,7 +19,7 @@
 
 namespace game::physics {
 
-/// @brief ボールの物理特性(RigidBodyから抽出した値)
+/** @brief ボールの物理特性(RigidBodyから抽出した値)*/
 struct BallPhysicsParams {
   float drag = 0.30f;
   float restitution = 0.35f;
@@ -28,7 +28,7 @@ struct BallPhysicsParams {
   float rollingFrictionScale = 1.0f; ///< クラブごとの摩擦スケール
 };
 
-/// @brief terrainSystem が無い場合に地面として扱う仮想の平面
+/** @brief terrainSystem が無い場合に地面として扱う仮想の平面*/
 struct FlatGroundParams {
   bool enabled = false;
   float groundY = 0.0f;
@@ -80,8 +80,10 @@ inline game::components::TerrainMaterial SampleGroundMaterial(
 
 } // namespace trajectory_detail
 
-/// @brief ボール弾道シミュレーションを1サブステップ分進める。
-/// terrainSystem が nullptr の場合は flatGround の平面を地面として扱う。
+/**
+ * @brief ボール弾道シミュレーションを1サブステップ分進める。
+ * terrainSystem が nullptr の場合は flatGround の平面を地面として扱う。
+*/
 inline void StepBallSimulation(BallSimState &state,
                                game::systems::WikiTerrainSystem *terrainSystem,
                                const FlatGroundParams &flatGround,
@@ -256,8 +258,10 @@ struct CarryResult {
   bool settled = false; ///< maxSimSeconds以内に静止したか
 };
 
-/// @brief 初速・打ち出し角からボールが静止するまでシミュレートし、
-/// 水平到達距離を返す。
+/**
+ * @brief 初速・打ち出し角からボールが静止するまでシミュレートし、
+ * 水平到達距離を返す。
+*/
 inline CarryResult
 SimulateCarryDistance(float initialSpeed, float launchAngleDeg,
                       const DirectX::XMFLOAT3 &shotDirection,
@@ -312,8 +316,10 @@ SimulateCarryDistance(float initialSpeed, float launchAngleDeg,
   return result;
 }
 
-/// @brief クラブごとの「初速→キャリー飛距離」対応表を、平坦・無風条件で
-/// 構築する。0からmaxSpeedまでsampleCount分割でサンプリングする。
+/**
+ * @brief クラブごとの「初速→キャリー飛距離」対応表を、平坦・無風条件で
+ * 構築する。0からmaxSpeedまでsampleCount分割でサンプリングする。
+*/
 inline game::utils::CarryDistanceTable
 BuildCarryDistanceTable(float maxSpeed, float launchAngleDeg,
                         const BallPhysicsParams &ballParams,

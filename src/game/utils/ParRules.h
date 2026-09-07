@@ -2,8 +2,8 @@
 
 /**
  * @file ParRules.h
- * @brief WikiGolf の Par 算出ルールです。 山内陽
- */
+ * @brief WikiGolf の Par 算出ルールです。
+*/
 
 #include <algorithm>
 #include <cstddef>
@@ -11,11 +11,11 @@
 namespace game::utils {
 
 /**
- * @brief 解決済みホップ数を優先して Par を算出します。 山内陽
+ * @brief 解決済みホップ数を優先して Par を算出します。
  * @param minHopsToTarget 現在ページのリンク先からターゲットまでの最小ホップ数です。
  * @param validLinkCount フォールバックに使う有効リンク数です。
  * @return ゲーム表示用の Par です。
- */
+*/
 inline int CalculateWikiGolfPar(int minHopsToTarget,
                                 std::size_t validLinkCount) {
   if (minHopsToTarget >= 0) {

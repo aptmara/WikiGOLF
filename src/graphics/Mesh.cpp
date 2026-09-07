@@ -1,7 +1,7 @@
 /**
  * @file Mesh.cpp
  * @brief 頂点/インデックスバッファ管理の実装
- */
+*/
 
 #include "Mesh.h"
 

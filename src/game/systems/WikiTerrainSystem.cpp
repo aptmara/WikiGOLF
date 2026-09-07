@@ -1,7 +1,7 @@
 /**
  * @file WikiTerrainSystem.cpp
  * @brief Wiki地形生成システム実装
- */
+*/
 
 #include "WikiTerrainSystem.h"
 #include "../utils/GameplayPhysicsConstants.h"
@@ -35,7 +35,7 @@ using namespace game::components;
 
 /**
  * @brief 現在生成されている地形データを全削除します。
- */
+*/
 void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   // 非同期タスクが走っていれば待つ（デストラクタ前の安全確保）
   if (m_terrainFuture.valid()) {
@@ -61,7 +61,7 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
 
 /**
  * @brief フィールドを再構築します（同期版）。
- */
+*/
 void WikiTerrainSystem::BuildField(core::GameContext &ctx,
                                    const std::string &pageTitle,
                                    const graphics::WikiTextureResult &result,
@@ -80,7 +80,7 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
 
 /**
  * @brief 床オブジェクトを生成します。
- */
+*/
 void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
                                     const graphics::WikiTextureResult &result,
                                     float width, float depth,
@@ -343,7 +343,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
       overlayVertices[i].position.y +=
           game::physics::kTerrainVisualSurfaceOffset;
       overlayVertices[i].color = {1.0f, 1.0f, 1.0f, 1.0f};
-      
+
       // オーバーレイのUVは元の 0..1 に戻す
       float u = (float)(i % resX) / (resX - 1);
       int zIdx = (int)(i / resX);
@@ -392,7 +392,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
 /**
  * @brief フィールド外周の壁オブジェクトを生成します。
- */
+*/
 void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
                                     float depth) {
   const auto walls = TerrainObstacleLayout::BuildWalls(width, depth);
@@ -430,7 +430,7 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
 
 /**
  * @brief 記事内の画像領域に対応した障害物オブジェクトを生成します。
- */
+*/
 void WikiTerrainSystem::CreateImageObstacles(
     core::GameContext &ctx, const graphics::WikiTextureResult &result,
     float fieldWidth, float fieldDepth) {
@@ -463,7 +463,7 @@ void WikiTerrainSystem::CreateImageObstacles(
 
 /**
  * @brief 見出し情報に対応した段差オブジェクトを生成します。
- */
+*/
 void WikiTerrainSystem::CreateHeadingSteps(
     core::GameContext &ctx, const graphics::WikiTextureResult &result,
     float fieldWidth, float fieldDepth) {}

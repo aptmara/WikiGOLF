@@ -2,7 +2,7 @@
 /**
  * @file GameplayControlsPanel.h
  * @brief ショット開始ボタンと通常操作ヒントを管理するHUDパネル
- */
+*/
 
 #include "../../../ecs/Entity.h"
 #include "../../../ecs/EntityOwner.h"
@@ -13,19 +13,19 @@ struct GameContext;
 
 namespace game::controllers::hud {
 
-/** @brief 通常操作中だけ表示する固定操作UIを管理します。 */
+/** @brief 通常操作中だけ表示する固定操作UIを管理します。*/
 class GameplayControlsPanel {
 public:
-  /** @brief 固定操作UIを生成します。 */
+  /** @brief 固定操作UIを生成します。*/
   void Initialize(core::GameContext &ctx);
 
-  /** @brief ショット入力中の表示状態を切り替えます。 */
+  /** @brief ショット入力中の表示状態を切り替えます。*/
   void SetShotPhaseVisible(core::GameContext &ctx, bool shotPhase);
 
-  /** @brief パネル全体の表示状態を変更します。 */
+  /** @brief パネル全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
-  /** @brief 生成したすべてのEntityを破棄します。 */
+  /** @brief 生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 
 private:

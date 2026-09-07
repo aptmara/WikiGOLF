@@ -1,7 +1,7 @@
 /**
  * @file WikiShortestPath.cpp
  * @brief 日本語Wikipedia最短経路計算実装
- */
+*/
 #include "WikiShortestPathInternals.h"
 #include "WikiShortestPath.h"
 #include "../../core/Logger.h"
@@ -77,7 +77,7 @@ bool WikiShortestPath::Initialize(const std::string &dbPath,
 
   std::string targetPath = dbPath;
   int rc = sqlite3_open_v2(targetPath.c_str(), &m_db, SQLITE_OPEN_READONLY, nullptr);
-  
+
   bool isValid = false;
   if (rc == SQLITE_OK && m_db) {
     sqlite3_stmt *checkStmt = nullptr;

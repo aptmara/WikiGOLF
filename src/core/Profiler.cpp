@@ -1,7 +1,7 @@
 /**
  * @file Profiler.cpp
  * @brief フレーム単位のCPU/GPUパフォーマンス計測の実装
- */
+*/
 
 #include "Profiler.h"
 #include "ProfilerInternals.h"

@@ -1,7 +1,7 @@
 /**
  * @file WikiClientJsonHtml.cpp
  * @brief Wikipedia応答のHTML/JSON終端処理です。
- */
+*/
 
 #include "WikiClientJson.h"
 #include <cctype>
@@ -11,8 +11,8 @@
 namespace game::systems::wiki_json {
 
 /**
- * @brief HTML文字列から <table>...</table> ブロック（入れ子考慮）を抜き出します。 山内陽
- */
+ * @brief HTML文字列から&lt;table&gt;...&lt;/table&gt;ブロック（入れ子考慮）を抜き出します。
+*/
 std::vector<std::string> ExtractTableBlocks(const std::string &html) {
   std::vector<std::string> blocks;
   size_t i = 0;
@@ -57,7 +57,7 @@ std::vector<std::string> ExtractTableBlocks(const std::string &html) {
 
 /**
  * @brief JSONオブジェクト内の真偽値フィールドを取得します。
- */
+*/
 bool ExtractBoolField(const std::string &json, const std::string &key,
                           size_t searchFrom, size_t searchLimit,
                           bool &value) {
@@ -85,7 +85,7 @@ bool ExtractBoolField(const std::string &json, const std::string &key,
 /**
  * @brief posが指すJSON値（文字列/オブジェクト/配列/その他リテラル）の終端の
  *        直後の位置を返します。ネストした{}/[]や文字列中の"も正しく無視します。
- */
+*/
 size_t SkipValue(const std::string &json, size_t pos) {
   if (pos >= json.size()) {
     return pos;
@@ -154,7 +154,7 @@ size_t SkipValue(const std::string &json, size_t pos) {
 
 /**
  * @brief 簡易的にHTMLタグとよく使う実体参照を取り除きます（見出しテキスト整形用）。
- */
+*/
 std::string StripHtmlTags(const std::string &html) {
   std::string result;
   result.reserve(html.size());

@@ -2,7 +2,7 @@
 /**
  * @file TitleScene.h
  * @brief タイトル画面シーン（WIKI GOLF 3Dスタイル）
- */
+*/
 
 #include "../../core/Scene.h"
 #include "../../ecs/Entity.h"
@@ -29,7 +29,7 @@ namespace game::scenes {
  *   - タイトルロゴ UI（画面上部中央）
  *   - 右パネルメニュー UI（6 項目）
  *   - 下部ステータスバー UI
- */
+*/
 class TitleScene : public core::Scene {
 public:
   const char *GetName() const override { return "TitleScene"; }
@@ -43,25 +43,25 @@ private:
   static constexpr const char *kIntroAudioLabel = "title_intro_video_audio";
 
   // --- 3D エンティティ ---
-  ecs::Entity m_cameraEntity  = 0; ///< カメラ
-  ecs::Entity m_skyboxEntity  = 0; ///< スカイボックス
-  ecs::Entity m_floorEntity   = 0; ///< ゴルフコース地面
-  ecs::Entity m_globeEntity   = 0; ///< Wikipedia パズル地球儀
-  ecs::Entity m_teeLoEntity   = 0; ///< ティー台・支柱（下）
-  ecs::Entity m_teeHiEntity   = 0; ///< ティー台・カップ（上）
-  ecs::Entity m_flagEntity    = 0; ///< 旗
+  ecs::Entity m_cameraEntity  = 0; /**< カメラ*/
+  ecs::Entity m_skyboxEntity  = 0; /**< スカイボックス*/
+  ecs::Entity m_floorEntity   = 0; /**< ゴルフコース地面*/
+  ecs::Entity m_globeEntity   = 0; /**< Wikipedia パズル地球儀*/
+  ecs::Entity m_teeLoEntity   = 0; /**< ティー台・支柱（下）*/
+  ecs::Entity m_teeHiEntity   = 0; /**< ティー台・カップ（上）*/
+  ecs::Entity m_flagEntity    = 0; /**< 旗*/
 
   // --- メニュー UI ---
   /**
    * @brief メニュー項目 1 つ分の状態
    * @note UIText エンティティ + ホバーアニメーション制御
-   */
+*/
   struct MenuEntry {
-    ecs::Entity entity;          ///< UIText エンティティ (背景・ラベル)
-    ecs::Entity iconEntity = 0;  ///< UIText エンティティ (アイコン)
-    std::wstring label;          ///< ラベル文字列
-    float baseY;                 ///< Y 座標ベース値
-    bool isHovered = false;      ///< ホバー状態
+    ecs::Entity entity;          /**< UIText エンティティ (背景・ラベル)*/
+    ecs::Entity iconEntity = 0;  /**< UIText エンティティ (アイコン)*/
+    std::wstring label;          /**< ラベル文字列*/
+    float baseY;                 /**< Y 座標ベース値*/
+    bool isHovered = false;      /**< ホバー状態*/
   };
   std::vector<MenuEntry> m_menuEntries;
 
@@ -86,15 +86,24 @@ private:
     std::string title;
   };
   std::shared_ptr<StartConnectionState> m_startConnectionState;
-  bool m_startConnectionChecking = false; ///< 通常スタート前の接続確認中かどうか
-  float m_startConnectionElapsed = 0.0f;  ///< 通常スタート接続確認の経過秒数
+  bool m_startConnectionChecking = false; /**< 通常スタート前の接続確認中かどうか*/
+  float m_startConnectionElapsed = 0.0f;  /**< 通常スタート接続確認の経過秒数*/
 
+  /**
+   * @brief スタートアップロード完了時の処理を行います。
+   * @param ctx ゲームコンテキスト
+*/
   void FinalizeStartupLoad(core::GameContext &ctx);
+
+  /**
+   * @brief イントロBGMの再生を停止します。
+   * @param ctx ゲームコンテキスト
+*/
   void StopIntroAudio(core::GameContext &ctx);
 
   ecs::Entity m_csBgEntity = 0;
   ecs::Entity m_csTitleEntity = 0;
-  
+
   ecs::Entity m_startInputBg = 0;
   ecs::Entity m_startInputText = 0;
   ecs::Entity m_startPasteBtn = 0;
@@ -118,9 +127,30 @@ private:
   bool m_checking = false;
   bool m_readyToStart = false;
 
+  /**
+   * @brief コース選択ダイアログのUI要素を生成します。
+   * @param ctx ゲームコンテキスト
+*/
   void CreateCourseSelectUI(core::GameContext& ctx);
+
+  /**
+   * @brief メインメニューUI要素の可視性を設定します。
+   * @param ctx ゲームコンテキスト
+   * @param visible 表示フラグ
+*/
   void SetMainMenuVisible(core::GameContext& ctx, bool visible);
+
+  /**
+   * @brief コース選択UI要素の可視性を設定します。
+   * @param ctx ゲームコンテキスト
+   * @param visible 表示フラグ
+*/
   void SetCourseSelectVisible(core::GameContext& ctx, bool visible);
+
+  /**
+   * @brief コース選択ダイアログの更新処理を行います。
+   * @param ctx ゲームコンテキスト
+*/
   void UpdateCourseSelect(core::GameContext& ctx);
 };
 

@@ -1,30 +1,45 @@
-Texture2D txDiffuse : register(t0);
-SamplerState samLinear : register(s0);
+/**
+ * @file TransitionPS.hlsl
+ * @brief シーン遷移エフェクト用ピクセルシェーダー（フェード、サークルワイプ、ヘキサゴンワイプ）
+ */
+
+Texture2D txDiffuse : register(t0);       /**< ディフューズテクスチャ（オプション） */
+SamplerState samLinear : register(s0);    /**< サンプラーステート */
 
 cbuffer ConstantBuffer : register(b0) {
-    float4 Color;      // フェード色 (RGB + Aは基本無視だがColor.aも乗算可)
-    float Progress;    // 0.0(全描画) -> 1.0(全隠蔽)
-    int Type;          // 0: Fade, 1: Circle, 2: Hexagon
-    float AspectRatio; // 画面幅/高さ
-    float2 Center;     // ワイプ中心 (0.5, 0.5) が中央
-    float Smoothness;  // エッジのぼかし
-    float Padding;
+    float4 Color;      /**< フェードカラー (RGB + A) */
+    float Progress;    /**< 進行度 (0.0:全描画 ～ 1.0:全隠蔽) */
+    int Type;          /**< 遷移種別 (0:通常フェード, 1:サークルワイプ, 2:ヘキサゴンワイプ) */
+    float AspectRatio; /**< 画面アスペクト比（幅/高さ） */
+    float2 Center;     /**< ワイプ中心UV座標 */
+    float Smoothness;  /**< エッジのぼかし幅 */
+    float Padding;     /**< アライメント用パディング */
 }
 
+/**
+ * @struct VS_OUTPUT
+ * @brief 頂点シェーダー出力 / ピクセルシェーダー入力
+ */
 struct VS_OUTPUT {
-    float4 Pos : SV_POSITION;
-    float2 Tex : TEXCOORD0;
+    float4 Pos : SV_POSITION; /**< 射影座標 */
+    float2 Tex : TEXCOORD0;   /**< UV座標 */
 };
 
-// ヘキサゴン距離関数
-// uv: 座標
-// radius: 半径（進行度）
+/**
+ * @brief 中心からの六角形距離（ヘキサゴン距離関数）を算出します。
+ * @param uv 中心原点のUV座標
+ * @return 六角形距離
+ */
 float HexagonDist(float2 uv) {
-    // 六角形グリッド計算
     float2 q = abs(uv);
-    return max(q.x * 0.866025 + q.y * 0.5, q.y); // cos(30), sin(30)
+    return max(q.x * 0.866025 + q.y * 0.5, q.y);
 }
 
+/**
+ * @brief シーン遷移ピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 遷移アルファ適用済みフェードカラー
+ */
 float4 main(VS_OUTPUT input) : SV_Target {
     float alpha = 1.0f;
     float2 uv = input.Tex;
@@ -33,43 +48,24 @@ float4 main(VS_OUTPUT input) : SV_Target {
     float2 aspectUV = (uv - Center);
     aspectUV.x *= AspectRatio;
     
-    if (Type == 0) { // Standard Fade
+    if (Type == 0) {
+        // 通常フェード
         alpha = Progress;
     }
-    else if (Type == 1) { // Circle Wipe
+    else if (Type == 1) {
+        // サークルワイプ
         float dist = length(aspectUV);
-        // Progress=0 -> radius=Max, Progress=1 -> radius=0
-        // 画面全体を覆うのに十分な最大半径 (対角線など)
         float maxRadius = 1.5f; 
         float radius = maxRadius * (1.0f - Progress);
-        
-        // エッジぼかし: smoothstep(radius, radius + smooth, dist) など
-        // ここでは「黒で塗りつぶす」= alpha=1 となる領域を計算
-        // radiusより外側が alpha=1 (黒)、内側が alpha=0 (透明)
-        
-        alpha = smoothstep(radius, radius - Smoothness, dist);
-        // 上記だと radiusより遠い(dist大)と 0, 近いと1 になるので逆
-        // 内側が見える = alpha=0
-        
         alpha = 1.0f - smoothstep(radius, radius + Smoothness, dist);
     }
-    else if (Type == 2) { // Hexagon Wipe (Grid)
-        // 画面を六角形セルに分割して個別に消していくのは難しいので、
-        // シンプルに「中央から巨大な六角形が広がる/閉じる」か、
-        // 「グリッド状にランダム/順序立てて消える」か。
-        // ここでは「中央から六角形」パターンを採用。
-        
-        // ヘキサゴン距離
+    else if (Type == 2) {
+        // ヘキサゴンワイプ
         float dist = HexagonDist(aspectUV);
         float maxRadius = 1.5f;
         float radius = maxRadius * (1.0f - Progress);
-        
         alpha = 1.0f - smoothstep(radius, radius + Smoothness, dist);
     }
-    
-    // アルファを適用して色を出力
-    // Overlapなので、alpha=1でColor色、alpha=0で透明(discard or blend zero)
-    // ブレンドステートで SrcAlpha, InvSrcAlpha を想定
     
     return float4(Color.rgb, alpha);
 }

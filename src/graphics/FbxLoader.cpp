@@ -1,7 +1,7 @@
 /**
  * @file FbxLoader.cpp
  * @brief Assimpを使用したFBX/汎用モデルローダーの実装
- */
+*/
 
 #include "FbxLoader.h"
 #include "../core/Logger.h"
@@ -13,11 +13,13 @@
 
 namespace graphics {
 
-/// @brief メッシュノードを再帰的に処理する
-/// @param mesh Assimpのメッシュ
-/// @param outVertices 頂点出力先
-/// @param outIndices インデックス出力先
-/// @param baseIndex 現在のベースインデックス
+/**
+ * @brief メッシュノードを再帰的に処理する
+ * @param mesh Assimpのメッシュ
+ * @param outVertices 頂点出力先
+ * @param outIndices インデックス出力先
+ * @param baseIndex 現在のベースインデックス
+ */
 static void ProcessMesh(const aiMesh *mesh, std::vector<Vertex> &outVertices,
                         std::vector<uint32_t> &outIndices, uint32_t baseIndex) {
   // 頂点データの抽出
@@ -68,11 +70,13 @@ static void ProcessMesh(const aiMesh *mesh, std::vector<Vertex> &outVertices,
   }
 }
 
-/// @brief ノードを再帰的に処理する
-/// @param node 現在のノード
-/// @param scene シーン全体
-/// @param outVertices 頂点出力先
-/// @param outIndices インデックス出力先
+/**
+ * @brief ノードを再帰的に処理する
+ * @param node 現在のノード
+ * @param scene シーン全体
+ * @param outVertices 頂点出力先
+ * @param outIndices インデックス出力先
+ */
 static void ProcessNode(const aiNode *node, const aiScene *scene,
                         std::vector<Vertex> &outVertices,
                         std::vector<uint32_t> &outIndices) {

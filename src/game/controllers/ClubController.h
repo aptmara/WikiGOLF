@@ -1,9 +1,7 @@
 #pragma once
 /**
  * @file ClubController.h
- * @brief WikiGolfのクラブ選択UIとクラブ演出を管理するコントローラー
- * @author 山内陽
- */
+ * @brief WikiGolfのクラブ選択UIとクラブ演出を管理するコントローラー*/
 
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
@@ -25,7 +23,7 @@ namespace game::controllers {
 
 /**
  * @brief クラブ定義・クラブUI・クラブモデル演出をまとめて管理する
- */
+*/
 class ClubController {
 public:
   struct Club {
@@ -37,10 +35,12 @@ public:
     std::string shortName;   // e.g. "1W"
     std::string categoryEN;  // e.g. "Driver"
 
-    /// @brief 平坦・無風フェアウェイでのフルスイング基準キャリー飛距離(ヤード)。
-    /// Initialize時にmaxPower/launchAngleから動的に算出する。
+    /**
+     * @brief 平坦・無風フェアウェイでのフルスイング基準キャリー飛距離(ヤード)。
+     * Initialize時にmaxPower/launchAngleから動的に算出する。
+*/
     float baseCarryDistance = 0.0f;
-    /// @brief 「目標飛距離→初速」を求めるための対応表(基準飛距離と同時に算出)。
+    /** @brief 「目標飛距離→初速」を求めるための対応表(基準飛距離と同時に算出)。*/
     game::utils::CarryDistanceTable carryTable;
   };
 
@@ -58,7 +58,7 @@ public:
   /**
    * @brief クラブ表示が生成したEntityを破棄します。
    * @param ctx ゲーム全体の共有コンテキストです。
-   */
+*/
   void Shutdown(core::GameContext &ctx);
   InputResult UpdateInput(core::GameContext &ctx, const InputParams &params);
   void UpdateAnimation(core::GameContext &ctx, float dt, ecs::Entity ballEntity,
@@ -69,7 +69,7 @@ public:
   float GetRecommendedCameraDistance(float fieldScale) const;
   float GetRecommendedCameraHeight(float fieldScale) const;
 
-  /// @brief 全クラブ名リストを返す (WikiGolfHUD のクラブ選択リスト描画用)
+  /** @brief 全クラブ名リストを返す (WikiGolfHUD のクラブ選択リスト描画用)*/
   const std::vector<Club>& GetAllClubs() const { return m_availableClubs; }
 
 private:

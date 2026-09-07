@@ -15,15 +15,29 @@ cbuffer FXAAConstants : register(b0) {
   float4 texelSize; // x = 1/renderWidth, y = 1/renderHeight
 };
 
+/**
+ * @struct PSInput
+ * @brief ピクセルシェーダー入力
+ */
 struct PSInput {
-  float4 position : SV_POSITION;
-  float2 texCoord : TEXCOORD0;
+  float4 position : SV_POSITION; /**< 射影座標 */
+  float2 texCoord : TEXCOORD0;   /**< UV座標 */
 };
 
+/**
+ * @brief RGBカラーから知覚輝度（Luma）を算出します。
+ * @param c 入力RGB
+ * @return 輝度値
+ */
 float Luma(float3 c) {
   return dot(c, float3(0.299, 0.587, 0.114));
 }
 
+/**
+ * @brief FXAAピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return アンチエイリアス処理済みカラー
+ */
 float4 main(PSInput input) : SV_TARGET {
   float2 uv = input.texCoord;
   float2 texel = texelSize.xy;

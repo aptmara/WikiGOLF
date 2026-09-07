@@ -1,3 +1,8 @@
+/**
+ * @file MinimapControllerMap.cpp
+ * @brief MinimapControllerMap の実装
+*/
+
 #include "MinimapController.h"
 #include "MinimapControllerInternals.h"
 #include "../components/Transform.h"
@@ -26,7 +31,7 @@ using namespace game::components;
 
 /**
  * @brief ミニマップおよびインジケーターの表示を更新します。
- */
+*/
 void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, float fieldDepth, const DirectX::XMFLOAT3& shotDirection) {
   if (!m_minimapRenderer)
     return;
@@ -365,7 +370,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   if (m_mapHelpVisible) {
     targetHelpAlpha = 1.0f;
   }
-  float fadeSpeed = game::ui::kFadeSpeed; 
+  float fadeSpeed = game::ui::kFadeSpeed;
   helpFadeAlpha += (targetHelpAlpha - helpFadeAlpha) * fadeSpeed * ctx.dt;
 
   bool shouldShowHelp = helpFadeAlpha > 0.01f;
@@ -412,7 +417,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
 
 /**
  * @brief 保留中のミニマップ描画要求があれば、オフスクリーンレンダーターゲットへ実際に描画します。
- */
+*/
 void MinimapController::RenderPendingMinimap(core::GameContext &ctx) {
   if (m_isMapView || !m_isVisible) {
     m_minimapRenderPending = false;
@@ -436,7 +441,7 @@ void MinimapController::RenderPendingMinimap(core::GameContext &ctx) {
 
 /**
  * @brief マップの中心座標をボール位置に同期させます。
- */
+*/
 void MinimapController::SyncMapCenterToBall(core::GameContext &ctx, float dt, float fieldWidth, float fieldDepth, bool forceSnap) {
   DirectX::XMFLOAT2 targetCenter{0.0f, 0.0f};
   if (auto *ballT = ctx.world.Get<Transform>(m_cfg.ballEntity)) {

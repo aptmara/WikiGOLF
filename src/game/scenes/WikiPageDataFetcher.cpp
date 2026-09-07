@@ -1,7 +1,7 @@
 /**
  * @file WikiPageDataFetcher.cpp
  * @brief Wikipedia記事データの取得処理を実装します。
- */
+*/
 
 #include "WikiPageDataFetcher.h"
 #include "../../core/Logger.h"

@@ -1,7 +1,7 @@
 /**
  * @file WindPanel.cpp
  * @brief 風情報パネルの実装
- */
+*/
 
 #include "WindPanel.h"
 #include "HudStyles.h"

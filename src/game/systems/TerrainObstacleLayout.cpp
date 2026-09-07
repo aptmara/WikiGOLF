@@ -1,7 +1,7 @@
 /**
  * @file TerrainObstacleLayout.cpp
  * @brief 壁と画像障害物の座標計算を実装します。
- */
+*/
 
 #include "TerrainObstacleLayout.h"
 

@@ -1,7 +1,7 @@
 /**
  * @file WikiShortestPathDistances.cpp
  * @brief WikiShortestPathの責務別実装です。
- */
+*/
 
 #include "WikiShortestPath.h"
 #include "WikiShortestPathInternals.h"
@@ -145,8 +145,8 @@ std::unordered_map<std::string, int> WikiShortestPath::ComputeDistancesToTarget(
   // 「最初に到達した起点ソース」を記録しておき、backward側と出会った時点で
   // そのソースの距離を確定させる。
   struct ForwardNode {
-    int originSourceId; ///< このノードへ最初に到達した起点ソースのページID
-    int depth;          ///< 起点ソースからの距離
+    int originSourceId; /**< このノードへ最初に到達した起点ソースのページID*/
+    int depth;          /**< 起点ソースからの距離*/
   };
 
   const auto resolveSource = [&](int sourceId, int depth) {

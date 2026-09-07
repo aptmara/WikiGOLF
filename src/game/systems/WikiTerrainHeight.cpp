@@ -1,7 +1,7 @@
 /**
  * @file WikiTerrainHeight.cpp
  * @brief 生成済み地形からワールド座標の高さを問い合わせます。
- */
+*/
 
 #include "WikiTerrainSystem.h"
 
@@ -12,7 +12,7 @@ namespace game::systems {
 /**
  * @brief 指定したワールド座標における地形の高さを取得します。
  * @details 地形データの格子点をバイリニア補間して返します。
- */
+*/
 float WikiTerrainSystem::GetHeight(float x, float z) const {
   if (!m_terrainData) {
     return 0.0f;

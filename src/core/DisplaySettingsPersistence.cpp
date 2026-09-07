@@ -1,7 +1,7 @@
 /**
  * @file DisplaySettingsPersistence.cpp
  * @brief 表示設定のテキスト変換と永続化。
- */
+*/
 
 #include "DisplaySettings.h"
 #include "DisplaySettingsInternals.h"

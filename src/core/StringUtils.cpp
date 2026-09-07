@@ -1,3 +1,8 @@
+/**
+ * @file StringUtils.cpp
+ * @brief StringUtils クラスの実装
+*/
+
 #include "StringUtils.h"
 #include <windows.h>
 

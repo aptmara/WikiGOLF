@@ -2,7 +2,7 @@
 /**
  * @file AudioSystem.h
  * @brief XAudio2を使用したオーディオ再生システム
- */
+*/
 
 #include <map>
 #include <memory>
@@ -39,57 +39,76 @@ public:
   AudioSystem() = default;
   ~AudioSystem();
 
+  /**
+   * @brief XAudio2エンジンおよびマスタリングボイスを初期化します。
+   * @return 初期化成否
+   */
   bool Initialize();
+
+  /** @brief XAudio2リソースを解放しオーディオエンジンをシャットダウンします。 */
   void Shutdown();
 
-  // 毎フレーム呼び出し（終了したボイスのクリーンアップなど）
+  /**
+   * @brief 毎フレーム呼び出され、再生完了したボイスリソースのクリーンアップを行います。
+   * @param ctx ゲームコンテキスト
+   */
   void Update(core::GameContext &ctx);
 
-  /// @brief 効果音を再生
-  /// @param name ファイル名 (Assets/sounds/以下のパス)
+  /**
+   * @brief 効果音を再生
+   * @param name ファイル名 (Assets/sounds/以下のパス)
+   */
   void PlaySE(core::GameContext &ctx, const std::string &name,
               float volume = 1.0f, float pitch = 0.0f);
 
-  /// @brief 任意パスの音声をラベル付きで一回再生
+  /** @brief 任意パスの音声をラベル付きで一回再生 */
   void PlayOneShotFile(core::GameContext &ctx, const std::string &label,
                        const std::string &path, float volume = 1.0f,
                        float pitch = 0.0f);
 
-  /// @brief ラベル付き一回再生音声を停止
+  /** @brief ラベル付き一回再生音声を停止 */
   void StopOneShot(const std::string &label);
 
-  /// @brief BGMを再生（ループ）
-  /// @param name ファイル名
+  /**
+   * @brief BGMを再生（ループ）
+   * @param name ファイル名
+   */
   void PlayBGM(core::GameContext &ctx, const std::string &name,
                float volume = 0.6f);
 
-  /// @brief BGM停止
+  /** @brief BGM停止 */
   void StopBGM();
 
-  /// @brief 全体音量設定
+  /** @brief 全体音量設定 */
   void SetMasterVolume(float volume);
 
-  /// @brief 同時再生最大数
+  /** @brief 同時再生最大数 */
   static constexpr size_t MAX_ACTIVE_SE = 16;
 
-  /// @brief ループSEの設定（ラベルごとに状態管理）
-  /// @param label 識別子（"BallRoll"等）
-  /// @param name ファイル名。空文字、またはvolume=0で停止。
+  /**
+   * @brief ループSEの設定（ラベルごとに状態管理）
+   * @param label 識別子（"BallRoll"等）
+   * @param name ファイル名。空文字、またはvolume=0で停止。
+   */
   void SetLoopingSE(core::GameContext &ctx, const std::string &label,
                     const std::string &name, float volume = 1.0f,
                     float pitch = 0.0f);
 
-  /// @brief 着地バウンドSEを再生
-  /// @param name ファイル名
-  /// @param volume 音量
-  /// @param pitch ピッチ
-  /// @param maxDuration 最大再生時間（秒）
+  /**
+   * @brief 着地バウンドSEを再生
+   * @param name ファイル名
+   * @param volume 音量
+   * @param pitch ピッチ
+   * @param maxDuration 最大再生時間（秒）
+   */
   void PlayLandingSE(core::GameContext &ctx, const std::string &name,
                      float volume = 1.0f, float pitch = 0.0f,
                      float maxDuration = 0.6f);
 
-  /// @brief 着地バウンドSEを停止
-  /// @param fadeSeconds フェード時間（秒）
+  /**
+   * @brief 着地バウンドSEを停止
+   * @param fadeSeconds フェード時間（秒）
+   */
   void StopLandingSE(float fadeSeconds = 0.1f);
 
 private:

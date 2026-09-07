@@ -2,7 +2,7 @@
 /**
  * @file GameScene.h
  * @brief ゲームプレイシーン（キューブデモ）
- */
+*/
 
 #include "../../core/Scene.h"
 #include "../../core/GameContext.h"

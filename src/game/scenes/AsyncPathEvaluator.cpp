@@ -1,7 +1,7 @@
 /**
  * @file AsyncPathEvaluator.cpp
  * @brief 非同期経路評価の実装
- */
+*/
 
 #include "AsyncPathEvaluator.h"
 #include "../../core/Logger.h"

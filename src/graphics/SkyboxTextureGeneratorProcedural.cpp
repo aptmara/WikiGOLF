@@ -1,3 +1,8 @@
+/**
+ * @file SkyboxTextureGeneratorProcedural.cpp
+ * @brief SkyboxTextureGeneratorProcedural の実装
+ */
+
 #include "SkyboxTextureGenerator.h"
 #include "SkyboxTextureGeneratorInternals.h"
 #include <algorithm>
@@ -18,7 +23,7 @@ namespace graphics::skybox_detail {
 
 /**
  * @brief テキストを小文字へ変換します。
- */
+*/
 std::string ToLower(const std::string &text) {
   std::string result = text;
   std::transform(result.begin(), result.end(), result.begin(),
@@ -30,14 +35,14 @@ std::string ToLower(const std::string &text) {
 
 /**
  * @brief 指定キーワードの有無を判定します。
- */
+*/
 bool ContainsKeyword(const std::string &text, const std::string &keyword) {
   return ToLower(text).find(ToLower(keyword)) != std::string::npos;
 }
 
 /**
  * @brief 複数キーワードのいずれかを判定します。
- */
+*/
 bool ContainsAnyKeyword(const std::string &text,
                         const std::vector<std::string> &keywords) {
   for (const std::string &keyword : keywords) {
@@ -50,7 +55,7 @@ bool ContainsAnyKeyword(const std::string &text,
 
 /**
  * @brief 決定論的なノイズ値を計算します。
- */
+*/
 float HashNoise(int x, int y, int z) {
   int value = x * 374761393 + y * 668265263 + z * 69069;
   value = (value ^ (value >> 13)) * 1274126177;
@@ -60,7 +65,7 @@ float HashNoise(int x, int y, int z) {
 
 /**
  * @brief 簡易パーリンノイズ風の関数
- */
+*/
 float GenerateNoise(float x, float y, float z) {
   // 簡易ハッシュベースノイズ
   int xi = static_cast<int>(std::floor(x));
@@ -106,7 +111,7 @@ float GenerateNoise(float x, float y, float z) {
 
 /**
  * @brief 星フィールド生成
- */
+*/
 float GenerateStars(float x, float y, float z) {
   // 高周波ノイズで星を生成
   float star = GenerateNoise(x * 100.0f, y * 100.0f, z * 100.0f);
@@ -120,7 +125,7 @@ float GenerateStars(float x, float y, float z) {
 
 /**
  * @brief 雲パターン生成
- */
+*/
 float GenerateClouds(float x, float y, float z) {
   // 複数のオクターブのノイズを重ねる
   float cloud = 0.0f;
@@ -141,7 +146,7 @@ float GenerateClouds(float x, float y, float z) {
 
 /**
  * @brief フラクタルブラウン運動（FBM）- 高品質ノイズ
- */
+*/
 float GenerateFBM(float x, float y, float z, int octaves) {
   float value = 0.0f;
   float amplitude = 1.0f;
@@ -161,7 +166,7 @@ float GenerateFBM(float x, float y, float z, int octaves) {
 
 /**
  * @brief ワーリーノイズ - セルラーノイズで雲の塊を生成
- */
+*/
 float GenerateWorleyNoise(float x, float y, float z) {
   int xi = static_cast<int>(std::floor(x));
   int yi = static_cast<int>(std::floor(y));
@@ -201,7 +206,7 @@ float GenerateWorleyNoise(float x, float y, float z) {
 
 /**
  * @brief 銀河/天の川生成
- */
+*/
 float GenerateGalaxy(float x, float y, float z) {
   // 特定の帯状領域に銀河を配置
   float band = std::abs(y - 0.2f);
@@ -215,7 +220,7 @@ float GenerateGalaxy(float x, float y, float z) {
 
 /**
  * @brief 太陽/月の描画
- */
+*/
 float GenerateSun(const DirectX::XMFLOAT3 &dir,
                   const DirectX::XMFLOAT3 &sunDir) {
   DirectX::XMVECTOR dirVec = DirectX::XMLoadFloat3(&dir);

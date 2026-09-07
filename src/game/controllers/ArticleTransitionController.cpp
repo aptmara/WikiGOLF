@@ -1,3 +1,8 @@
+/**
+ * @file ArticleTransitionController.cpp
+ * @brief ArticleTransitionController の実装
+*/
+
 #include "ArticleTransitionController.h"
 #include "../../ecs/World.h"
 #include "../../core/StringUtils.h"
@@ -20,8 +25,8 @@ namespace game::controllers {
 namespace {
 
 /**
- * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
- */
+ * @brief 開始時刻からの経過時間をミリ秒で返します。
+*/
 long long ElapsedMs(const std::chrono::steady_clock::time_point& startedAt) {
     if (startedAt == std::chrono::steady_clock::time_point::min()) {
         return 0;
@@ -129,7 +134,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     // トランジション専用カメラ（既存フィールドと干渉しないよう遥か上空に配置）
     m_cameraEntity = m_entityOwner.Create(ctx.world);
     auto& camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
-    camTr.position = {0.0f, 5000.0f, -30.0f}; 
+    camTr.position = {0.0f, 5000.0f, -30.0f};
     camTr.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
 
     auto& cam = ctx.world.Add<components::Camera>(m_cameraEntity);

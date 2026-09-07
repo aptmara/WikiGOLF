@@ -2,7 +2,7 @@
 /**
  * @file GameJuiceVisualRules.h
  * @brief Game Juiceの粒子演出で共有する純粋な表示計算です。
- */
+*/
 
 #include "GameJuiceSystem.h"
 #include <DirectXMath.h>
@@ -11,23 +11,23 @@
 
 namespace game::systems::juice_detail {
 
-/// @brief 0.0から1.0の乱数を返します。
+/** @brief 0.0から1.0の乱数を返します。*/
 inline float Rand01() {
   return static_cast<float>(rand() % 100) / 100.0f;
 }
 
-/// @brief -0.5から0.5の乱数を返します。
+/** @brief -0.5から0.5の乱数を返します。*/
 inline float RandCentered() {
   return Rand01() - 0.5f;
 }
 
-/// @brief 始点から終点へ向かう滑らかな減衰率を返します。
+/** @brief 始点から終点へ向かう滑らかな減衰率を返します。*/
 inline float SmoothFade(float value, float start, float end) {
   const float t = std::clamp((value - start) / (end - start), 0.0f, 1.0f);
   return t * t * (3.0f - 2.0f * t);
 }
 
-/// @brief 色を指定倍率で明るくします。
+/** @brief 色を指定倍率で明るくします。*/
 inline DirectX::XMFLOAT4 ScaleColor(const DirectX::XMFLOAT3 &color,
                                     float brightness,
                                     float alpha = 1.0f) {
@@ -35,7 +35,7 @@ inline DirectX::XMFLOAT4 ScaleColor(const DirectX::XMFLOAT3 &color,
           alpha};
 }
 
-/// @brief カップイン祝祭粒子用の色を返します。
+/** @brief カップイン祝祭粒子用の色を返します。*/
 inline DirectX::XMFLOAT3 CupInSparkleColor(int index) {
   static const DirectX::XMFLOAT3 kPalette[] = {
       {1.0f, 0.78f, 0.16f}, {1.0f, 0.94f, 0.45f},
@@ -45,7 +45,7 @@ inline DirectX::XMFLOAT3 CupInSparkleColor(int index) {
   return kPalette[index % (sizeof(kPalette) / sizeof(kPalette[0]))];
 }
 
-/// @brief ショット判定に対応した発光色を返します。
+/** @brief ショット判定に対応した発光色を返します。*/
 inline DirectX::XMFLOAT3 ShotJudgeColor(GameJuiceSystem::JudgeType judge,
                                          int index) {
   switch (judge) {

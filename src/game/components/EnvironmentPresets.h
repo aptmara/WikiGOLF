@@ -2,7 +2,7 @@
  * @file EnvironmentPresets.h
  * @brief テーマ別環境プリセット -
  * スカイボックステーマから環境パラメータを自動設定
- */
+*/
 
 #pragma once
 
@@ -16,7 +16,7 @@ namespace game::components {
  * @brief スカイボックステーマから環境プリセットを取得
  * @param theme スカイボックステーマ
  * @return 環境状態の初期設定
- */
+*/
 inline EnvironmentState GetEnvironmentPreset(graphics::SkyboxTheme theme) {
   EnvironmentState env;
 

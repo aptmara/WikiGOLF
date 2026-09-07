@@ -1,7 +1,7 @@
 /**
  * @file PhysicsSystemStaticCollision.cpp
  * @brief 静的ボックスとの衝突解決
- */
+*/
 
 #include "PhysicsSystemInternals.h"
 #include "../../core/Logger.h"

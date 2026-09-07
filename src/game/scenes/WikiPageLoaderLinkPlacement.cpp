@@ -1,7 +1,7 @@
 /**
  * @file WikiPageLoaderLinkPlacement.cpp
  * @brief テクスチャリンクからホール候補を配置します。
- */
+*/
 
 #include "WikiPageLoader.h"
 #include "../../core/GameContext.h"
@@ -12,7 +12,7 @@ namespace game::scenes {
 
 /**
  * @brief テクスチャのリンク領域からホールを一括配置する
- */
+*/
 void WikiPageLoader::CreateLinksFromTexture(core::GameContext& ctx)
 {
     if (!m_wikiTexture) return;

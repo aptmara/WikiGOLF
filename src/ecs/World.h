@@ -2,7 +2,7 @@
 /**
  * @file World.h
  * @brief ECSデータストア（Entity, Component, Global Data）
- */
+*/
 
 #include "Entity.h"
 #include "ComponentPool.h"
@@ -18,7 +18,7 @@
 
 namespace ecs {
 
-/// @brief ECSデータ管理クラス
+/** @brief ECSデータ管理クラス*/
 class World {
 public:
     World() = default;
@@ -28,21 +28,23 @@ public:
     World(const World&) = delete;
     World& operator=(const World&) = delete;
 
-    /// @brief 全データを破棄し、初期状態に戻す
+    /** @brief 全データを破棄し、初期状態に戻す*/
     void Reset() {
         for (auto& pool : m_componentPools) {
             if (pool) pool->Clear();
         }
         m_globals.clear();
-        
+
         m_generations.clear();
         m_freeIndices = {};
     }
 
     // エンティティ管理
 
-    /// @brief 新しいエンティティを生成
-    /// @return 生成されたEntity ID
+    /**
+     * @brief 新しいエンティティを生成
+     * @return 生成されたEntity ID
+*/
     Entity CreateEntity() {
         Entity entity;
         if (!m_freeIndices.empty()) {
@@ -58,8 +60,10 @@ public:
         return entity;
     }
 
-    /// @brief エンティティを破棄
-    /// @param entity 破棄するEntity ID
+    /**
+     * @brief エンティティを破棄
+     * @param entity 破棄するEntity ID
+*/
     void DestroyEntity(Entity entity) {
         if (!IsAlive(entity)) return;
 
@@ -79,25 +83,29 @@ public:
         return m_generations[index] == GetEntityGeneration(entity);
     }
 
-    /// @brief アクティブなエンティティ数を取得する
-    /// @author 山内陽
-    /// @return 使用中スロット数に基づくアクティブエンティティ数
+    /**
+     * @brief アクティブなエンティティ数を取得する     * @return 使用中スロット数に基づくアクティブエンティティ数
+*/
     size_t GetEntityCount() const {
         return m_generations.size() - m_freeIndices.size();
     }
 
     // コンポーネント管理
 
-    /// @brief コンポーネントを追加（または上書き）
-    /// @tparam T コンポーネント型
-    /// @return 追加されたコンポーネントへの参照
+    /**
+     * @brief コンポーネントを追加（または上書き）
+     * @tparam T コンポーネント型
+     * @return 追加されたコンポーネントへの参照
+*/
     template<typename T, typename... Args>
     T& Add(Entity entity, Args&&... args) {
         return GetOrCreatePool<T>().Add(entity, std::forward<Args>(args)...);
     }
 
-    /// @brief コンポーネントを取得
-    /// @return コンポーネントへのポインタ（存在しなければnullptr）
+    /**
+     * @brief コンポーネントを取得
+     * @return コンポーネントへのポインタ（存在しなければnullptr）
+*/
     template<typename T>
     T* Get(Entity entity) {
         auto* pool = GetPool<T>();
@@ -110,7 +118,7 @@ public:
         return pool ? pool->Get(entity) : nullptr;
     }
 
-    /// @brief コンポーネントを削除
+    /** @brief コンポーネントを削除*/
     template<typename T>
     void Remove(Entity entity) {
         if (auto* pool = GetPool<T>()) {
@@ -175,7 +183,7 @@ public:
 
         for (size_t i = 0; i < m_componentPools.size(); ++i) {
             if (auto& pool = m_componentPools[i]) {
-                LOG_INFO("WorldStats", "  - [ID:{}] {}: {} entities", 
+                LOG_INFO("WorldStats", "  - [ID:{}] {}: {} entities",
                     i, pool->GetTypeName(), pool->Size());
             }
         }

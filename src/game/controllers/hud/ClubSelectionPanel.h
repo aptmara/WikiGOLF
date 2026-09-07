@@ -2,7 +2,7 @@
 /**
  * @file ClubSelectionPanel.h
  * @brief クラブ選択一覧と着弾予測ボタンを管理するHUDパネル
- */
+*/
 
 #include "../../../ecs/Entity.h"
 #include "../../../ecs/EntityOwner.h"
@@ -15,7 +15,7 @@ struct GameContext;
 
 namespace game::controllers {
 
-/** @brief クラブ選択UIへ渡す表示用データです。 */
+/** @brief クラブ選択UIへ渡す表示用データです。*/
 struct ClubUIData {
   std::string name;
   std::string iconTexture;
@@ -30,30 +30,30 @@ namespace hud {
 /**
  * @brief クラブ一覧の生成、3行窓、選択表示を一括管理します。
  * @details 表示中の行は常に「前・選択中・次」の最大3行です。
- */
+*/
 class ClubSelectionPanel {
 public:
-  /** @brief 固定見出しと着弾予測ボタンを生成します。 */
+  /** @brief 固定見出しと着弾予測ボタンを生成します。*/
   void Initialize(core::GameContext &ctx);
 
   /**
    * @brief クラブ数に合わせて行を構築し、選択位置を表示へ反映します。
    * @param elapsedTime HUD開始からの経過時間です。
-   */
+*/
   void Update(core::GameContext &ctx, float elapsedTime,
               const std::vector<ClubUIData> &clubs, int currentClubIndex);
 
-  /** @brief 着弾予測ボタンの状態を表示へ反映します。 */
+  /** @brief 着弾予測ボタンの状態を表示へ反映します。*/
   void UpdateLandingPreviewButton(core::GameContext &ctx, bool hovered,
                                   bool active, bool enabled);
 
-  /** @brief ショット中のクラブ選択UIの表示状態を切り替えます。 */
+  /** @brief ショット中のクラブ選択UIの表示状態を切り替えます。*/
   void SetShotPhaseVisible(core::GameContext &ctx, bool shotPhase);
 
-  /** @brief パネル全体の表示状態を変更します。 */
+  /** @brief パネル全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
-  /** @brief パネルが生成したすべてのEntityを破棄します。 */
+  /** @brief パネルが生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 
 private:

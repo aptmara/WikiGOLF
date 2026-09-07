@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file ScreenFade.h
+ * @brief ScreenFade クラスおよび関連定義
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
@@ -10,7 +14,7 @@ namespace game::utils {
 
 enum class FadeType { Fade, CircleWipe, HexagonWipe };
 
-/// @brief 画面フェード制御クラス
+/** @brief 画面フェード制御クラス*/
 class ScreenFade {
 public:
   ScreenFade() = default;
@@ -18,39 +22,43 @@ public:
 
   /**
    * @brief フェード用の初期化処理を行います。
-   */
+*/
   void Initialize(core::GameContext &ctx);
 
   /**
    * @brief フェード用の終了処理を行います。
-   */
+*/
   void Shutdown(core::GameContext &ctx);
 
-  /// @brief フェードイン（画面が開く、見えるようになる）
-  /// @param duration 秒数
-  /// @param type フェードタイプ
-  /// @param color フェード色 (通常は黒か白)
+  /**
+   * @brief フェードイン（画面が開く、見えるようになる）
+   * @param duration 秒数
+   * @param type フェードタイプ
+   * @param color フェード色 (通常は黒か白)
+*/
   void FadeIn(float duration, FadeType type = FadeType::Fade,
               DirectX::XMFLOAT3 color = {0, 0, 0});
 
-  /// @brief フェードアウト（画面が閉じる、隠れる）
-  /// @param duration 秒数
-  /// @param type フェードタイプ
-  /// @param color フェード色
+  /**
+   * @brief フェードアウト（画面が閉じる、隠れる）
+   * @param duration 秒数
+   * @param type フェードタイプ
+   * @param color フェード色
+*/
   void FadeOut(float duration, FadeType type = FadeType::Fade,
                DirectX::XMFLOAT3 color = {0, 0, 0});
 
   /**
    * @brief 毎フレームのフェード更新処理を行います。
-   */
+*/
   void Update(float dt);
 
   /**
    * @brief 描画処理を行います。
-   */
+*/
   void Render(core::GameContext &ctx);
 
-  /// @brief ワイプの中心を設定 (0.0~1.0)
+  /** @brief ワイプの中心を設定 (0.0~1.0)*/
   void SetCenter(float u, float v);
 
   bool IsFading() const { return m_isFading; }

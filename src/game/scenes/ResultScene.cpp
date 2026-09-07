@@ -1,3 +1,8 @@
+/**
+ * @file ResultScene.cpp
+ * @brief ResultScene の実装
+*/
+
 #define NOMINMAX
 #include "ResultScene.h"
 #include "../../audio/AudioSystem.h"
@@ -36,7 +41,7 @@ ResultScene::~ResultScene() = default;
 
 /**
  * @brief シーン開始時の初期化処理を行います。
- */
+*/
 void ResultScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("ResultScene", "OnEnter (Luxury) - Target: {}, Score: {}",
            m_data.targetPage, m_data.shotCount);
@@ -73,7 +78,7 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
 
 /**
  * @brief 毎フレームの更新処理を行います。
- */
+*/
 void ResultScene::OnUpdate(core::GameContext &ctx) {
   m_time += ctx.dt;
 
@@ -97,7 +102,7 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
           std::sin(angle) * radius, height,
           std::cos(angle) * -radius
       };
-      
+
       // Apply shake to camera position
       if (m_cameraShake > 0.0f) {
           float intensity = m_cameraShake * 0.5f;
@@ -105,7 +110,7 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
           basePos.y += (static_cast<float>(rand() % 100) / 100.0f - 0.5f) * intensity;
           basePos.z += (static_cast<float>(rand() % 100) / 100.0f - 0.5f) * intensity;
       }
-      
+
       camTr->position = basePos;
 
       // 注視点の設定とカメラの姿勢更新を行います。
@@ -217,6 +222,6 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
 
 /**
  * @brief 3Dオブジェクトのビジュアル更新を行います。
- */
+*/
 
 } // namespace game::scenes

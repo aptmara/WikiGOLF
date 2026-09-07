@@ -1,7 +1,7 @@
 /**
  * @file WikiGolfSceneResultEffects.cpp
  * @brief 着地とショット判定の結果表示を実装します。
- */
+*/
 
 #include "WikiGolfScene.h"
 #include "../../core/GameContext.h"

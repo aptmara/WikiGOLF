@@ -2,7 +2,7 @@
 /**
  * @file WikiShortestPathInternals.h
  * @brief WikiShortestPathが共有するSQLite/BFS内部処理です。
- */
+*/
 
 #include "WikiShortestPath.h"
 #include "../../core/Logger.h"
@@ -72,8 +72,8 @@ struct LinkFetchChunkStats {
 };
 
 /**
- * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
- */
+ * @brief 開始時刻からの経過時間をミリ秒で返します。
+*/
 inline long long ElapsedMs(const std::chrono::steady_clock::time_point &startedAt) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::steady_clock::now() - startedAt)
@@ -255,14 +255,14 @@ inline std::vector<int> BuildPath(int meet,
 }
 
 /**
- * @brief ゴール記事（ターゲット）起点の逆方向BFS結果をプロセス内で使い回すキャッシュです。 山内陽
+ * @brief ゴール記事（ターゲット）起点の逆方向BFS結果をプロセス内で使い回すキャッシュです。
  * @details 1プレイ中はゲーム開始時に決まったターゲット記事を目指してページ
  *          （＝ホール）を渡り歩くため、ページ移動のたびに ComputeDistancesToTarget
  *          が呼ばれても target->incoming_links の探索結果は不変。前回到達済みの
  *          ノード集合とその境界フロンティアを保持して使い回す。新しいゲームで
  *          別のターゲットを目指すことになったら破棄する。1ターゲット分だけ
  *          保持すれば十分（同時に複数のターゲットを探索することはない）。
- */
+*/
 struct BackwardBfsCache {
   std::mutex mutex;
   int targetId = -1;
@@ -277,7 +277,7 @@ inline BackwardBfsCache &GetBackwardBfsCache() {
 
 /**
  * @brief 特定ページからターゲットまでの「確定済み距離」をプロセス内で
- *        使い回すキャッシュです。 山内陽
+ *        使い回すキャッシュです。
  * @details BackwardBfsCache は逆方向BFSの到達済みノード（探索の途中経過）を
  *          保持するだけなので、双方向BFSで forward 側との合流によって解決した
  *          ソース自身の最終距離までは保持できない。同じ記事へのリンクは
@@ -285,7 +285,7 @@ inline BackwardBfsCache &GetBackwardBfsCache() {
  *          （リンク先ページID, 距離）は個別に憶えておき、次に同じリンクが
  *          別のページに出てきた時はBFSを一切行わずに即答する。
  *          ターゲットが変わったら破棄する。
- */
+*/
 struct ResolvedDistanceCache {
   std::mutex mutex;
   int targetId = -1;

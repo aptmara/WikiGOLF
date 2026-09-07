@@ -2,7 +2,7 @@
 /**
  * @file UIButton.h
  * @brief クリック可能なUIボタンコンポーネント
- */
+*/
 
 #include <string>
 #include <DirectXMath.h>
@@ -10,7 +10,7 @@
 
 namespace game::components {
 
-/// @brief UIボタンの状態
+/** @brief UIボタンの状態*/
 enum class ButtonState {
     Normal,
     Hovered,
@@ -18,7 +18,7 @@ enum class ButtonState {
     Disabled
 };
 
-/// @brief UIボタンコンポーネント
+/** @brief UIボタンコンポーネント*/
 struct UIButton {
     // ヒット領域
     float x = 0.0f;
@@ -45,7 +45,7 @@ struct UIButton {
     // 可視性
     bool visible = true;
 
-    /// @brief 現在の状態に応じた背景色を取得
+    /** @brief 現在の状態に応じた背景色を取得*/
     DirectX::XMFLOAT4 GetCurrentColor() const {
         switch (state) {
             case ButtonState::Hovered: return hoverColor;
@@ -55,7 +55,7 @@ struct UIButton {
         }
     }
 
-    /// @brief ヘルパー: ボタン作成
+    /** @brief ヘルパー: ボタン作成*/
     static UIButton Create(const std::wstring& label, const std::string& action,
                            float x, float y, float w = 200.0f, float h = 50.0f) {
         UIButton btn;

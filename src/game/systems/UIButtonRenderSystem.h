@@ -2,7 +2,7 @@
 /**
  * @file UIButtonRenderSystem.h
  * @brief UIボタンの描画処理（背景色＋テキスト）
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"
@@ -11,12 +11,16 @@
 
 namespace game::systems {
 
-/// @brief UIボタン描画システム
+/** @brief UIボタン描画システム*/
 class UIButtonRenderSystem {
 public:
   explicit UIButtonRenderSystem(graphics::TextRenderer &renderer)
       : m_renderer(renderer) {}
 
+  /**
+   * @brief ボタン描画を実行します。
+   * @param ctx ゲームコンテキスト
+   */
   void operator()(core::GameContext &ctx) {
     if (!m_renderer.IsValid())
       return;

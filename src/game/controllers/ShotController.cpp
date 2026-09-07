@@ -1,3 +1,8 @@
+/**
+ * @file ShotController.cpp
+ * @brief ShotController の実装
+*/
+
 #include "ShotController.h"
 #include "../../core/Input.h"
 #include "../../ecs/World.h"
@@ -45,14 +50,14 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->phase = game::components::ShotState::Phase::PowerCharging;
             shot->powerGaugePos = 0.0f;
             shot->powerGaugeDir = 1.0f;
-            
+
             if (ctx.audio) {
                 ctx.audio->PlaySE(ctx, "se_shot_charge.mp3", 0.7f);
             }
         }
         break;
     }
-    
+
     case game::components::ShotState::Phase::PowerCharging: {
         // パワー決定
         if (ctx.input.GetMouseButtonDown(0)) {
@@ -60,7 +65,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->phase = game::components::ShotState::Phase::ImpactTiming;
             shot->impactGaugePos = 0.0f;
             shot->impactGaugeDir = 1.0f;
-            
+
             if (hud) {
                 hud->SetImpactZonesVisible(ctx, true);
             }
@@ -70,7 +75,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             }
             break;
         }
-        
+
         // 右クリックキャンセル
         if (ctx.input.GetMouseButtonDown(1)) {
             shot->Reset();
@@ -84,7 +89,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
                      shot->powerGaugeSpeed, dt);
         break;
     }
-    
+
     case game::components::ShotState::Phase::ImpactTiming: {
         // インパクト決定
         if (ctx.input.GetMouseButtonDown(0)) {
@@ -108,12 +113,12 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             if (ctx.audio && !feedback.soundPath.empty()) {
                 ctx.audio->PlaySE(ctx, feedback.soundPath, feedback.soundVolume);
             }
-            
+
             state->lastShotPosition = ctx.world.Get<game::components::Transform>(state->ballEntity)->position;
             eventOut.shotFired = true;
             break;
         }
-        
+
         // キャンセル
         if (ctx.input.GetMouseButtonDown(1)) {
             shot->Reset();
@@ -127,11 +132,11 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
                      shot->impactGaugeSpeed, dt);
         break;
     }
-    
+
     default:
         break;
     }
-    
+
     return eventOut;
 }
 

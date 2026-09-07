@@ -2,7 +2,7 @@
 /**
  * @file WikiTerrainSystem.h
  * @brief Wikipedia記事情報に基づいた地形（フィールド）生成システム
- */
+*/
 
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../../resources/ResourceManager.h"
@@ -30,16 +30,16 @@ namespace game::systems {
  *
  * 記事のレイアウト情報（WikiTextureResult）を受け取り、
  * 物理挙動を持つ3Dオブジェクト群（床、壁、障害物、段差）を生成する。
- */
+*/
 class WikiTerrainSystem {
 public:
   WikiTerrainSystem() = default;
   ~WikiTerrainSystem() = default;
 
-  /// @brief チュートリアル専用の固定教材地形を使うか設定します。 山内陽
+  /** @brief チュートリアル専用の固定教材地形を使うか設定します。*/
   void SetTutorialMode(bool enabled) { m_tutorialMode = enabled; }
 
-  /// @brief フィールドを再構築する（同期版 / 後方互換用）
+  /** @brief フィールドを再構築する（同期版 / 後方互換用）*/
   void BuildField(core::GameContext &ctx, const std::string &pageTitle,
                   const graphics::WikiTextureResult &textureResult,
                   float fieldWidth, float fieldDepth,
@@ -50,36 +50,40 @@ public:
   // TerrainGeneratorをstd::asyncで非同期化し、メッシュを1タイル/フレームで構築する。
   // ------------------------------------------------------------------
 
-  /// @brief インクリメンタルビルドを開始する
-  /// @note テクスチャ結果はコピーして保持する（呼び出し元がムーブしても安全）
+  /**
+   * @brief インクリメンタルビルドを開始する
+   * @note テクスチャ結果はコピーして保持する（呼び出し元がムーブしても安全）
+*/
   void BeginBuildField(const std::string &pageTitle,
                        const graphics::WikiTextureResult &textureResult,
                        float fieldWidth, float fieldDepth,
                        const std::vector<std::string> &pageCategories);
 
-  /// @brief 構築を1ステップ進める（毎フレーム1回呼ぶ）
-  /// @return 完了したら true
+  /**
+   * @brief 構築を1ステップ進める（毎フレーム1回呼ぶ）
+   * @return 完了したら true
+*/
   bool StepBuildField(core::GameContext &ctx);
 
-  /// @brief 構築進捗 (0.0-1.0)
+  /** @brief 構築進捗 (0.0-1.0)*/
   float GetBuildProgress() const { return m_buildProgress; }
 
-  /// @brief 現在のフィールドエンティティ群を取得
+  /** @brief 現在のフィールドエンティティ群を取得*/
   const std::vector<ecs::Entity> &GetEntities() const { return m_entities; }
 
-  /// @brief フィールドを全削除
+  /** @brief フィールドを全削除*/
   void Clear(core::GameContext &ctx);
 
-  /// @brief 床のエンティティID取得（カメラターゲット用など）
+  /** @brief 床のエンティティID取得（カメラターゲット用など）*/
   ecs::Entity GetFloorEntity() const { return m_floorEntity; }
 
-  /// @brief 地形データを取得（物理パラメータ参照用）
+  /** @brief 地形データを取得（物理パラメータ参照用）*/
   std::shared_ptr<TerrainData> GetTerrainData() const { return m_terrainData; }
 
-  /// @brief 指定座標の地形高さを取得
+  /** @brief 指定座標の地形高さを取得*/
   float GetHeight(float x, float z) const;
 
-  /// @brief ボール近傍の芝を倒し、離れた芝を元の姿勢へ戻す
+  /** @brief ボール近傍の芝を倒し、離れた芝を元の姿勢へ戻す*/
   void UpdateSurfaceResponse(core::GameContext &ctx, ecs::Entity ballEntity,
                              float dt);
 
@@ -104,38 +108,68 @@ private:
   // 先頭が最も古いサンプル、末尾が最新のボール位置。
   std::deque<DirectX::XMFLOAT3> m_ballTrail;
 
-  /// @brief 床作成（同期版 / BuildFieldから呼ぶ）
+  /** @brief 床作成（同期版 / BuildFieldから呼ぶ）*/
   void CreateFloor(core::GameContext &ctx,
                    const graphics::WikiTextureResult &result, float width,
                    float depth, const std::string &pageTitle,
                    const std::vector<std::string> &pageCategories);
 
+  /**
+   * @brief 外周壁エンティティを生成します。
+   * @param ctx ゲームコンテキスト
+   * @param width フィールド幅
+   * @param depth フィールド奥行き
+   */
   void CreateWalls(core::GameContext &ctx, float width, float depth);
+
+  /**
+   * @brief 画像障害物エンティティを配置します。
+   * @param ctx ゲームコンテキスト
+   * @param result テクスチャ生成結果
+   * @param fieldWidth フィールド幅
+   * @param fieldDepth フィールド奥行き
+   */
   void CreateImageObstacles(core::GameContext &ctx,
                             const graphics::WikiTextureResult &result,
                             float fieldWidth, float fieldDepth);
+
+  /**
+   * @brief 見出し段差エンティティを配置します。
+   * @param ctx ゲームコンテキスト
+   * @param result テクスチャ生成結果
+   * @param fieldWidth フィールド幅
+   * @param fieldDepth フィールド奥行き
+   */
   void CreateHeadingSteps(core::GameContext &ctx,
                           const graphics::WikiTextureResult &result,
                           float fieldWidth, float fieldDepth);
-  /// @brief バイオーム別装飾オブジェクト作成
+
+  /** @brief バイオーム別装飾オブジェクトを作成します。 */
   void CreateDecorations(core::GameContext &ctx, float fieldWidth,
                          float fieldDepth, int biome);
+
+  /**
+   * @brief 草面装飾エンティティを配置します。
+   * @param ctx ゲームコンテキスト
+   * @param fieldWidth フィールド幅
+   * @param fieldDepth フィールド奥行き
+   */
   void CreateSurfaceGrass(core::GameContext &ctx, float fieldWidth,
                           float fieldDepth);
 
-  int m_biome = 0; ///< 現在のバイオーム
+  int m_biome = 0; /**< 現在のバイオーム*/
 
   // ------------------------------------------------------------------
   // インクリメンタルビルド用状態
   // ------------------------------------------------------------------
   enum class BuildPhase {
     Idle,
-    TerrainGenAsync,   ///< TerrainGenerator 非同期待ち
-    CreatePhysics,     ///< 物理エンティティ作成
-    CreateTileMesh,    ///< ビジュアルメッシュ（1タイル/ステップ）
-    CreateTileOverlay, ///< オーバーレイ（1タイル/ステップ）
-    CreateWalls,       ///< 壁生成
-    CreateDecorations, ///< 装飾生成
+    TerrainGenAsync,   /**< TerrainGenerator 非同期待ち*/
+    CreatePhysics,     /**< 物理エンティティ作成*/
+    CreateTileMesh,    /**< ビジュアルメッシュ（1タイル/ステップ）*/
+    CreateTileOverlay, /**< オーバーレイ（1タイル/ステップ）*/
+    CreateWalls,       /**< 壁生成*/
+    CreateDecorations, /**< 装飾生成*/
     Done
   };
 
@@ -168,7 +202,7 @@ private:
     int     tileResZ = 0;
     float   vStart   = 0.0f;
     float   vEnd     = 0.0f;
-    float   maxHeight = 0.0f; ///< タイル内の頂点最大Y（ミニマップオーバーレイの平面高さ算出用）
+    float   maxHeight = 0.0f; /**< タイル内の頂点最大Y（ミニマップオーバーレイの平面高さ算出用）*/
   };
   std::vector<TileMeshCache> m_tileMeshCaches;
 

@@ -1,7 +1,7 @@
 /**
  * @file Logger.cpp
  * @brief ログシステムの実装
- */
+*/
 
 #include "Logger.h"
 #include <iostream>

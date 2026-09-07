@@ -2,7 +2,7 @@
 /**
  * @file PhysicsSystem.h
  * @brief 物理演算システム
- */
+*/
 
 #include "../../core/GameContext.h"
 
@@ -15,7 +15,7 @@ namespace game::systems {
  *
  * @param ctx ゲームコンテキスト (World, Input等へのアクセス)
  * @param dt デルタタイム (秒)
- */
+*/
 void PhysicsSystem(core::GameContext &ctx, float dt);
 
 } // namespace game::systems

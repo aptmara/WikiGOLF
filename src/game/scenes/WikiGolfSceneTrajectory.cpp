@@ -1,7 +1,7 @@
 /**
  * @file WikiGolfSceneTrajectory.cpp
  * @brief 予測軌道と方向ガイドの更新処理を実装します。
- */
+*/
 
 #include "WikiGolfScene.h"
 #include "../../core/GameContext.h"

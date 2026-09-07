@@ -1,4 +1,9 @@
 #pragma once
+/**
+ * @file Input.h
+ * @brief Input クラスおよび関連インターフェースの定義
+*/
+
 #include <DirectXMath.h>
 #include <Windows.h>
 #include <array>
@@ -8,71 +13,73 @@ namespace core {
 
 class Input {
 public:
-  /// @brief 初期化
+  /** @brief 初期化*/
   void Initialize();
 
-  /// @brief ウィンドウの解像度を設定
+  /** @brief ウィンドウの解像度を設定*/
   void SetResolution(int width, int height) {
     m_windowWidth = width;
     m_windowHeight = height;
   }
 
-  /// @brief フレームごとの更新処理（イベントフラグをリセット）
+  /** @brief フレームごとの更新処理（イベントフラグをリセット）*/
   void Update();
 
-  /// @brief Win32メッセージ処理用ハンドラ
+  /** @brief Win32メッセージ処理用ハンドラ*/
   void ProcessMessage(UINT message, WPARAM wParam, LPARAM lParam);
 
   // --- キーボード入力 ---
 
-  /// @brief キーが押されているか
+  /** @brief キーが押されているか*/
   bool GetKey(int key) const;
 
-  /// @brief キーが押された瞬間か（このフレームで）
+  /** @brief キーが押された瞬間か（このフレームで）*/
   bool GetKeyDown(int key) const;
 
-  /// @brief キーが離された瞬間か
+  /** @brief キーが離された瞬間か*/
   bool GetKeyUp(int key) const;
 
   // --- マウス入力 ---
 
-  /// @brief マウスボタンが押されているか (0:左, 1:右, 2:中)
+  /** @brief マウスボタンが押されているか (0:左, 1:右, 2:中)*/
   bool GetMouseButton(int button) const;
 
-  /// @brief マウスボタンが押された瞬間か（このフレームで）
+  /** @brief マウスボタンが押された瞬間か（このフレームで）*/
   bool GetMouseButtonDown(int button) const;
 
-  /// @brief マウスボタンが離された瞬間か
+  /** @brief マウスボタンが離された瞬間か*/
   bool GetMouseButtonUp(int button) const;
 
-  /// @brief マウス位置取得
+  /** @brief マウス位置取得*/
   DirectX::XMINT2 GetMousePosition() const { return m_mousePosition; }
 
-  /// @brief マウスホイール変位取得
+  /** @brief マウスホイール変位取得*/
   float GetMouseScrollDelta() const;
 
-  /// @brief マウスカーソルの表示/非表示
+  /** @brief マウスカーソルの表示/非表示*/
   void SetMouseCursorVisible(bool visible);
 
-  /// @brief マウスカーソルのロック（ウィンドウ内に制限）
+  /** @brief マウスカーソルのロック（ウィンドウ内に制限）*/
   void SetMouseCursorLocked(bool locked);
 
   // --- テキスト入力・クリップボード ---
 
-  /// @brief このフレームで入力された文字（WM_CHARベース）を取得
+  /** @brief このフレームで入力された文字（WM_CHARベース）を取得*/
   const std::wstring& GetInputChars() const { return m_inputChars; }
 
-  /// @brief バックスペースが押されたか
+  /** @brief バックスペースが押されたか*/
   bool GetBackspacePressed() const { return m_backspacePressed; }
 
-  /// @brief クリップボードから文字列を取得する
+  /** @brief クリップボードから文字列を取得する*/
   std::wstring GetClipboardText() const;
 
 private:
-  /// @brief クライアント座標(ピクセル)を仮想解像度(1280x720)座標へ変換する。
-  /// @details UI/クリック判定は仮想解像度基準のため、実ウィンドウとのアスペクト比が
-  ///          異なる解像度でもUIが歪まないよう、TextRenderer側の描画変換
-  ///          （縦横同一倍率スケール＋レターボックス）と同じ式で逆変換する。
+  /**
+   * @brief クライアント座標(ピクセル)を仮想解像度(1280x720)座標へ変換する。
+   * @details UI/クリック判定は仮想解像度基準のため、実ウィンドウとのアスペクト比が
+   *          異なる解像度でもUIが歪まないよう、TextRenderer側の描画変換
+   *          （縦横同一倍率スケール＋レターボックス）と同じ式で逆変換する。
+*/
   DirectX::XMINT2 ClientToVirtual(int rawX, int rawY) const;
 
   std::array<bool, 256> m_keys;

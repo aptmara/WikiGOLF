@@ -1,7 +1,7 @@
 /**
  * @file DisplaySettings.cpp
  * @brief 表示設定の初期化処理。
- */
+*/
 
 #include "DisplaySettings.h"
 #include "DisplaySettingsInternals.h"

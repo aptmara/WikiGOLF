@@ -2,7 +2,7 @@
 /**
  * @file ResourcePool.h
  * @brief 世代管理付きリソースプール (Slot Map pattern)
- */
+*/
 
 #include "../core/Logger.h"
 #include "../core/ResourceHandle.h"
@@ -16,14 +16,18 @@
 
 namespace resources {
 
-/// @brief リソース管理プール
-/// @tparam T リソース型 (Movableであること)
+/**
+ * @brief リソース管理プール
+ * @tparam T リソース型 (Movableであること)
+ */
 template <typename T> class ResourcePool {
 public:
   using Handle = core::ResourceHandle<T>;
 
-  /// @brief コンストラクタ
-  /// @param dummyFallback エラー時に返すダミーリソース（Releaseビルド用）
+  /**
+   * @brief コンストラクタ
+   * @param dummyFallback エラー時に返すダミーリソース（Releaseビルド用）
+   */
   ResourcePool(T &&dummyFallback) : m_dummy(std::move(dummyFallback)) {
     // dequeにはreserveがないが、パフォーマンスへの影響は軽微
   }
@@ -32,8 +36,10 @@ public:
   ResourcePool(const ResourcePool &) = delete;
   ResourcePool &operator=(const ResourcePool &) = delete;
 
-  /// @brief リソースを追加し、ハンドルを返す
-  /// @param resource リソース実体（Move）
+  /**
+   * @brief リソースを追加し、ハンドルを返す
+   * @param resource リソース実体（Move）
+   */
   Handle Add(T &&resource) {
     uint32_t index;
     if (!m_freeIndices.empty()) {
@@ -52,10 +58,12 @@ public:
     return {index, slot.generation};
   }
 
-  /// @brief リソースを取得 (安全なポインタアクセス)
-  /// @param handle リソースハンドル
-  /// @return
-  /// リソースへのポインタ。無効な場合はDebugではAssert、ReleaseではDummyを返す。
+  /**
+   * @brief リソースを取得 (安全なポインタアクセス)
+   * @param handle リソースハンドル
+   * @return
+   * リソースへのポインタ。無効な場合はDebugではAssert、ReleaseではDummyを返す。
+   */
   T *Get(Handle handle) {
     // インデックス範囲チェック
     if (handle.index >= m_slots.size()) {
@@ -72,7 +80,7 @@ public:
     return &slot.resource;
   }
 
-  /// @brief リソースを解放
+  /** @brief リソースを解放 */
   void Remove(Handle handle) {
     if (handle.index >= m_slots.size())
       return;
@@ -90,7 +98,7 @@ public:
     }
   }
 
-  /// @brief 全リソースを解放（シーン遷移用）
+  /** @brief 全リソースを解放（シーン遷移用） */
   void Clear() {
     m_slots.clear();
     m_freeIndices = {};
@@ -109,7 +117,7 @@ private:
   std::queue<uint32_t> m_freeIndices;
   T m_dummy; // フォールバック用ダミーリソース
 
-  /// @brief エラーハンドリング
+  /** @brief エラーハンドリング */
   T *HandleError(const char *message) {
 #ifdef _DEBUG
     // デバッグ時は即停止

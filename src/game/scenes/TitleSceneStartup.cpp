@@ -1,3 +1,8 @@
+/**
+ * @file TitleSceneStartup.cpp
+ * @brief TitleSceneStartup の実装
+*/
+
 #include "ResultScene.h"
 #include "TitleScene.h"
 #include "TitleSceneSupport.h"
@@ -43,7 +48,7 @@ using namespace DirectX;
 
 /**
  * @brief スタートアップロード完了後の初期化処理を行います。
- */
+*/
 void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   StopIntroAudio(ctx);
 
@@ -80,7 +85,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   m_floorEntity = CreateEntity(ctx.world);
   auto &floorTr = ctx.world.Add<components::Transform>(m_floorEntity);
   floorTr.position = {0.0f, -0.5f, 0.0f};
-  
+
   auto &floorMr  = ctx.world.Add<components::MeshRenderer>(m_floorEntity);
   game::systems::TerrainConfig tconf;
   tconf.worldWidth = 150.0f;
@@ -90,7 +95,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   tconf.baseHeight = 0.0f;
   tconf.heightScale = 2.5f;
   tconf.biome = 0; // 草原
-  
+
   auto tdata = game::systems::TerrainGenerator::GenerateTerrain("TitleSeed", {}, tconf);
   floorMr.mesh = ctx.resource.CreateDynamicMesh("TitleTerrain", tdata.vertices, tdata.indices);
   floorMr.shader = basicShader;
@@ -202,7 +207,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     // 背景カード (白・角丸)
     auto ep = CreateEntity(ctx.world);
     auto &tp = ctx.world.Add<components::UIText>(ep);
-    tp.text = L""; 
+    tp.text = L"";
     tp.x = 40.0f; tp.y = 260.0f;
     tp.width = 340.0f; tp.height = 410.0f; // 下パネル(y=680)と被らないように430->410へ短縮
     tp.style.bgColor = {0.98f, 0.98f, 0.98f, 0.95f};
@@ -245,7 +250,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     // サムネイル画像
     auto ei = CreateEntity(ctx.world);
     auto &ui = ctx.world.Add<components::UIImage>(ei);
-    ui.texturePath = "Golfer_swing.jpg"; 
+    ui.texturePath = "Golfer_swing.jpg";
     ui.x = 65.0f; ui.y = 350.0f;
     ui.width = 120.0f; ui.height = 80.0f; // 左半分に配置
     ui.layer = 12;
@@ -451,7 +456,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
 
   // ポップアップUIの生成
   m_popupTimer = 0.0f;
-  
+
   m_popupBgEntity = CreateEntity(ctx.world);
   auto &pbg = ctx.world.Add<components::UIText>(m_popupBgEntity);
   pbg.text = L"";

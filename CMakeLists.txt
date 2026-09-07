@@ -4,6 +4,22 @@ project(DX_GAME)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Doxygen が利用可能な環境では、API ドキュメント生成用ターゲットを追加する。
+# 通常のゲームビルドには含めず、必要なときだけ明示的に実行する。
+find_package(Doxygen QUIET)
+if(Doxygen_FOUND)
+    add_custom_target(doxygen-docs
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "${CMAKE_SOURCE_DIR}/docs/doxygen"
+        COMMAND "${DOXYGEN_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/Doxyfile"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Generating WikiGOLF API documentation..."
+        VERBATIM
+    )
+else()
+    message(STATUS "Doxygen was not found; the doxygen-docs target is disabled.")
+endif()
+
 # テスト有効化
 enable_testing()
 

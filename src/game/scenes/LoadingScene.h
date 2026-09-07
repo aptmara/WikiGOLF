@@ -2,7 +2,7 @@
 /**
  * @file LoadingScene.h
  * @brief ローディング画面シーン（ゴルフボール物理演出）
- */
+*/
 
 #include "../../core/Scene.h"
 #include "../../ecs/Entity.h"
@@ -22,13 +22,17 @@ class Scene;
 
 namespace game::scenes {
 
-/// @brief ローディングシーン
-/// @details ゴルフボールが上から降ってきて溜まる演出を表示し、
-///          完了後にフェードアウトして次のシーンへ遷移する
+/**
+ * @brief ローディングシーン
+ * @details ゴルフボールが上から降ってきて溜まる演出を表示し、
+ *          完了後にフェードアウトして次のシーンへ遷移する
+*/
 class LoadingScene : public core::Scene {
 public:
-  /// @brief コンストラクタ
-  /// @param nextSceneFactory 次のシーンを生成するファクトリ関数
+  /**
+   * @brief コンストラクタ
+   * @param nextSceneFactory 次のシーンを生成するファクトリ関数
+*/
   explicit LoadingScene(
       std::function<std::unique_ptr<core::Scene>()> nextSceneFactory);
 
@@ -40,36 +44,36 @@ public:
   void OnExit(core::GameContext &ctx) override;
 
 private:
-  /// @brief ゴルフボールの状態
+  /** @brief ゴルフボールの状態*/
   struct BallState {
     ecs::Entity entity;
     DirectX::XMFLOAT3 velocity;
     DirectX::XMFLOAT3 angularVelocity;
-    bool settled; ///< 静止したかどうか
+    bool settled; /**< 静止したかどうか*/
   };
 
-  /// @brief ゴルフボールをスポーンする
+  /** @brief ゴルフボールをスポーンする*/
   void SpawnBall(core::GameContext &ctx);
 
-  /// @brief 物理シミュレーション更新
+  /** @brief 物理シミュレーション更新*/
   void UpdatePhysics(core::GameContext &ctx, float dt);
 
-  /// @brief すべてのボールが静止したか判定
+  /** @brief すべてのボールが静止したか判定*/
   bool AreAllBallsSettled();
 
-  /// @brief フェードアウト処理
+  /** @brief フェードアウト処理*/
   void UpdateFade(core::GameContext &ctx, float dt);
 
-  /// @brief 床と壁を生成
+  /** @brief 床と壁を生成*/
   void CreateBoundaries(core::GameContext &ctx);
 
-  /// @brief カメラの軽い揺らぎ
+  /** @brief カメラの軽い揺らぎ*/
   void UpdateCamera(core::GameContext &ctx, float dt);
 
-  /// @brief UIの更新
+  /** @brief UIの更新*/
   void UpdateUI(core::GameContext &ctx);
 
-  /// @brief フェードに合わせた縮小・透明演出
+  /** @brief フェードに合わせた縮小・透明演出*/
   void ApplyFadeToScene(core::GameContext &ctx);
 
   // 次シーン生成ファクトリ
@@ -82,25 +86,25 @@ private:
   float m_spawnTimer = 0.0f;
 
   // 演出設定（大量投入＆小型ボール仕様）
-  static constexpr int TOTAL_BALLS = 350;         ///< 総数増量
-  static constexpr float SPAWN_INTERVAL = 0.005f; ///< 爆速スポーン
-  static constexpr float BALL_RADIUS = 1.1f;      ///< 物理半径
-  static constexpr float BALL_MODEL_SCALE = 3.0f; ///< 見た目スケールも
+  static constexpr int TOTAL_BALLS = 350;         /**< 総数増量*/
+  static constexpr float SPAWN_INTERVAL = 0.005f; /**< 爆速スポーン*/
+  static constexpr float BALL_RADIUS = 1.1f;      /**< 物理半径*/
+  static constexpr float BALL_MODEL_SCALE = 3.0f; /**< 見た目スケールも*/
   static constexpr float MODEL_ASSET_SCALE_FACTOR =
-      20.0f;                                  ///< FBXモデルの単位ズレ補正
-  static constexpr float GRAVITY = -180.0f;   ///< 重力強化
-  static constexpr float RESTITUTION = 0.3f;  ///< よく弾む
-  static constexpr float FRICTION = 0.82f;    ///< 横滑りを抑える
+      20.0f;                                  /**< FBXモデルの単位ズレ補正*/
+  static constexpr float GRAVITY = -180.0f;   /**< 重力強化*/
+  static constexpr float RESTITUTION = 0.3f;  /**< よく弾む*/
+  static constexpr float FRICTION = 0.82f;    /**< 横滑りを抑える*/
   static constexpr float AIR_DRAG =
-      0.98f; ///< 減衰弱め
-  static constexpr float ANGULAR_DAMPING = 0.95f; ///< 回転維持
+      0.98f; /**< 減衰弱め*/
+  static constexpr float ANGULAR_DAMPING = 0.95f; /**< 回転維持*/
   static constexpr float SETTLE_THRESHOLD =
-      1.2f; ///< 小型化に合わせて閾値も縮小
+      1.2f; /**< 小型化に合わせて閾値も縮小*/
 
   // フェードアウト
   float m_fadeAlpha = 0.0f;
   bool m_fadeStarted = false;
-  float m_fadeDelay = 0.6f; ///< 全ボール静止後の待機時間
+  float m_fadeDelay = 0.6f; /**< 全ボール静止後の待機時間*/
   static constexpr float FADE_SPEED = 2.0f;
   float m_sceneTime = 0.0f;
   float m_explosionTimer = 0.0f; // 爆発演出用タイマー
@@ -152,9 +156,11 @@ private:
   std::shared_ptr<std::atomic<float>> m_loadProgress;
   float m_uiProgress = 0.0f;
 
-  /// @brief 本編で使用するゲームプレイ用アセット（テクスチャ/SE）を1フレームに1件だけ
-  ///        先行ロードするためのタスクキュー。WIC/MFの重い同期ロードが1フレームに
-  ///        集中して固まるのを防ぐ。
+  /**
+   * @brief 本編で使用するゲームプレイ用アセット（テクスチャ/SE）を1フレームに1件だけ
+   *        先行ロードするためのタスクキュー。WIC/MFの重い同期ロードが1フレームに
+   *        集中して固まるのを防ぐ。
+*/
   void BuildGameplayPreloadQueue();
   std::vector<std::function<void(core::GameContext &)>> m_preloadTasks;
   size_t m_preloadIndex = 0;

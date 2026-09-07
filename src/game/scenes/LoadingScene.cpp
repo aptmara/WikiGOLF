@@ -1,7 +1,7 @@
 /**
  * @file LoadingScene.cpp
  * @brief ローディング画面シーン（ゴルフボール物理演出）の実装
- */
+*/
 
 #include "LoadingScene.h"
 #include "../../core/GameContext.h"
@@ -31,17 +31,17 @@ namespace game::scenes {
 namespace {
 
 /**
- * @brief ロード前グローバルデータが明示的な開始指定か判定します。 山内陽
+ * @brief ロード前グローバルデータが明示的な開始指定か判定します。
  * @details 標準スタートでは空データを渡すため、空のままならランダム抽選を継続します。
- */
+*/
 bool HasExplicitStartData(const game::components::WikiGlobalData &data) {
   return data.isUserOverride || !data.startPage.empty() ||
          !data.targetPage.empty() || data.targetPageId != -1;
 }
 
 /**
- * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
- */
+ * @brief 開始時刻からの経過時間をミリ秒で返します。
+*/
 long long ElapsedMs(const std::chrono::steady_clock::time_point &startedAt) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::steady_clock::now() - startedAt)
@@ -155,8 +155,8 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     }
 
     /**
-     * @brief ユーザー指定ターゲットでも経路評価用のページIDを補完します。 山内陽
-     */
+     * @brief ユーザー指定ターゲットでも経路評価用のページIDを補完します。
+*/
     const auto resolveTargetPageId = [&]() {
       if (!dbLoaded || !data->pathSystem || !data->pathSystem->IsAvailable() ||
           data->targetPage.empty() || data->targetPageId != -1) {
@@ -437,6 +437,6 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
  *        1フレーム1件ロード用のタスクキューを構築します。
  * @details ここで作るのはロードタスクの「予約」のみで、実際のWIC/MFの
  *          同期IOはOnUpdateで1フレームに1件ずつ実行される。
- */
+*/
 
 } // namespace game::scenes

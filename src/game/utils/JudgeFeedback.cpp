@@ -1,3 +1,8 @@
+/**
+ * @file JudgeFeedback.cpp
+ * @brief JudgeFeedback の実装
+*/
+
 #include "JudgeFeedback.h"
 
 namespace game::utils {

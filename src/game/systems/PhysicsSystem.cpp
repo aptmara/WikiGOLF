@@ -5,7 +5,7 @@
  *
  * ゴルフゲーム向けの安定した物理��ミュレーションを提供、（
  * NaN防止、地形衝突、�（ール吸引を実装��（
- */
+*/
 
 #include "PhysicsSystem.h"
 #include "../../audio/AudioSystem.h" // 効果音再生用

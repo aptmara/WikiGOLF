@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file VideoPlayer.h
+ * @brief VideoPlayer クラスおよびグラフィックス/リソース関連定義
+ */
 
 #include "../../core/Logger.h"
 #include <d3d11.h>
@@ -23,23 +27,31 @@ public:
   VideoPlayer(const VideoPlayer&) = delete;
   VideoPlayer& operator=(const VideoPlayer&) = delete;
 
-  /// @brief 動画ファイルの再生を初期化し、デコードスレッドを開始する
+  /** @brief 動画ファイルの再生を初期化し、デコードスレッドを開始する */
   bool Initialize(ID3D11Device* device, const std::string& filePath);
 
-  /// @brief 毎フレーム呼び出し、必要に応じてテクスチャを更新する
+  /** @brief 毎フレーム呼び出し、必要に応じてテクスチャを更新する */
   void Update(ID3D11DeviceContext* context, float dt);
 
-  /// @brief 現在のフレームが書き込まれたテクスチャのSRVを取得する
+  /** @brief 現在のフレームが書き込まれたテクスチャのSRVを取得する */
   ID3D11ShaderResourceView* GetSRV() const { return m_srv.Get(); }
 
-  /// @brief 再生が終了したか（キューも空になったか）
+  /** @brief 再生が終了したか（キューも空になったか） */
   bool IsFinished() const { return m_isFinished && m_frameQueue.empty(); }
 
-  /// @brief 再生を強制終了する
+  /** @brief 再生を強制終了する */
   void Stop();
 
 private:
+  /** @brief バックグラウンドスレッドで動画フレームをデコードします。 */
   void DecodeThreadFunc();
+
+  /**
+   * @brief デコード出力用のD3D11テクスチャおよびSRVを生成します。
+   * @param width 画像幅
+   * @param height 画像高さ
+   * @return 生成成否
+   */
   bool CreateTexture(int width, int height);
 
   Microsoft::WRL::ComPtr<ID3D11Texture2D> m_texture;

@@ -2,7 +2,7 @@
 /**
  * @file Mesh.h
  * @brief 頂点/インデックスバッファ管理
- */
+*/
 
 #include <DirectXMath.h>
 #include <DirectXCollision.h>
@@ -15,7 +15,7 @@ namespace graphics {
 
 using Microsoft::WRL::ComPtr;
 
-/// @brief 頂点構造体
+/** @brief 頂点構造体 */
 struct Vertex {
   DirectX::XMFLOAT3 position;
   DirectX::XMFLOAT3 normal;
@@ -25,29 +25,29 @@ struct Vertex {
   DirectX::XMFLOAT3 bitangent{0.0f, 1.0f, 0.0f};
 };
 
-/// @brief メッシュクラス
+/** @brief メッシュクラス */
 class Mesh {
 public:
   Mesh() = default;
   ~Mesh() = default;
 
-  /// @brief メッシュを作成
+  /** @brief メッシュを作成 */
   bool Create(ID3D11Device *device, const std::vector<Vertex> &vertices,
               const std::vector<uint32_t> &indices);
 
-  /// @brief 描画用にバインド
+  /** @brief 描画用にバインド */
   void Bind(ID3D11DeviceContext *context) const;
 
-  /// @brief 描画
+  /** @brief 描画 */
   void Draw(ID3D11DeviceContext *context) const;
 
-  /// @brief 有効かどうか
+  /** @brief 有効かどうか */
   bool IsValid() const { return m_vertexBuffer && m_indexBuffer; }
 
-  /// @brief インデックス数
+  /** @brief インデックス数 */
   uint32_t GetIndexCount() const { return m_indexCount; }
 
-  /// @brief フラスタムカリング用のローカル境界球
+  /** @brief フラスタムカリング用のローカル境界球 */
   const DirectX::BoundingSphere &GetBounds() const { return m_bounds; }
 
 private:

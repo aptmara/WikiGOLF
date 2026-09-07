@@ -2,7 +2,7 @@
 /**
  * @file TutorialOverlayController.h
  * @brief WikiGolf チュートリアルの進行管理とオーバーレイUIを制御するコントローラー
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
@@ -53,7 +53,7 @@ public:
     };
 
     void Initialize(core::GameContext& ctx);
-    void Update(core::GameContext& ctx, 
+    void Update(core::GameContext& ctx,
                 CameraController* cameraCtrl,
                 ClubController* clubCtrl,
                 ShotController* shotCtrl,
@@ -65,35 +65,37 @@ public:
     // -------------------------------------------------------
     // イベントカメラ設定
     // -------------------------------------------------------
-    /// @brief STEP 5/6 のイベントカメラターゲットと使用カメラEntityを設定する。
-    /// @details 本体共通チュートリアルでは、地形注視点を安全に抽出できるまで未設定の旧動作を使う。
+    /**
+     * @brief STEP 5/6 のイベントカメラターゲットと使用カメラEntityを設定する。
+     * @details 本体共通チュートリアルでは、地形注視点を安全に抽出できるまで未設定の旧動作を使う。
+*/
     void SetEventCameraTargets(ecs::Entity cameraEntity,
                                std::vector<EventCameraTarget> terrainTargets,
                                std::vector<EventCameraTarget> flagTargets = {});
 
-    /// @brief イベントカメラ説明中は入力をロックする。
+    /** @brief イベントカメラ説明中は入力をロックする。*/
     bool IsInputLocked() const;
 
-    /// @brief イベントカメラを毎フレーム更新する。
+    /** @brief イベントカメラを毎フレーム更新する。*/
     void UpdateEventCamera(core::GameContext& ctx);
 
 private:
     void NextStep(core::GameContext& ctx);
     void UpdateUI(core::GameContext& ctx);
-    void CheckCompletion(core::GameContext& ctx, 
+    void CheckCompletion(core::GameContext& ctx,
                          CameraController* cameraCtrl,
                          ClubController* clubCtrl,
                          ShotController* shotCtrl,
                          MinimapController* minimapCtrl);
-    /// @brief 現在のイベントカメラ説明で使うターゲット一覧を返します。山内陽
+    /** @brief 現在のイベントカメラ説明で使うターゲット一覧を返します。*/
     const std::vector<EventCameraTarget>& GetActiveEventCameraTargets() const;
-    /// @brief ステップ完了演出を開始する（チェックマーク表示→NextStep）
+    /** @brief ステップ完了演出を開始する（チェックマーク表示→NextStep）*/
     void TriggerStepClear(core::GameContext& ctx);
-    /// @brief チェックマークアニメーションを毎フレーム更新する
+    /** @brief チェックマークアニメーションを毎フレーム更新する*/
     void UpdateStepClearAnim(core::GameContext& ctx);
 
     TutorialStep m_step = TutorialStep::Camera;
-    
+
     // UI Entities
     ecs::Entity m_overlayBgEntity   = UINT32_MAX;
     ecs::Entity m_overlayTextEntity = UINT32_MAX;

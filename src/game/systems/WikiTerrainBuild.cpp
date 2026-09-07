@@ -1,7 +1,7 @@
 /**
  * @file WikiTerrainBuild.cpp
  * @brief インクリメンタルな地形構築を実装します。
- */
+*/
 
 #include "WikiTerrainSystem.h"
 #include "../../core/GameContext.h"
@@ -32,7 +32,7 @@ using namespace game::components;
 
 /**
  * @brief インクリメンタルな地形構築を開始します。
- */
+*/
 void WikiTerrainSystem::BeginBuildField(
     const std::string              &pageTitle,
     const graphics::WikiTextureResult &textureResult,
@@ -132,7 +132,7 @@ void WikiTerrainSystem::BeginBuildField(
 /**
  * @brief 地形構築を1ステップ進めます。
  * @return 完了したら true
- */
+*/
 bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 {
   PROFILE_SCOPE("StepBuildField");

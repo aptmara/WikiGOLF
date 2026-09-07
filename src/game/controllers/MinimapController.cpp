@@ -1,3 +1,8 @@
+/**
+ * @file MinimapController.cpp
+ * @brief MinimapController の実装
+*/
+
 #include "MinimapController.h"
 #include "MinimapControllerInternals.h"
 #include "../components/Transform.h"
@@ -68,11 +73,11 @@ void MinimapController::Shutdown(core::GameContext &ctx) {
 
 /**
  * @brief ミニマップUI全体の表示状態を切り替えます。
- * 
+ *
  * 入力: 表示フラグ（visible）
  * 変更: UIImageやUITextの表示フラグ
  * 出力: なし（副作用としてコンポーネントの表示状態が変化）
- */
+*/
 void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
     if (!visible && m_isVisible) {
       // 非表示化：再表示時に必ず1回再描画させるため状態を無効化する

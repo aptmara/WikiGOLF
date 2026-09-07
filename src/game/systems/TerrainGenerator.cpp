@@ -1,3 +1,8 @@
+/**
+ * @file TerrainGenerator.cpp
+ * @brief TerrainGenerator の実装
+*/
+
 #include "TerrainGeneratorInternals.h"
 #include "TerrainGenerator.h"
 #include "../../core/Logger.h"
@@ -163,6 +168,6 @@ TerrainData TerrainGenerator::GenerateTutorialTerrain(
 
 /**
  * @brief 基準ハイト�（チ（�（を生成します、（
- */
+*/
 
 } // namespace game::systems

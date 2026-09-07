@@ -2,7 +2,7 @@
 /**
  * @file MinimapController.h
  * @brief ミニマップの描画更新・全体マップビューのカメラ/UI制御を担当するコントローラー
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
@@ -18,7 +18,7 @@ namespace game::controllers {
 
 /**
  * @brief ミニマップおよび全体俯瞰マップの制御コントローラー
- */
+*/
 class MinimapController {
 public:
   struct Config {
@@ -32,67 +32,71 @@ public:
   /**
    * @brief ミニマップが生成したEntityと描画資源を破棄します。
    * @param ctx ゲーム全体の共有コンテキストです。
-   */
+*/
   void Shutdown(core::GameContext &ctx);
   void SetBallEntity(ecs::Entity ballEntity) { m_cfg.ballEntity = ballEntity; }
 
-  /// @brief ミニマップ・マップUIなどのEntityを初期化・登録
+  /** @brief ミニマップ・マップUIなどのEntityを初期化・登録*/
   void InitializeUI(core::GameContext &ctx);
 
   // ------------------------------------------------------------------
   // 毎フレーム呼び出し
   // ------------------------------------------------------------------
 
-  /// @brief 右上ミニマップの更新（マーカー等のUI更新と描画リクエストの発行のみ行う）
+  /** @brief 右上ミニマップの更新（マーカー等のUI更新と描画リクエストの発行のみ行う）*/
   void UpdateMinimap(core::GameContext &ctx, float fieldWidth, float fieldDepth, const DirectX::XMFLOAT3& shotDirection);
 
-  /// @brief レンダーフェーズ内で呼び出し、保留中のミニマップGPU描画を実行する
-  /// @details BeginFrame後・Skybox/メインメッシュ描画前に呼ばれる想定。マップビュー中はメイン
-  ///          カメラが俯瞰映像を描画するため、ここではオフスクリーン描画をスキップする。
+  /**
+   * @brief レンダーフェーズ内で呼び出し、保留中のミニマップGPU描画を実行する
+   * @details BeginFrame後・Skybox/メインメッシュ描画前に呼ばれる想定。マップビュー中はメイン
+   *          カメラが俯瞰映像を描画するため、ここではオフスクリーン描画をスキップする。
+*/
   void RenderPendingMinimap(core::GameContext &ctx);
 
-  /// @brief 俯瞰マップカメラの更新（マップビュー有効時）
+  /** @brief 俯瞰マップカメラの更新（マップビュー有効時）*/
   void UpdateMapCamera(core::GameContext &ctx, float fieldWidth, float fieldDepth);
 
-  /// @brief 入力処理（Mキーでトグル、マップビュー時のパン/ズームなど）
+  /** @brief 入力処理（Mキーでトグル、マップビュー時のパン/ズームなど）*/
   void ProcessInput(core::GameContext &ctx, int mouseX, int mouseY, float fieldWidth, float fieldDepth, ecs::Entity skyboxEntity);
 
   // ------------------------------------------------------------------
   // イベント・状態操作
   // ------------------------------------------------------------------
 
-  /// @brief マップ中心をボール位置に同期
+  /** @brief マップ中心をボール位置に同期*/
   void SyncMapCenterToBall(core::GameContext &ctx, float dt, float fieldWidth, float fieldDepth, bool forceSnap = false);
 
-  /// @brief ページ遷移時などにマップ上のアイコン（リンク穴など）をクリア
+  /** @brief ページ遷移時などにマップ上のアイコン（リンク穴など）をクリア*/
   void ClearHoleIcons(core::GameContext &ctx);
 
-  /// @brief マップ上のリンク穴アイコンを追加
+  /** @brief マップ上のリンク穴アイコンを追加*/
   void AddHoleIcon(core::GameContext &ctx, float x, float z,
                    const std::string& linkTarget, bool isTargetHole,
                    bool isPlayableHole = true, int hopsToTarget = -1);
 
   /**
-   * @brief 経路評価後のホールアイコン情報を更新します。山内陽
+   * @brief 経路評価後のホールアイコン情報を更新します。
    * @details 物理ホール生成後に距離計算が完了するため、マップ表示も後追いで同期します。
-   */
+*/
   void UpdateHoleIconEvaluation(const std::string& linkTarget,
                                 bool isPlayableHole,
                                 int hopsToTarget);
 
-  /// @brief マップビュー状態のトグル
+  /** @brief マップビュー状態のトグル*/
   void ToggleMapView(core::GameContext &ctx, ecs::Entity skyboxEntity);
 
-  /// @brief トップビュー上に着弾点プレビュー(中心マーカー+ばらつき範囲円)を
-  /// 表示・更新する。マップビューが無効な間は描画されない。
-  /// @param landingCenter 着弾(最終静止)予測位置のワールド座標
-  /// @param dispersionRadius ばらつき範囲の半径(ワールド単位)
-  /// @param visible 表示するかどうか
+  /**
+   * @brief トップビュー上に着弾点プレビュー(中心マーカー+ばらつき範囲円)を
+   * 表示・更新する。マップビューが無効な間は描画されない。
+   * @param landingCenter 着弾(最終静止)予測位置のワールド座標
+   * @param dispersionRadius ばらつき範囲の半径(ワールド単位)
+   * @param visible 表示するかどうか
+*/
   void SetLandingPreview(core::GameContext &ctx,
                         const DirectX::XMFLOAT3 &landingCenter,
                         float dispersionRadius, bool visible);
 
-  /// @brief 現在マップビュー状態かどうか
+  /** @brief 現在マップビュー状態かどうか*/
   bool IsMapView() const { return m_isMapView; }
   void* GetMapSRV() const {
     if (!m_minimapRenderer) {
@@ -101,13 +105,13 @@ public:
     return m_minimapRenderer->GetSRV();
   }
 
-  /// @brief ミニマップUI全体の表示/非表示切り替え（ロード中は非表示にするため）
+  /** @brief ミニマップUI全体の表示/非表示切り替え（ロード中は非表示にするため）*/
   void SetVisible(core::GameContext& ctx, bool visible);
 
   // ------------------------------------------------------------------
   // Getter / Setter
   // ------------------------------------------------------------------
-  
+
   float GetMapZoom() const { return m_mapZoom; }
   void SetMapZoom(float zoom) { m_mapZoom = zoom; m_targetMapZoom = zoom; }
 
@@ -133,7 +137,7 @@ private:
   float m_mapBoundaryHitTime = 0.0f;
   float m_markerPulseTimer = 0.0f;
   bool m_mapHelpVisible = false;
-  bool m_isVisible = true; ///< HUDの表示状態です。ロード中の更新再表示を防ぎます。山内陽
+  bool m_isVisible = true; ///< HUDの表示状態です。ロード中の更新再表示を防ぎます。
 
   int m_prevMouseX = 0;
   int m_prevMouseY = 0;
@@ -163,7 +167,7 @@ private:
 
   ecs::Entity m_minimapEntity = UINT32_MAX;
   ecs::Entity m_minimapMarkerEntity = UINT32_MAX;      ///< 自ボール用内側ドットマーカー（●）
-  ecs::Entity m_minimapBallIconEntity = UINT32_MAX;    ///< 自ボール用画像アイコンです。山内陽
+  ecs::Entity m_minimapBallIconEntity = UINT32_MAX;    ///< 自ボール用画像アイコンです。
   ecs::Entity m_minimapPulseMarkerEntity = UINT32_MAX; ///< 自ボール用外側パルスサークル（○）
   ecs::Entity m_minimapFlagMarkerEntity = UINT32_MAX;  ///< ターゲットピン用パルスマーカー（）
   std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）

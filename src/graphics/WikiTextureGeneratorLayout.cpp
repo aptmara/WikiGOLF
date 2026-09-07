@@ -1,7 +1,7 @@
 /**
  * @file WikiTextureGeneratorLayout.cpp
  * @brief Wikipedia記事テキストからD3D11テクスチャを生成する実装
- */
+*/
 
 #include "WikiTextureGenerator.h"
 #include "../core/Logger.h"
@@ -18,7 +18,7 @@ namespace {
 
 /**
  * @brief 見出し1件分の情報（クリーニング後テキスト内の位置）
- */
+*/
 struct HeadingSpan {
   size_t pos;
   size_t length;
@@ -27,7 +27,7 @@ struct HeadingSpan {
 
 /**
  * @brief 本文中に挿入する画像1件分の配置情報
- */
+*/
 struct ImagePlacement {
   size_t insertionPos;
   const PendingWikiImage *image;
@@ -35,7 +35,7 @@ struct ImagePlacement {
 
 /**
  * @brief 前後の空白（全角スペース含む）を取り除きます。
- */
+*/
 std::wstring TrimW(const std::wstring &s) {
   size_t a = s.find_first_not_of(L" \t　");
   if (a == std::wstring::npos) return L"";
@@ -46,7 +46,7 @@ std::wstring TrimW(const std::wstring &s) {
 /**
  * @brief MediaWiki抽出テキスト（exsectionformat=wiki）から見出し記法（==見出し==）を検出し、
  *        記法を取り除いたテキストと見出し位置一覧を返す。
- */
+*/
 std::wstring ExtractHeadingsAndClean(const std::wstring &text,
                                      std::vector<HeadingSpan> &headings) {
   std::wstring cleaned;
@@ -107,7 +107,7 @@ std::wstring ExtractHeadingsAndClean(const std::wstring &text,
 
 /**
  * @brief 見出しレベルに応じたフォントサイズを返す。
- */
+*/
 float HeadingFontSize(int level) {
   switch (level) {
   case 1: return 92.0f;
@@ -119,7 +119,7 @@ float HeadingFontSize(int level) {
 /**
  * @brief 画像の表示サイズを決める。本家Wikipediaのサムネイルと同様に、
  *        幅を固定し、高さはアスペクト比なりに可変とする（高さは制限しない）。
- */
+*/
 void ComputeDisplaySize(uint32_t natW, uint32_t natH, float targetWidth,
                        float &outW, float &outH) {
   outW = targetWidth;

@@ -5,7 +5,7 @@
  * 入力: GameContext・各コントローラーへのポインタ
  * 変更: チュートリアルステップ進行・UI 更新・STEP 5 イベントカメラ制御
  * 出力: IsDone()/IsInputLocked() の状態変化・カメラ Transform の強制更新
- */
+*/
 
 #include "TutorialOverlayController.h"
 #include "../utils/GameplayPhysicsConstants.h"
@@ -116,9 +116,7 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
 // -------------------------------------------------------
 /**
  * @brief 現在ステップのイベントカメラターゲット一覧を返します。
- * @return 地形説明中は地形ターゲット、旗説明中は旗ターゲット、それ以外は空配列です。
- * @author 山内陽
- */
+ * @return 地形説明中は地形ターゲット、旗説明中は旗ターゲット、それ以外は空配列です。*/
 const std::vector<TutorialOverlayController::EventCameraTarget>&
 TutorialOverlayController::GetActiveEventCameraTargets() const {
     static const std::vector<EventCameraTarget> kEmptyTargets;
@@ -138,7 +136,7 @@ TutorialOverlayController::GetActiveEventCameraTargets() const {
  * @brief ステップ完了時にチェックマーク演出を開始する。
  * @details チェックマーク UIImage を生成し m_stepClearPending = true にする。
  *          呼び出し元は NextStep を直接呼ばずこの関数を使う。
- */
+*/
 void TutorialOverlayController::TriggerStepClear(core::GameContext& ctx) {
     // 既存のチェックマークがあれば破棄
     if (ctx.world.IsAlive(m_checkMarkEntity)) {
@@ -170,7 +168,7 @@ void TutorialOverlayController::TriggerStepClear(core::GameContext& ctx) {
  * @details タイマー m_checkMarkTimer を参照する（更新は呼び出し元が行う）。
  *          CupIn 用に 4 秒表示・フェードアウトにも対応。
  *          通常ステップ用（0.9 秒）はフェードなし（破棄で消す）。
- */
+*/
 void TutorialOverlayController::UpdateStepClearAnim(core::GameContext& ctx) {
     if (!ctx.world.IsAlive(m_checkMarkEntity)) return;
     auto* img = ctx.world.Get<components::UIImage>(m_checkMarkEntity);

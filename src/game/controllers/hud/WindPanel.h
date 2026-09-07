@@ -2,7 +2,7 @@
 /**
  * @file WindPanel.h
  * @brief 風速とカメラ相対の風向きを表示するHUDパネル
- */
+*/
 
 #include "../../../ecs/Entity.h"
 #include "../../../ecs/EntityOwner.h"
@@ -16,10 +16,10 @@ namespace game::controllers::hud {
 
 /**
  * @brief 風情報パネルのEntity生成と表示更新を管理します。
- */
+*/
 class WindPanel {
 public:
-  /** @brief 風情報を構成するUI Entityを生成します。 */
+  /** @brief 風情報を構成するUI Entityを生成します。*/
   void Initialize(core::GameContext &ctx);
 
   /**
@@ -29,14 +29,14 @@ public:
    * @param windSpeed 風速です。
    * @param windDirection ワールド座標上の風向きです。
    * @param cameraYaw カメラのヨー角です。
-   */
+*/
   void Update(core::GameContext &ctx, float elapsedTime, float windSpeed,
               const DirectX::XMFLOAT2 &windDirection, float cameraYaw);
 
-  /** @brief パネル全体の表示状態を変更します。 */
+  /** @brief パネル全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
-  /** @brief パネルが生成したすべてのEntityを破棄します。 */
+  /** @brief パネルが生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 
 private:

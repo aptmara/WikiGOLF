@@ -1,7 +1,7 @@
 /**
  * @file WikiGolfSceneHudEffects.cpp
  * @brief HUDとショット演出の更新処理を実装します。
- */
+*/
 
 #include "WikiGolfScene.h"
 #include "../../core/GameContext.h"
@@ -90,7 +90,7 @@ void WikiGolfScene::UpdateHudAndEffects(
                           clubDataList, clubIdx,
                           distanceToTarget, heightDiff);
         }
-        
+
         // HUDへのパワーゲージ更新
         if (shot.phase == game::components::ShotState::Phase::PowerCharging ||
             shot.phase == game::components::ShotState::Phase::ImpactTiming) {

@@ -4,7 +4,7 @@
  * @details 実際のGPU描画（フルスクリーンパス）はgraphics::GraphicsDeviceが担う。
  *          このクラスはEnvironmentState（記事テーマ由来の環境プリセット等）から
  *          描画に渡す定数を計算するだけの、GPUリソースを持たない値オブジェクト。
- */
+*/
 
 #pragma once
 
@@ -18,7 +18,7 @@ using namespace DirectX;
 
 /**
  * @brief ポストプロセス定数（GraphicsDevice::PostProcessParamsへコピーされる）
- */
+*/
 struct PostProcessConstants {
   // 霧
   XMFLOAT4 fogColor;  // RGB + density
@@ -37,12 +37,12 @@ struct PostProcessConstants {
 
 /**
  * @brief ポストプロセスパラメータ算出システム
- */
+*/
 class PostProcessSystem {
 public:
   /**
    * @brief 環境状態から定数を更新
-   */
+*/
   void UpdateFromEnvironment(const components::EnvironmentState &env,
                              float time) {
     using LightingMood = game::components::LightingMood;
@@ -91,7 +91,7 @@ public:
 
   /**
    * @brief デフォルト設定でリセット
-   */
+*/
   void ResetToDefaults() {
     m_constants.fogColor = {0.7f, 0.75f, 0.8f, 0.0f};
     m_constants.fogParams = {100.0f, 500.0f, 0, 0};
@@ -103,7 +103,7 @@ public:
 
   /**
    * @brief 霧パラメータ設定
-   */
+*/
   void SetFog(const XMFLOAT3 &color, float density, float start, float end) {
     m_constants.fogColor = {color.x, color.y, color.z, density};
     m_constants.fogParams = {start, end, 0, 0};
@@ -111,7 +111,7 @@ public:
 
   /**
    * @brief 色調補正設定
-   */
+*/
   void SetColorGrading(const XMFLOAT3 &tint, float brightness, float saturation,
                        float contrast) {
     m_constants.colorTint = {tint.x, tint.y, tint.z, brightness};
@@ -120,7 +120,7 @@ public:
 
   /**
    * @brief ビネット設定
-   */
+*/
   void SetVignette(float intensity, float radius = 0.7f,
                    float softness = 0.5f) {
     m_constants.vignetteParams = {intensity, radius, softness, 0};
@@ -131,7 +131,7 @@ public:
    * @param intensity 発光にじみの強さ
    * @param threshold 抽出しきい値
    * @param spread サンプル範囲倍率
-   */
+*/
   void SetBloom(float intensity, float threshold = 0.72f,
                 float spread = 1.0f) {
     m_constants.timeParams.y = std::max(0.0f, intensity);
@@ -141,7 +141,7 @@ public:
 
   /**
    * @brief 現在の定数を取得
-   */
+*/
   const PostProcessConstants &GetConstants() const { return m_constants; }
 
 private:

@@ -6,13 +6,22 @@
 Texture2D diffuseTexture : register(t0);
 SamplerState texSampler : register(s0);
 
+/**
+ * @struct PS_INPUT
+ * @brief ピクセルシェーダー入力
+ */
 struct PS_INPUT {
-    float4 position : SV_POSITION;
-    float2 texCoord : TEXCOORD0;
-    float4 color : COLOR;
-    float4 flags : TEXCOORD1;
+    float4 position : SV_POSITION; /**< 射影座標 */
+    float2 texCoord : TEXCOORD0;   /**< UV座標 */
+    float4 color : COLOR;          /**< 頂点カラー */
+    float4 flags : TEXCOORD1;      /**< フラグ情報 */
 };
 
+/**
+ * @brief ミニマップピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 描画カラー値
+ */
 float4 main(PS_INPUT input) : SV_TARGET {
     float4 baseColor = input.color;
 

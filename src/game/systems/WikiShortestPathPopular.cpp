@@ -1,7 +1,7 @@
 /**
  * @file WikiShortestPathPopular.cpp
  * @brief WikiShortestPathの責務別実装です。
- */
+*/
 
 #include "WikiShortestPath.h"
 #include "WikiShortestPathInternals.h"

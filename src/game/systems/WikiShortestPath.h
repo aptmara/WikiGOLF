@@ -5,7 +5,7 @@
  *
  * jawiki_sdowで生成されたSQLiteデータベースを使用して
  * 2記事間の最短リンク数を計算する。
- */
+*/
 
 #include <atomic>
 #include <functional>
@@ -22,19 +22,19 @@ namespace game::systems {
 
 /**
  * @brief 最短経路計算結果
- */
+*/
 struct ShortestPathResult {
-  bool success = false;          ///< 計算成功
-  int degrees = -1;              ///< 最短リンク数（-1=失敗）
-  std::vector<std::string> path; ///< 経路（タイトルリスト）
-  std::string errorMessage;      ///< エラーメッセージ
+  bool success = false;          /**< 計算成功*/
+  int degrees = -1;              /**< 最短リンク数（-1=失敗）*/
+  std::vector<std::string> path; /**< 経路（タイトルリスト）*/
+  std::string errorMessage;      /**< エラーメッセージ*/
 };
 
 /**
  * @brief Wikipedia最短経路計算クラス
  *
  * 双方向BFSで効率的に最短経路を探索
- */
+*/
 class WikiShortestPath {
 public:
   WikiShortestPath() = default;
@@ -49,19 +49,19 @@ public:
    * @param dbPath SQLiteデータベースパス
    * @param cachePopularPages 旧キャッシュを作成するか
    * @return 成功ならtrue
-   */
+*/
   bool Initialize(const std::string &dbPath, bool cachePopularPages = true);
 
   /**
    * @brief データベースが利用可能か
-   */
+*/
   bool IsAvailable() const { return m_db != nullptr; }
 
   /**
-   * @brief 記事タイトルからページIDを解決します。 山内陽
+   * @brief 記事タイトルからページIDを解決します。
    * @param title 記事タイトル
    * @return 解決できたページID（失敗時は-1）
-   */
+*/
   int ResolvePageId(const std::string &title);
 
   /**
@@ -71,7 +71,7 @@ public:
    * @param maxDepth 最大探索深度（デフォルト4）
    * @param logSuccess 成功時の経路ログを出すか
    * @return 計算結果
-   */
+*/
   ShortestPathResult FindShortestPath(const std::string &sourceTitle,
                                       const std::string &targetTitle,
                                       int maxDepth = 4,
@@ -84,22 +84,22 @@ public:
    * @param maxDepth 最大探索深度（デフォルト4）
    * @param logSuccess 成功時の経路ログを出すか
    * @return 計算結果
-   */
+*/
   ShortestPathResult FindShortestPath(const std::string &sourceTitle,
                                       int targetId, int maxDepth = 4,
                                       bool logSuccess = true);
 
   /**
-   * @brief 複数記事からターゲットまでの最短リンク数を一括計算します。 山内陽
+   * @brief 複数記事からターゲットまでの最短リンク数を一括計算します。
    * @param sourceTitles 開始記事タイトル一覧
    * @param targetId 目標記事ID
    * @param maxDepth 最大探索深度
    * @param progressUnits 進捗の完了単位数を書き込む先
    * @param progressBase この計算の開始前に完了済みとして扱う単位数
-   * @param onResolved タイトルごとの距離が確定した時に呼ばれる通知です。山内陽
+   * @param onResolved タイトルごとの距離が確定した時に呼ばれる通知です。
    * @param cancelRequested この計算だけを中断するためのフラグ（nullptr可）
    * @return タイトルごとのリンク数（未到達・未登録記事は含めない）
-   */
+*/
   std::unordered_map<std::string, int>
   ComputeDistancesToTarget(const std::vector<std::string> &sourceTitles,
                            int targetId, int maxDepth = 4,
@@ -110,11 +110,11 @@ public:
                            const std::atomic<bool>* cancelRequested = nullptr);
 
 private:
-  /// @brief タイトルからページIDを取得
+  /** @brief タイトルからページIDを取得*/
   int FetchPageId(const std::string &title);
 
   /**
-   * @brief 複数の正規化タイトルをバッチSQLで一括解決します。 山内陽
+   * @brief 複数の正規化タイトルをバッチSQLで一括解決します。
    *
    * IN句にまとめて kLinkChunkSize 件ずつ SELECT するため、
    * 1件ずつ FetchPageId を呼ぶより大幅に高速です。
@@ -122,7 +122,7 @@ private:
    * @param normalizedTitles スペースをアンダースコアに変換済みのタイトル列
    * @param onChunkDone チャンク完了ごとに呼ぶ進捗コールバック（nullptr可）
    * @return 正規化タイトル → ページID のマップ（未登録は含めない）
-   */
+*/
   std::unordered_map<std::string, int>
   FetchPageIdsBatch(
       const std::vector<std::string> &normalizedTitles,
@@ -130,22 +130,22 @@ private:
           nullptr,
       const std::atomic<bool>* cancelRequested = nullptr);
 
-  /// @brief ページIDからタイトルを取得
+  /** @brief ページIDからタイトルを取得*/
   std::string FetchPageTitle(int pageId);
 
-  /// @brief 出力リンクを取得（パイプ区切り文字列）
+  /** @brief 出力リンクを取得（パイプ区切り文字列）*/
   std::string FetchOutgoingLinks(int pageId);
 
-  /// @brief 入力リンクを取得（パイプ区切り文字列）
+  /** @brief 入力リンクを取得（パイプ区切り文字列）*/
   std::string FetchIncomingLinks(int pageId);
 
-  /// @brief 出力リンク総数を取得
+  /** @brief 出力リンク総数を取得*/
   int FetchOutgoingLinksCount(const std::vector<int> &pageIds);
 
-  /// @brief 入力リンク総数を取得
+  /** @brief 入力リンク総数を取得*/
   int FetchIncomingLinksCount(const std::vector<int> &pageIds);
 
-  /// @brief パスを再構築
+  /** @brief パスを再構築*/
   std::vector<std::vector<int>> ReconstructPaths(
       const std::vector<int> &pageIds,
       const std::unordered_map<int, std::vector<int>> &visitedDict);
@@ -155,23 +155,23 @@ public:
    * @brief 入力リンク数が一定以上の人気記事をランダム取得
    * @param minIncomingLinks 最小入力リンク数（デフォルト100）
    * @return 記事タイトル（失敗時は空文字列）
-   */
+*/
   std::pair<std::string, int> FetchPopularPageTitle(int minIncomingLinks = 100);
 
   /**
-   * @brief 実行中の全インスタンスのDBクエリに中断を要求します。 山内陽
+   * @brief 実行中の全インスタンスのDBクエリに中断を要求します。
    *
    * ウィンドウが閉じられた際などに呼び出し、リンク取得のような
    * 巨大なチャンクループ(数十秒かかることがある)を即座に打ち切るために使う。
    * sqlite3_interrupt() は別スレッドから安全に呼び出せるため、
    * 現在 sqlite3_step() でブロック中のクエリもすぐにエラー終了する。
    * 以後 Initialize() された新規インスタンスもチャンクループへ入らず即終了する。
-   */
+*/
   static void RequestCancelAll();
 
   /**
-   * @brief RequestCancelAll() が呼ばれたかどうかを返します。 山内陽
-   */
+   * @brief RequestCancelAll() が呼ばれたかどうかを返します。
+*/
   static bool IsCancelRequested();
 
   /**
@@ -181,12 +181,12 @@ public:
    *          使い回すが、ゲーム終了時（タイトルへ戻る等）にはこの関数で
    *          明示的に破棄する。次にターゲットが変わった時点でも自動的に
    *          破棄されるが、後始末として呼んでおくとメモリ保持期間が短くなる。
-   */
+*/
   static void ClearProcessCaches();
 
 private:
   sqlite3 *m_db = nullptr;
-  std::vector<int> m_popularPageIds; ///< 人気記事IDのキャッシュ
+  std::vector<int> m_popularPageIds; /**< 人気記事IDのキャッシュ*/
 };
 
 } // namespace game::systems

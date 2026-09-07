@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file TrajectoryPredictor.h
+ * @brief TrajectoryPredictor クラスおよび関連定義
+*/
 
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
@@ -23,9 +27,9 @@ public:
     ecs::Entity ballEntity = UINT32_MAX;
     ecs::Entity arrowEntity = UINT32_MAX;
     DirectX::XMFLOAT3 shotDirection = {0.0f, 0.0f, 1.0f};
-    /// @brief 平坦・無風フェアウェイでのフルスイング基準キャリー飛距離(ヤード)
+    /** @brief 平坦・無風フェアウェイでのフルスイング基準キャリー飛距離(ヤード)*/
     float baseCarryDistance = 0.0f;
-    /// @brief 「目標飛距離→初速」を求めるためのクラブ別対応表への参照
+    /** @brief 「目標飛距離→初速」を求めるためのクラブ別対応表への参照*/
     const game::utils::CarryDistanceTable *carryTable = nullptr;
     float launchAngle = 0.0f;
     bool isMapView = false;
@@ -38,7 +42,7 @@ public:
   /**
    * @brief 軌道予測表示が生成したEntityを破棄します。
    * @param ctx ゲーム全体の共有コンテキストです。
-   */
+*/
   void Shutdown(core::GameContext &ctx);
   void Update(core::GameContext &ctx, const Params &params);
   void Hide(core::GameContext &ctx);

@@ -1,7 +1,7 @@
 /**
  * @file HolePlacementPlanner.cpp
  * @brief ホール配置計画の実装
- */
+*/
 
 #include "HolePlacementPlanner.h"
 #include "../../core/Logger.h"

@@ -1,7 +1,7 @@
 /**
  * @file WikiPageLoaderPath.cpp
  * @brief ホール候補の経路評価結果反映を実装します。
- */
+*/
 
 #include "WikiPageLoader.h"
 #include "../../core/GameContext.h"
@@ -21,8 +21,8 @@ constexpr int kPathEvaluationMaxDepth = 4;
 }
 
 /**
- * @brief 経路評価結果を全ホール候補とマップ候補へ反映します。 山内陽
- */
+ * @brief 経路評価結果を全ホール候補とマップ候補へ反映します。
+*/
 void WikiPageLoader::ApplyPathEvaluationResults(
     const std::vector<HolePlacementCandidate>& evaluatedCandidates)
 {
@@ -99,8 +99,8 @@ void WikiPageLoader::RefreshParFromPathEvaluation(core::GameContext& ctx,
 }
 
 /**
- * @brief 候補のリンク距離をページ内キャッシュ付きで評価します。 山内陽
- */
+ * @brief 候補のリンク距離をページ内キャッシュ付きで評価します。
+*/
 void WikiPageLoader::EvaluateCandidatePath(core::GameContext& ctx,
                                            HolePlacementCandidate& candidate)
 {
@@ -136,8 +136,8 @@ void WikiPageLoader::EvaluateCandidatePath(core::GameContext& ctx,
 }
 
 /**
- * @brief マップ候補がプレイ可能ホールとして選ばれたかを判定します。 山内陽
- */
+ * @brief マップ候補がプレイ可能ホールとして選ばれたかを判定します。
+*/
 bool WikiPageLoader::IsPlayableCandidate(
     const HolePlacementCandidate& candidate) const
 {

@@ -1,7 +1,7 @@
 /**
  * @file WikiClientJson.cpp
  * @brief Wikipedia API応答のJSON/HTML解析を実装します。
- */
+*/
 
 #include "WikiClientJson.h"
 #include "../../core/StringUtils.h"
@@ -25,7 +25,7 @@ std::string ReplaceAll(std::string str, const std::string &from,
 
 /**
  * @brief JSONのUnicodeエスケープをUTF-8へ変換します。
- */
+*/
 std::string DecodeUnicodeEscape(const std::string &str) {
   std::string result;
   result.reserve(str.size());
@@ -93,8 +93,8 @@ std::string DecodeUnicodeEscape(const std::string &str) {
 
 
 /**
- * @brief JSON文字列値をUTF-8文字列へ復元します。 山内陽
- */
+ * @brief JSON文字列値をUTF-8文字列へ復元します。
+*/
 std::string DecodeString(std::string value) {
   value = ReplaceAll(value, "\\\"", "\"");
   value = ReplaceAll(value, "\\/", "/");
@@ -104,8 +104,8 @@ std::string DecodeString(std::string value) {
 }
 
 /**
- * @brief 指定キーのJSON文字列値を安全に切り出します。 山内陽
- */
+ * @brief 指定キーのJSON文字列値を安全に切り出します。
+*/
 bool ExtractStringField(const std::string &json, const std::string &key,
                             size_t searchFrom, size_t searchLimit,
                             std::string &value, size_t &nextPos) {
@@ -136,8 +136,8 @@ bool ExtractStringField(const std::string &json, const std::string &key,
 }
 
 /**
- * @brief JSONオブジェクト内の整数フィールドを取得します。 山内陽
- */
+ * @brief JSONオブジェクト内の整数フィールドを取得します。
+*/
 bool ExtractIntField(const std::string &json, const std::string &key,
                          size_t searchFrom, size_t searchLimit, int &value) {
   size_t keyPos = json.find(key, searchFrom);
@@ -178,8 +178,8 @@ bool ExtractIntField(const std::string &json, const std::string &key,
 }
 
 /**
- * @brief ゲーム候補として扱う通常記事リンクを追加します。 山内陽
- */
+ * @brief ゲーム候補として扱う通常記事リンクを追加します。
+*/
 void AddWikiLink(std::vector<game::WikiLink> &links,
                  std::unordered_set<std::string> &seen,
                  const std::string &sourceTitle,
@@ -194,8 +194,8 @@ void AddWikiLink(std::vector<game::WikiLink> &links,
 }
 
 /**
- * @brief query APIのlinks配列から通常記事リンクを抽出します。 山内陽
- */
+ * @brief query APIのlinks配列から通常記事リンクを抽出します。
+*/
 void ParseQueryPageLinks(const std::string &response,
                          const std::string &sourceTitle, int effectiveLimit,
                          std::vector<game::WikiLink> &links,
@@ -225,8 +225,8 @@ void ParseQueryPageLinks(const std::string &response,
 }
 
 /**
- * @brief parse APIのレンダリング後リンクから通常記事リンクを抽出します。 山内陽
- */
+ * @brief parse APIのレンダリング後リンクから通常記事リンクを抽出します。
+*/
 void ParseRenderedPageLinks(const std::string &response,
                             const std::string &sourceTitle, int effectiveLimit,
                             std::vector<game::WikiLink> &links,
@@ -272,8 +272,8 @@ void ParseRenderedPageLinks(const std::string &response,
 }
 
 /**
- * @brief Unicodeコードポイントを UTF-8 バイト列として追記します。 山内陽
- */
+ * @brief Unicodeコードポイントを UTF-8 バイト列として追記します。
+*/
 void AppendUtf8(std::string &out, unsigned long codepoint) {
   if (codepoint <= 0x7F) {
     out += static_cast<char>(codepoint);
@@ -293,8 +293,8 @@ void AppendUtf8(std::string &out, unsigned long codepoint) {
 }
 
 /**
- * @brief HTML実体参照（&amp; &nbsp; &#12345; &#xAB; 等）をデコードします。 山内陽
- */
+ * @brief 名前付きおよび10進数・16進数形式のHTML実体参照をデコードします。
+*/
 std::string DecodeHtmlEntities(const std::string &text) {
   std::string out;
   out.reserve(text.size());
@@ -343,12 +343,12 @@ std::string DecodeHtmlEntities(const std::string &text) {
 }
 
 /**
- * @brief HTML断片からタグを除去し、読める平文へ変換します。 山内陽
+ * @brief HTML断片からタグを除去し、読める平文へ変換します。
  * @details テーブル/インフォボックスの中身を articleText 相当のテキストへ
- *          変換するための簡易ストリッパー。<script>/<style> は中身ごと除去し、
+ *          変換するための簡易ストリッパー。&lt;script&gt;と&lt;style&gt;は中身ごと除去し、
  *          ブロック的なタグ（tr/table/p/div/li/br/見出し等）は改行、
  *          それ以外のタグは単語がくっつかないよう半角スペースへ変換する。
- */
+*/
 std::string StripHtmlToPlainText(const std::string &html) {
   static const std::unordered_set<std::string> kBlockTags = {
       "tr", "table", "p",  "div", "li", "ul", "ol",

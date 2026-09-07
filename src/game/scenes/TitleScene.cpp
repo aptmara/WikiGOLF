@@ -1,3 +1,8 @@
+/**
+ * @file TitleScene.cpp
+ * @brief TitleScene の実装
+*/
+
 #include "ResultScene.h"
 #include "TitleScene.h"
 #include "TitleSceneSupport.h"
@@ -43,7 +48,7 @@ using namespace DirectX;
 
 /**
  * @brief シーンに侵入した際の初期化処理を行います。
- */
+*/
 void TitleScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnEnter (WIKI GOLF High-End UI Style)");
 

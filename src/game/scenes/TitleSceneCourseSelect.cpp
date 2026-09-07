@@ -1,3 +1,8 @@
+/**
+ * @file TitleSceneCourseSelect.cpp
+ * @brief TitleSceneCourseSelect の実装
+*/
+
 #include "ResultScene.h"
 #include "TitleScene.h"
 #include "TitleSceneSupport.h"
@@ -43,7 +48,7 @@ using namespace DirectX;
 
 /**
  * @brief コース選択用UIを生成します。
- */
+*/
 void TitleScene::CreateCourseSelectUI(core::GameContext& ctx) {
   // 背景半透明パネル
   m_csBgEntity = CreateEntity(ctx.world);
@@ -153,7 +158,7 @@ void TitleScene::CreateCourseSelectUI(core::GameContext& ctx) {
 
 /**
  * @brief メインメニューの表示状態を切り替えます。
- */
+*/
 void TitleScene::SetMainMenuVisible(core::GameContext& ctx, bool visible) {
   ctx.world.Query<components::UIButton>().Each([&](ecs::Entity, components::UIButton &btn) {
     if (btn.action != "cs_check" && btn.action != "cs_start" && btn.action != "cs_close" && btn.action != "cs_paste_start" && btn.action != "cs_paste_goal") {
@@ -164,7 +169,7 @@ void TitleScene::SetMainMenuVisible(core::GameContext& ctx, bool visible) {
 
 /**
  * @brief コース選択UIの表示状態を切り替えます。
- */
+*/
 void TitleScene::SetCourseSelectVisible(core::GameContext& ctx, bool visible) {
   if (auto* bg = ctx.world.Get<components::UIText>(m_csBgEntity)) bg->visible = visible;
   if (auto* title = ctx.world.Get<components::UIText>(m_csTitleEntity)) title->visible = visible;
@@ -184,7 +189,7 @@ void TitleScene::SetCourseSelectVisible(core::GameContext& ctx, bool visible) {
 
 /**
  * @brief コース選択UIの毎フレーム更新処理を行います。
- */
+*/
 void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
   if (ctx.input.GetKeyDown(VK_ESCAPE)) {
     if (ctx.audio) {

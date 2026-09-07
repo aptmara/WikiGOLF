@@ -1,3 +1,8 @@
+/**
+ * @file MinimapControllerInput.cpp
+ * @brief MinimapControllerInput の実装
+*/
+
 #include "MinimapController.h"
 #include "MinimapControllerInternals.h"
 #include "../components/Transform.h"
@@ -26,7 +31,7 @@ using namespace game::components;
 
 /**
  * @brief ユーザー入力を処理しマップビュー操作に反映します。
- */
+*/
 void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mouseY, float fieldWidth, float fieldDepth, ecs::Entity skyboxEntity) {
   if (ctx.input.GetKeyDown('M')) {
     ToggleMapView(ctx, skyboxEntity);
@@ -106,8 +111,8 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
     if (deltaX != 0 || deltaY != 0) {
       float extent = std::max(fieldWidth, fieldDepth);
       float viewSpan = extent / std::max(0.01f, m_mapZoom);
-      float panSpeed = viewSpan * game::ui::kMapPanSpeedFactor; 
-      
+      float panSpeed = viewSpan * game::ui::kMapPanSpeedFactor;
+
       m_mapCenter.x -= deltaX * panSpeed;
       m_mapCenter.y += deltaY * panSpeed;
       m_mapPanVelocity = {0.0f, 0.0f};

@@ -1,3 +1,8 @@
+/**
+ * @file ObjLoader.cpp
+ * @brief ObjLoader の実装
+ */
+
 #include "ObjLoader.h"
 #include "../core/Logger.h"
 #include "TangentGenerator.h"

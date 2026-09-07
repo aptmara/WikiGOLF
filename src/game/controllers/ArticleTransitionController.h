@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file ArticleTransitionController.h
+ * @brief ArticleTransitionController クラスおよび関連定義
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
@@ -24,21 +28,21 @@ public:
     void Initialize(core::GameContext& ctx);
     void Cleanup(core::GameContext& ctx);
 
-    /** @brief トランジションを開始する */
+    /** @brief トランジションを開始する*/
     void StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap);
 
-    /// @brief トランジション中の更新。ロード完了とフェードアウトが終われば true を返す
+    /** @brief トランジション中の更新。ロード完了とフェードアウトが終われば true を返す*/
     bool Update(core::GameContext& ctx);
 
-    /// @brief 現在トランジション中かどうか
+    /** @brief 現在トランジション中かどうか*/
     bool IsActive() const { return m_isActive; }
 
 private:
     void SpawnEntities(core::GameContext& ctx);
     void DestroyEntities(core::GameContext& ctx);
-    /// @brief 遷移演出前のメインカメラ状態を退避する
+    /** @brief 遷移演出前のメインカメラ状態を退避する*/
     void CaptureMainCamera(core::GameContext& ctx);
-    /// @brief 遷移演出後に元のメインカメラを復元する
+    /** @brief 遷移演出後に元のメインカメラを復元する*/
     void RestoreMainCamera(core::GameContext& ctx);
     void UpdateAnimation(core::GameContext& ctx, float dt);
     void UpdateUI(core::GameContext& ctx, float dt);
@@ -91,13 +95,13 @@ private:
     ecs::Entity m_bgEntity = UINT32_MAX;
     ecs::Entity m_cameraEntity = UINT32_MAX; // トランジション専用カメラ
     ecs::Entity m_previousMainCameraEntity = UINT32_MAX;
-    
+
     // UI エンティティ
     ecs::Entity m_textEntity = UINT32_MAX;
     ecs::Entity m_progressTextEntity = UINT32_MAX;
     ecs::Entity m_captionTextEntity = UINT32_MAX;
     ecs::EntityOwner m_entityOwner;
-    
+
     graphics::TextStyle m_primaryStyle{};
     graphics::TextStyle m_progressStyle{};
     graphics::TextStyle m_captionStyle{};

@@ -17,7 +17,7 @@
  * 出力: UIText/UIImage/UIBarGauge エンティティの表示・テキスト更新
  *
  * 呼び出し元: WikiGolfScene::OnUpdate -> m_hud->Update(...)
- */
+*/
 #include "WikiGolfHUD.h"
 #include "hud/HudStyles.h"
 #include "../../ecs/World.h"

@@ -1,7 +1,7 @@
 /**
  * @file WikiTextureGeneratorDecode.cpp
  * @brief Wikipedia記事テキストからD3D11テクスチャを生成する実装
- */
+*/
 
 #include "WikiTextureGenerator.h"
 #include <algorithm>

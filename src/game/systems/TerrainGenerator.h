@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file TerrainGenerator.h
+ * @brief TerrainGenerator クラスおよび関連システム
+*/
 
 #include "../../graphics/Mesh.h"
 #include <DirectXMath.h>
@@ -41,7 +45,7 @@ class TerrainGenerator {
 public:
   /**
    * @brief 記事データに基づいて地形データを生成します。
-   */
+*/
   static TerrainData
   GenerateTerrain(const std::string &articleText,
                   const std::vector<DirectX::XMFLOAT2> &holePositions,
@@ -49,7 +53,7 @@ public:
 
   /**
    * @brief チュートリアル用の固定教材地形を生成します。
-   */
+*/
   static TerrainData
   GenerateTutorialTerrain(const TerrainConfig &config,
                           const std::vector<DirectX::XMFLOAT2> &holePositions);
@@ -57,51 +61,51 @@ public:
 private:
   /**
    * @brief 基準ハイトマップを生成します。
-   */
+*/
   static void GenerateBaseHeightMap(TerrainData &data, const std::string &text);
 
   /**
    * @brief ホール周辺に平らなプラットフォームを作成します。
-   */
+*/
   static void
   CreatePlatforms(TerrainData &data,
                    const std::vector<DirectX::XMFLOAT2> &holePositions);
 
   /**
    * @brief 小さすぎる孤立地形を整理し、コースの読みやすさを保ちます。
-   */
+*/
   static void ApplyMaterialCleanup(TerrainData &data);
 
   /**
    * @brief 離散した物理材質から描画専用の連続カラーフィールドを生成します。
-   */
+*/
   static void GenerateVisualMaterialColors(TerrainData &data);
 
   /**
    * @brief ハイトマップにスムージング処理を適用します。
-   */
+*/
   static void ApplySmoothing(TerrainData &data, int iterations);
 
   /**
    * @brief 地形メッシュを生成します。
-   */
+*/
   static void
   GenerateMesh(TerrainData &data,
                const std::vector<DirectX::XMFLOAT2> &holePositions = {});
 
   /**
    * @brief 地形の法線を計算します。
-   */
+*/
   static void CalculateNormals(TerrainData &data);
 
   /**
    * @brief 指定した格子座標の地形高さを取得します。
-   */
+*/
   static float GetHeight(const TerrainData &data, int x, int z);
 
   /**
    * @brief 指定した格子座標の地形高さを設定します。
-   */
+*/
   static void SetHeight(TerrainData &data, int x, int z, float h);
 };
 

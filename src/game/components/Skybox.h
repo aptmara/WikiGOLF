@@ -2,7 +2,7 @@
 /**
  * @file Skybox.h
  * @brief スカイボックスコンポーネント
- */
+*/
 
 #include <DirectXMath.h>
 #include <d3d11.h>
@@ -15,27 +15,27 @@ namespace game::components {
  * @brief スカイボックスコンポーネント
  *
  * キューブマップテクスチャを使用した背景スカイボックス
- */
+*/
 struct Skybox {
-  /// @brief キューブマップのShaderResourceView
+  /** @brief キューブマップのShaderResourceView*/
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
 
-  /// @brief 描画の有効/無効
+  /** @brief 描画の有効/無効*/
   bool isVisible = true;
 
-  /// @brief 明度調整 (0.0 = 暗い, 1.0 = 標準, 2.0 = 明るい)
+  /** @brief 明度調整 (0.0 = 暗い, 1.0 = 標準, 2.0 = 明るい)*/
   float brightness = 0.7f; // 床の文字を見やすくするため控えめ
 
-  /// @brief 彩度調整 (0.0 = グレースケール, 1.0 = 標準)
+  /** @brief 彩度調整 (0.0 = グレースケール, 1.0 = 標準)*/
   float saturation = 0.8f; // やや彩度を抑えめ
 
-  /// @brief ティント色（追加の色調整用）
+  /** @brief ティント色（追加の色調整用）*/
   DirectX::XMFLOAT4 tintColor = {1.0f, 1.0f, 1.0f, 1.0f};
 
-  /// @brief アニメーション用時間（秒）
+  /** @brief アニメーション用時間（秒）*/
   float time = 0.0f;
 
-  /// @brief 太陽の方向（正規化ベクトル）
+  /** @brief 太陽の方向（正規化ベクトル）*/
   DirectX::XMFLOAT3 sunDirection = {0.6f, 0.75f, 0.4f};
 };
 

@@ -1,7 +1,7 @@
 /**
  * @file CourseInfoPanel.cpp
  * @brief コース情報パネルの実装
- */
+*/
 
 #include "CourseInfoPanel.h"
 #include "HudStyles.h"

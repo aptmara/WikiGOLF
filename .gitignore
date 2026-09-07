@@ -21,6 +21,7 @@
 
 # --- Whitelist: Root Files ---
 !.gitignore
+!Doxyfile
 !*.cpp
 !*.h
 !*.rc
@@ -65,3 +66,7 @@ tools/
 !CMakeLists.txt
 !Assets/data/*.sqlite
 Assets/data/jawiki_sdow-001.sqlite
+
+# Doxygen の生成物は設定ファイルと分離し、Git管理へ含めない
+docs/doxygen/
+docs/doxygen-warnings.log

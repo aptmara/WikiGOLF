@@ -1,7 +1,7 @@
 /**
  * @file WikiTerrainDecorations.cpp
  * @brief バイオーム別の地形装飾を実装します。
- */
+*/
 
 #include "WikiTerrainSystem.h"
 #include "../../core/GameContext.h"
@@ -23,7 +23,7 @@ using namespace game::components;
 
 /**
  * @brief バイオームに応じた装飾オブジェクトを生成します。
- */
+*/
 void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
                                           float fieldWidth, float fieldDepth,
                                           int biome) {

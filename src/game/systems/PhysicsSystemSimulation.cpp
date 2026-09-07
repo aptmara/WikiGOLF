@@ -1,7 +1,7 @@
 /**
  * @file PhysicsSystemSimulation.cpp
  * @brief 物理サブステップの実行
- */
+*/
 
 #include "PhysicsSystemInternals.h"
 #include "GameJuiceSystem.h"
@@ -82,7 +82,7 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
         continue;
       }
 
-      // 速度クランプ（ドライバー飛距離3倍化に伴い上限を拡張。山内陽）
+      // 速度クランプ（ドライバー飛距離3倍化に伴い上限を拡張。）
       float speed = SafeLength(vel);
       if (speed > 300.0f) {
         vel = XMVectorScale(SafeNormalize(vel), 300.0f);

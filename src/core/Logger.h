@@ -2,7 +2,7 @@
 /**
  * @file Logger.h
  * @brief 多機能ログシステム
- */
+*/
 
 #include <string>
 #include <fstream>
@@ -26,17 +26,19 @@ public:
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
 
-    /// @brief ログシステムの初期化
-    /// @param filename 出力するログファイル名
+    /**
+     * @brief ログシステムの初期化
+     * @param filename 出力するログファイル名
+*/
     void Initialize(const std::string& filename = "game.log");
 
-    /// @brief 終了処理
+    /** @brief 終了処理*/
     void Shutdown();
 
-    /// @brief ログ出力（内部実装）
+    /** @brief ログ出力（内部実装）*/
     void Log(LogLevel level, const char* category, const char* file, int line, const std::string& message);
 
-    /// @brief フォーマット付きログ出力ヘルパー
+    /** @brief フォーマット付きログ出力ヘルパー*/
     template<typename... Args>
     void LogFmt(LogLevel level, const char* category, const char* file, int line, std::format_string<Args...> fmt, Args&&... args) {
         try {

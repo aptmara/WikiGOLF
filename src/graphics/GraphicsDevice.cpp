@@ -1,7 +1,7 @@
 /**
  * @file GraphicsDevice.cpp
  * @brief DirectX11デバイス・コンテキスト管理の実装
- */
+*/
 
 #include "GraphicsDevice.h"
 #include "../core/Logger.h"

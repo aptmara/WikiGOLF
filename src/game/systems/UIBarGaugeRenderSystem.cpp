@@ -1,3 +1,8 @@
+/**
+ * @file UIBarGaugeRenderSystem.cpp
+ * @brief UIBarGaugeRenderSystem の実装
+*/
+
 #include "UIBarGaugeRenderSystem.h"
 #include "../../ecs/World.h"
 #include "../../graphics/TextRenderer.h"

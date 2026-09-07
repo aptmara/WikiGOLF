@@ -17,14 +17,23 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags_unused;
 };
 
+/**
+ * @struct PS_INPUT
+ * @brief ピクセルシェーダー入力
+ */
 struct PS_INPUT {
-    float4 position : SV_POSITION;
-    float3 normal : NORMAL;
-    float2 texCoord : TEXCOORD;
-    float4 color : COLOR;
-    float4 materialFlags : TEXCOORD4;
+    float4 position : SV_POSITION;   /**< 射影座標 */
+    float3 normal : NORMAL;          /**< 法線ベクトル */
+    float2 texCoord : TEXCOORD;      /**< UV座標 */
+    float4 color : COLOR;            /**< 頂点カラー */
+    float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
 };
 
+/**
+ * @brief パーティクルピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 円形・星型減衰適用後のアルファ合成カラー
+ */
 float4 main(PS_INPUT input) : SV_TARGET {
     // 頂点カラー * マテリアルカラー
     float4 finalColor = input.color;

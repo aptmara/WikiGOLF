@@ -2,7 +2,7 @@
 /**
  * @file UIImage.h
  * @brief UI画像コンポーネント
- */
+*/
 
 #include <DirectXMath.h>
 #include <d3d11.h>
@@ -10,7 +10,7 @@
 
 namespace game::components {
 
-/// @brief UI画像コンポーネント
+/** @brief UI画像コンポーネント*/
 struct UIImage {
   std::string texturePath; ///< 画像パス（resourcesフォルダからの相対パス）
   ID3D11ShaderResourceView *textureSRV =
@@ -27,10 +27,10 @@ struct UIImage {
   bool visible = true; ///< 表示可否
   int layer = 0;       ///< レイヤー（大きいほど前面）
 
-  /// @brief テクスチャを持っているか
+  /** @brief テクスチャを持っているか*/
   bool HasTexture() const { return textureSRV != nullptr || !texturePath.empty(); }
 
-  /// @brief 簡易コンストラクタ
+  /** @brief 簡易コンストラクタ*/
   static UIImage Create(const std::string &path, float x, float y) {
     UIImage ui;
     ui.texturePath = path;

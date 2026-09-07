@@ -1,7 +1,7 @@
 /**
  * @file ResultSceneVisuals.cpp
  * @brief ResultSceneの責務別実装です。
- */
+*/
 
 #define NOMINMAX
 #include "ResultScene.h"
@@ -85,7 +85,7 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
   for (auto it = m_shells.begin(); it != m_shells.end(); ) {
       auto& sh = *it;
       sh.age += ctx.dt;
-      
+
       if (sh.phase == HanabiShell::Phase::Ascending) {
           sh.vel.y -= 9.8f * ctx.dt;
           sh.vel.x *= 1.0f - (0.5f * ctx.dt);
@@ -93,7 +93,7 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
           sh.pos.x += sh.vel.x * ctx.dt;
           sh.pos.y += sh.vel.y * ctx.dt;
           sh.pos.z += sh.vel.z * ctx.dt;
-          
+
           // Spawn shell ascending trail
           if (rand() % 2 == 0) {
               HanabiSpark trail;
@@ -108,12 +108,12 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
               trail.lifeTime = 0.4f + (static_cast<float>(rand() % 20) / 100.0f);
               trail.size = 0.15f + (static_cast<float>(rand() % 10) / 100.0f);
               trail.drag = 0.95f;
-              
+
               trail.entity = CreateEntity(ctx.world);
               auto& t = ctx.world.Add<Transform>(trail.entity);
               t.position = trail.pos;
               t.scale = { trail.size, trail.size, trail.size };
-              
+
               auto& mr = ctx.world.Add<MeshRenderer>(trail.entity);
               mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
               mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
@@ -138,7 +138,7 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
                   float theta = (static_cast<float>(rand() % 628) / 100.0f);
                   float phi = acosf((static_cast<float>(rand() % 200) / 100.0f) - 1.0f);
                   float spd = 2.0f + (static_cast<float>(rand() % 130) / 10.0f); // 2~15
-                  
+
                   HanabiSpark sp;
                   sp.pos = sh.pos;
                   sp.vel = {
@@ -151,13 +151,13 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
                   sp.lifeTime = 0.15f + (static_cast<float>(rand() % 10) / 100.0f);
                   sp.size = 0.4f + (static_cast<float>(rand() % 30) / 100.0f);
                   sp.drag = 0.85f;
-                  
+
                   // ECS Entity
                   sp.entity = CreateEntity(ctx.world);
                   auto& t = ctx.world.Add<Transform>(sp.entity);
                   t.position = sp.pos;
                   t.scale = { sp.size, sp.size, sp.size };
-                  
+
                   auto& mr = ctx.world.Add<MeshRenderer>(sp.entity);
                   mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
                   mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
@@ -168,7 +168,7 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
 
                   m_sparks.push_back(sp);
               }
-              
+
               // Outer Sparks
               int outerSparks = 180 + (rand() % 80);
               DirectX::XMFLOAT4 shellColor;
@@ -183,7 +183,7 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
                   float theta = (static_cast<float>(rand() % 628) / 100.0f);
                   float phi = acosf((static_cast<float>(rand() % 200) / 100.0f) - 1.0f);
                   float spd = 4.0f + (static_cast<float>(rand() % 200) / 10.0f); // 4~24
-                  
+
                   HanabiSpark sp;
                   sp.pos = sh.pos;
                   sp.vel = {
@@ -196,13 +196,13 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
                   sp.lifeTime = 1.5f + (static_cast<float>(rand() % 100) / 100.0f);
                   sp.size = 0.12f + (static_cast<float>(rand() % 12) / 100.0f);
                   sp.drag = 0.96f;
-                  
+
                   // ECS Entity
                   sp.entity = CreateEntity(ctx.world);
                   auto& t = ctx.world.Add<Transform>(sp.entity);
                   t.position = sp.pos;
                   t.scale = { sp.size, sp.size, sp.size };
-                  
+
                   auto& mr = ctx.world.Add<MeshRenderer>(sp.entity);
                   mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
                   mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
@@ -236,13 +236,13 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
   for (auto it = m_sparks.begin(); it != m_sparks.end(); ) {
       auto& sp = *it;
       sp.age += ctx.dt;
-      
+
       if (sp.age >= sp.lifeTime || !ctx.world.IsAlive(sp.entity)) {
           if(ctx.world.IsAlive(sp.entity)) ctx.world.DestroyEntity(sp.entity);
           it = m_sparks.erase(it);
           continue;
       }
-      
+
       // Spawn trail particle behind the spark if it's moving fast
       if (sp.drag < 0.99f && sp.age < sp.lifeTime * 0.7f && (rand() % 4 == 0)) {
           HanabiSpark trail;
@@ -258,12 +258,12 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
           trail.lifeTime = 0.15f + (static_cast<float>(rand() % 10) / 100.0f);
           trail.size = sp.size * 0.6f;
           trail.drag = 0.99f; // static trail, slowly fading
-          
+
           trail.entity = CreateEntity(ctx.world);
           auto& t = ctx.world.Add<Transform>(trail.entity);
           t.position = trail.pos;
           t.scale = { trail.size, trail.size, trail.size };
-          
+
           auto& mr = ctx.world.Add<MeshRenderer>(trail.entity);
           mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
           mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/UnlitPS.hlsl");
@@ -279,7 +279,7 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
       sp.vel.x *= (1.0f - (1.0f - sp.drag) * ctx.dt * 60.0f);
       sp.vel.y *= (1.0f - (1.0f - sp.drag) * ctx.dt * 60.0f);
       sp.vel.z *= (1.0f - (1.0f - sp.drag) * ctx.dt * 60.0f);
-      
+
       sp.pos.x += sp.vel.x * ctx.dt;
       sp.pos.y += sp.vel.y * ctx.dt;
       sp.pos.z += sp.vel.z * ctx.dt;
@@ -289,13 +289,13 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
       if (t) {
           t->position = sp.pos;
       }
-      
+
       auto* mr = ctx.world.Get<MeshRenderer>(sp.entity);
       if (mr) {
           float fade = 1.0f - (sp.age / sp.lifeTime);
           mr->color.w = fade; // Fade alpha
       }
-      
+
       ++it;
   }
 
@@ -307,6 +307,6 @@ void ResultScene::UpdateVisuals(core::GameContext &ctx) {
 
 /**
  * @brief 3Dのビジュアル表示環境を生成します。
- */
+*/
 
 } // namespace game::scenes

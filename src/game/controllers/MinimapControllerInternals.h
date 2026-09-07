@@ -2,7 +2,7 @@
 /**
  * @file MinimapControllerInternals.h
  * @brief ミニマップ計算処理の内部共有定義
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"
@@ -25,7 +25,7 @@ inline constexpr float kScreenHeight = 720.0f;
 
 /**
  * @brief HUDミニマップに必要なワールド表示範囲を計算します。
- */
+*/
 inline float ComputeMinimapWorldSpan(
     const game::systems::MapRenderParams &params) {
   float viewSpan = params.extent / std::max(0.01f, params.zoom);
@@ -36,7 +36,7 @@ inline float ComputeMinimapWorldSpan(
 
 /**
  * @brief 指定した表示範囲に合わせたズーム率を計算します。
- */
+*/
 inline float ComputeZoomForVisibleSpan(float extent, float desiredVisibleSpan,
                                        float orthoPadding) {
   const float safeExtent = std::max(1.0f, extent);
@@ -48,7 +48,7 @@ inline float ComputeZoomForVisibleSpan(float extent, float desiredVisibleSpan,
 
 /**
  * @brief ボール位置をマップ座標の中心として取得します。
- */
+*/
 inline DirectX::XMFLOAT2 GetBallMapCenter(core::GameContext &ctx,
                                           ecs::Entity ballEntity) {
   if (auto *ballTransform =
@@ -60,7 +60,7 @@ inline DirectX::XMFLOAT2 GetBallMapCenter(core::GameContext &ctx,
 
 /**
  * @brief ボール中心表示に必要な全体範囲を計算します。
- */
+*/
 inline float ComputeBallCenteredFullSpan(const DirectX::XMFLOAT2 &center,
                                          float fieldWidth, float fieldDepth) {
   const float halfWidth = std::max(1.0f, fieldWidth * 0.5f);
@@ -72,7 +72,7 @@ inline float ComputeBallCenteredFullSpan(const DirectX::XMFLOAT2 &center,
 
 /**
  * @brief ワールド座標をミニマップの正規化座標へ投影します。
- */
+*/
 inline bool ProjectToMinimap(float worldX, float worldZ,
                              const game::systems::MapRenderParams &params,
                              float &outU, float &outV) {
@@ -88,7 +88,7 @@ inline bool ProjectToMinimap(float worldX, float worldZ,
 
 /**
  * @brief HUDミニマップの描画パラメータを作成します。
- */
+*/
 inline game::systems::MapRenderParams BuildHudMinimapParams(
     core::GameContext &ctx, ecs::Entity ballEntity, float fieldWidth,
     float fieldDepth) {
@@ -115,7 +115,7 @@ inline game::systems::MapRenderParams BuildHudMinimapParams(
 
 /**
  * @brief 全体マップビューの描画パラメータを作成します。
- */
+*/
 inline game::systems::MapRenderParams BuildMapViewParams(
     const DirectX::XMFLOAT2 &center, float zoom, float fieldWidth,
     float fieldDepth) {
@@ -138,7 +138,7 @@ struct MarkerBounds {
 
 /**
  * @brief 全体マップ表示時のマーカー描画領域を取得します。
- */
+*/
 inline MarkerBounds GetMapViewMarkerBounds() {
   constexpr float margin = 24.0f;
   return {margin, margin, kScreenWidth - margin * 2.0f,

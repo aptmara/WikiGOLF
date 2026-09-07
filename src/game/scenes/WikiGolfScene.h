@@ -2,7 +2,7 @@
 /**
  * @file WikiGolfScene.h
  * @brief WikiGolfのメインゲームシーン
- */
+*/
 
 #include "../../core/Scene.h"
 #include "../../ecs/Entity.h"
@@ -48,7 +48,7 @@ namespace game::scenes {
 
 /**
  * @brief WikiGolfのゲームプレイシーンクラス
- */
+*/
 class WikiGolfScene : public core::Scene {
 public:
   const char *GetName() const override { return "WikiGolfScene"; }
@@ -63,51 +63,55 @@ public:
   void OnExit(core::GameContext &ctx) override;
 
 private:
-  /// @brief ボールをスポーン
+  /** @brief ボールをスポーン*/
   void SpawnBall(core::GameContext &ctx);
 
-  /// @brief フィールド（床・壁）作成
+  /** @brief フィールド（床・壁）作成*/
   void CreateField(core::GameContext &ctx);
 
-  /** @brief チュートリアルの旗色解説用に実旗モデルを配置します。 */
+  /** @brief チュートリアルの旗色解説用に実旗モデルを配置します。*/
   void CreateTutorialFlagSamples(core::GameContext &ctx);
 
-  /// @brief チュートリアルの旗色解説用に配置した一時旗モデルを破棄します。山内陽
+  /** @brief チュートリアルの旗色解説用に配置した一時旗モデルを破棄します。*/
   void ClearTutorialFlagSamples(core::GameContext &ctx);
 
-  /// @brief ページ遷移（値渡し：ホール削除後も安全に使用するため）
+  /** @brief ページ遷移（値渡し：ホール削除後も安全に使用するため）*/
   void TransitionToPage(core::GameContext &ctx, const std::string &pageName);
 
-  /// @brief 1 つ前の訪問ページへ戻ります。
+  /** @brief 1 つ前の訪問ページへ戻ります。*/
   bool ReturnToPreviousPage(core::GameContext &ctx);
 
-  /// @brief 現在の状態で前ページへ戻れるか判定します。
+  /** @brief 現在の状態で前ページへ戻れるか判定します。*/
   bool CanReturnToPreviousPage(core::GameContext &ctx) const;
 
-  /// @brief ポーズメニューを開きます。
+  /** @brief ポーズメニューを開きます。*/
   void OpenPauseScene(core::GameContext &ctx);
 
-  /// @brief カップイン判定（ボールがホール内で静止したか）
-  /// @return 遷移が発生した場合はtrue
+  /**
+   * @brief カップイン判定（ボールがホール内で静止したか）
+   * @return 遷移が発生した場合はtrue
+*/
   bool CheckCupIn(core::GameContext &ctx);
 
-  /// @brief プロシージャル旗のなびきと旗粒子を更新します。山内陽
+  /** @brief プロシージャル旗のなびきと旗粒子を更新します。*/
   void UpdateProceduralFlagEffects(core::GameContext &ctx, float dt);
 
-  /// @brief トップビューの着弾点プレビュー(現在クラブのフルスイング着弾予測)を
-  /// 計算し、MinimapControllerへ反映します。
+  /**
+   * @brief トップビューの着弾点プレビュー(現在クラブのフルスイング着弾予測)を
+   * 計算し、MinimapControllerへ反映します。
+*/
   void RefreshLandingPreview(core::GameContext &ctx);
 
-  /// @brief 着地地形とショット判定の結果画像を更新します。
+  /** @brief 着地地形とショット判定の結果画像を更新します。*/
   void UpdateResultVisuals(core::GameContext &ctx, float dt);
 
-  /// @brief 予測軌道と方向ガイドを更新します。
+  /** @brief 予測軌道と方向ガイドを更新します。*/
   void UpdateTrajectoryAndGuide(core::GameContext &ctx,
                                 game::components::GolfGameState &state,
                                 game::components::ShotState &shot, float dt,
                                 bool tutorialInputLocked, bool isMapView);
 
-  /// @brief HUDとショット後の演出システムを更新します。
+  /** @brief HUDとショット後の演出システムを更新します。*/
   void UpdateHudAndEffects(core::GameContext &ctx,
                            game::components::GolfGameState &state,
                            game::components::ShotState &shot, float dt);
@@ -115,11 +119,11 @@ private:
   ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;
   ecs::Entity m_cameraEntity = UINT32_MAX;
-  ecs::Entity m_arrowEntity = UINT32_MAX;         ///< 矢印表示用（パワーチャージ時）
-  std::vector<ecs::Entity> m_guideSegments;       ///< 方向ガイドセグメント（アイドル時流れる矢印）
-  float m_guideAnimTimer = 0.0f;                  ///< 方向ガイドアニメーションタイマー
+  ecs::Entity m_arrowEntity = UINT32_MAX;         /**< 矢印表示用（パワーチャージ時）*/
+  std::vector<ecs::Entity> m_guideSegments;       /**< 方向ガイドセグメント（アイドル時流れる矢印）*/
+  float m_guideAnimTimer = 0.0f;                  /**< 方向ガイドアニメーションタイマー*/
   ecs::Entity m_clubModelEntity = UINT32_MAX;
-  
+
   std::unique_ptr<game::controllers::CameraController>    m_cameraController;
   std::unique_ptr<game::controllers::MinimapController>   m_minimapController;
   std::unique_ptr<game::controllers::WikiGolfHUD>          m_hud;
@@ -135,12 +139,14 @@ private:
   enum class ScenePhase { Playing, Transitioning };
   ScenePhase m_phase = ScenePhase::Playing;
 
-  /// @brief カメラの衝突判定（地形・壁）を行い、位置を補正する
-  /// @param ctx ゲームコンテキスト
-  /// @param targetPos カメラの目標位置
-  /// @param lookAtPos 注視点（ボール位置）
-  /// @param outPos 補正後のカメラ位置
-  /// @return 補正が行われたか
+  /**
+   * @brief カメラの衝突判定（地形・壁）を行い、位置を補正する
+   * @param ctx ゲームコンテキスト
+   * @param targetPos カメラの目標位置
+   * @param lookAtPos 注視点（ボール位置）
+   * @param outPos 補正後のカメラ位置
+   * @return 補正が行われたか
+*/
   bool CheckCameraCollision(core::GameContext &ctx,
                             const DirectX::XMVECTOR &targetPos,
                             const DirectX::XMVECTOR &lookAtPos,
@@ -154,7 +160,7 @@ private:
 
   // === Skybox システム（背景スカイボックス） ===
   std::unique_ptr<graphics::SkyboxTextureGenerator> m_skyboxGenerator;
-  ecs::Entity m_skyboxEntity = UINT32_MAX; ///< スカイボックスエンティティ
+  ecs::Entity m_skyboxEntity = UINT32_MAX; /**< スカイボックスエンティティ*/
 
   // === Environment システム（環境効果） ===
   game::systems::EnvironmentParticleSystem m_particleSystem;
@@ -165,9 +171,9 @@ private:
   // === テクスチャ・パス探索 ===
   std::unique_ptr<graphics::WikiTextureGenerator> m_textureGenerator;
   std::unique_ptr<game::systems::WikiShortestPath> m_shortestPath;
-  
+
   game::utils::ScreenFade m_screenFade;
-  
+
   // === 着地地形の結果画像（Fairway/Rough/Bunker/Green/OB） ===
   // スイング判定の結果画像とは別エンティティ・別アニメーションで演出する
   // （同じ質感にすると「どちらの結果か」が伝わりにくくなるため意図的に
@@ -189,32 +195,34 @@ private:
   float m_judgeDisplayTargetH = 80.0f;
   game::components::ShotJudgement m_judgeDisplayJudgement =
       game::components::ShotJudgement::None;
-  float m_hudUpdateTimer = 0.0f;     ///< HUD静的表示の更新間引きタイマーです。山内陽
-  float m_minimapUpdateTimer = 0.0f; ///< ミニマップ描画の更新間引きタイマーです。山内陽
-  float m_flagEffectTimer = 0.0f;    ///< 旗なびき・粒子演出の時間です。山内陽
-  float m_cupInBloomTimer = 0.0f;    ///< カップイン発光演出の残り時間です。山内陽
-  float m_cupInBloomDuration = 0.0f; ///< カップイン発光演出の全体時間です。山内陽
-  float m_shotBloomTimer = 0.0f;     ///< ショット発光演出の残り時間です。山内陽
-  float m_shotBloomDuration = 0.0f;  ///< ショット発光演出の全体時間です。山内陽
-  float m_shotBloomIntensity = 0.0f; ///< ショット発光演出の強さです。山内陽
-  ecs::Entity m_cupInGlowHoleEntity = UINT32_MAX; ///< 発光中のホールです。山内陽
-  ecs::Entity m_cupInGlowFlagEntity = UINT32_MAX; ///< 発光中の旗です。山内陽
-  ecs::Entity m_cupInGlowPillarEntity = UINT32_MAX; ///< 発光中の光柱です。山内陽
-  DirectX::XMFLOAT4 m_cupInGlowHoleBaseColor = {1, 1, 1, 1}; ///< ホール元色です。山内陽
-  DirectX::XMFLOAT4 m_cupInGlowFlagBaseColor = {1, 1, 1, 1}; ///< 旗元色です。山内陽
-  DirectX::XMFLOAT4 m_cupInGlowPillarBaseColor = {1, 1, 1, 1}; ///< 光柱元色です。山内陽
-  bool m_pendingResultTransition = false; ///< リザルト遷移待ち中かどうかです。山内陽
-  float m_pendingResultTimer = 0.0f; ///< リザルト遷移までの演出待機時間です。山内陽
-  ResultData m_pendingResultData{}; ///< 遅延遷移で渡すリザルト情報です。山内陽
-  bool m_prevTutorialInputLocked = false; ///< チュートリアル演出入力ロックの解除検知用です。山内陽
-  std::vector<ecs::Entity> m_tutorialFlagSampleEntities; ///< 旗色解説用の一時旗モデルです。山内陽
-  /// @brief チュートリアル中にカップイン SE が既に再生済みかどうか。
-  /// @details 毎フレーム CheckCupIn が走るためボールがカップに留まり続けると連打される。
-  ///          このフラグで1回だけ処理させる。
+  float m_hudUpdateTimer = 0.0f;     /**< HUD静的表示の更新間引きタイマーです。*/
+  float m_minimapUpdateTimer = 0.0f; /**< ミニマップ描画の更新間引きタイマーです。*/
+  float m_flagEffectTimer = 0.0f;    /**< 旗なびき・粒子演出の時間です。*/
+  float m_cupInBloomTimer = 0.0f;    /**< カップイン発光演出の残り時間です。*/
+  float m_cupInBloomDuration = 0.0f; /**< カップイン発光演出の全体時間です。*/
+  float m_shotBloomTimer = 0.0f;     /**< ショット発光演出の残り時間です。*/
+  float m_shotBloomDuration = 0.0f;  /**< ショット発光演出の全体時間です。*/
+  float m_shotBloomIntensity = 0.0f; /**< ショット発光演出の強さです。*/
+  ecs::Entity m_cupInGlowHoleEntity = UINT32_MAX; /**< 発光中のホールです。*/
+  ecs::Entity m_cupInGlowFlagEntity = UINT32_MAX; /**< 発光中の旗です。*/
+  ecs::Entity m_cupInGlowPillarEntity = UINT32_MAX; /**< 発光中の光柱です。*/
+  DirectX::XMFLOAT4 m_cupInGlowHoleBaseColor = {1, 1, 1, 1}; /**< ホール元色です。*/
+  DirectX::XMFLOAT4 m_cupInGlowFlagBaseColor = {1, 1, 1, 1}; /**< 旗元色です。*/
+  DirectX::XMFLOAT4 m_cupInGlowPillarBaseColor = {1, 1, 1, 1}; /**< 光柱元色です。*/
+  bool m_pendingResultTransition = false; /**< リザルト遷移待ち中かどうかです。*/
+  float m_pendingResultTimer = 0.0f; /**< リザルト遷移までの演出待機時間です。*/
+  ResultData m_pendingResultData{}; /**< 遅延遷移で渡すリザルト情報です。*/
+  bool m_prevTutorialInputLocked = false; /**< チュートリアル演出入力ロックの解除検知用です。*/
+  std::vector<ecs::Entity> m_tutorialFlagSampleEntities; /**< 旗色解説用の一時旗モデルです。*/
+  /**
+   * @brief チュートリアル中にカップイン SE が既に再生済みかどうか。
+   * @details 毎フレーム CheckCupIn が走るためボールがカップに留まり続けると連打される。
+   *          このフラグで1回だけ処理させる。
+*/
   bool m_tutorialCupInFired = false;
 
-  /// @brief ページ読み込み（WikiPageLoader へ委譲）
-  
+  /** @brief ページ読み込み（WikiPageLoader へ委譲）*/
+
 };
 
 } // namespace game::scenes

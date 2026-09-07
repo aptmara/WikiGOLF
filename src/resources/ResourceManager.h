@@ -2,7 +2,7 @@
 /**
  * @file ResourceManager.h
  * @brief 統合リソース管理クラス
- */
+*/
 
 #include "../audio/AudioClip.h"
 #include "../graphics/Mesh.h"
@@ -28,50 +28,52 @@ public:
   ResourceManager(graphics::GraphicsDevice &device);
   ~ResourceManager() = default;
 
-  /// @brief メッシュをロード（キャッシュ時は既存ハンドルを返す）
-  /// @param path ファイルパス または "builtin/cube" などの特殊コマンド
+  /**
+   * @brief メッシュをロード（キャッシュ時は既存ハンドルを返す）
+   * @param path ファイルパス または "builtin/cube" などの特殊コマンド
+   */
   MeshHandle LoadMesh(const std::string &path);
 
-  /// @brief 動的にメッシュを作成して登録
+  /** @brief 動的にメッシュを作成して登録 */
   MeshHandle CreateDynamicMesh(const std::string &name,
                                const std::vector<graphics::Vertex> &vertices,
                                const std::vector<uint32_t> &indices);
 
-  /// @brief キャッシュ済みメッシュを取得（存在しない場合は無効ハンドル）
+  /** @brief キャッシュ済みメッシュを取得（存在しない場合は無効ハンドル） */
   MeshHandle FindMesh(const std::string &name) const;
 
-  /// @brief メッシュを取得（レンダリングループ用）
+  /** @brief メッシュを取得（レンダリングループ用） */
   graphics::Mesh *GetMesh(MeshHandle handle);
 
-  /// @brief シェーダーをロード
+  /** @brief シェーダーをロード */
   ShaderHandle LoadShader(const std::string &name, const std::wstring &vsPath,
                           const std::wstring &psPath);
 
-  /// @brief キャッシュされているシェーダーを取得（存在しない場合は無効ハンドルを返す）
+  /** @brief キャッシュされているシェーダーを取得（存在しない場合は無効ハンドルを返す） */
   ShaderHandle FindShader(const std::string &name) const;
 
-  /// @brief シェーダーを取得
+  /** @brief シェーダーを取得 */
   graphics::Shader *GetShader(ShaderHandle handle);
 
-  /// @brief 音声をロード（WAVのみ対応）
+  /** @brief 音声をロード（WAVのみ対応） */
   AudioHandle LoadAudio(const std::string &path);
 
-  /// @brief 音声を取得
+  /** @brief 音声を取得 */
   audio::AudioClip *GetAudio(AudioHandle handle);
 
-  /// @brief テクスチャをSRVとしてロード（キャッシュ付き）
+  /** @brief テクスチャをSRVとしてロード（キャッシュ付き） */
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
   LoadTextureSRV(const std::string &path);
 
-  /// @brief 複数のテクスチャを1つのTexture2DArrayとしてロード
+  /** @brief 複数のテクスチャを1つのTexture2DArrayとしてロード */
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
   LoadTextureArraySRV(const std::string &name,
                       const std::vector<std::string> &paths);
 
-  /// @brief 全リソースを解放（シーン遷移用）
+  /** @brief 全リソースを解放（シーン遷移用） */
   void Clear();
 
-  /// @brief リソース統計情報をログ出力
+  /** @brief リソース統計情報をログ出力 */
   void DumpStatistics() const;
 
 private:

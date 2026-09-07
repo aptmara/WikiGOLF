@@ -1,3 +1,8 @@
+/**
+ * @file ClubController.cpp
+ * @brief ClubController の実装
+*/
+
 #include "ClubController.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"

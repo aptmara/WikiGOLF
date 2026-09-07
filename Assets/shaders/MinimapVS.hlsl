@@ -11,31 +11,49 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags_unused;
 };
 
+/**
+ * @struct InstanceData
+ * @brief ミニマップインスタンスデータ
+ */
 struct InstanceData {
-    matrix World;
-    float4 Color;
-    float4 Flags; // x: hasTexture, y: forceOpaque, z: uvScale, w: unused
+    matrix World; /**< ワールド行列 */
+    float4 Color; /**< インスタンスカラー */
+    float4 Flags; /**< x: hasTexture, y: forceOpaque, z: uvScale, w: 未使用 */
 };
 
+/** @brief ミニマップインスタンスバッファ */
 StructuredBuffer<InstanceData> g_instances : register(t15);
 
+/**
+ * @struct VS_INPUT
+ * @brief 頂点シェーダー入力
+ */
 struct VS_INPUT {
-    float3 position : POSITION;
-    float3 normal : NORMAL;
-    float2 texCoord : TEXCOORD;
-    float4 color : COLOR;
-    float3 tangent : TANGENT;
-    float3 bitangent : BINORMAL;
-    uint instanceID : SV_InstanceID;
+    float3 position : POSITION;      /**< 頂点ローカル座標 */
+    float3 normal : NORMAL;          /**< 法線ベクトル */
+    float2 texCoord : TEXCOORD;      /**< UV座標 */
+    float4 color : COLOR;            /**< 頂点カラー */
+    float3 tangent : TANGENT;        /**< 接線ベクトル */
+    float3 bitangent : BINORMAL;     /**< 従法線ベクトル */
+    uint instanceID : SV_InstanceID; /**< インスタンスID */
 };
 
+/**
+ * @struct VS_OUTPUT
+ * @brief 頂点シェーダー出力
+ */
 struct VS_OUTPUT {
-    float4 position : SV_POSITION;
-    float2 texCoord : TEXCOORD0;
-    float4 color : COLOR;
-    float4 flags : TEXCOORD1;
+    float4 position : SV_POSITION; /**< 射影座標 */
+    float2 texCoord : TEXCOORD0;   /**< UV座標 */
+    float4 color : COLOR;          /**< 頂点カラー */
+    float4 flags : TEXCOORD1;      /**< フラグ情報 */
 };
 
+/**
+ * @brief ミニマップ頂点シェーダーメインエントリ
+ * @param input 頂点入力情報
+ * @return 正射影変換後の頂点出力
+ */
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
 

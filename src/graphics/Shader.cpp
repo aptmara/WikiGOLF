@@ -1,7 +1,7 @@
 /**
  * @file Shader.cpp
  * @brief シェーダーコンパイル・管理の実装
- */
+*/
 
 #include "Shader.h"
 #include "../core/Logger.h"

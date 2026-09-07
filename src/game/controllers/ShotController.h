@@ -2,7 +2,7 @@
 /**
  * @file ShotController.h
  * @brief ショット入力の管理およびショット実行処理を行うコントローラー
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
@@ -19,7 +19,7 @@ class WikiGolfHUD;
 
 /**
  * @brief ショット処理コントローラー
- */
+*/
 class ShotController {
 public:
     ShotController() = default;
@@ -36,7 +36,7 @@ public:
      * @param ctx ゲームコンテキスト
      * @param canAim 狙いをつけることが可能な状態か
      * @return ショット関連のイベントフラグ
-     */
+*/
     ShotEvent ProcessShot(core::GameContext& ctx, bool canAim, WikiGolfHUD* hud, class ClubController* clubCtrl);
 
     /**
@@ -47,7 +47,7 @@ public:
      * @param club 選択中クラブ(基準飛距離・キャリー距離テーブルを含む)
      * @param timeOfDay 時間経過を反映するための TimeOfDaySystem
      * @param hud 判定結果などを表示するための HUD
-     */
+*/
     void ExecuteShot(core::GameContext& ctx,
                      ecs::Entity ballEntity,
                      const DirectX::XMFLOAT3& shotDir,

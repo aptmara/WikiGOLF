@@ -1,3 +1,8 @@
+/**
+ * @file VideoPlayer.cpp
+ * @brief VideoPlayer の実装
+ */
+
 #include "VideoPlayer.h"
 #include <windows.h>
 #include <shlwapi.h>
@@ -67,7 +72,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
   MFCreateMediaType(&mediaType);
   mediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
   mediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
-  
+
   hr = m_reader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, mediaType.Get());
   if (FAILED(hr)) {
     LOG_ERROR("VideoPlayer", "Failed to set media type to RGB32");
@@ -101,7 +106,7 @@ bool VideoPlayer::Initialize(ID3D11Device* device, const std::string& filePath) 
 
   // デコードスレッドを開始
   m_decodeThread = std::thread(&VideoPlayer::DecodeThreadFunc, this);
-  
+
   LOG_INFO("VideoPlayer", "Initialized streaming for video: {} ({}x{})", filePath, m_width, m_height);
   return true;
 }
@@ -112,7 +117,7 @@ bool VideoPlayer::CreateTexture(int width, int height) {
   desc.Height = height;
   desc.MipLevels = 1;
   desc.ArraySize = 1;
-  desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; 
+  desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
   desc.SampleDesc.Count = 1;
   desc.Usage = D3D11_USAGE_DEFAULT;
   desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
@@ -220,7 +225,7 @@ void VideoPlayer::DecodeThreadFunc() {
     ComPtr<IMFSample> sample;
     DWORD flags = 0;
     LONGLONG timestamp = 0;
-    
+
     HRESULT hr = m_reader->ReadSample(
         MF_SOURCE_READER_FIRST_VIDEO_STREAM,
         0,

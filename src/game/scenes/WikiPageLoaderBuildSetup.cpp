@@ -1,7 +1,7 @@
 /**
  * @file WikiPageLoaderBuildSetup.cpp
  * @brief 段階構築の初期化とフレーム予算処理を実装します。
- */
+*/
 
 #include "WikiPageLoader.h"
 #include "../../core/GameContext.h"
@@ -16,7 +16,7 @@ using namespace game::components;
 
 /**
  * @brief インクリメンタルな構築を開始する
- */
+*/
 void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
                                     PageDataAsyncResult asyncData,
                                     ecs::Entity ballEntity,
@@ -56,7 +56,7 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
 
 /**
  * @brief 構築を 1 ステップ進める
- */
+*/
 bool WikiPageLoader::StepBuildPageWithinFrameBudget(
     core::GameContext& ctx, std::chrono::milliseconds budget)
 {

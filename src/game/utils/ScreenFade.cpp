@@ -1,3 +1,8 @@
+/**
+ * @file ScreenFade.cpp
+ * @brief ScreenFade の実装
+*/
+
 #include "ScreenFade.h"
 #include "../../core/Logger.h"
 #include "../../ecs/World.h"
@@ -17,11 +22,11 @@ ScreenFade::~ScreenFade() {
 
 /**
  * @brief フェード用の初期化�（琁（��行います、（
- */
+*/
 void ScreenFade::Initialize(core::GameContext &ctx) {
   static_assert((sizeof(FadeCB) % 16) == 0,
                 "FadeCB must be 16-byte aligned for constant buffers");
-  
+
   // フェード用のエンティティを作成します。
   m_fadeEntity = ctx.world.CreateEntity();
 
@@ -91,7 +96,7 @@ void ScreenFade::Initialize(core::GameContext &ctx) {
 
 /**
  * @brief フェード用の終了�（琁（��行います、（
- */
+*/
 void ScreenFade::Shutdown(core::GameContext &ctx) {
   if (m_fadeEntity != UINT32_MAX && ctx.world.IsAlive(m_fadeEntity)) {
     ctx.world.DestroyEntity(m_fadeEntity);
@@ -104,7 +109,7 @@ void ScreenFade::Shutdown(core::GameContext &ctx) {
 
 /**
  * @brief フェードイン�（�画面が開く、見えるよぁ（��なる）�（琁（��開始します、（
- */
+*/
 void ScreenFade::FadeIn(float duration, FadeType type,
                         DirectX::XMFLOAT3 color) {
   m_isFading = true;
@@ -118,7 +123,7 @@ void ScreenFade::FadeIn(float duration, FadeType type,
 
 /**
  * @brief フェードアウト（画面が閉じる、（��れる�（��（琁（��開始します、（
- */
+*/
 void ScreenFade::FadeOut(float duration, FadeType type,
                          DirectX::XMFLOAT3 color) {
   m_isFading = true;
@@ -132,12 +137,12 @@ void ScreenFade::FadeOut(float duration, FadeType type,
 
 /**
  * @brief ワイプ�（中心��設定します、（
- */
+*/
 void ScreenFade::SetCenter(float u, float v) { m_center = {u, v}; }
 
 /**
  * @brief 毎フレームのフェード更新処理��行います、（
- */
+*/
 void ScreenFade::Update(float dt) {
   if (m_isFading) {
     m_timer += dt;
@@ -160,7 +165,7 @@ void ScreenFade::Update(float dt) {
 
 /**
  * @brief 描画処理��行います、（
- */
+*/
 void ScreenFade::Render(core::GameContext &ctx) {
   // 描画の必要性を判定します。
   if (m_progress <= 0.001f && !m_isFading) {

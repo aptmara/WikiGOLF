@@ -2,7 +2,7 @@
 /**
  * @file MapViewState.h
  * @brief マップビュー時のスカイボックス可視制御ヘルパー
- */
+*/
 
 #include "../components/Skybox.h"
 #include <DirectXMath.h>
@@ -15,7 +15,7 @@ namespace game::utils {
  *
  * 俯瞰モードに入った瞬間だけスカイボックスを隠し、通常ビューへ戻った際に
  * 元の可視状態へ戻す。
- */
+*/
 struct MapViewSkyboxState {
   bool previousMapViewState = false; ///< 直前のマップビュー状態
   bool cachedVisibility = true;      ///< マップビュー突入前の可視状態を保持
@@ -24,7 +24,7 @@ struct MapViewSkyboxState {
    * @brief マップビュー状態に応じてスカイボックスの可視状態を同期
    * @param isMapView 現在のマップビュー状態
    * @param skybox 対象スカイボックス
-   */
+*/
   void Sync(bool isMapView, game::components::Skybox &skybox) {
     if (isMapView == previousMapViewState) {
       return; // 状態が変わっていない場合は何もしない
@@ -43,7 +43,7 @@ struct MapViewSkyboxState {
   /**
    * @brief 状態を初期化
    * @param initialVisibility 現在のスカイボックス可視状態
-   */
+*/
   void Reset(bool initialVisibility) {
     cachedVisibility = initialVisibility;
     previousMapViewState = false;
@@ -57,7 +57,7 @@ struct MapViewSkyboxState {
  * @param fieldDepth フィールド全奥行
  * @param padding 端からの余白（ホール等が見切れないようにするためのマージン）
  * @return 収められた中心座標
- */
+*/
 inline DirectX::XMFLOAT2 ClampMapCenter(const DirectX::XMFLOAT2 &center,
                                         float fieldWidth, float fieldDepth,
                                         float padding = 0.0f) {
@@ -71,7 +71,7 @@ inline DirectX::XMFLOAT2 ClampMapCenter(const DirectX::XMFLOAT2 &center,
 
 /**
  * @brief ズーム値を範囲内に収める
- */
+*/
 inline float ClampMapZoom(float zoom, float minZoom, float maxZoom) {
   return std::clamp(zoom, minZoom, maxZoom);
 }
@@ -82,7 +82,7 @@ inline float ClampMapZoom(float zoom, float minZoom, float maxZoom) {
  * @param desiredMinViewSpan これ以上は寄りたい最小ビュー幅
  * @param baseMaxZoom デフォルト上限
  * @return 実質的な最大ズーム値
- */
+*/
 inline float CalculateMaxMapZoom(float fieldExtent, float desiredMinViewSpan,
                                  float baseMaxZoom) {
   if (desiredMinViewSpan <= 0.0f)

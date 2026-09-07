@@ -2,7 +2,7 @@
 /**
  * @file WikiComponents.h
  * @brief WikiPinball固有のコンポーネント定義
- */
+*/
 
 #include "../systems/TerrainGenerator.h"
 #include "../systems/WikiClient.h"
@@ -20,7 +20,7 @@ namespace game::components {
 /**
  * @brief 地形コライダー
  * ハイトマップデータを保持し、詳細な衝突判定に使用する。
- */
+*/
 struct TerrainCollider {
   std::shared_ptr<game::systems::TerrainData> data;
 };
@@ -28,7 +28,7 @@ struct TerrainCollider {
 /**
  * @brief Wikiの見出し（障害物）コンポーネント
  * リンク先記事への遷移に使用
- */
+*/
 struct Heading {
   int maxHealth = 3;       ///< 最大耐久値
   int currentHealth = 3;   ///< 現在の耐久値
@@ -41,18 +41,18 @@ struct Heading {
 
 /**
  * @brief 壁タグコンポーネント
- */
+*/
 struct Wall {};
 
 /**
  * @brief 地形オブジェクトタグ（フロア、装飾など）
  * シーン遷移時に手動削除するために使用
- */
+*/
 struct TerrainObject {};
 
 /**
  * @brief バリア接触エフェクト（波紋）
- */
+*/
 struct RippleEffect {
   float timer = 0.0f;
   float duration = 0.5f;
@@ -62,7 +62,7 @@ struct RippleEffect {
 
 /**
  * @brief ゲーム状態をシステム間で共有するためのグローバルデータ
- */
+*/
 struct WikiGameState {
   uint32_t scoreEntity = 0;  ///< スコア表示UIエンティティ
   uint32_t infoEntity = 0;   ///< 情報表示UIエンティティ
@@ -82,7 +82,7 @@ struct WikiGameState {
 /**
  * @brief WikiGolf初期化用グローバルデータ
  * LoadingSceneで非同期ロードしたデータをWikiGolfSceneへ渡すために使用
- */
+*/
 struct WikiGlobalData {
   std::unique_ptr<game::systems::WikiShortestPath> pathSystem;
   std::string startPage;
@@ -104,7 +104,7 @@ struct WikiGlobalData {
 
 /**
  * @brief ゴールホールコンポーネント
- */
+*/
 struct GoalHole {
   bool isOpen = false;    ///< 開放状態
   std::string targetPage; ///< 遷移先のページ名
@@ -112,14 +112,14 @@ struct GoalHole {
 
 /**
  * @brief ピンボールのボール識別用タグ
- */
+*/
 struct PinballBall {
   bool active = true; ///< アクティブ状態
 };
 
 /**
  * @brief フリッパーコンポーネント
- */
+*/
 struct Flipper {
   enum Side { Left, Right };
   Side side;                 ///< 左右の識別
@@ -130,7 +130,7 @@ struct Flipper {
 
 /**
  * @brief 3Dワールド座標に追従するUIラベル
- */
+*/
 struct World3DLabel {
   DirectX::XMFLOAT3 worldPos = {0, 0, 0}; ///< ワールド座標
   uint32_t uiTextEntity = 0;              ///< 紐づくUITextエンティティ
@@ -140,7 +140,7 @@ struct World3DLabel {
 
 /**
  * @brief 地形マテリアル種別
- */
+*/
 enum class TerrainMaterial : uint8_t {
   Fairway = 0,
   Rough = 1,
@@ -157,14 +157,14 @@ enum class TerrainMaterial : uint8_t {
  * @brief 停止したボールをOB扱いにする地形か判定します。
  * @param material 判定対象の地形マテリアル
  * @return OB扱いする場合はtrue
- */
+*/
 inline bool IsOutOfBoundsTerrainMaterial(TerrainMaterial material) {
   return material == TerrainMaterial::Water || material == TerrainMaterial::Lava;
 }
 
 /**
  * @brief ゴルフゲーム状態
- */
+*/
 struct GolfGameState {
   // UI エンティティ (従来)
   uint32_t ballEntity = 0;        ///< ボールエンティティ
@@ -201,8 +201,10 @@ struct GolfGameState {
   bool isBallGrounded = false;
   float rollingFrictionScale = 1.0f; ///< クラブごとの摩擦スケール
 
-  /// @brief マップビュー(俯瞰トップビュー)中かどうか。
-  /// RenderSystemが距離フォグを無効化するために参照する。
+  /**
+   * @brief マップビュー(俯瞰トップビュー)中かどうか。
+   * RenderSystemが距離フォグを無効化するために参照する。
+*/
   bool isMapView = false;
 
   // OB（アウトオブバウンズ）
@@ -228,7 +230,7 @@ struct GolfGameState {
 
 /**
  * @brief ショット判定結果
- */
+*/
 enum class ShotJudgement {
   None,    ///< 未判定
   Special, ///< 完璧 (誤差 < 2%)
@@ -239,9 +241,9 @@ enum class ShotJudgement {
 
 /**
  * @brief ショット状態（みんなのゴルフ風パワーゲージ）
- */
+*/
 struct ShotState {
-  /// @brief ショットフェーズ
+  /** @brief ショットフェーズ*/
   enum class Phase {
     Idle,           ///< 待機中（クリックでパワー開始）
     PowerCharging,  ///< パワーゲージ往復中
@@ -277,7 +279,7 @@ struct ShotState {
   // スピン入力（将来用）
   DirectX::XMFLOAT2 spinInput = {0.0f, 0.0f};
 
-  /// @brief 状態のリセット
+  /** @brief 状態のリセット*/
   void Reset() {
     phase = Phase::Idle;
     powerGaugePos = 0.0f;
@@ -293,7 +295,7 @@ struct ShotState {
 
 /**
  * @brief ゴルフホール（リンク用）
- */
+*/
 struct GolfHole {
   std::string linkTarget;    ///< リンク先記事
   float radius = 0.7f;       ///< 判定半径（吸い込み範囲も兼ねる）
@@ -311,12 +313,12 @@ struct GolfHole {
 
 /**
  * @brief 常にカメラの方向へヨー回転するビルボード用タグ
- */
+*/
 struct Billboard {};
 
 /**
  * @brief ホールの旗モデル用タグ
- */
+*/
 struct HoleFlag {
   enum class Kind {
     Cloth,    ///< なびく旗布
@@ -335,9 +337,7 @@ struct HoleFlag {
 };
 
 /**
- * @brief バーゲージの表示用途です。
- * @author 山内陽
- */
+ * @brief バーゲージの表示用途です。*/
 enum class UIBarGaugeMode {
   Power, ///< 強さ決定用の左詰めゲージ
   Impact ///< インパクト精度用の中央合わせゲージ
@@ -345,7 +345,7 @@ enum class UIBarGaugeMode {
 
 /**
  * @brief D2D描画用バーゲージコンポーネント
- */
+*/
 struct UIBarGauge {
   float value = 0.0f;    ///< 現在値 (0.0 - 1.0)
   float maxValue = 1.0f; ///< 最大値

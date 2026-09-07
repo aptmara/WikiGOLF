@@ -1,7 +1,7 @@
 /**
  * @file TutorialCourseLayout.cpp
  * @brief チュートリアル専用コースの固定配置を実装します。
- */
+*/
 
 #include "TutorialCourseLayout.h"
 #include <algorithm>

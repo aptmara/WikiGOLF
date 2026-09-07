@@ -1,7 +1,7 @@
 /**
  * @file PageLinkSelector.cpp
  * @brief 記事内リンク選択を実装します。
- */
+*/
 
 #include "PageLinkSelector.h"
 #include "../../core/StringUtils.h"

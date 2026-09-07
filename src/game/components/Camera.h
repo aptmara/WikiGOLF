@@ -2,7 +2,7 @@
 /**
  * @file Camera.h
  * @brief Camera Component
- */
+*/
 
 #include <DirectXMath.h>
 #include "Transform.h"
@@ -19,7 +19,7 @@ struct Camera {
     DirectX::XMMATRIX GetViewMatrix(const Transform& transform) const {
         DirectX::XMVECTOR pos = DirectX::XMLoadFloat3(&transform.position);
         DirectX::XMVECTOR rot = DirectX::XMLoadFloat4(&transform.rotation);
-        
+
         // 回転情報から前方方向ベクトルを算出
         DirectX::XMVECTOR forward = DirectX::XMVector3Rotate(
             DirectX::XMVectorSet(0, 0, 1, 0), rot

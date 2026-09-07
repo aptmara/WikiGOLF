@@ -1,7 +1,7 @@
 /**
  * @file WikiClientContent.cpp
  * @brief WikiClientの責務別実装です。
- */
+*/
 
 #include "WikiClient.h"
 #include "WikiClientJson.h"

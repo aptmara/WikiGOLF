@@ -2,7 +2,7 @@
 /**
  * @file GameContext.h
  * @brief ゲーム全体で共有されるコンテキスト（Bridge）
- */
+*/
 
 namespace resources {
 class ResourceManager;

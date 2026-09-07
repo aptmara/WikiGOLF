@@ -1,7 +1,7 @@
 /**
  * @file HudStyles.cpp
  * @brief WikiGolf HUDで共有する外観規則の実装
- */
+*/
 
 #include "HudStyles.h"
 #include "../../../graphics/TextStyle.h"

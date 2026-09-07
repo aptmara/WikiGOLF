@@ -1,7 +1,7 @@
 /**
  * @file WikiPageLoaderBuildStep.cpp
  * @brief 段階構築の状態遷移を実装します。
- */
+*/
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
@@ -150,7 +150,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
     {
         if (m_textureGenerator) {
             bool textureDone = m_textureGenerator->GenerateNextTile(m_textureState);
-            
+
             float textureProgress = 0.0f;
             if (m_textureState.totalHeight > 0) {
                 textureProgress = (float)m_textureState.currentOffsetY / (float)m_textureState.totalHeight;
@@ -194,7 +194,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                      m_buildLoadId, m_wikiTexture->width,
                      m_wikiTexture->height, m_wikiTexture->links.size(),
                      gameplayLinkCount, m_buildFieldWidth, m_buildFieldDepth);
-                
+
                 m_buildStep = BuildStep::ApplySkybox;
                 m_buildProgress = 0.60f;
             }
@@ -224,7 +224,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             }
             skyboxComp->isVisible = true;
         }
-        
+
         m_fieldWidth = m_buildFieldWidth;
         m_fieldDepth = m_buildFieldDepth;
         state->fieldWidth = m_buildFieldWidth;
@@ -305,7 +305,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             if (m_buildMinimap)
                 m_buildMinimap->SyncMapCenterToBall(ctx, 0.0f, m_buildFieldWidth, m_buildFieldDepth, true);
         }
-        
+
         m_nextHoleIndex = 0;
         m_nextMapIconIndex = 0;
         m_buildHoleCandidates.clear();
@@ -508,9 +508,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
         state->pathHistory.push_back(m_buildData.pageName);
 
         /**
-         * @brief 99%付近で描画スレッドを止めないため、Parは即時計算可能な値だけで決定します。山内陽
+         * @brief 99%付近で描画スレッドを止めないため、Parは即時計算可能な値だけで決定します。
          * @details 最短パスDB探索はロード初期化とホール距離評価の非同期処理に寄せています。
-         */
+*/
         TryConsumePathEvaluation(ctx, true);
         RefreshParFromPathEvaluation(ctx, true);
 

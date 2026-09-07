@@ -13,11 +13,20 @@ cbuffer UpscaleConstants : register(b0) {
   float4 texelSize;
 };
 
+/**
+ * @struct PSInput
+ * @brief ピクセルシェーダー入力
+ */
 struct PSInput {
-  float4 position : SV_POSITION;
-  float2 texCoord : TEXCOORD0;
+  float4 position : SV_POSITION; /**< 射影座標 */
+  float2 texCoord : TEXCOORD0;   /**< UV座標 */
 };
 
+/**
+ * @brief アップスケールピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return アンシャープマスク強調適用後カラー
+ */
 float4 main(PSInput input) : SV_TARGET {
   float2 uv = input.texCoord;
   float3 center = sceneTexture.Sample(linearSampler, uv).rgb;

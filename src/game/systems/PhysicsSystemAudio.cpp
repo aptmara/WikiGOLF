@@ -1,7 +1,7 @@
 /**
  * @file PhysicsSystemAudio.cpp
  * @brief 物理更新に連動する走行音の制御
- */
+*/
 
 #include "PhysicsSystemInternals.h"
 #include "../../audio/AudioSystem.h"

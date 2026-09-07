@@ -1,7 +1,7 @@
 /**
  * @file TextRendererImage.cpp
  * @brief Direct2D 1.1/DirectWrite テキスト描画の実装
- */
+*/
 
 #include "TextRenderer.h"
 #include "TextRendererInternals.h"

@@ -1,3 +1,8 @@
+/**
+ * @file MapSys.cpp
+ * @brief MapSys の実装
+*/
+
 #include "MapSys.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"

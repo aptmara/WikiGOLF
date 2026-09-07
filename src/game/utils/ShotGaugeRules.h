@@ -2,7 +2,7 @@
 /**
  * @file ShotGaugeRules.h
  * @brief ショットゲージの表示と判定で共有するルール
- */
+*/
 
 #include "../components/WikiComponents.h"
 #include "UIConstants.h"
@@ -12,25 +12,19 @@
 namespace game::utils {
 
 /**
- * @brief ゲージ値を0.0から1.0に収めます。
- * @author 山内陽
- */
+ * @brief ゲージ値を0.0から1.0に収めます。*/
 inline float ClampGaugeValue(float value) {
   return std::clamp(value, 0.0f, 1.0f);
 }
 
 /**
- * @brief インパクト中心からの絶対誤差を返します。
- * @author 山内陽
- */
+ * @brief インパクト中心からの絶対誤差を返します。*/
 inline float GetImpactDiff(float impactValue) {
   return std::abs(ClampGaugeValue(impactValue) - 0.5f);
 }
 
 /**
- * @brief インパクト値からショット判定を決定します。
- * @author 山内陽
- */
+ * @brief インパクト値からショット判定を決定します。*/
 inline game::components::ShotJudgement EvaluateImpactJudgement(
     float impactValue) {
   const float diff = GetImpactDiff(impactValue);
@@ -47,9 +41,7 @@ inline game::components::ShotJudgement EvaluateImpactJudgement(
 }
 
 /**
- * @brief 中央から左右に広がる判定しきい値を描画用の全幅へ変換します。
- * @author 山内陽
- */
+ * @brief 中央から左右に広がる判定しきい値を描画用の全幅へ変換します。*/
 inline float GetImpactZoneVisualWidth(float threshold) {
   return ClampGaugeValue(threshold * 2.0f);
 }
@@ -59,7 +51,7 @@ inline float GetImpactZoneVisualWidth(float threshold) {
  *
  * ExecuteShot(実際のショット)とHUD表示のどちらからも参照し、
  * 「基本飛距離からの変位」を判定と一貫させます。
- */
+*/
 inline float GetJudgementDistanceMultiplier(
     game::components::ShotJudgement judgement) {
   switch (judgement) {

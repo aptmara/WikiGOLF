@@ -1,7 +1,7 @@
 /**
  * @file TextRenderer.cpp
  * @brief Direct2D 1.1/DirectWrite テキスト描画の実装
- */
+*/
 
 #include "TextRenderer.h"
 #include "TextRendererInternals.h"
@@ -40,7 +40,7 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
   // D2D1.1ファクトリの生成
   D2D1_FACTORY_OPTIONS options = {};
 #ifdef _DEBUG
-  /// @brief 山内陽: Debug実行時にD2D診断レイヤーのブレークで起動が止まらないようにする。
+  /** @brief : Debug実行時にD2D診断レイヤーのブレークで起動が止まらないようにする。 */
   options.debugLevel = D2D1_DEBUG_LEVEL_NONE;
 #endif
   hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, options,

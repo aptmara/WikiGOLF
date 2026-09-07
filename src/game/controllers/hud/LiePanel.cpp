@@ -1,7 +1,7 @@
 /**
  * @file LiePanel.cpp
  * @brief ライ表示パネルの実装
- */
+*/
 
 #include "LiePanel.h"
 #include "HudStyles.h"

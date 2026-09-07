@@ -1,7 +1,7 @@
 /**
  * @file WikiTerrainSurfaceResponse.cpp
  * @brief 芝の接触応答を実装します。
- */
+*/
 
 #include "WikiTerrainSystem.h"
 #include "../../core/GameContext.h"

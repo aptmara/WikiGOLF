@@ -3,7 +3,7 @@
  * @file UIConstants.h
  * @brief UI詳細設定の定数定義
  * 位置、サイズ、色、フォント、アニメーション、ゲームプレイパラメータを一括管理
- */
+*/
 
 #include <DirectXMath.h>
 

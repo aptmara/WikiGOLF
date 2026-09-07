@@ -2,7 +2,7 @@
 /**
  * @file UIButtonSystem.h
  * @brief UIボタンのマウスインタラクション処理
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
@@ -14,18 +14,18 @@
 
 namespace game::systems {
 
-/// @brief ボタンクリックコールバック型
+/** @brief ボタンクリックコールバック型*/
 using ButtonClickCallback = std::function<void(const std::string &action)>;
 
-/// @brief UIボタンシステム
+/** @brief UIボタンシステム*/
 class UIButtonSystem {
 public:
-  /// @brief クリックコールバックを設定
+  /** @brief クリックコールバックを設定*/
   void SetClickCallback(ButtonClickCallback callback) {
     m_callback = std::move(callback);
   }
 
-  /// @brief システム実行
+  /** @brief システム実行*/
   void operator()(core::GameContext &ctx) {
     auto mousePos = ctx.input.GetMousePosition();
     float mx = static_cast<float>(mousePos.x);

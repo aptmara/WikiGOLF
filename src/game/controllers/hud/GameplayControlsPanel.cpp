@@ -1,7 +1,7 @@
 /**
  * @file GameplayControlsPanel.cpp
  * @brief 固定操作UIパネルの実装
- */
+*/
 
 #include "GameplayControlsPanel.h"
 #include "HudStyles.h"

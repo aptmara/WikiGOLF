@@ -1,3 +1,8 @@
+/**
+ * @file TitleSceneLifecycle.cpp
+ * @brief TitleSceneLifecycle の実装
+*/
+
 #include "ResultScene.h"
 #include "TitleScene.h"
 #include "TitleSceneSupport.h"
@@ -43,7 +48,7 @@ using namespace DirectX;
 
 /**
  * @brief シーンの描画処理を行います。
- */
+*/
 void TitleScene::Render(core::GameContext &ctx) {
   if (m_state != TitleState::IntroVideo || !m_videoPlayer || !ctx.textRenderer) {
     return;
@@ -62,7 +67,7 @@ void TitleScene::Render(core::GameContext &ctx) {
 
 /**
  * @brief シーンを抜ける際の後処理を行います。
- */
+*/
 void TitleScene::OnExit(core::GameContext &ctx) {
   LOG_INFO("TitleScene", "OnExit");
   if (ctx.audio) {

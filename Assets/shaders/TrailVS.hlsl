@@ -11,30 +11,48 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags_unused;
 };
 
+/**
+ * @struct InstanceData
+ * @brief トレイルインスタンスデータ
+ */
 struct InstanceData {
-    matrix World;
-    float4 Color;
-    float4 Flags;
+    matrix World; /**< ワールド行列 */
+    float4 Color; /**< トレイルカラー */
+    float4 Flags; /**< フラグ情報 */
 };
 
+/** @brief トレイルインスタンスバッファ */
 StructuredBuffer<InstanceData> g_instances : register(t15);
 
+/**
+ * @struct VS_INPUT
+ * @brief 頂点シェーダー入力
+ */
 struct VS_INPUT {
-    float3 position : POSITION;
-    float3 normal : NORMAL;
-    float2 texCoord : TEXCOORD;
-    float4 color : COLOR;
-    uint instanceID : SV_InstanceID;
+    float3 position : POSITION;      /**< 頂点座標 */
+    float3 normal : NORMAL;          /**< 法線ベクトル */
+    float2 texCoord : TEXCOORD;      /**< UV座標 */
+    float4 color : COLOR;            /**< 頂点カラー */
+    uint instanceID : SV_InstanceID; /**< インスタンスID */
 };
 
+/**
+ * @struct VS_OUTPUT
+ * @brief 頂点シェーダー出力
+ */
 struct VS_OUTPUT {
-    float4 position : SV_POSITION;
-    float3 normal : NORMAL;
-    float2 texCoord : TEXCOORD;
-    float4 color : COLOR;
-    float4 materialFlags : TEXCOORD4;
+    float4 position : SV_POSITION;   /**< 射影座標 */
+    float3 normal : NORMAL;          /**< ワールド法線 */
+    float2 texCoord : TEXCOORD;      /**< UV座標 */
+    float4 color : COLOR;            /**< 頂点カラー */
+    float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
 };
 
+/**
+ * @brief ボールトレイル頂点シェーダーメインエントリ
+ * @param input 頂点入力情報
+ * @return 変換済み頂点出力
+ */
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
     InstanceData inst = g_instances[input.instanceID];

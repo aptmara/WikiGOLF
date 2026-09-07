@@ -1,3 +1,8 @@
+/**
+ * @file WikiClient.cpp
+ * @brief WikiClient の実装
+*/
+
 #include "WikiClient.h"
 #include "WikiClientJson.h"
 #include "../../core/Logger.h"

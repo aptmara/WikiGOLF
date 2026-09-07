@@ -1,3 +1,8 @@
+/**
+ * @file TangentGenerator.cpp
+ * @brief TangentGenerator の実装
+ */
+
 #include "TangentGenerator.h"
 #include <DirectXMath.h>
 #include <cmath>

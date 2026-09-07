@@ -2,7 +2,7 @@
 /**
  * @file ResultScene.h
  * @brief ゲームクリア時のリザルトシーン
- */
+*/
 
 #include "../../core/Scene.h"
 #include "../../graphics/WikiTextureGenerator.h"
@@ -16,7 +16,7 @@ using namespace DirectX;
 
 /**
  * @brief リザルト画面に渡すデータ
- */
+*/
 struct ResultData {
   std::string targetPage;
   int shotCount;
@@ -27,7 +27,7 @@ struct ResultData {
 
 /**
  * @brief リザルトシーンクラス
- */
+*/
 class ResultScene : public core::Scene {
 public:
   ResultScene(const ResultData &data);
@@ -54,13 +54,16 @@ private:
   ecs::Entity m_retryBtnEntity = UINT32_MAX;
   ecs::Entity m_titleBtnEntity = UINT32_MAX;
 
-  // 内部ヘルパー関数
+  /**
+   * @brief 結果画面のUI要素を構築します。
+   * @param ctx ゲームコンテキスト
+*/
   void SetupUI(core::GameContext &ctx);
   // 3Dビジュアル関連
   ecs::Entity m_globeEntity =
-      0; ///< 自転する地球儀エンティティ
-  ecs::Entity m_floorEntity = 0;  ///< 反射する床面エンティティ
-  ecs::Entity m_cameraEntity = 0; ///< 周回するカメラエンティティ
+      0; /**< 自転する地球儀エンティティ*/
+  ecs::Entity m_floorEntity = 0;  /**< 反射する床面エンティティ*/
+  ecs::Entity m_cameraEntity = 0; /**< 周回するカメラエンティティ*/
 
   // 装飾リング
   struct RingObject {
@@ -95,18 +98,22 @@ private:
 
   std::vector<HanabiShell> m_shells;
   std::vector<HanabiSpark> m_sparks;
-  
+
   float m_cameraShake = 0.0f;
   float m_volleyTimer = 1.0f;
   float m_volleyInterval = 4.0f;
   int m_shellsPerVolley = 3;
 
+  /**
+   * @brief 花火の斉射エフェクトを開始します。
+*/
   void LaunchVolley();
 
   // 豪華なUI要素
   struct UIElement {
     ecs::Entity entity;
-    float baseX, baseY;
+    float baseX;
+    float baseY;
     float currentScale;
     float targetScale;
     bool isHovered;
@@ -120,9 +127,22 @@ private:
   float m_scoreDisplayValue = 0.0f; // カウントアップ用アニメーション変数
   bool m_isScoreCountFinished = false;
 
-  // UI生成ヘルパー関数
+  /**
+   * @brief スコア表示等の装飾UIを生成します。
+   * @param ctx ゲームコンテキスト
+*/
   void CreateLuxuryUI(core::GameContext &ctx);
+
+  /**
+   * @brief 背景ビジュアル（地球儀、床、花火等）の環境を初期化します。
+   * @param ctx ゲームコンテキスト
+*/
   void CreateVisualEnvironment(core::GameContext &ctx);
+
+  /**
+   * @brief 背景ビジュアルと演出の更新を行います。
+   * @param ctx ゲームコンテキスト
+*/
   void UpdateVisuals(core::GameContext &ctx);
 };
 

@@ -1,7 +1,7 @@
 /**
  * @file ResultSceneExit.cpp
  * @brief ResultSceneの責務別実装です。
- */
+*/
 
 #define NOMINMAX
 #include "ResultScene.h"
@@ -85,7 +85,7 @@ void ResultScene::LaunchVolley() {
             0.0f,
             (static_cast<float>(rand() % 200) / 10.0f) - 10.0f
         };
-        
+
         // Launch up
         shell.vel = {
             (static_cast<float>(rand() % 40) / 10.0f) - 2.0f,
@@ -98,7 +98,7 @@ void ResultScene::LaunchVolley() {
 
 /**
  * @brief 描画処理を行います（実描画はECSシステムが担当）。
- */
+*/
 void ResultScene::Render(core::GameContext &ctx) {
   LOG_DEBUG("ResultScene", "Render: START");
   LOG_DEBUG("ResultScene", "Render: FINISHED");

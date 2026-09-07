@@ -2,7 +2,7 @@
 /**
  * @file ProceduralFlag.h
  * @brief プロシージャル旗生成ユーティリティ
- */
+*/
 
 #include "../../ecs/Entity.h"
 #include <DirectXMath.h>
@@ -17,7 +17,7 @@ namespace game::utils {
 
 /**
  * @brief プロシージャル旗の生成設定です。
- */
+*/
 struct ProceduralFlagOptions {
   uint32_t holeEntity = UINT32_MAX; ///< 紐づけるホール。説明用は UINT32_MAX。
   bool createParticles = false;     ///< 旗周辺の低密度粒子を生成するか。
@@ -27,7 +27,7 @@ struct ProceduralFlagOptions {
 
 /**
  * @brief 生成した旗関連エンティティです。
- */
+*/
 struct ProceduralFlagResult {
   ecs::Entity poleEntity = UINT32_MAX;
   ecs::Entity firstClothEntity = UINT32_MAX;
@@ -42,7 +42,7 @@ struct ProceduralFlagResult {
  * @param color 旗色
  * @param options 生成設定
  * @return 生成したエンティティ群
- */
+*/
 ProceduralFlagResult CreateProceduralFlag(
     core::GameContext &ctx, const DirectX::XMFLOAT3 &basePosition,
     const DirectX::XMFLOAT4 &color, const ProceduralFlagOptions &options);

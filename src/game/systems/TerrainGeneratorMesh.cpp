@@ -1,3 +1,8 @@
+/**
+ * @file TerrainGeneratorMesh.cpp
+ * @brief TerrainGeneratorMesh の実装
+*/
+
 #include "TerrainGeneratorInternals.h"
 #include "TerrainGenerator.h"
 #include "../../core/Logger.h"
@@ -83,7 +88,7 @@ void TerrainGenerator::GenerateMesh(
 
 /**
  * @brief 指定��した格子座標�（地形高さを取得します、（
- */
+*/
 float TerrainGenerator::GetHeight(const TerrainData &data, int x, int z) {
   if (x < 0 || x >= data.config.resolutionX || z < 0 ||
       z >= data.config.resolutionZ)
@@ -93,7 +98,7 @@ float TerrainGenerator::GetHeight(const TerrainData &data, int x, int z) {
 
 /**
  * @brief 指定��した格子座標의地形高さを設定します、（
- */
+*/
 void TerrainGenerator::SetHeight(TerrainData &data, int x, int z, float h) {
   if (x < 0 || x >= data.config.resolutionX || z < 0 ||
       z >= data.config.resolutionZ)

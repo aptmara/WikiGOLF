@@ -1,8 +1,8 @@
 #pragma once
 /**
  * @file UIImageRenderSystem.h
- * @brief UI画像描画システム��
- */
+ * @brief UI画像描画システム
+*/
 
 #include "../../core/GameContext.h"
 #include "../../graphics/TextRenderer.h"
@@ -13,12 +13,16 @@
 
 namespace game::systems {
 
-/// @brief UI画像描画システム
+/** @brief UI画像描画システム */
 class UIImageRenderSystem {
 public:
   explicit UIImageRenderSystem(graphics::TextRenderer &renderer)
       : m_renderer(renderer) {}
 
+  /**
+   * @brief UI画像描画を実行します。
+   * @param ctx ゲームコンテキスト
+   */
   void operator()(core::GameContext &ctx) {
     if (!m_renderer.IsValid())
       return;

@@ -1,7 +1,7 @@
 /**
  * @file WikiGolfSceneSupport.cpp
  * @brief WikiGolfシーンの共有初期化処理を実装します。
- */
+*/
 
 #include "WikiGolfSceneSupport.h"
 #include "../../core/GameContext.h"

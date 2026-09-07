@@ -1,7 +1,7 @@
 /**
  * @file DisplaySettingsQuality.cpp
  * @brief 画質プリセット、描画品質、FPS/GPU 設定の適用。
- */
+*/
 
 #include "DisplaySettings.h"
 #include "DisplaySettingsInternals.h"

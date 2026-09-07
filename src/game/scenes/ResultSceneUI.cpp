@@ -1,7 +1,7 @@
 /**
  * @file ResultSceneUI.cpp
  * @brief ResultSceneの責務別実装です。
- */
+*/
 
 #define NOMINMAX
 #include "ResultScene.h"
@@ -192,6 +192,6 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
 
 /**
  * @brief シーン終了時のクリーンアップ処理を行います。
- */
+*/
 
 } // namespace game::scenes

@@ -2,7 +2,7 @@
 /**
  * @file SceneManager.h
  * @brief シーン管理（スタック方式）
- */
+*/
 
 #include "Logger.h"
 #include "Scene.h"
@@ -13,36 +13,36 @@
 
 namespace core {
 
-/// @brief シーン管理クラス
+/** @brief シーン管理クラス*/
 class SceneManager {
 public:
-  /// @brief シーンをスタックにプッシュ（現在のシーンの上に追加）
+  /** @brief シーンをスタックにプッシュ（現在のシーンの上に追加）*/
   void PushScene(std::unique_ptr<Scene> scene) {
     m_pendingOp = Op::Push;
     m_pendingScene = std::move(scene);
   }
 
-  /// @brief 現在のシーンをポップ（前のシーンに戻る）
+  /** @brief 現在のシーンをポップ（前のシーンに戻る）*/
   void PopScene() { m_pendingOp = Op::Pop; }
 
-  /// @brief 現在のシーンを置き換え
+  /** @brief 現在のシーンを置き換え*/
   void ChangeScene(std::unique_ptr<Scene> scene) {
     m_pendingOp = Op::Change;
     m_pendingScene = std::move(scene);
   }
 
-  /// @brief シーンスタック全体を破棄して新しいシーンへ遷移
+  /** @brief シーンスタック全体を破棄して新しいシーンへ遷移*/
   void ResetToScene(std::unique_ptr<Scene> scene) {
     m_pendingOp = Op::Reset;
     m_pendingScene = std::move(scene);
   }
 
-  /// @brief 現在のシーンを取得
+  /** @brief 現在のシーンを取得*/
   Scene *Current() {
     return m_sceneStack.empty() ? nullptr : m_sceneStack.back().get();
   }
 
-  /// @brief フレーム更新（遷移処理とOnUpdate呼び出し）
+  /** @brief フレーム更新（遷移処理とOnUpdate呼び出し）*/
   void Update(GameContext &ctx) {
     // 遷移リクエストを処理
     ProcessPendingOp(ctx);
@@ -53,7 +53,7 @@ public:
     }
   }
 
-  /// @brief フレーム描画
+  /** @brief フレーム描画*/
   void Render(GameContext &ctx) {
     // LOG_DEBUG("SceneManager", "Render START");
     if (auto *scene = Current()) {
@@ -63,20 +63,20 @@ public:
     // LOG_DEBUG("SceneManager", "Render FINISHED");
   }
 
-  /// @brief BeginFrame直後・Skybox/メインメッシュ描画前のオフスクリーン描画
+  /** @brief BeginFrame直後・Skybox/メインメッシュ描画前のオフスクリーン描画*/
   void RenderOffscreen(GameContext &ctx) {
     if (auto *scene = Current()) {
       scene->RenderOffscreen(ctx);
     }
   }
 
-  /// @brief シーンスタックが空か
+  /** @brief シーンスタックが空か*/
   bool IsEmpty() const { return m_sceneStack.empty(); }
 
 private:
   enum class Op { None, Push, Pop, Change, Reset };
 
-  /// @brief シーン処理の経過時間をミリ秒で返します。 山内陽
+  /** @brief シーン処理の経過時間をミリ秒で返します。*/
   static long long ElapsedMs(
       const std::chrono::steady_clock::time_point &startedAt) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -1,3 +1,8 @@
+/**
+ * @file WikiGolfScene.cpp
+ * @brief WikiGolfScene の実装
+*/
+
 #include "WikiGolfScene.h"
 #include "WikiGolfSceneSupport.h"
 #include "../../core/Profiler.h"
@@ -56,7 +61,7 @@ WikiGolfScene::~WikiGolfScene() = default;
 
 /**
  * @brief シーンの描画処理を行います。
- */
+*/
 void WikiGolfScene::Render(core::GameContext &ctx) {
   PROFILE_SCOPE("WikiGolf.SceneOverlay");
   m_screenFade.Render(ctx);
@@ -71,7 +76,7 @@ void WikiGolfScene::RenderOffscreen(core::GameContext &ctx) {
 /**
  * @brief カップイン判定を行います。
  * @return 遷移が発生した場合はtrue
- */
+*/
 bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
   // チュートリアル中のカップイン音連続再生防止
   // gameCleared セット後はオーバーレイが Done になるまでこの関数をスキップする。
@@ -153,7 +158,7 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       // 音楽と効果音
       if (ctx.audio) {
         ctx.audio->PlaySE(ctx, "se_cupin.mp3");
-        
+
         // ホールインワン判定（1打目でターゲット到達）
         if (hole->isTarget && state->shotCount == 1) {
             ctx.audio->PlaySE(ctx, "se_holeInOne.mp3", 1.0f);

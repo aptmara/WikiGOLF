@@ -1,7 +1,7 @@
 /**
  * @file WikiPageLoaderAssets.cpp
  * @brief サムネイルと看板のECS表示を実装します。
- */
+*/
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
@@ -28,7 +28,7 @@ using namespace game::components;
 
 /**
  * @brief デコード済みBGRAピクセル列からD3D11 SRVを作成する
- */
+*/
 Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> WikiPageLoader::CreateSRVFromPixels(
     core::GameContext& ctx, const std::vector<uint8_t>& pixelsBGRA,
     uint32_t width, uint32_t height)
@@ -76,7 +76,7 @@ Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> WikiPageLoader::CreateSRVFromPi
 
 /**
  * @brief 目的記事の代表サムネイルをGPUテクスチャ化して保持する
- */
+*/
 void WikiPageLoader::SetTargetThumbnail(core::GameContext& ctx,
                                         const std::vector<uint8_t>& pixelsBGRA,
                                         uint32_t width, uint32_t height)
@@ -94,7 +94,7 @@ void WikiPageLoader::SetTargetThumbnail(core::GameContext& ctx,
 
 /**
  * @brief 記事サムネイル看板（ビルボード）を1枚生成する
- */
+*/
 ecs::Entity WikiPageLoader::CreateHoleSignboardEntity(
     core::GameContext& ctx, float x, float z, float terrainH,
     bool isTargetHole, int hopsToTarget, ID3D11ShaderResourceView* srv,
@@ -150,7 +150,7 @@ ecs::Entity WikiPageLoader::CreateHoleSignboardEntity(
 
 /**
  * @brief ボール付近のホールに対し、記事サムネイル看板を遅延ロードする
- */
+*/
 void WikiPageLoader::UpdateNearbyHoleSignboards(core::GameContext& ctx,
                                                 const DirectX::XMFLOAT3& ballPos,
                                                 ecs::Entity cameraEntity)

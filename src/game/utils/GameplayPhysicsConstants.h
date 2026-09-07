@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file GameplayPhysicsConstants.h
+ * @brief GameplayPhysicsConstants クラスおよび関連定義
+*/
 
 namespace game::physics {
 

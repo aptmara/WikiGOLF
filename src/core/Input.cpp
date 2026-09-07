@@ -1,3 +1,8 @@
+/**
+ * @file Input.cpp
+ * @brief Input クラスの実装
+*/
+
 #include "Input.h"
 #include "Logger.h"
 #include <algorithm>

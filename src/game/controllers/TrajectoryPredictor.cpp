@@ -1,3 +1,8 @@
+/**
+ * @file TrajectoryPredictor.cpp
+ * @brief TrajectoryPredictor の実装
+*/
+
 #include "TrajectoryPredictor.h"
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"

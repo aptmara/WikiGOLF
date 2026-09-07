@@ -2,7 +2,7 @@
 /**
  * @file FontManager.h
  * @brief フォントファイルのロードと TextFormat キャッシュ管理
- */
+*/
 
 #include <dwrite_3.h>
 #include <wrl/client.h>
@@ -19,22 +19,26 @@ namespace graphics {
 
 using Microsoft::WRL::ComPtr;
 
-/// @brief フォント管理クラス
-/// @details カスタムフォントのロード、TextFormat のキャッシュを担当
-///
-/// AddFontResourceEx(FR_PRIVATE) による GDI 登録だけでは、
-/// IDWriteFactory::CreateTextFormat がそのファミリー名を見つけられるとは
-/// 限らない（見つからなくても CreateTextFormat 自体はエラーを返さず、
-/// 描画時に静かに既定フォントへフォールバックするため気付きにくい）。
-/// そのため同梱フォントは IDWriteFontSetBuilder で専用の
-/// IDWriteFontCollection を組み立て、CreateTextFormat にそのコレクションを
-/// 明示的に渡すことで確実に解決させる。
+/**
+ * @brief フォント管理クラス
+ * @details カスタムフォントのロード、TextFormat のキャッシュを担当
+ *
+ * AddFontResourceEx(FR_PRIVATE) による GDI 登録だけでは、
+ * IDWriteFactory::CreateTextFormat がそのファミリー名を見つけられるとは
+ * 限らない（見つからなくても CreateTextFormat 自体はエラーを返さず、
+ * 描画時に静かに既定フォントへフォールバックするため気付きにくい）。
+ * そのため同梱フォントは IDWriteFontSetBuilder で専用の
+ * IDWriteFontCollection を組み立て、CreateTextFormat にそのコレクションを
+ * 明示的に渡すことで確実に解決させる。
+ */
 class FontManager {
-    /// @brief LoadFont() に渡す複合ファミリー名 -> 実際の解決先の対応
-    /// @details 同梱フォントのビルド済みコレクション内では、DirectWriteが
-    ///          OS/2テーブルの usWidthClass/usWeightClass と一致する語
-    ///          （"Condensed" "Medium" 等）をファミリー名から取り除くため、
-    ///          複合名（"Barlow Condensed Medium"）ではファミリーが見つからない。
+    /**
+     * @brief LoadFont() に渡す複合ファミリー名 -> 実際の解決先の対応
+     * @details 同梱フォントのビルド済みコレクション内では、DirectWriteが
+     *          OS/2テーブルの usWidthClass/usWeightClass と一致する語
+     *          （"Condensed" "Medium" 等）をファミリー名から取り除くため、
+     *          複合名（"Barlow Condensed Medium"）ではファミリーが見つからない。
+     */
     struct BundledFamilyOverride {
         std::string baseFamily;
         DWRITE_FONT_WEIGHT weight;
@@ -52,8 +56,10 @@ class FontManager {
     }
 
 public:
-    /// @brief 初期化
-    /// @param factory DirectWrite ファクトリ
+    /**
+     * @brief 初期化
+     * @param factory DirectWrite ファクトリ
+     */
     void Initialize(IDWriteFactory* factory) {
         m_factory = factory;
         m_formatCache.clear();
@@ -69,7 +75,7 @@ public:
         }
     }
 
-    /// @brief 終了処理
+    /** @brief 終了処理 */
     void Shutdown() {
         for (const auto& path : m_loadedFontPaths) {
             RemoveFontResourceExA(path.c_str(), FR_PRIVATE | FR_NOT_ENUM, nullptr);
@@ -83,10 +89,12 @@ public:
         m_factory = nullptr;
     }
 
-    /// @brief フォントファイルを登録
-    /// @param fontName ログ表示用の名前（実際の解決はファイル内蔵のファミリー名で行う）
-    /// @param filePath フォントファイルパス（.otf / .ttf）
-    /// @return 成功なら true
+    /**
+     * @brief フォントファイルを登録
+     * @param fontName ログ表示用の名前（実際の解決はファイル内蔵のファミリー名で行う）
+     * @param filePath フォントファイルパス（.otf / .ttf）
+     * @return 成功なら true
+     */
     bool LoadFont(const std::string& fontName, const std::string& filePath) {
         // 旧経路（GDI）も一応登録しておく。害はないが、実際の解決には使わない。
         AddFontResourceExA(filePath.c_str(), FR_PRIVATE | FR_NOT_ENUM, nullptr);
@@ -100,11 +108,13 @@ public:
         return true;
     }
 
-    /// @brief TextFormat を取得（キャッシュがあれば再利用）
-    /// @param fontName フォント名
-    /// @param size フォントサイズ
-    /// @param align 水平アラインメント
-    /// @return TextFormat へのポインタ（作成失敗時は nullptr）
+    /**
+     * @brief TextFormat を取得（キャッシュがあれば再利用）
+     * @param fontName フォント名
+     * @param size フォントサイズ
+     * @param align 水平アラインメント
+     * @return TextFormat へのポインタ（作成失敗時は nullptr）
+     */
     IDWriteTextFormat* GetFormat(const std::string& fontName, float size, TextAlign align) {
         if (!m_factory) return nullptr;
 
@@ -208,7 +218,7 @@ public:
     }
 
 private:
-    /// @brief 同梱フォントファイル群から IDWriteFontCollection を（未構築/変更時のみ）組み立てる
+    /** @brief 同梱フォントファイル群から IDWriteFontCollection を（未構築/変更時のみ）組み立てる */
     IDWriteFontCollection1* EnsureCollection() {
         if (!m_factory5) return nullptr;
         if (m_collection && !m_collectionDirty) return m_collection.Get();

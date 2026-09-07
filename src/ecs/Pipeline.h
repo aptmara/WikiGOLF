@@ -2,7 +2,7 @@
 /**
  * @file Pipeline.h
  * @brief システム実行パイプライン（依存関係管理・実行順序制御）
- */
+*/
 
 #include "../core/GameContext.h"
 #include "../core/Logger.h"
@@ -35,7 +35,7 @@ struct SystemDesc {
 
 class Pipeline;
 
-/// @brief システム構築用ビルダークラス
+/** @brief システム構築用ビルダークラス*/
 class SystemBuilder {
 public:
     SystemBuilder(Pipeline& pipeline, std::string name, SystemFunc func)
@@ -78,10 +78,10 @@ public:
         m_systems.push_back(std::move(desc));
     }
 
-    /// @brief 依存関係を検証し、実行順序を確定する
+    /** @brief 依存関係を検証し、実行順序を確定する*/
     void Build() {
         // フェーズ順にソート
-        std::sort(m_systems.begin(), m_systems.end(), 
+        std::sort(m_systems.begin(), m_systems.end(),
             [](const SystemDesc& a, const SystemDesc& b) {
                 return a.phase < b.phase;
             });

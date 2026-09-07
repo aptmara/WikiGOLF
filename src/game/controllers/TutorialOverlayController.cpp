@@ -5,7 +5,7 @@
  * 入力: GameContext・各コントローラーへのポインタ
  * 変更: チュートリアルステップ進行・UI 更新・STEP 5 イベントカメラ制御
  * 出力: IsDone()/IsInputLocked() の状態変化・カメラ Transform の強制更新
- */
+*/
 
 #include "TutorialOverlayController.h"
 #include "../utils/GameplayPhysicsConstants.h"

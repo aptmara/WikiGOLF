@@ -1,3 +1,8 @@
+/**
+ * @file RenderSystem.cpp
+ * @brief RenderSystem の実装
+*/
+
 #include "RenderSystem.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -45,8 +50,8 @@ struct RenderState {
 };
 
 /**
- * @brief 1フレーム分の描画負荷を集計します。 山内陽
- */
+ * @brief 1フレーム分の描画負荷を集計します。
+*/
 struct RenderFrameStats {
   size_t candidates = 0;
   size_t visibleCandidates = 0;
@@ -269,7 +274,7 @@ void RenderSystem(core::GameContext &ctx) {
     while (newSize < requiredCount) {
       newSize *= 2;
     }
-    
+
     D3D11_BUFFER_DESC desc = {};
     desc.ByteWidth = static_cast<UINT>(sizeof(InstanceData) * newSize);
     desc.Usage = D3D11_USAGE_DYNAMIC;

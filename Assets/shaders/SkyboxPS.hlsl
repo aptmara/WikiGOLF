@@ -18,11 +18,20 @@ cbuffer SkyboxConstants : register(b0) {
     float Padding2;
 };
 
+/**
+ * @struct PS_INPUT
+ * @brief ピクセルシェーダー入力
+ */
 struct PS_INPUT {
-    float4 position : SV_POSITION;
-    float3 texCoord : TEXCOORD;
+    float4 position : SV_POSITION; /**< 射影座標 */
+    float3 texCoord : TEXCOORD;    /**< キューブマップ方向ベクトル */
 };
 
+/**
+ * @brief スカイボックスピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 太陽グロー・大気散乱・ティント適用済みスカイカラー
+ */
 float4 main(PS_INPUT input) : SV_TARGET {
     // キューブマップをゆっくり回転（流れる雲）
     float angle = Time * 0.005f;

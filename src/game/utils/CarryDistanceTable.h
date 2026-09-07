@@ -7,7 +7,7 @@
  * 弾道シミュレーションを解いて逆算するのはコストが高い。クラブ初期化時に
  * 一度だけ TrajectorySimulation.h でこの表を構築し、以降はここでの線形補間
  * だけで「目標飛距離→初速」を求める。
- */
+*/
 
 #include <vector>
 
@@ -18,7 +18,7 @@ struct CarryDistanceTable {
   std::vector<float> distances; ///< speedsに対応する平坦・無風キャリー飛距離(昇順)
 };
 
-/// @brief 目標飛距離に対応する初速を表から線形補間で求めます。
+/** @brief 目標飛距離に対応する初速を表から線形補間で求めます。*/
 inline float LookupSpeedForDistance(const CarryDistanceTable &table,
                                     float targetDistance) {
   if (table.speeds.empty() || table.distances.empty()) {

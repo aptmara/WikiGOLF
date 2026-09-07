@@ -10,7 +10,7 @@
  *   - UpdateCamera の全ロジックをここへ移動
  *   - m_cameraYaw/Pitch/Distance は本クラスが唯一の管理者
  *   - WikiGolfScene 側の同名メンバは削除し、GetYaw()/GetPitch()/GetDistance() 参照に切り替える
- */
+*/
 
 #include "CameraController.h"
 #include "../../core/Input.h"
@@ -37,7 +37,7 @@ namespace game::controllers {
 // ============================================================
 namespace {
 
-/// @brief スラブ法による AABB 交差判定ヘルパー
+/** @brief スラブ法による AABB 交差判定ヘルパー*/
 bool IntersectRayAABBSlab(float start, float dir, float minVal, float maxVal,
                            float &tmin, float &tmax) {
   if (std::abs(dir) < 1e-6f) {
@@ -53,7 +53,7 @@ bool IntersectRayAABBSlab(float start, float dir, float minVal, float maxVal,
   return tmin <= tmax;
 }
 
-/// @brief OBB とのレイ交差判定（ボックスのローカル空間へ変換してAABBで判定）
+/** @brief OBB とのレイ交差判定（ボックスのローカル空間へ変換してAABBで判定）*/
 bool IntersectRayOBB(XMVECTOR rayOrigin, XMVECTOR rayDir, float maxDist,
                      XMVECTOR boxPos, XMVECTOR boxSize, XMVECTOR boxRot,
                      float &outDist) {

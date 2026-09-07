@@ -2,7 +2,7 @@
 /**
  * @file PhysicsComponents.h
  * @brief 物理演算に関連するコンポーネント定義
- */
+*/
 
 #include <DirectXMath.h>
 #include <cstdint>
@@ -14,7 +14,7 @@ namespace game::components {
  * @brief 剛体コンポーネント
  *
  * 物理演算（移動、衝突応答）の対象となるエンティティに付与します。
- */
+*/
 struct RigidBody {
   DirectX::XMFLOAT3 velocity = {0.0f, 0.0f, 0.0f};     ///< 現在の速度ベクトル
   DirectX::XMFLOAT3 acceleration = {0.0f, 0.0f, 0.0f}; ///< 現在の加速度ベクトル
@@ -31,7 +31,7 @@ struct RigidBody {
 
 /**
  * @brief コライダーの種類
- */
+*/
 enum class ColliderType {
   Sphere,  ///< 球体コライダー
   Box,     ///< 矩形（AABB）コライダー
@@ -40,7 +40,7 @@ enum class ColliderType {
 
 /**
  * @brief 衝突判定用コンポーネント
- */
+*/
 struct Collider {
   ColliderType type = ColliderType::Sphere; ///< コライダーの形状
   float radius = 0.5f;                      ///< 半径 (Sphere用)
@@ -51,7 +51,7 @@ struct Collider {
 
 /**
  * @brief 衝突イベント
- */
+*/
 struct CollisionEvent {
   uint32_t entityA;
   uint32_t entityB;
@@ -59,7 +59,7 @@ struct CollisionEvent {
 
 /**
  * @brief フレームごとの衝突イベントリスト (Global Resource)
- */
+*/
 struct CollisionEvents {
   std::vector<CollisionEvent> events;
 };

@@ -2,7 +2,7 @@
 /**
  * @file Transform.h
  * @brief Transform Component
- */
+*/
 
 #include <DirectXMath.h>
 
@@ -19,7 +19,7 @@ struct Transform {
         DirectX::XMVECTOR p = DirectX::XMLoadFloat3(&position);
         DirectX::XMVECTOR r = DirectX::XMLoadFloat4(&rotation);
         DirectX::XMVECTOR s = DirectX::XMLoadFloat3(&scale);
-        
+
         return DirectX::XMMatrixScalingFromVector(s) *
                DirectX::XMMatrixRotationQuaternion(r) *
                DirectX::XMMatrixTranslationFromVector(p);

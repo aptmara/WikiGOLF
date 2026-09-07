@@ -1,3 +1,8 @@
+/**
+ * @file CameraSystem.cpp
+ * @brief CameraSystem の実装
+*/
+
 #include "CameraSystem.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"

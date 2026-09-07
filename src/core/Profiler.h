@@ -2,7 +2,7 @@
 /**
  * @file Profiler.h
  * @brief フレーム単位のCPU/GPUパフォーマンス計測
- */
+*/
 
 #include <chrono>
 #include <cstdint>

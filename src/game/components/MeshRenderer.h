@@ -2,7 +2,7 @@
 /**
  * @file MeshRenderer.h
  * @brief MeshRenderer Component
- */
+*/
 
 #include "../../resources/ResourceManager.h"
 #include <d3d11.h>
@@ -10,7 +10,7 @@
 
 namespace game::components {
 
-/// @brief 描画時のブレンドモード
+/** @brief 描画時のブレンドモード*/
 enum class BlendMode {
     Opaque,     ///< 不透明
     Alpha,      ///< 標準的なアルファブレンド (SrcAlpha, InvSrcAlpha)
@@ -18,9 +18,11 @@ enum class BlendMode {
     Add         ///< 加算 (DestColor + SrcColor)
 };
 
-/// @brief ミニマップ（俯瞰オフスクリーン）描画時の扱い
-/// @details デフォルトは除外。ミニマップに映すオブジェクトは地形タイルと
-///          記事オーバーレイタイルのみに限定するための明示フラグ。
+/**
+ * @brief ミニマップ（俯瞰オフスクリーン）描画時の扱い
+ * @details デフォルトは除外。ミニマップに映すオブジェクトは地形タイルと
+ *          記事オーバーレイタイルのみに限定するための明示フラグ。
+*/
 enum class MinimapRenderMode {
     None,         ///< ミニマップには描画しない（デフォルト）
     VertexColor,  ///< 頂点カラーのみで描画（Texture2DArrayはサンプルしない。地形ベースメッシュ用）

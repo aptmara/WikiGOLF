@@ -1,7 +1,7 @@
 /**
  * @file WikiPageLoaderHoles.cpp
  * @brief ホールとリンク領域のECS生成を実装します。
- */
+*/
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
@@ -28,7 +28,7 @@ using namespace game::components;
 
 /**
  * @brief ホールを生成する
- */
+*/
 void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
                                 const std::string& linkTarget,
                                 bool isTargetHole, int hopsToTarget,

@@ -5,7 +5,7 @@
  * 入力: pageName、GameContext、各種システムポインタ（SetSystems で設定）
  * 変更: ECS エンティティ（ホール・地形）の作成／削除、GolfGameState の更新
  * 出力: PageLoadResult（フィールドサイズ・Par）、ECS への副作用
- */
+*/
 
 // GraphicsDevice の完全定義を先に確保する（GameContext.h が前方宣言のみのため）
 #include "../../graphics/GraphicsDevice.h"
@@ -52,8 +52,8 @@ using namespace game::components;
 namespace {
 constexpr auto kLongBuildStepLogInterval = std::chrono::seconds(2);
 /**
- * @brief 開始時刻からの経過時間をミリ秒で返します。 山内陽
- */
+ * @brief 開始時刻からの経過時間をミリ秒で返します。
+*/
 long long ElapsedMs(const std::chrono::steady_clock::time_point& startedAt) {
     if (startedAt == std::chrono::steady_clock::time_point::min()) {
         return 0;
@@ -66,8 +66,8 @@ long long ElapsedMs(const std::chrono::steady_clock::time_point& startedAt) {
 } // namespace
 
 /**
- * @brief 生成済みページオブジェクトを破棄します。 山内陽
- */
+ * @brief 生成済みページオブジェクトを破棄します。
+*/
 void WikiPageLoader::ClearGeneratedPageObjects(
     core::GameContext&              ctx,
     controllers::MinimapController* minimapController)

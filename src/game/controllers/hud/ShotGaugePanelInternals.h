@@ -2,7 +2,7 @@
 /**
  * @file ShotGaugePanelInternals.h
  * @brief ショットゲージ表示処理で共有する内部ヘルパー
- */
+*/
 
 #include "../../../ecs/World.h"
 #include "../../components/UIText.h"

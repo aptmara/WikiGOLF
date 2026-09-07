@@ -24,11 +24,21 @@ struct PS_INPUT {
     float materialClass : TEXCOORD3;
 };
 
+/**
+ * @brief スクリーン座標に基づくインターリーブ・グラディエントノイズを計算します（ディザ抜き用）。
+ * @param pixelPosition ピクセルスクリーン座標
+ * @return 0～1のノイズ値
+ */
 float InterleavedGradientNoise(float2 pixelPosition) {
     return frac(52.9829189f * frac(dot(pixelPosition,
                                       float2(0.06711056f, 0.00583715f))));
 }
 
+/**
+ * @brief 芝生ピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 両面照明・透過光適用済みピクセルカラー
+ */
 float4 main(PS_INPUT input) : SV_TARGET {
     clip(input.distanceFade - InterleavedGradientNoise(input.position.xy));
 

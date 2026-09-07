@@ -1,7 +1,7 @@
 /**
  * @file ClubSelectionPanel.cpp
  * @brief クラブ選択パネルの実装
- */
+*/
 
 #include "ClubSelectionPanel.h"
 #include "HudStyles.h"

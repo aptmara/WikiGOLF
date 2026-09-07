@@ -3,7 +3,7 @@
 /**
  * @file DisplaySettingsInternals.h
  * @brief DisplaySettings の分割実装で共有する内部ヘルパー。
- */
+*/
 
 #include "DisplaySettings.h"
 

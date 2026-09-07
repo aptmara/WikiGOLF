@@ -3,20 +3,33 @@
  * @brief 全画面クアッド用の頂点シェーダー（TransitionPSなどのフルスクリーン効果向け）
  */
 
+/**
+ * @struct VS_INPUT
+ * @brief 頂点シェーダー入力
+ */
 struct VS_INPUT {
-    float3 position : POSITION;
-    float3 normal : NORMAL;
-    float2 texCoord : TEXCOORD;
-    float4 color : COLOR;
-    float3 tangent : TANGENT;
-    float3 bitangent : BINORMAL;
+    float3 position : POSITION;  /**< ローカル頂点座標 */
+    float3 normal : NORMAL;      /**< 法線ベクトル */
+    float2 texCoord : TEXCOORD;  /**< UV座標 */
+    float4 color : COLOR;        /**< 頂点カラー */
+    float3 tangent : TANGENT;    /**< 接線ベクトル */
+    float3 bitangent : BINORMAL; /**< 従法線ベクトル */
 };
 
+/**
+ * @struct VS_OUTPUT
+ * @brief 頂点シェーダー出力
+ */
 struct VS_OUTPUT {
-    float4 position : SV_POSITION;
-    float2 texCoord : TEXCOORD0;
+    float4 position : SV_POSITION; /**< 射影座標 */
+    float2 texCoord : TEXCOORD0;   /**< UV座標 */
 };
 
+/**
+ * @brief フルスクリーン頂点シェーダーメインエントリ
+ * @param input 頂点入力情報
+ * @return 全画面クアッド頂点出力
+ */
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
 

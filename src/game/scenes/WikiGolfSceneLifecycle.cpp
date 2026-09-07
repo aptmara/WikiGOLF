@@ -1,7 +1,7 @@
 /**
  * @file WikiGolfSceneLifecycle.cpp
  * @brief WikiGolfシーンの遷移と後処理を実装します。
- */
+*/
 
 #include "WikiGolfScene.h"
 #include "WikiGolfSceneSupport.h"
@@ -32,8 +32,7 @@ using namespace game::components;
 
 /**
  * @brief プロシージャル旗のなびきと旗粒子を更新します。
- * @author 山内陽
- */
+*/
 void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
                                                 float dt) {
   m_flagEffectTimer += dt;
@@ -46,7 +45,7 @@ void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
  * 同じ物理ロジック)を使うため、着弾点は実際のショット結果と整合する。
  * クラブ切り替えはマップビュー中は行えないため、マップビューに入った
  * 瞬間に1回計算すれば十分。
- */
+*/
 void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
   if (!m_minimapController) return;
 
@@ -92,7 +91,7 @@ void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
 
 /**
  * @brief フィールド（床・壁）を作成します。
- */
+*/
 void WikiGolfScene::CreateField(core::GameContext &ctx) {
   m_floorEntity = CreateEntity(ctx.world);
   auto &ft = ctx.world.Add<Transform>(m_floorEntity);
@@ -107,8 +106,7 @@ void WikiGolfScene::CreateField(core::GameContext &ctx) {
 /**
  * @brief チュートリアルの旗色解説用に、一時的な実旗モデルを配置します。
  * @details ホールやコライダーは付けず、描画専用にしてショット判定へ干渉させません。
- * @author 山内陽
- */
+*/
 void WikiGolfScene::CreateTutorialFlagSamples(core::GameContext &ctx) {
   ClearTutorialFlagSamples(ctx);
 
@@ -154,8 +152,7 @@ void WikiGolfScene::CreateTutorialFlagSamples(core::GameContext &ctx) {
 
 /**
  * @brief チュートリアルの旗色解説用に配置した一時旗モデルを破棄します。
- * @author 山内陽
- */
+*/
 void WikiGolfScene::ClearTutorialFlagSamples(core::GameContext &ctx) {
   for (auto entity : m_tutorialFlagSampleEntities) {
     if (ctx.world.IsAlive(entity)) {
@@ -167,7 +164,7 @@ void WikiGolfScene::ClearTutorialFlagSamples(core::GameContext &ctx) {
 
 /**
  * @brief ボールをスポーンします。
- */
+*/
 void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
   if (ctx.world.IsAlive(m_ballEntity)) {
     ctx.world.DestroyEntity(m_ballEntity);
@@ -234,7 +231,7 @@ void WikiGolfScene::SpawnBall(core::GameContext &ctx) {
 
 /**
  * @brief 指定したページへ遷移します。
- */
+*/
 void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
                                      const std::string &pageName) {
   LOG_INFO("WikiGolf", "Transitioning to page: {}", pageName);
@@ -336,7 +333,7 @@ void WikiGolfScene::OpenPauseScene(core::GameContext &ctx) {
 
 /**
  * @brief シーンを抜ける際の後処理を行います。
- */
+*/
 void WikiGolfScene::OnExit(core::GameContext &ctx) {
   if (m_pageLoader) {
     m_pageLoader->CancelAsyncPathEvaluations();

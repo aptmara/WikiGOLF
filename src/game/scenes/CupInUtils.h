@@ -1,4 +1,8 @@
 #pragma once
+/**
+ * @file CupInUtils.h
+ * @brief CupInUtils クラスおよび関連インターフェース
+*/
 
 #include <DirectXMath.h>
 

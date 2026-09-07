@@ -1,7 +1,7 @@
 /**
  * @file ResultSceneEnvironment.cpp
  * @brief ResultSceneの責務別実装です。
- */
+*/
 
 #define NOMINMAX
 #include "ResultScene.h"
@@ -106,6 +106,6 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
 
 /**
  * @brief 豪華な演出のUI表示要素を生成します。
- */
+*/
 
 } // namespace game::scenes

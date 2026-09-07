@@ -1,7 +1,7 @@
 /**
  * @file WikiGolfSceneEntry.cpp
  * @brief WikiGolfシーンの初期化処理を実装します。
- */
+*/
 
 #include "WikiGolfScene.h"
 #include "WikiGolfSceneSupport.h"
@@ -58,7 +58,7 @@ const char *EntityAliveLabel(const ecs::World &world, ecs::Entity entity) {
 
 /**
  * @brief シーンに侵入した際の初期化処理を行います。
- */
+*/
 void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("WikiGolf", "OnEnter");
 
@@ -126,7 +126,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
         "最後はゴールへカップインしましょう。";
     globalData->hasCachedData = true;
   }
-  
+
   // フィールドの初期化
   CreateField(ctx);
 
@@ -406,7 +406,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_DEBUG("WikiGolf", "After SpawnBall: Cam Alive={}",
             EntityAliveLabel(ctx.world, m_cameraEntity));
 
-  
+
   GolfGameState state;
   state.currentPage = startPage;
   state.targetPage = targetPage;
@@ -419,8 +419,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   state.canShoot = true;
   state.ballEntity = m_ballEntity;
   state.windSpeed = 0.0f; // LoadPageで設定
-  
-  
+
+
   LOG_INFO("WikiGolf", "Saving global state...");
   ctx.world.SetGlobal(state);
 
@@ -429,7 +429,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   LOG_DEBUG("WikiGolf", "Before LoadPage: Cam Alive={}",
             EntityAliveLabel(ctx.world, m_cameraEntity));
-  
+
   m_pageLoader->SetSystems(m_textureGenerator.get(), m_terrainSystem.get(), m_skyboxGenerator.get(), m_shortestPath.get());
   m_pageLoader->SetTutorialMode(m_isTutorial);
   m_terrainSystem->SetTutorialMode(m_isTutorial);
@@ -470,7 +470,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   m_transitionController = std::make_unique<game::controllers::ArticleTransitionController>();
   m_transitionController->Initialize(ctx);
-  
+
   if (m_transitionController) {
       m_phase = ScenePhase::Transitioning;
       // ロード中は地球儀のみ表示するためHUD/ミニマップを非表示

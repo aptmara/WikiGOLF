@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file UIRenderSystem.h
- * @brief UIチ（��スト描画システム���（�リファクタリング版）
+ * @brief UIテキスト描画システム
  */
 
 #include "../../core/GameContext.h"
@@ -16,16 +16,20 @@
 
 namespace game::systems {
 
-/// @brief UIテキスト描画システム
-/// @details TextRenderer を使用して UIText コンポーネントを描画
+/**
+ * @brief UIテキスト描画システム
+ * @details TextRenderer を使用して UIText コンポーネントを描画
+*/
 class UIRenderSystem {
 public:
-  /// @brief コンストラクタ
-  /// @param renderer 共有 TextRenderer への参照
+  /**
+   * @brief コンストラクタ
+   * @param renderer 共有 TextRenderer への参照
+*/
   explicit UIRenderSystem(graphics::TextRenderer &renderer)
       : m_renderer(renderer) {}
 
-  /// @brief システム実行（ECS パイプラインから呼び出される）
+  /** @brief システム実行（ECS パイプラインから呼び出される）*/
   void operator()(core::GameContext &ctx) {
     if (!m_renderer.IsValid())
       return;
@@ -102,7 +106,7 @@ public:
   }
 
 private:
-  /// @brief 内容/スタイル/レイアウトサイズが連続して安定しているエンティティかどうかを追跡する
+  /** @brief 内容/スタイル/レイアウトサイズが連続して安定しているエンティティかどうかを追跡する*/
   struct EntityTextState {
     std::wstring text;
     graphics::TextStyle style;
@@ -113,7 +117,9 @@ private:
 
   static constexpr int kStableFrameThreshold = 3;
 
-  /// @return ラスタキャッシュ描画を使ってよいほど安定しているか
+  /**
+   * @return ラスタキャッシュ描画を使ってよいほど安定しているか
+*/
   bool UpdateStability(ecs::Entity entity, const std::wstring &text,
                        const graphics::TextStyle &style, float width,
                        float height) {

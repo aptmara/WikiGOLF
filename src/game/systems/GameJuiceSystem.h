@@ -5,7 +5,7 @@
  *
  * カメラシェイク、FOV変化、トレイル、インパクトエフェクトなど
  * プレイヤーのアクションに対するフィードバック演出を提供する。
- */
+*/
 
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
@@ -26,7 +26,7 @@ namespace game::systems {
  * 1. Initialize() でエンティティプールを作成
  * 2. 毎フレーム Update() を呼ぶ
  * 3. イベント発生時に TriggerXXX() を呼ぶ
- */
+*/
 class GameJuiceSystem {
 public:
   GameJuiceSystem() = default;
@@ -36,77 +36,93 @@ public:
   GameJuiceSystem(const GameJuiceSystem &) = delete;
   GameJuiceSystem &operator=(const GameJuiceSystem &) = delete;
 
-  /// @brief 初期化（エンティティプール作成）
-  /// @param ctx ゲームコンテキスト
+  /**
+   * @brief 初期化（エンティティプール作成）
+   * @param ctx ゲームコンテキスト
+*/
   void Initialize(core::GameContext &ctx);
 
   /**
    * @brief 演出用に生成したEntityをすべて破棄します。
    * @param ctx ゲーム全体の共有コンテキストです。
-   */
+*/
   void Shutdown(core::GameContext &ctx);
 
-  /// @brief 毎フレーム更新
-  /// @param ctx ゲームコンテキスト
-  /// @param cameraEntity カメラエンティティ（シェイク・FOV適用対象）
-  /// @param targetEntity トレイル追跡対象エンティティ（ボールなど）
+  /**
+   * @brief 毎フレーム更新
+   * @param ctx ゲームコンテキスト
+   * @param cameraEntity カメラエンティティ（シェイク・FOV適用対象）
+   * @param targetEntity トレイル追跡対象エンティティ（ボールなど）
+*/
   void Update(core::GameContext &ctx, ecs::Entity cameraEntity,
               ecs::Entity targetEntity);
 
   // === カメラシェイク ===
 
-  /// @brief カメラシェイクを発火
-  /// @param intensity 揺れの強さ（0.0〜1.0推奨）
-  /// @param duration 継続時間（秒）
+  /**
+   * @brief カメラシェイクを発火
+   * @param intensity 揺れの強さ（0.0〜1.0推奨）
+   * @param duration 継続時間（秒）
+*/
   void TriggerCameraShake(float intensity, float duration);
 
   // === FOV変化 ===
 
-  /// @brief 目標FOVを設定（度単位）
-  /// @param fov 目標FOV（度）
+  /**
+   * @brief 目標FOVを設定（度単位）
+   * @param fov 目標FOV（度）
+*/
   void SetTargetFov(float fov);
 
-  /// @brief 基本FOVにリセット
+  /** @brief 基本FOVにリセット*/
   void ResetFov();
 
-  /// @brief 現在のFOVを取得（度単位）
+  /** @brief 現在のFOVを取得（度単位）*/
   float GetCurrentFov() const { return m_currentFov; }
 
   // === タイムコントロール ===
 
-  /// @brief 一時的なヒットストップを発火
-  /// @param duration 継続時間（秒）
-  /// @param timeScale 停止中のスケール（0.0fで完全停止）
+  /**
+   * @brief 一時的なヒットストップを発火
+   * @param duration 継続時間（秒）
+   * @param timeScale 停止中のスケール（0.0fで完全停止）
+*/
   void TriggerHitStop(float duration, float timeScale = 0.0f);
 
-  /// @brief スローモーションを開始
-  /// @param duration 継続時間
-  /// @param scale 適用するスケール
+  /**
+   * @brief スローモーションを開始
+   * @param duration 継続時間
+   * @param scale 適用するスケール
+*/
   void TriggerSlowMotion(float duration, float scale);
 
-  /// @brief 未スケールのdtから有効タイムスケールを計算
+  /** @brief 未スケールのdtから有効タイムスケールを計算*/
   float ConsumeTimeScale(float unscaledDt);
 
   // === インパクトエフェクト ===
 
-  /// @brief 判定タイプ（パーティクルの色・挙動に影響）
+  /** @brief 判定タイプ（パーティクルの色・挙動に影響）*/
   enum class JudgeType { None, Great, Nice, Miss, Special };
 
-  /// @brief インパクトエフェクト発火
-  /// @param ctx ゲームコンテキスト
-  /// @param position エフェクト発生位置
-  /// @param power エフェクトの強さ（パーティクル速度に影響）
-  /// @param judge 判定タイプ（デフォルト: None）
+  /**
+   * @brief インパクトエフェクト発火
+   * @param ctx ゲームコンテキスト
+   * @param position エフェクト発生位置
+   * @param power エフェクトの強さ（パーティクル速度に影響）
+   * @param judge 判定タイプ（デフォルト: None）
+*/
   void TriggerImpactEffect(core::GameContext &ctx,
                            const DirectX::XMFLOAT3 &position, float power,
                            JudgeType judge = JudgeType::None);
 
-  /// @brief ショット時の精度別パーティクルを発火
-  /// @param ctx ゲームコンテキスト
-  /// @param position 発生位置
-  /// @param direction ショット方向
-  /// @param power ショットの強さ
-  /// @param judge 判定タイプ
+  /**
+   * @brief ショット時の精度別パーティクルを発火
+   * @param ctx ゲームコンテキスト
+   * @param position 発生位置
+   * @param direction ショット方向
+   * @param power ショットの強さ
+   * @param judge 判定タイプ
+*/
   void TriggerShotEffect(core::GameContext &ctx,
                          const DirectX::XMFLOAT3 &position,
                          const DirectX::XMFLOAT3 &direction, float power,
@@ -114,28 +130,30 @@ public:
 
   // === マテリアルエフェクト ===
 
-  /// @brief マテリアルに応じたエフェクト発火
-  /// @param ctx ゲームコンテキスト
-  /// @param position 発生位置
-  /// @param material マテリアル種別
-  /// @param strength 強さ（0.0-1.0）
+  /**
+   * @brief マテリアルに応じたエフェクト発火
+   * @param ctx ゲームコンテキスト
+   * @param position 発生位置
+   * @param material マテリアル種別
+   * @param strength 強さ（0.0-1.0）
+*/
   void TriggerMaterialEffect(core::GameContext &ctx,
                              const DirectX::XMFLOAT3 &position,
                              game::components::TerrainMaterial material,
                              float strength);
 
-  /// @brief リップルエフェクトを発火（強いバウンド時）
+  /** @brief リップルエフェクトを発火（強いバウンド時）*/
   void TriggerRippleEffect(core::GameContext &ctx,
                            const DirectX::XMFLOAT3 &position,
                            float baseRadius, float strength);
 
-  /// @brief カップインなど祝祭時の星・紙吹雪・きらめきを発火
+  /** @brief カップインなど祝祭時の星・紙吹雪・きらめきを発火*/
   void TriggerConfetti(core::GameContext &ctx,
                        const DirectX::XMFLOAT3 &position, float burstPower);
 
   // === トレイル ===
 
-  /// @brief トレイルをリセット（ページ遷移時などに呼ぶ）
+  /** @brief トレイルをリセット（ページ遷移時などに呼ぶ）*/
   void ResetTrail();
 
 private:
@@ -170,8 +188,8 @@ private:
   float m_trailUpdateTimer = 0.0f;
   DirectX::XMFLOAT3 m_lastTrailTargetPosition = {0.0f, 0.0f, 0.0f};
   bool m_hasLastTrailTargetPosition = false;
-  static constexpr int kTrailCount = 24;                ///< 軌跡プール数です。山内陽
-  static constexpr float kTrailUpdateInterval = 0.025f; ///< 軌跡更新間隔です。山内陽
+  static constexpr int kTrailCount = 24;                /**< 軌跡プール数です。*/
+  static constexpr float kTrailUpdateInterval = 0.025f; /**< 軌跡更新間隔です。*/
   static constexpr float kTrailMaxSpacing = 0.10f;
 
   // --- インパクトエフェクト ---
@@ -197,8 +215,8 @@ private:
     ImpactParticleKind kind = ImpactParticleKind::Burst;
   };
   std::vector<ImpactParticle> m_impactParticles;
-  static constexpr int kImpactBurstCount = 48; ///< インパクト粒子数です。山内陽
-  static constexpr int kImpactParticleCount = 96; ///< 祝祭を含む粒子数です。山内陽
+  static constexpr int kImpactBurstCount = 48; /**< インパクト粒子数です。*/
+  static constexpr int kImpactParticleCount = 96; /**< 祝祭を含む粒子数です。*/
 
   // --- 環境エフェクト（転がり・スライド） ---
   enum class EnvironmentParticleKind {
@@ -248,29 +266,67 @@ private:
   };
   std::vector<Ripple> m_ripples;
   int m_rippleWriteIndex = 0;
-  static constexpr int kRippleCount = 12; ///< リップル同時数です。山内陽
+  static constexpr int kRippleCount = 12; /**< リップル同時数です。*/
 
-  // --- 内部処理 ---
+  /** @brief カメラシェイクを更新します。 */
   void UpdateCameraShake(core::GameContext &ctx, ecs::Entity cameraEntity);
+
+  /** @brief 視野角（FOV）アニメーションを更新します。 */
   void UpdateFov(core::GameContext &ctx, ecs::Entity cameraEntity);
+
+  /** @brief 弾道軌跡（トレイル）を更新します。 */
   void UpdateTrail(core::GameContext &ctx, ecs::Entity targetEntity);
+
+  /** @brief 着弾パーティクルを更新します。 */
   void UpdateImpactParticles(core::GameContext &ctx);
+
+  /** @brief 環境パーティクルを更新します。 */
   void UpdateEnvironmentParticles(core::GameContext &ctx,
                                   ecs::Entity targetEntity);
+
+  /** @brief 砂面エフェクトを更新します。 */
   void UpdateSandSurfaceEffects(core::GameContext &ctx,
                                 ecs::Entity targetEntity);
+
+  /** @brief 水面波紋（リップル）を更新します。 */
   void UpdateRipples(core::GameContext &ctx);
+
+  /**
+   * @brief FOVパンチ効果を減衰更新します。
+   * @param dt 経過時間[秒]
+   * @return 現在の追加FOV量
+   */
   float UpdateFovPunch(float dt);
+
+  /** @brief 環境パーティクルを発生させます。 */
   void EmitEnvironmentParticles(core::GameContext &ctx,
                                 ecs::Entity targetEntity);
 
+  /** @brief トレイル用エンティティ群を生成します。 */
   void CreateTrailEntities(core::GameContext &ctx);
+
+  /** @brief 着弾パーティクル用エンティティ群を生成します。 */
   void CreateImpactParticleEntities(core::GameContext &ctx);
+
+  /** @brief 環境パーティクル用エンティティ群を生成します。 */
   void CreateEnvironmentParticleEntities(core::GameContext &ctx);
+
+  /** @brief 砂面用エンティティ群を生成します。 */
   void CreateSandSurfaceEntities(core::GameContext &ctx);
+
+  /**
+   * @brief 砂面に足跡・弾痕を配置します。
+   * @param ctx ゲームコンテキスト
+   * @param position 配置座標
+   * @param scale スケール
+   * @param lifetime 生存時間[秒]
+   * @param color カラー値
+   */
   void SpawnSandImprint(core::GameContext &ctx,
                         const DirectX::XMFLOAT3 &position, float scale,
                         float lifetime, const DirectX::XMFLOAT4 &color);
+
+  /** @brief リップル用エンティティ群を生成します。 */
   void CreateRippleEntities(core::GameContext &ctx);
   ecs::EntityOwner m_entityOwner;
 };

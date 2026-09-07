@@ -32,7 +32,7 @@
 */
 #ifndef SQLITE3_H
 #define SQLITE3_H
-#include <stdarg.h>     /* Needed for the definition of va_list */
+#include <stdarg.h>     /* Needed for the definition of va_list*/
 
 /*
 ** Make sure we can call this stuff from C++.
@@ -423,11 +423,11 @@ typedef int (*sqlite3_callback)(void*,int,char**, char**);
 ** </ul>
 */
 SQLITE_API int sqlite3_exec(
-  sqlite3*,                                  /* An open database */
-  const char *sql,                           /* SQL to be evaluated */
-  int (*callback)(void*,int,char**,char**),  /* Callback function */
-  void *,                                    /* 1st argument to callback */
-  char **errmsg                              /* Error msg written here */
+  sqlite3*,                                  /* An open database*/
+  const char *sql,                           /* SQL to be evaluated*/
+  int (*callback)(void*,int,char**,char**),  /* Callback function*/
+  void *,                                    /* 1st argument to callback*/
+  char **errmsg                              /* Error msg written here*/
 );
 
 /*
@@ -441,39 +441,39 @@ SQLITE_API int sqlite3_exec(
 **
 ** See also: [extended result code definitions]
 */
-#define SQLITE_OK           0   /* Successful result */
-/* beginning-of-error-codes */
-#define SQLITE_ERROR        1   /* Generic error */
-#define SQLITE_INTERNAL     2   /* Internal logic error in SQLite */
-#define SQLITE_PERM         3   /* Access permission denied */
-#define SQLITE_ABORT        4   /* Callback routine requested an abort */
-#define SQLITE_BUSY         5   /* The database file is locked */
-#define SQLITE_LOCKED       6   /* A table in the database is locked */
-#define SQLITE_NOMEM        7   /* A malloc() failed */
-#define SQLITE_READONLY     8   /* Attempt to write a readonly database */
+#define SQLITE_OK           0   /* Successful result*/
+/* beginning-of-error-codes*/
+#define SQLITE_ERROR        1   /* Generic error*/
+#define SQLITE_INTERNAL     2   /* Internal logic error in SQLite*/
+#define SQLITE_PERM         3   /* Access permission denied*/
+#define SQLITE_ABORT        4   /* Callback routine requested an abort*/
+#define SQLITE_BUSY         5   /* The database file is locked*/
+#define SQLITE_LOCKED       6   /* A table in the database is locked*/
+#define SQLITE_NOMEM        7   /* A malloc() failed*/
+#define SQLITE_READONLY     8   /* Attempt to write a readonly database*/
 #define SQLITE_INTERRUPT    9   /* Operation terminated by sqlite3_interrupt()*/
-#define SQLITE_IOERR       10   /* Some kind of disk I/O error occurred */
-#define SQLITE_CORRUPT     11   /* The database disk image is malformed */
-#define SQLITE_NOTFOUND    12   /* Unknown opcode in sqlite3_file_control() */
-#define SQLITE_FULL        13   /* Insertion failed because database is full */
-#define SQLITE_CANTOPEN    14   /* Unable to open the database file */
-#define SQLITE_PROTOCOL    15   /* Database lock protocol error */
-#define SQLITE_EMPTY       16   /* Internal use only */
-#define SQLITE_SCHEMA      17   /* The database schema changed */
-#define SQLITE_TOOBIG      18   /* String or BLOB exceeds size limit */
-#define SQLITE_CONSTRAINT  19   /* Abort due to constraint violation */
-#define SQLITE_MISMATCH    20   /* Data type mismatch */
-#define SQLITE_MISUSE      21   /* Library used incorrectly */
-#define SQLITE_NOLFS       22   /* Uses OS features not supported on host */
-#define SQLITE_AUTH        23   /* Authorization denied */
-#define SQLITE_FORMAT      24   /* Not used */
-#define SQLITE_RANGE       25   /* 2nd parameter to sqlite3_bind out of range */
-#define SQLITE_NOTADB      26   /* File opened that is not a database file */
-#define SQLITE_NOTICE      27   /* Notifications from sqlite3_log() */
-#define SQLITE_WARNING     28   /* Warnings from sqlite3_log() */
-#define SQLITE_ROW         100  /* sqlite3_step() has another row ready */
-#define SQLITE_DONE        101  /* sqlite3_step() has finished executing */
-/* end-of-error-codes */
+#define SQLITE_IOERR       10   /* Some kind of disk I/O error occurred*/
+#define SQLITE_CORRUPT     11   /* The database disk image is malformed*/
+#define SQLITE_NOTFOUND    12   /* Unknown opcode in sqlite3_file_control()*/
+#define SQLITE_FULL        13   /* Insertion failed because database is full*/
+#define SQLITE_CANTOPEN    14   /* Unable to open the database file*/
+#define SQLITE_PROTOCOL    15   /* Database lock protocol error*/
+#define SQLITE_EMPTY       16   /* Internal use only*/
+#define SQLITE_SCHEMA      17   /* The database schema changed*/
+#define SQLITE_TOOBIG      18   /* String or BLOB exceeds size limit*/
+#define SQLITE_CONSTRAINT  19   /* Abort due to constraint violation*/
+#define SQLITE_MISMATCH    20   /* Data type mismatch*/
+#define SQLITE_MISUSE      21   /* Library used incorrectly*/
+#define SQLITE_NOLFS       22   /* Uses OS features not supported on host*/
+#define SQLITE_AUTH        23   /* Authorization denied*/
+#define SQLITE_FORMAT      24   /* Not used*/
+#define SQLITE_RANGE       25   /* 2nd parameter to sqlite3_bind out of range*/
+#define SQLITE_NOTADB      26   /* File opened that is not a database file*/
+#define SQLITE_NOTICE      27   /* Notifications from sqlite3_log()*/
+#define SQLITE_WARNING     28   /* Warnings from sqlite3_log()*/
+#define SQLITE_ROW         100  /* sqlite3_step() has another row ready*/
+#define SQLITE_DONE        101  /* sqlite3_step() has finished executing*/
+/* end-of-error-codes*/
 
 /*
 ** CAPI3REF: Extended Result Codes
@@ -538,7 +538,7 @@ SQLITE_API int sqlite3_exec(
 #define SQLITE_CANTOPEN_ISDIR          (SQLITE_CANTOPEN | (2<<8))
 #define SQLITE_CANTOPEN_FULLPATH       (SQLITE_CANTOPEN | (3<<8))
 #define SQLITE_CANTOPEN_CONVPATH       (SQLITE_CANTOPEN | (4<<8))
-#define SQLITE_CANTOPEN_DIRTYWAL       (SQLITE_CANTOPEN | (5<<8)) /* Not Used */
+#define SQLITE_CANTOPEN_DIRTYWAL       (SQLITE_CANTOPEN | (5<<8)) /* Not Used*/
 #define SQLITE_CANTOPEN_SYMLINK        (SQLITE_CANTOPEN | (6<<8))
 #define SQLITE_CORRUPT_VTAB            (SQLITE_CORRUPT | (1<<8))
 #define SQLITE_CORRUPT_SEQUENCE        (SQLITE_CORRUPT | (2<<8))
@@ -568,7 +568,7 @@ SQLITE_API int sqlite3_exec(
 #define SQLITE_WARNING_AUTOINDEX       (SQLITE_WARNING | (1<<8))
 #define SQLITE_AUTH_USER               (SQLITE_AUTH | (1<<8))
 #define SQLITE_OK_LOAD_PERMANENTLY     (SQLITE_OK | (1<<8))
-#define SQLITE_OK_SYMLINK              (SQLITE_OK | (2<<8)) /* internal use only */
+#define SQLITE_OK_SYMLINK              (SQLITE_OK | (2<<8)) /* internal use only*/
 
 /*
 ** CAPI3REF: Flags For File Open Operations
@@ -590,32 +590,32 @@ SQLITE_API int sqlite3_exec(
 ** [sqlite3_open_v2()] has historically be a no-op and might become an
 ** error in future versions of SQLite.
 */
-#define SQLITE_OPEN_READONLY         0x00000001  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_READWRITE        0x00000002  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_CREATE           0x00000004  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_DELETEONCLOSE    0x00000008  /* VFS only */
-#define SQLITE_OPEN_EXCLUSIVE        0x00000010  /* VFS only */
-#define SQLITE_OPEN_AUTOPROXY        0x00000020  /* VFS only */
-#define SQLITE_OPEN_URI              0x00000040  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_MEMORY           0x00000080  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_MAIN_DB          0x00000100  /* VFS only */
-#define SQLITE_OPEN_TEMP_DB          0x00000200  /* VFS only */
-#define SQLITE_OPEN_TRANSIENT_DB     0x00000400  /* VFS only */
-#define SQLITE_OPEN_MAIN_JOURNAL     0x00000800  /* VFS only */
-#define SQLITE_OPEN_TEMP_JOURNAL     0x00001000  /* VFS only */
-#define SQLITE_OPEN_SUBJOURNAL       0x00002000  /* VFS only */
-#define SQLITE_OPEN_SUPER_JOURNAL    0x00004000  /* VFS only */
-#define SQLITE_OPEN_NOMUTEX          0x00008000  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_FULLMUTEX        0x00010000  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_SHAREDCACHE      0x00020000  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_PRIVATECACHE     0x00040000  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_WAL              0x00080000  /* VFS only */
-#define SQLITE_OPEN_NOFOLLOW         0x01000000  /* Ok for sqlite3_open_v2() */
-#define SQLITE_OPEN_EXRESCODE        0x02000000  /* Extended result codes */
+#define SQLITE_OPEN_READONLY         0x00000001  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_READWRITE        0x00000002  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_CREATE           0x00000004  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_DELETEONCLOSE    0x00000008  /* VFS only*/
+#define SQLITE_OPEN_EXCLUSIVE        0x00000010  /* VFS only*/
+#define SQLITE_OPEN_AUTOPROXY        0x00000020  /* VFS only*/
+#define SQLITE_OPEN_URI              0x00000040  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_MEMORY           0x00000080  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_MAIN_DB          0x00000100  /* VFS only*/
+#define SQLITE_OPEN_TEMP_DB          0x00000200  /* VFS only*/
+#define SQLITE_OPEN_TRANSIENT_DB     0x00000400  /* VFS only*/
+#define SQLITE_OPEN_MAIN_JOURNAL     0x00000800  /* VFS only*/
+#define SQLITE_OPEN_TEMP_JOURNAL     0x00001000  /* VFS only*/
+#define SQLITE_OPEN_SUBJOURNAL       0x00002000  /* VFS only*/
+#define SQLITE_OPEN_SUPER_JOURNAL    0x00004000  /* VFS only*/
+#define SQLITE_OPEN_NOMUTEX          0x00008000  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_FULLMUTEX        0x00010000  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_SHAREDCACHE      0x00020000  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_PRIVATECACHE     0x00040000  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_WAL              0x00080000  /* VFS only*/
+#define SQLITE_OPEN_NOFOLLOW         0x01000000  /* Ok for sqlite3_open_v2()*/
+#define SQLITE_OPEN_EXRESCODE        0x02000000  /* Extended result codes*/
 
-/* Reserved:                         0x00F00000 */
-/* Legacy compatibility: */
-#define SQLITE_OPEN_MASTER_JOURNAL   0x00004000  /* VFS only */
+/* Reserved:                         0x00F00000*/
+/* Legacy compatibility:*/
+#define SQLITE_OPEN_MASTER_JOURNAL   0x00004000  /* VFS only*/
 
 
 /*
@@ -678,11 +678,11 @@ SQLITE_API int sqlite3_exec(
 ** The argument to xLock() is always SHARED or higher.  The argument to
 ** xUnlock is either SHARED or NONE.
 */
-#define SQLITE_LOCK_NONE          0       /* xUnlock() only */
-#define SQLITE_LOCK_SHARED        1       /* xLock() or xUnlock() */
-#define SQLITE_LOCK_RESERVED      2       /* xLock() only */
-#define SQLITE_LOCK_PENDING       3       /* xLock() only */
-#define SQLITE_LOCK_EXCLUSIVE     4       /* xLock() only */
+#define SQLITE_LOCK_NONE          0       /* xUnlock() only*/
+#define SQLITE_LOCK_SHARED        1       /* xLock() or xUnlock()*/
+#define SQLITE_LOCK_RESERVED      2       /* xLock() only*/
+#define SQLITE_LOCK_PENDING       3       /* xLock() only*/
+#define SQLITE_LOCK_EXCLUSIVE     4       /* xLock() only*/
 
 /*
 ** CAPI3REF: Synchronization Type Flags
@@ -727,7 +727,7 @@ SQLITE_API int sqlite3_exec(
 */
 typedef struct sqlite3_file sqlite3_file;
 struct sqlite3_file {
-  const struct sqlite3_io_methods *pMethods;  /* Methods for an open file */
+  const struct sqlite3_io_methods *pMethods;  /* Methods for an open file*/
 };
 
 /*
@@ -846,16 +846,16 @@ struct sqlite3_io_methods {
   int (*xFileControl)(sqlite3_file*, int op, void *pArg);
   int (*xSectorSize)(sqlite3_file*);
   int (*xDeviceCharacteristics)(sqlite3_file*);
-  /* Methods above are valid for version 1 */
+  /* Methods above are valid for version 1*/
   int (*xShmMap)(sqlite3_file*, int iPg, int pgsz, int, void volatile**);
   int (*xShmLock)(sqlite3_file*, int offset, int n, int flags);
   void (*xShmBarrier)(sqlite3_file*);
   int (*xShmUnmap)(sqlite3_file*, int deleteFlag);
-  /* Methods above are valid for version 2 */
+  /* Methods above are valid for version 2*/
   int (*xFetch)(sqlite3_file*, sqlite3_int64 iOfst, int iAmt, void **pp);
   int (*xUnfetch)(sqlite3_file*, sqlite3_int64 iOfst, void *p);
-  /* Methods above are valid for version 3 */
-  /* Additional methods may be added in future releases */
+  /* Methods above are valid for version 3*/
+  /* Additional methods may be added in future releases*/
 };
 
 /*
@@ -1243,7 +1243,7 @@ struct sqlite3_io_methods {
 #define SQLITE_FCNTL_CKSM_FILE              41
 #define SQLITE_FCNTL_RESET_CACHE            42
 
-/* deprecated names */
+/* deprecated names*/
 #define SQLITE_GET_LOCKPROXYFILE      SQLITE_FCNTL_GET_LOCKPROXYFILE
 #define SQLITE_SET_LOCKPROXYFILE      SQLITE_FCNTL_SET_LOCKPROXYFILE
 #define SQLITE_LAST_ERRNO             SQLITE_FCNTL_LAST_ERRNO
@@ -1463,12 +1463,12 @@ typedef const char *sqlite3_filename;
 typedef struct sqlite3_vfs sqlite3_vfs;
 typedef void (*sqlite3_syscall_ptr)(void);
 struct sqlite3_vfs {
-  int iVersion;            /* Structure version number (currently 3) */
-  int szOsFile;            /* Size of subclassed sqlite3_file */
-  int mxPathname;          /* Maximum file pathname length */
-  sqlite3_vfs *pNext;      /* Next registered VFS */
-  const char *zName;       /* Name of this virtual file system */
-  void *pAppData;          /* Pointer to application-specific data */
+  int iVersion;            /* Structure version number (currently 3)*/
+  int szOsFile;            /* Size of subclassed sqlite3_file*/
+  int mxPathname;          /* Maximum file pathname length*/
+  sqlite3_vfs *pNext;      /* Next registered VFS*/
+  const char *zName;       /* Name of this virtual file system*/
+  void *pAppData;          /* Pointer to application-specific data*/
   int (*xOpen)(sqlite3_vfs*, sqlite3_filename zName, sqlite3_file*,
                int flags, int *pOutFlags);
   int (*xDelete)(sqlite3_vfs*, const char *zName, int syncDir);
@@ -1485,12 +1485,12 @@ struct sqlite3_vfs {
   /*
   ** The methods above are in version 1 of the sqlite_vfs object
   ** definition.  Those that follow are added in version 2 or later
-  */
+*/
   int (*xCurrentTimeInt64)(sqlite3_vfs*, sqlite3_int64*);
   /*
   ** The methods above are in versions 1 and 2 of the sqlite_vfs object.
   ** Those below are for version 3 and greater.
-  */
+*/
   int (*xSetSystemCall)(sqlite3_vfs*, const char *zName, sqlite3_syscall_ptr);
   sqlite3_syscall_ptr (*xGetSystemCall)(sqlite3_vfs*, const char *zName);
   const char *(*xNextSystemCall)(sqlite3_vfs*, const char *zName);
@@ -1498,7 +1498,7 @@ struct sqlite3_vfs {
   ** The methods above are in versions 1 through 3 of the sqlite_vfs object.
   ** New fields may be appended in future versions.  The iVersion
   ** value will increment whenever this happens.
-  */
+*/
 };
 
 /*
@@ -1522,8 +1522,8 @@ struct sqlite3_vfs {
 ** SQLite.
 */
 #define SQLITE_ACCESS_EXISTS    0
-#define SQLITE_ACCESS_READWRITE 1   /* Used by PRAGMA temp_store_directory */
-#define SQLITE_ACCESS_READ      2   /* Unused */
+#define SQLITE_ACCESS_READWRITE 1   /* Used by PRAGMA temp_store_directory*/
+#define SQLITE_ACCESS_READ      2   /* Unused*/
 
 /*
 ** CAPI3REF: Flags for the xShmLock VFS method
@@ -1763,14 +1763,14 @@ SQLITE_API int sqlite3_db_config(sqlite3*, int op, ...);
 */
 typedef struct sqlite3_mem_methods sqlite3_mem_methods;
 struct sqlite3_mem_methods {
-  void *(*xMalloc)(int);         /* Memory allocation function */
-  void (*xFree)(void*);          /* Free a prior allocation */
-  void *(*xRealloc)(void*,int);  /* Resize an allocation */
-  int (*xSize)(void*);           /* Return the size of an allocation */
-  int (*xRoundup)(int);          /* Round up request size to allocation size */
-  int (*xInit)(void*);           /* Initialize the memory allocator */
-  void (*xShutdown)(void*);      /* Deinitialize the memory allocator */
-  void *pAppData;                /* Argument to xInit() and xShutdown() */
+  void *(*xMalloc)(int);         /* Memory allocation function*/
+  void (*xFree)(void*);          /* Free a prior allocation*/
+  void *(*xRealloc)(void*,int);  /* Resize an allocation*/
+  int (*xSize)(void*);           /* Return the size of an allocation*/
+  int (*xRoundup)(int);          /* Round up request size to allocation size*/
+  int (*xInit)(void*);           /* Initialize the memory allocator*/
+  void (*xShutdown)(void*);      /* Deinitialize the memory allocator*/
+  void *pAppData;                /* Argument to xInit() and xShutdown()*/
 };
 
 /*
@@ -2143,35 +2143,35 @@ struct sqlite3_mem_methods {
 ** compile-time option is not set, then the default maximum is 1073741824.
 ** </dl>
 */
-#define SQLITE_CONFIG_SINGLETHREAD         1  /* nil */
-#define SQLITE_CONFIG_MULTITHREAD          2  /* nil */
-#define SQLITE_CONFIG_SERIALIZED           3  /* nil */
-#define SQLITE_CONFIG_MALLOC               4  /* sqlite3_mem_methods* */
-#define SQLITE_CONFIG_GETMALLOC            5  /* sqlite3_mem_methods* */
-#define SQLITE_CONFIG_SCRATCH              6  /* No longer used */
-#define SQLITE_CONFIG_PAGECACHE            7  /* void*, int sz, int N */
-#define SQLITE_CONFIG_HEAP                 8  /* void*, int nByte, int min */
-#define SQLITE_CONFIG_MEMSTATUS            9  /* boolean */
-#define SQLITE_CONFIG_MUTEX               10  /* sqlite3_mutex_methods* */
-#define SQLITE_CONFIG_GETMUTEX            11  /* sqlite3_mutex_methods* */
-/* previously SQLITE_CONFIG_CHUNKALLOC    12 which is now unused. */
-#define SQLITE_CONFIG_LOOKASIDE           13  /* int int */
-#define SQLITE_CONFIG_PCACHE              14  /* no-op */
-#define SQLITE_CONFIG_GETPCACHE           15  /* no-op */
-#define SQLITE_CONFIG_LOG                 16  /* xFunc, void* */
-#define SQLITE_CONFIG_URI                 17  /* int */
-#define SQLITE_CONFIG_PCACHE2             18  /* sqlite3_pcache_methods2* */
-#define SQLITE_CONFIG_GETPCACHE2          19  /* sqlite3_pcache_methods2* */
-#define SQLITE_CONFIG_COVERING_INDEX_SCAN 20  /* int */
-#define SQLITE_CONFIG_SQLLOG              21  /* xSqllog, void* */
-#define SQLITE_CONFIG_MMAP_SIZE           22  /* sqlite3_int64, sqlite3_int64 */
-#define SQLITE_CONFIG_WIN32_HEAPSIZE      23  /* int nByte */
-#define SQLITE_CONFIG_PCACHE_HDRSZ        24  /* int *psz */
-#define SQLITE_CONFIG_PMASZ               25  /* unsigned int szPma */
-#define SQLITE_CONFIG_STMTJRNL_SPILL      26  /* int nByte */
-#define SQLITE_CONFIG_SMALL_MALLOC        27  /* boolean */
-#define SQLITE_CONFIG_SORTERREF_SIZE      28  /* int nByte */
-#define SQLITE_CONFIG_MEMDB_MAXSIZE       29  /* sqlite3_int64 */
+#define SQLITE_CONFIG_SINGLETHREAD         1  /* nil*/
+#define SQLITE_CONFIG_MULTITHREAD          2  /* nil*/
+#define SQLITE_CONFIG_SERIALIZED           3  /* nil*/
+#define SQLITE_CONFIG_MALLOC               4  /* sqlite3_mem_methods**/
+#define SQLITE_CONFIG_GETMALLOC            5  /* sqlite3_mem_methods**/
+#define SQLITE_CONFIG_SCRATCH              6  /* No longer used*/
+#define SQLITE_CONFIG_PAGECACHE            7  /* void*, int sz, int N*/
+#define SQLITE_CONFIG_HEAP                 8  /* void*, int nByte, int min*/
+#define SQLITE_CONFIG_MEMSTATUS            9  /* boolean*/
+#define SQLITE_CONFIG_MUTEX               10  /* sqlite3_mutex_methods**/
+#define SQLITE_CONFIG_GETMUTEX            11  /* sqlite3_mutex_methods**/
+/* previously SQLITE_CONFIG_CHUNKALLOC    12 which is now unused.*/
+#define SQLITE_CONFIG_LOOKASIDE           13  /* int int*/
+#define SQLITE_CONFIG_PCACHE              14  /* no-op*/
+#define SQLITE_CONFIG_GETPCACHE           15  /* no-op*/
+#define SQLITE_CONFIG_LOG                 16  /* xFunc, void**/
+#define SQLITE_CONFIG_URI                 17  /* int*/
+#define SQLITE_CONFIG_PCACHE2             18  /* sqlite3_pcache_methods2**/
+#define SQLITE_CONFIG_GETPCACHE2          19  /* sqlite3_pcache_methods2**/
+#define SQLITE_CONFIG_COVERING_INDEX_SCAN 20  /* int*/
+#define SQLITE_CONFIG_SQLLOG              21  /* xSqllog, void**/
+#define SQLITE_CONFIG_MMAP_SIZE           22  /* sqlite3_int64, sqlite3_int64*/
+#define SQLITE_CONFIG_WIN32_HEAPSIZE      23  /* int nByte*/
+#define SQLITE_CONFIG_PCACHE_HDRSZ        24  /* int *psz*/
+#define SQLITE_CONFIG_PMASZ               25  /* unsigned int szPma*/
+#define SQLITE_CONFIG_STMTJRNL_SPILL      26  /* int nByte*/
+#define SQLITE_CONFIG_SMALL_MALLOC        27  /* boolean*/
+#define SQLITE_CONFIG_SORTERREF_SIZE      28  /* int nByte*/
+#define SQLITE_CONFIG_MEMDB_MAXSIZE       29  /* sqlite3_int64*/
 
 /*
 ** CAPI3REF: Database Connection Configuration Options
@@ -2491,27 +2491,27 @@ struct sqlite3_mem_methods {
 **
 ** </dl>
 */
-#define SQLITE_DBCONFIG_MAINDBNAME            1000 /* const char* */
-#define SQLITE_DBCONFIG_LOOKASIDE             1001 /* void* int int */
-#define SQLITE_DBCONFIG_ENABLE_FKEY           1002 /* int int* */
-#define SQLITE_DBCONFIG_ENABLE_TRIGGER        1003 /* int int* */
-#define SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER 1004 /* int int* */
-#define SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION 1005 /* int int* */
-#define SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE      1006 /* int int* */
-#define SQLITE_DBCONFIG_ENABLE_QPSG           1007 /* int int* */
-#define SQLITE_DBCONFIG_TRIGGER_EQP           1008 /* int int* */
-#define SQLITE_DBCONFIG_RESET_DATABASE        1009 /* int int* */
-#define SQLITE_DBCONFIG_DEFENSIVE             1010 /* int int* */
-#define SQLITE_DBCONFIG_WRITABLE_SCHEMA       1011 /* int int* */
-#define SQLITE_DBCONFIG_LEGACY_ALTER_TABLE    1012 /* int int* */
-#define SQLITE_DBCONFIG_DQS_DML               1013 /* int int* */
-#define SQLITE_DBCONFIG_DQS_DDL               1014 /* int int* */
-#define SQLITE_DBCONFIG_ENABLE_VIEW           1015 /* int int* */
-#define SQLITE_DBCONFIG_LEGACY_FILE_FORMAT    1016 /* int int* */
-#define SQLITE_DBCONFIG_TRUSTED_SCHEMA        1017 /* int int* */
-#define SQLITE_DBCONFIG_STMT_SCANSTATUS       1018 /* int int* */
-#define SQLITE_DBCONFIG_REVERSE_SCANORDER     1019 /* int int* */
-#define SQLITE_DBCONFIG_MAX                   1019 /* Largest DBCONFIG */
+#define SQLITE_DBCONFIG_MAINDBNAME            1000 /* const char**/
+#define SQLITE_DBCONFIG_LOOKASIDE             1001 /* void* int int*/
+#define SQLITE_DBCONFIG_ENABLE_FKEY           1002 /* int int**/
+#define SQLITE_DBCONFIG_ENABLE_TRIGGER        1003 /* int int**/
+#define SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER 1004 /* int int**/
+#define SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION 1005 /* int int**/
+#define SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE      1006 /* int int**/
+#define SQLITE_DBCONFIG_ENABLE_QPSG           1007 /* int int**/
+#define SQLITE_DBCONFIG_TRIGGER_EQP           1008 /* int int**/
+#define SQLITE_DBCONFIG_RESET_DATABASE        1009 /* int int**/
+#define SQLITE_DBCONFIG_DEFENSIVE             1010 /* int int**/
+#define SQLITE_DBCONFIG_WRITABLE_SCHEMA       1011 /* int int**/
+#define SQLITE_DBCONFIG_LEGACY_ALTER_TABLE    1012 /* int int**/
+#define SQLITE_DBCONFIG_DQS_DML               1013 /* int int**/
+#define SQLITE_DBCONFIG_DQS_DDL               1014 /* int int**/
+#define SQLITE_DBCONFIG_ENABLE_VIEW           1015 /* int int**/
+#define SQLITE_DBCONFIG_LEGACY_FILE_FORMAT    1016 /* int int**/
+#define SQLITE_DBCONFIG_TRUSTED_SCHEMA        1017 /* int int**/
+#define SQLITE_DBCONFIG_STMT_SCANSTATUS       1018 /* int int**/
+#define SQLITE_DBCONFIG_REVERSE_SCANORDER     1019 /* int int**/
+#define SQLITE_DBCONFIG_MAX                   1019 /* Largest DBCONFIG*/
 
 /*
 ** CAPI3REF: Enable Or Disable Extended Result Codes
@@ -2935,12 +2935,12 @@ SQLITE_API int sqlite3_busy_timeout(sqlite3*, int ms);
 ** [sqlite3_errmsg()].
 */
 SQLITE_API int sqlite3_get_table(
-  sqlite3 *db,          /* An open database */
-  const char *zSql,     /* SQL to be evaluated */
-  char ***pazResult,    /* Results of the query */
-  int *pnRow,           /* Number of result rows written here */
-  int *pnColumn,        /* Number of result columns written here */
-  char **pzErrmsg       /* Error msg written here */
+  sqlite3 *db,          /* An open database*/
+  const char *zSql,     /* SQL to be evaluated*/
+  char ***pazResult,    /* Results of the query*/
+  int *pnRow,           /* Number of result rows written here*/
+  int *pnColumn,        /* Number of result columns written here*/
+  char **pzErrmsg       /* Error msg written here*/
 );
 SQLITE_API void sqlite3_free_table(char **result);
 
@@ -3227,8 +3227,8 @@ SQLITE_API int sqlite3_set_authorizer(
 ** Note that SQLITE_IGNORE is also used as a [conflict resolution mode]
 ** returned from the [sqlite3_vtab_on_conflict()] interface.
 */
-#define SQLITE_DENY   1   /* Abort the SQL statement with an error */
-#define SQLITE_IGNORE 2   /* Don't allow access, but don't generate an error */
+#define SQLITE_DENY   1   /* Abort the SQL statement with an error*/
+#define SQLITE_IGNORE 2   /* Don't allow access, but don't generate an error*/
 
 /*
 ** CAPI3REF: Authorizer Action Codes
@@ -3250,40 +3250,40 @@ SQLITE_API int sqlite3_set_authorizer(
 ** top-level SQL code.
 */
 /******************************************* 3rd ************ 4th ***********/
-#define SQLITE_CREATE_INDEX          1   /* Index Name      Table Name      */
-#define SQLITE_CREATE_TABLE          2   /* Table Name      NULL            */
-#define SQLITE_CREATE_TEMP_INDEX     3   /* Index Name      Table Name      */
-#define SQLITE_CREATE_TEMP_TABLE     4   /* Table Name      NULL            */
-#define SQLITE_CREATE_TEMP_TRIGGER   5   /* Trigger Name    Table Name      */
-#define SQLITE_CREATE_TEMP_VIEW      6   /* View Name       NULL            */
-#define SQLITE_CREATE_TRIGGER        7   /* Trigger Name    Table Name      */
-#define SQLITE_CREATE_VIEW           8   /* View Name       NULL            */
-#define SQLITE_DELETE                9   /* Table Name      NULL            */
-#define SQLITE_DROP_INDEX           10   /* Index Name      Table Name      */
-#define SQLITE_DROP_TABLE           11   /* Table Name      NULL            */
-#define SQLITE_DROP_TEMP_INDEX      12   /* Index Name      Table Name      */
-#define SQLITE_DROP_TEMP_TABLE      13   /* Table Name      NULL            */
-#define SQLITE_DROP_TEMP_TRIGGER    14   /* Trigger Name    Table Name      */
-#define SQLITE_DROP_TEMP_VIEW       15   /* View Name       NULL            */
-#define SQLITE_DROP_TRIGGER         16   /* Trigger Name    Table Name      */
-#define SQLITE_DROP_VIEW            17   /* View Name       NULL            */
-#define SQLITE_INSERT               18   /* Table Name      NULL            */
-#define SQLITE_PRAGMA               19   /* Pragma Name     1st arg or NULL */
-#define SQLITE_READ                 20   /* Table Name      Column Name     */
-#define SQLITE_SELECT               21   /* NULL            NULL            */
-#define SQLITE_TRANSACTION          22   /* Operation       NULL            */
-#define SQLITE_UPDATE               23   /* Table Name      Column Name     */
-#define SQLITE_ATTACH               24   /* Filename        NULL            */
-#define SQLITE_DETACH               25   /* Database Name   NULL            */
-#define SQLITE_ALTER_TABLE          26   /* Database Name   Table Name      */
-#define SQLITE_REINDEX              27   /* Index Name      NULL            */
-#define SQLITE_ANALYZE              28   /* Table Name      NULL            */
-#define SQLITE_CREATE_VTABLE        29   /* Table Name      Module Name     */
-#define SQLITE_DROP_VTABLE          30   /* Table Name      Module Name     */
-#define SQLITE_FUNCTION             31   /* NULL            Function Name   */
-#define SQLITE_SAVEPOINT            32   /* Operation       Savepoint Name  */
-#define SQLITE_COPY                  0   /* No longer used */
-#define SQLITE_RECURSIVE            33   /* NULL            NULL            */
+#define SQLITE_CREATE_INDEX          1   /* Index Name      Table Name*/
+#define SQLITE_CREATE_TABLE          2   /* Table Name      NULL*/
+#define SQLITE_CREATE_TEMP_INDEX     3   /* Index Name      Table Name*/
+#define SQLITE_CREATE_TEMP_TABLE     4   /* Table Name      NULL*/
+#define SQLITE_CREATE_TEMP_TRIGGER   5   /* Trigger Name    Table Name*/
+#define SQLITE_CREATE_TEMP_VIEW      6   /* View Name       NULL*/
+#define SQLITE_CREATE_TRIGGER        7   /* Trigger Name    Table Name*/
+#define SQLITE_CREATE_VIEW           8   /* View Name       NULL*/
+#define SQLITE_DELETE                9   /* Table Name      NULL*/
+#define SQLITE_DROP_INDEX           10   /* Index Name      Table Name*/
+#define SQLITE_DROP_TABLE           11   /* Table Name      NULL*/
+#define SQLITE_DROP_TEMP_INDEX      12   /* Index Name      Table Name*/
+#define SQLITE_DROP_TEMP_TABLE      13   /* Table Name      NULL*/
+#define SQLITE_DROP_TEMP_TRIGGER    14   /* Trigger Name    Table Name*/
+#define SQLITE_DROP_TEMP_VIEW       15   /* View Name       NULL*/
+#define SQLITE_DROP_TRIGGER         16   /* Trigger Name    Table Name*/
+#define SQLITE_DROP_VIEW            17   /* View Name       NULL*/
+#define SQLITE_INSERT               18   /* Table Name      NULL*/
+#define SQLITE_PRAGMA               19   /* Pragma Name     1st arg or NULL*/
+#define SQLITE_READ                 20   /* Table Name      Column Name*/
+#define SQLITE_SELECT               21   /* NULL            NULL*/
+#define SQLITE_TRANSACTION          22   /* Operation       NULL*/
+#define SQLITE_UPDATE               23   /* Table Name      Column Name*/
+#define SQLITE_ATTACH               24   /* Filename        NULL*/
+#define SQLITE_DETACH               25   /* Database Name   NULL*/
+#define SQLITE_ALTER_TABLE          26   /* Database Name   Table Name*/
+#define SQLITE_REINDEX              27   /* Index Name      NULL*/
+#define SQLITE_ANALYZE              28   /* Table Name      NULL*/
+#define SQLITE_CREATE_VTABLE        29   /* Table Name      Module Name*/
+#define SQLITE_DROP_VTABLE          30   /* Table Name      Module Name*/
+#define SQLITE_FUNCTION             31   /* NULL            Function Name*/
+#define SQLITE_SAVEPOINT            32   /* Operation       Savepoint Name*/
+#define SQLITE_COPY                  0   /* No longer used*/
+#define SQLITE_RECURSIVE            33   /* NULL            NULL*/
 
 /*
 ** CAPI3REF: Tracing And Profiling Functions
@@ -3737,18 +3737,18 @@ SQLITE_API void sqlite3_progress_handler(sqlite3*, int, int(*)(void*), void*);
 ** See also: [sqlite3_temp_directory]
 */
 SQLITE_API int sqlite3_open(
-  const char *filename,   /* Database filename (UTF-8) */
-  sqlite3 **ppDb          /* OUT: SQLite db handle */
+  const char *filename,   /* Database filename (UTF-8)*/
+  sqlite3 **ppDb          /* OUT: SQLite db handle*/
 );
 SQLITE_API int sqlite3_open16(
-  const void *filename,   /* Database filename (UTF-16) */
-  sqlite3 **ppDb          /* OUT: SQLite db handle */
+  const void *filename,   /* Database filename (UTF-16)*/
+  sqlite3 **ppDb          /* OUT: SQLite db handle*/
 );
 SQLITE_API int sqlite3_open_v2(
-  const char *filename,   /* Database filename (UTF-8) */
-  sqlite3 **ppDb,         /* OUT: SQLite db handle */
-  int flags,              /* Flags */
-  const char *zVfs        /* Name of VFS module to use */
+  const char *filename,   /* Database filename (UTF-8)*/
+  sqlite3 **ppDb,         /* OUT: SQLite db handle*/
+  int flags,              /* Flags*/
+  const char *zVfs        /* Name of VFS module to use*/
 );
 
 /*
@@ -4273,48 +4273,48 @@ SQLITE_API int sqlite3_limit(sqlite3*, int id, int newVal);
 ** sqlite3_prepare_v3() with a zero prepFlags parameter.
 */
 SQLITE_API int sqlite3_prepare(
-  sqlite3 *db,            /* Database handle */
-  const char *zSql,       /* SQL statement, UTF-8 encoded */
-  int nByte,              /* Maximum length of zSql in bytes. */
-  sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
-  const char **pzTail     /* OUT: Pointer to unused portion of zSql */
+  sqlite3 *db,            /* Database handle*/
+  const char *zSql,       /* SQL statement, UTF-8 encoded*/
+  int nByte,              /* Maximum length of zSql in bytes.*/
+  sqlite3_stmt **ppStmt,  /* OUT: Statement handle*/
+  const char **pzTail     /* OUT: Pointer to unused portion of zSql*/
 );
 SQLITE_API int sqlite3_prepare_v2(
-  sqlite3 *db,            /* Database handle */
-  const char *zSql,       /* SQL statement, UTF-8 encoded */
-  int nByte,              /* Maximum length of zSql in bytes. */
-  sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
-  const char **pzTail     /* OUT: Pointer to unused portion of zSql */
+  sqlite3 *db,            /* Database handle*/
+  const char *zSql,       /* SQL statement, UTF-8 encoded*/
+  int nByte,              /* Maximum length of zSql in bytes.*/
+  sqlite3_stmt **ppStmt,  /* OUT: Statement handle*/
+  const char **pzTail     /* OUT: Pointer to unused portion of zSql*/
 );
 SQLITE_API int sqlite3_prepare_v3(
-  sqlite3 *db,            /* Database handle */
-  const char *zSql,       /* SQL statement, UTF-8 encoded */
-  int nByte,              /* Maximum length of zSql in bytes. */
-  unsigned int prepFlags, /* Zero or more SQLITE_PREPARE_ flags */
-  sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
-  const char **pzTail     /* OUT: Pointer to unused portion of zSql */
+  sqlite3 *db,            /* Database handle*/
+  const char *zSql,       /* SQL statement, UTF-8 encoded*/
+  int nByte,              /* Maximum length of zSql in bytes.*/
+  unsigned int prepFlags, /* Zero or more SQLITE_PREPARE_ flags*/
+  sqlite3_stmt **ppStmt,  /* OUT: Statement handle*/
+  const char **pzTail     /* OUT: Pointer to unused portion of zSql*/
 );
 SQLITE_API int sqlite3_prepare16(
-  sqlite3 *db,            /* Database handle */
-  const void *zSql,       /* SQL statement, UTF-16 encoded */
-  int nByte,              /* Maximum length of zSql in bytes. */
-  sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
-  const void **pzTail     /* OUT: Pointer to unused portion of zSql */
+  sqlite3 *db,            /* Database handle*/
+  const void *zSql,       /* SQL statement, UTF-16 encoded*/
+  int nByte,              /* Maximum length of zSql in bytes.*/
+  sqlite3_stmt **ppStmt,  /* OUT: Statement handle*/
+  const void **pzTail     /* OUT: Pointer to unused portion of zSql*/
 );
 SQLITE_API int sqlite3_prepare16_v2(
-  sqlite3 *db,            /* Database handle */
-  const void *zSql,       /* SQL statement, UTF-16 encoded */
-  int nByte,              /* Maximum length of zSql in bytes. */
-  sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
-  const void **pzTail     /* OUT: Pointer to unused portion of zSql */
+  sqlite3 *db,            /* Database handle*/
+  const void *zSql,       /* SQL statement, UTF-16 encoded*/
+  int nByte,              /* Maximum length of zSql in bytes.*/
+  sqlite3_stmt **ppStmt,  /* OUT: Statement handle*/
+  const void **pzTail     /* OUT: Pointer to unused portion of zSql*/
 );
 SQLITE_API int sqlite3_prepare16_v3(
-  sqlite3 *db,            /* Database handle */
-  const void *zSql,       /* SQL statement, UTF-16 encoded */
-  int nByte,              /* Maximum length of zSql in bytes. */
-  unsigned int prepFlags, /* Zero or more SQLITE_PREPARE_ flags */
-  sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
-  const void **pzTail     /* OUT: Pointer to unused portion of zSql */
+  sqlite3 *db,            /* Database handle*/
+  const void *zSql,       /* SQL statement, UTF-16 encoded*/
+  int nByte,              /* Maximum length of zSql in bytes.*/
+  unsigned int prepFlags, /* Zero or more SQLITE_PREPARE_ flags*/
+  sqlite3_stmt **ppStmt,  /* OUT: Statement handle*/
+  const void **pzTail     /* OUT: Pointer to unused portion of zSql*/
 );
 
 /*
@@ -5502,12 +5502,12 @@ SQLITE_API int sqlite3_create_window_function(
 ** These constant define integer codes that represent the various
 ** text encodings supported by SQLite.
 */
-#define SQLITE_UTF8           1    /* IMP: R-37514-35566 */
-#define SQLITE_UTF16LE        2    /* IMP: R-03371-37637 */
-#define SQLITE_UTF16BE        3    /* IMP: R-51971-34154 */
-#define SQLITE_UTF16          4    /* Use native byte order */
-#define SQLITE_ANY            5    /* Deprecated */
-#define SQLITE_UTF16_ALIGNED  8    /* sqlite3_create_collation only */
+#define SQLITE_UTF8           1    /* IMP: R-37514-35566*/
+#define SQLITE_UTF16LE        2    /* IMP: R-03371-37637*/
+#define SQLITE_UTF16BE        3    /* IMP: R-51971-34154*/
+#define SQLITE_UTF16          4    /* Use native byte order*/
+#define SQLITE_ANY            5    /* Deprecated*/
+#define SQLITE_UTF16_ALIGNED  8    /* sqlite3_create_collation only*/
 
 /*
 ** CAPI3REF: Function Flags
@@ -6390,7 +6390,7 @@ SQLITE_API int sqlite3_collation_needed16(
 ** activated, none of the CEROD routines will work.
 */
 SQLITE_API void sqlite3_activate_cerod(
-  const char *zPassPhrase        /* Activation phrase */
+  const char *zPassPhrase        /* Activation phrase*/
 );
 #endif
 
@@ -6535,8 +6535,8 @@ SQLITE_API SQLITE_EXTERN char *sqlite3_data_directory;
 ** UTF-8 or UTF-16, respectively.
 */
 SQLITE_API int sqlite3_win32_set_directory(
-  unsigned long type, /* Identifier for directory being set or reset */
-  void *zValue        /* New value for directory being set or reset */
+  unsigned long type, /* Identifier for directory being set or reset*/
+  void *zValue        /* New value for directory being set or reset*/
 );
 SQLITE_API int sqlite3_win32_set_directory8(unsigned long type, const char *zValue);
 SQLITE_API int sqlite3_win32_set_directory16(unsigned long type, const void *zValue);
@@ -7114,15 +7114,15 @@ SQLITE_API SQLITE_DEPRECATED void sqlite3_soft_heap_limit(int N);
 ** any errors are encountered while loading the schema.
 */
 SQLITE_API int sqlite3_table_column_metadata(
-  sqlite3 *db,                /* Connection handle */
-  const char *zDbName,        /* Database name or NULL */
-  const char *zTableName,     /* Table name */
-  const char *zColumnName,    /* Column name */
-  char const **pzDataType,    /* OUTPUT: Declared data type */
-  char const **pzCollSeq,     /* OUTPUT: Collation sequence name */
-  int *pNotNull,              /* OUTPUT: True if NOT NULL constraint exists */
-  int *pPrimaryKey,           /* OUTPUT: True if column part of PK */
-  int *pAutoinc               /* OUTPUT: True if column is auto-increment */
+  sqlite3 *db,                /* Connection handle*/
+  const char *zDbName,        /* Database name or NULL*/
+  const char *zTableName,     /* Table name*/
+  const char *zColumnName,    /* Column name*/
+  char const **pzDataType,    /* OUTPUT: Declared data type*/
+  char const **pzCollSeq,     /* OUTPUT: Collation sequence name*/
+  int *pNotNull,              /* OUTPUT: True if NOT NULL constraint exists*/
+  int *pPrimaryKey,           /* OUTPUT: True if column part of PK*/
+  int *pAutoinc               /* OUTPUT: True if column is auto-increment*/
 );
 
 /*
@@ -7170,10 +7170,10 @@ SQLITE_API int sqlite3_table_column_metadata(
 ** See also the [load_extension() SQL function].
 */
 SQLITE_API int sqlite3_load_extension(
-  sqlite3 *db,          /* Load the extension into this database connection */
-  const char *zFile,    /* Name of the shared library containing extension */
-  const char *zProc,    /* Entry point.  Derived from zFile if 0 */
-  char **pzErrMsg       /* Put error message here if not 0 */
+  sqlite3 *db,          /* Load the extension into this database connection*/
+  const char *zFile,    /* Name of the shared library containing extension*/
+  const char *zProc,    /* Entry point.  Derived from zFile if 0*/
+  char **pzErrMsg       /* Put error message here if not 0*/
 );
 
 /*
@@ -7314,15 +7314,15 @@ struct sqlite3_module {
                        void **ppArg);
   int (*xRename)(sqlite3_vtab *pVtab, const char *zNew);
   /* The methods above are in version 1 of the sqlite_module object. Those
-  ** below are for version 2 and greater. */
+  ** below are for version 2 and greater.*/
   int (*xSavepoint)(sqlite3_vtab *pVTab, int);
   int (*xRelease)(sqlite3_vtab *pVTab, int);
   int (*xRollbackTo)(sqlite3_vtab *pVTab, int);
   /* The methods above are in versions 1 and 2 of the sqlite_module object.
-  ** Those below are for version 3 and greater. */
+  ** Those below are for version 3 and greater.*/
   int (*xShadowName)(const char*);
   /* The methods above are in versions 1 through 3 of the sqlite_module object.
-  ** Those below are for version 4 and greater. */
+  ** Those below are for version 4 and greater.*/
   int (*xIntegrity)(sqlite3_vtab *pVTab, const char *zSchema,
                     const char *zTabName, int mFlags, char **pzErr);
 };
@@ -7430,35 +7430,35 @@ struct sqlite3_module {
 ** 3009000.
 */
 struct sqlite3_index_info {
-  /* Inputs */
-  int nConstraint;           /* Number of entries in aConstraint */
+  /* Inputs*/
+  int nConstraint;           /* Number of entries in aConstraint*/
   struct sqlite3_index_constraint {
-     int iColumn;              /* Column constrained.  -1 for ROWID */
-     unsigned char op;         /* Constraint operator */
-     unsigned char usable;     /* True if this constraint is usable */
-     int iTermOffset;          /* Used internally - xBestIndex should ignore */
-  } *aConstraint;            /* Table of WHERE clause constraints */
-  int nOrderBy;              /* Number of terms in the ORDER BY clause */
+     int iColumn;              /* Column constrained.  -1 for ROWID*/
+     unsigned char op;         /* Constraint operator*/
+     unsigned char usable;     /* True if this constraint is usable*/
+     int iTermOffset;          /* Used internally - xBestIndex should ignore*/
+  } *aConstraint;            /* Table of WHERE clause constraints*/
+  int nOrderBy;              /* Number of terms in the ORDER BY clause*/
   struct sqlite3_index_orderby {
-     int iColumn;              /* Column number */
-     unsigned char desc;       /* True for DESC.  False for ASC. */
-  } *aOrderBy;               /* The ORDER BY clause */
-  /* Outputs */
+     int iColumn;              /* Column number*/
+     unsigned char desc;       /* True for DESC.  False for ASC.*/
+  } *aOrderBy;               /* The ORDER BY clause*/
+  /* Outputs*/
   struct sqlite3_index_constraint_usage {
-    int argvIndex;           /* if >0, constraint is part of argv to xFilter */
-    unsigned char omit;      /* Do not code a test for this constraint */
+    int argvIndex;           /* if >0, constraint is part of argv to xFilter*/
+    unsigned char omit;      /* Do not code a test for this constraint*/
   } *aConstraintUsage;
-  int idxNum;                /* Number used to identify the index */
-  char *idxStr;              /* String, possibly obtained from sqlite3_malloc */
-  int needToFreeIdxStr;      /* Free idxStr using sqlite3_free() if true */
-  int orderByConsumed;       /* True if output is already ordered */
-  double estimatedCost;           /* Estimated cost of using this index */
-  /* Fields below are only available in SQLite 3.8.2 and later */
-  sqlite3_int64 estimatedRows;    /* Estimated number of rows returned */
-  /* Fields below are only available in SQLite 3.9.0 and later */
-  int idxFlags;              /* Mask of SQLITE_INDEX_SCAN_* flags */
-  /* Fields below are only available in SQLite 3.10.0 and later */
-  sqlite3_uint64 colUsed;    /* Input: Mask of columns used by statement */
+  int idxNum;                /* Number used to identify the index*/
+  char *idxStr;              /* String, possibly obtained from sqlite3_malloc*/
+  int needToFreeIdxStr;      /* Free idxStr using sqlite3_free() if true*/
+  int orderByConsumed;       /* True if output is already ordered*/
+  double estimatedCost;           /* Estimated cost of using this index*/
+  /* Fields below are only available in SQLite 3.8.2 and later*/
+  sqlite3_int64 estimatedRows;    /* Estimated number of rows returned*/
+  /* Fields below are only available in SQLite 3.9.0 and later*/
+  int idxFlags;              /* Mask of SQLITE_INDEX_SCAN_* flags*/
+  /* Fields below are only available in SQLite 3.10.0 and later*/
+  sqlite3_uint64 colUsed;    /* Input: Mask of columns used by statement*/
 };
 
 /*
@@ -7468,7 +7468,7 @@ struct sqlite3_index_info {
 ** [sqlite3_index_info].idxFlags field to some combination of
 ** these bits.
 */
-#define SQLITE_INDEX_SCAN_UNIQUE      1     /* Scan visits at most 1 row */
+#define SQLITE_INDEX_SCAN_UNIQUE      1     /* Scan visits at most 1 row*/
 
 /*
 ** CAPI3REF: Virtual Table Constraint Operator Codes
@@ -7559,17 +7559,17 @@ struct sqlite3_index_info {
 ** See also: [sqlite3_drop_modules()]
 */
 SQLITE_API int sqlite3_create_module(
-  sqlite3 *db,               /* SQLite connection to register module with */
-  const char *zName,         /* Name of the module */
-  const sqlite3_module *p,   /* Methods for the module */
-  void *pClientData          /* Client data for xCreate/xConnect */
+  sqlite3 *db,               /* SQLite connection to register module with*/
+  const char *zName,         /* Name of the module*/
+  const sqlite3_module *p,   /* Methods for the module*/
+  void *pClientData          /* Client data for xCreate/xConnect*/
 );
 SQLITE_API int sqlite3_create_module_v2(
-  sqlite3 *db,               /* SQLite connection to register module with */
-  const char *zName,         /* Name of the module */
-  const sqlite3_module *p,   /* Methods for the module */
-  void *pClientData,         /* Client data for xCreate/xConnect */
-  void(*xDestroy)(void*)     /* Module destructor function */
+  sqlite3 *db,               /* SQLite connection to register module with*/
+  const char *zName,         /* Name of the module*/
+  const sqlite3_module *p,   /* Methods for the module*/
+  void *pClientData,         /* Client data for xCreate/xConnect*/
+  void(*xDestroy)(void*)     /* Module destructor function*/
 );
 
 /*
@@ -7585,8 +7585,8 @@ SQLITE_API int sqlite3_create_module_v2(
 ** See also: [sqlite3_create_module()]
 */
 SQLITE_API int sqlite3_drop_modules(
-  sqlite3 *db,                /* Remove modules from this connection */
-  const char **azKeep         /* Except, do not remove the ones named here */
+  sqlite3 *db,                /* Remove modules from this connection*/
+  const char **azKeep         /* Except, do not remove the ones named here*/
 );
 
 /*
@@ -7608,10 +7608,10 @@ SQLITE_API int sqlite3_drop_modules(
 ** freed by sqlite3_free() and the zErrMsg field will be zeroed.
 */
 struct sqlite3_vtab {
-  const sqlite3_module *pModule;  /* The module for this virtual table */
-  int nRef;                       /* Number of open cursors */
-  char *zErrMsg;                  /* Error message from sqlite3_mprintf() */
-  /* Virtual table implementations will typically add additional fields */
+  const sqlite3_module *pModule;  /* The module for this virtual table*/
+  int nRef;                       /* Number of open cursors*/
+  char *zErrMsg;                  /* Error message from sqlite3_mprintf()*/
+  /* Virtual table implementations will typically add additional fields*/
 };
 
 /*
@@ -7632,8 +7632,8 @@ struct sqlite3_vtab {
 ** are common to all implementations.
 */
 struct sqlite3_vtab_cursor {
-  sqlite3_vtab *pVtab;      /* Virtual table of this cursor */
-  /* Virtual table implementations will typically add additional fields */
+  sqlite3_vtab *pVtab;      /* Virtual table of this cursor*/
+  /* Virtual table implementations will typically add additional fields*/
 };
 
 /*
@@ -8187,21 +8187,21 @@ SQLITE_API int sqlite3_mutex_notheld(sqlite3_mutex*);
 #define SQLITE_MUTEX_FAST             0
 #define SQLITE_MUTEX_RECURSIVE        1
 #define SQLITE_MUTEX_STATIC_MAIN      2
-#define SQLITE_MUTEX_STATIC_MEM       3  /* sqlite3_malloc() */
-#define SQLITE_MUTEX_STATIC_MEM2      4  /* NOT USED */
-#define SQLITE_MUTEX_STATIC_OPEN      4  /* sqlite3BtreeOpen() */
-#define SQLITE_MUTEX_STATIC_PRNG      5  /* sqlite3_randomness() */
-#define SQLITE_MUTEX_STATIC_LRU       6  /* lru page list */
-#define SQLITE_MUTEX_STATIC_LRU2      7  /* NOT USED */
-#define SQLITE_MUTEX_STATIC_PMEM      7  /* sqlite3PageMalloc() */
-#define SQLITE_MUTEX_STATIC_APP1      8  /* For use by application */
-#define SQLITE_MUTEX_STATIC_APP2      9  /* For use by application */
-#define SQLITE_MUTEX_STATIC_APP3     10  /* For use by application */
-#define SQLITE_MUTEX_STATIC_VFS1     11  /* For use by built-in VFS */
-#define SQLITE_MUTEX_STATIC_VFS2     12  /* For use by extension VFS */
-#define SQLITE_MUTEX_STATIC_VFS3     13  /* For use by application VFS */
+#define SQLITE_MUTEX_STATIC_MEM       3  /* sqlite3_malloc()*/
+#define SQLITE_MUTEX_STATIC_MEM2      4  /* NOT USED*/
+#define SQLITE_MUTEX_STATIC_OPEN      4  /* sqlite3BtreeOpen()*/
+#define SQLITE_MUTEX_STATIC_PRNG      5  /* sqlite3_randomness()*/
+#define SQLITE_MUTEX_STATIC_LRU       6  /* lru page list*/
+#define SQLITE_MUTEX_STATIC_LRU2      7  /* NOT USED*/
+#define SQLITE_MUTEX_STATIC_PMEM      7  /* sqlite3PageMalloc()*/
+#define SQLITE_MUTEX_STATIC_APP1      8  /* For use by application*/
+#define SQLITE_MUTEX_STATIC_APP2      9  /* For use by application*/
+#define SQLITE_MUTEX_STATIC_APP3     10  /* For use by application*/
+#define SQLITE_MUTEX_STATIC_VFS1     11  /* For use by built-in VFS*/
+#define SQLITE_MUTEX_STATIC_VFS2     12  /* For use by extension VFS*/
+#define SQLITE_MUTEX_STATIC_VFS3     13  /* For use by application VFS*/
 
-/* Legacy compatibility: */
+/* Legacy compatibility:*/
 #define SQLITE_MUTEX_STATIC_MASTER    2
 
 
@@ -8293,7 +8293,7 @@ SQLITE_API int sqlite3_test_control(int op, ...);
 #define SQLITE_TESTCTRL_FIRST                    5
 #define SQLITE_TESTCTRL_PRNG_SAVE                5
 #define SQLITE_TESTCTRL_PRNG_RESTORE             6
-#define SQLITE_TESTCTRL_PRNG_RESET               7  /* NOT USED */
+#define SQLITE_TESTCTRL_PRNG_RESET               7  /* NOT USED*/
 #define SQLITE_TESTCTRL_FK_NO_ACTION             7
 #define SQLITE_TESTCTRL_BITVEC_TEST              8
 #define SQLITE_TESTCTRL_FAULT_INSTALL            9
@@ -8301,14 +8301,14 @@ SQLITE_API int sqlite3_test_control(int op, ...);
 #define SQLITE_TESTCTRL_PENDING_BYTE            11
 #define SQLITE_TESTCTRL_ASSERT                  12
 #define SQLITE_TESTCTRL_ALWAYS                  13
-#define SQLITE_TESTCTRL_RESERVE                 14  /* NOT USED */
+#define SQLITE_TESTCTRL_RESERVE                 14  /* NOT USED*/
 #define SQLITE_TESTCTRL_JSON_SELFCHECK          14
 #define SQLITE_TESTCTRL_OPTIMIZATIONS           15
-#define SQLITE_TESTCTRL_ISKEYWORD               16  /* NOT USED */
-#define SQLITE_TESTCTRL_SCRATCHMALLOC           17  /* NOT USED */
+#define SQLITE_TESTCTRL_ISKEYWORD               16  /* NOT USED*/
+#define SQLITE_TESTCTRL_SCRATCHMALLOC           17  /* NOT USED*/
 #define SQLITE_TESTCTRL_INTERNAL_FUNCTIONS      17
 #define SQLITE_TESTCTRL_LOCALTIME_FAULT         18
-#define SQLITE_TESTCTRL_EXPLAIN_STMT            19  /* NOT USED */
+#define SQLITE_TESTCTRL_EXPLAIN_STMT            19  /* NOT USED*/
 #define SQLITE_TESTCTRL_ONCE_RESET_THRESHOLD    19
 #define SQLITE_TESTCTRL_NEVER_CORRUPT           20
 #define SQLITE_TESTCTRL_VDBE_COVERAGE           21
@@ -8325,7 +8325,7 @@ SQLITE_API int sqlite3_test_control(int op, ...);
 #define SQLITE_TESTCTRL_TUNE                    32
 #define SQLITE_TESTCTRL_LOGEST                  33
 #define SQLITE_TESTCTRL_USELONGDOUBLE           34
-#define SQLITE_TESTCTRL_LAST                    34  /* Largest TESTCTRL */
+#define SQLITE_TESTCTRL_LAST                    34  /* Largest TESTCTRL*/
 
 /*
 ** CAPI3REF: SQL Keyword Checking
@@ -8615,12 +8615,12 @@ SQLITE_API int sqlite3_status64(
 #define SQLITE_STATUS_MEMORY_USED          0
 #define SQLITE_STATUS_PAGECACHE_USED       1
 #define SQLITE_STATUS_PAGECACHE_OVERFLOW   2
-#define SQLITE_STATUS_SCRATCH_USED         3  /* NOT USED */
-#define SQLITE_STATUS_SCRATCH_OVERFLOW     4  /* NOT USED */
+#define SQLITE_STATUS_SCRATCH_USED         3  /* NOT USED*/
+#define SQLITE_STATUS_SCRATCH_OVERFLOW     4  /* NOT USED*/
 #define SQLITE_STATUS_MALLOC_SIZE          5
 #define SQLITE_STATUS_PARSER_STACK         6
 #define SQLITE_STATUS_PAGECACHE_SIZE       7
-#define SQLITE_STATUS_SCRATCH_SIZE         8  /* NOT USED */
+#define SQLITE_STATUS_SCRATCH_SIZE         8  /* NOT USED*/
 #define SQLITE_STATUS_MALLOC_COUNT         9
 
 /*
@@ -8772,7 +8772,7 @@ SQLITE_API int sqlite3_db_status(sqlite3*, int op, int *pCur, int *pHiwtr, int r
 #define SQLITE_DBSTATUS_DEFERRED_FKS        10
 #define SQLITE_DBSTATUS_CACHE_USED_SHARED   11
 #define SQLITE_DBSTATUS_CACHE_SPILL         12
-#define SQLITE_DBSTATUS_MAX                 12   /* Largest defined DBSTATUS */
+#define SQLITE_DBSTATUS_MAX                 12   /* Largest defined DBSTATUS*/
 
 
 /*
@@ -8901,8 +8901,8 @@ typedef struct sqlite3_pcache sqlite3_pcache;
 */
 typedef struct sqlite3_pcache_page sqlite3_pcache_page;
 struct sqlite3_pcache_page {
-  void *pBuf;        /* The content of the page */
-  void *pExtra;      /* Extra information associated with the page */
+  void *pBuf;        /* The content of the page*/
+  void *pExtra;      /* Extra information associated with the page*/
 };
 
 /*
@@ -9302,10 +9302,10 @@ typedef struct sqlite3_backup sqlite3_backup;
 ** possible that they return invalid values.
 */
 SQLITE_API sqlite3_backup *sqlite3_backup_init(
-  sqlite3 *pDest,                        /* Destination database handle */
-  const char *zDestName,                 /* Destination database name */
-  sqlite3 *pSource,                      /* Source database handle */
-  const char *zSourceName                /* Source database name */
+  sqlite3 *pDest,                        /* Destination database handle*/
+  const char *zDestName,                 /* Destination database name*/
+  sqlite3 *pSource,                      /* Source database handle*/
+  const char *zSourceName                /* Source database name*/
 );
 SQLITE_API int sqlite3_backup_step(sqlite3_backup *p, int nPage);
 SQLITE_API int sqlite3_backup_finish(sqlite3_backup *p);
@@ -9428,9 +9428,9 @@ SQLITE_API int sqlite3_backup_pagecount(sqlite3_backup *p);
 ** SQLITE_LOCKED.)^
 */
 SQLITE_API int sqlite3_unlock_notify(
-  sqlite3 *pBlocked,                          /* Waiting connection */
-  void (*xNotify)(void **apArg, int nArg),    /* Callback function to invoke */
-  void *pNotifyArg                            /* Argument to pass to xNotify */
+  sqlite3 *pBlocked,                          /* Waiting connection*/
+  void (*xNotify)(void **apArg, int nArg),    /* Callback function to invoke*/
+  void *pNotifyArg                            /* Argument to pass to xNotify*/
 );
 
 
@@ -9695,11 +9695,11 @@ SQLITE_API int sqlite3_wal_checkpoint(sqlite3 *db, const char *zDb);
 ** from SQL.
 */
 SQLITE_API int sqlite3_wal_checkpoint_v2(
-  sqlite3 *db,                    /* Database handle */
-  const char *zDb,                /* Name of attached database (or NULL) */
-  int eMode,                      /* SQLITE_CHECKPOINT_* value */
-  int *pnLog,                     /* OUT: Size of WAL log in frames */
-  int *pnCkpt                     /* OUT: Total number of frames checkpointed */
+  sqlite3 *db,                    /* Database handle*/
+  const char *zDb,                /* Name of attached database (or NULL)*/
+  int eMode,                      /* SQLITE_CHECKPOINT_* value*/
+  int *pnLog,                     /* OUT: Size of WAL log in frames*/
+  int *pnCkpt                     /* OUT: Total number of frames checkpointed*/
 );
 
 /*
@@ -9711,10 +9711,10 @@ SQLITE_API int sqlite3_wal_checkpoint_v2(
 ** See the [sqlite3_wal_checkpoint_v2()] documentation for details on the
 ** meaning of each of these checkpoint modes.
 */
-#define SQLITE_CHECKPOINT_PASSIVE  0  /* Do as much as possible w/o blocking */
-#define SQLITE_CHECKPOINT_FULL     1  /* Wait for writers, then checkpoint */
-#define SQLITE_CHECKPOINT_RESTART  2  /* Like FULL but wait for readers */
-#define SQLITE_CHECKPOINT_TRUNCATE 3  /* Like RESTART but also truncate WAL */
+#define SQLITE_CHECKPOINT_PASSIVE  0  /* Do as much as possible w/o blocking*/
+#define SQLITE_CHECKPOINT_FULL     1  /* Wait for writers, then checkpoint*/
+#define SQLITE_CHECKPOINT_RESTART  2  /* Like FULL but wait for readers*/
+#define SQLITE_CHECKPOINT_TRUNCATE 3  /* Like RESTART but also truncate WAL*/
 
 /*
 ** CAPI3REF: Virtual Table Interface Configuration
@@ -10134,9 +10134,9 @@ SQLITE_API int sqlite3_vtab_rhs_value(sqlite3_index_info*, int, sqlite3_value **
 ** [SQLITE_ABORT] is also a [result code].
 */
 #define SQLITE_ROLLBACK 1
-/* #define SQLITE_IGNORE 2 // Also used by sqlite3_authorizer() callback */
+/* #define SQLITE_IGNORE 2 // Also used by sqlite3_authorizer() callback*/
 #define SQLITE_FAIL     3
-/* #define SQLITE_ABORT 4  // Also an error code */
+/* #define SQLITE_ABORT 4  // Also an error code*/
 #define SQLITE_REPLACE  5
 
 /*
@@ -10249,17 +10249,17 @@ SQLITE_API int sqlite3_vtab_rhs_value(sqlite3_index_info*, int, sqlite3_value **
 ** See also: [sqlite3_stmt_scanstatus_reset()]
 */
 SQLITE_API int sqlite3_stmt_scanstatus(
-  sqlite3_stmt *pStmt,      /* Prepared statement for which info desired */
-  int idx,                  /* Index of loop to report on */
-  int iScanStatusOp,        /* Information desired.  SQLITE_SCANSTAT_* */
-  void *pOut                /* Result written here */
+  sqlite3_stmt *pStmt,      /* Prepared statement for which info desired*/
+  int idx,                  /* Index of loop to report on*/
+  int iScanStatusOp,        /* Information desired.  SQLITE_SCANSTAT_**/
+  void *pOut                /* Result written here*/
 );
 SQLITE_API int sqlite3_stmt_scanstatus_v2(
-  sqlite3_stmt *pStmt,      /* Prepared statement for which info desired */
-  int idx,                  /* Index of loop to report on */
-  int iScanStatusOp,        /* Information desired.  SQLITE_SCANSTAT_* */
-  int flags,                /* Mask of flags defined below */
-  void *pOut                /* Result written here */
+  sqlite3_stmt *pStmt,      /* Prepared statement for which info desired*/
+  int idx,                  /* Index of loop to report on*/
+  int iScanStatusOp,        /* Information desired.  SQLITE_SCANSTAT_**/
+  int flags,                /* Mask of flags defined below*/
+  void *pOut                /* Result written here*/
 );
 
 /*
@@ -10412,13 +10412,13 @@ SQLITE_API int sqlite3_db_cacheflush(sqlite3*);
 SQLITE_API void *sqlite3_preupdate_hook(
   sqlite3 *db,
   void(*xPreUpdate)(
-    void *pCtx,                   /* Copy of third arg to preupdate_hook() */
-    sqlite3 *db,                  /* Database handle */
-    int op,                       /* SQLITE_UPDATE, DELETE or INSERT */
-    char const *zDb,              /* Database name */
-    char const *zName,            /* Table name */
-    sqlite3_int64 iKey1,          /* Rowid of row about to be deleted/updated */
-    sqlite3_int64 iKey2           /* New rowid value (for a rowid UPDATE) */
+    void *pCtx,                   /* Copy of third arg to preupdate_hook()*/
+    sqlite3 *db,                  /* Database handle*/
+    int op,                       /* SQLITE_UPDATE, DELETE or INSERT*/
+    char const *zDb,              /* Database name*/
+    char const *zName,            /* Table name*/
+    sqlite3_int64 iKey1,          /* Rowid of row about to be deleted/updated*/
+    sqlite3_int64 iKey2           /* New rowid value (for a rowid UPDATE)*/
   ),
   void*
 );
@@ -10676,10 +10676,10 @@ SQLITE_API SQLITE_EXPERIMENTAL int sqlite3_snapshot_recover(sqlite3 *db, const c
 ** [SQLITE_OMIT_DESERIALIZE] option.
 */
 SQLITE_API unsigned char *sqlite3_serialize(
-  sqlite3 *db,           /* The database connection */
-  const char *zSchema,   /* Which DB to serialize. ex: "main", "temp", ... */
-  sqlite3_int64 *piSize, /* Write size of the DB here, if not NULL */
-  unsigned int mFlags    /* Zero or more SQLITE_SERIALIZE_* flags */
+  sqlite3 *db,           /* The database connection*/
+  const char *zSchema,   /* Which DB to serialize. ex: "main", "temp", ...*/
+  sqlite3_int64 *piSize, /* Write size of the DB here, if not NULL*/
+  unsigned int mFlags    /* Zero or more SQLITE_SERIALIZE_* flags*/
 );
 
 /*
@@ -10696,7 +10696,7 @@ SQLITE_API unsigned char *sqlite3_serialize(
 ** using a contiguous in-memory database if it has been initialized by a
 ** prior call to [sqlite3_deserialize()].
 */
-#define SQLITE_SERIALIZE_NOCOPY 0x001   /* Do no memory allocations */
+#define SQLITE_SERIALIZE_NOCOPY 0x001   /* Do no memory allocations*/
 
 /*
 ** CAPI3REF: Deserialize a database
@@ -10742,12 +10742,12 @@ SQLITE_API unsigned char *sqlite3_serialize(
 ** [SQLITE_OMIT_DESERIALIZE] option.
 */
 SQLITE_API int sqlite3_deserialize(
-  sqlite3 *db,            /* The database connection */
-  const char *zSchema,    /* Which DB to reopen with the deserialization */
-  unsigned char *pData,   /* The serialized database content */
-  sqlite3_int64 szDb,     /* Number bytes in the deserialization */
-  sqlite3_int64 szBuf,    /* Total size of buffer pData[] */
-  unsigned mFlags         /* Zero or more SQLITE_DESERIALIZE_* flags */
+  sqlite3 *db,            /* The database connection*/
+  const char *zSchema,    /* Which DB to reopen with the deserialization*/
+  unsigned char *pData,   /* The serialized database content*/
+  sqlite3_int64 szDb,     /* Number bytes in the deserialization*/
+  sqlite3_int64 szBuf,    /* Total size of buffer pData[]*/
+  unsigned mFlags         /* Zero or more SQLITE_DESERIALIZE_* flags*/
 );
 
 /*
@@ -10771,9 +10771,9 @@ SQLITE_API int sqlite3_deserialize(
 ** The SQLITE_DESERIALIZE_READONLY flag means that the deserialized database
 ** should be treated as read-only.
 */
-#define SQLITE_DESERIALIZE_FREEONCLOSE 1 /* Call sqlite3_free() on close */
-#define SQLITE_DESERIALIZE_RESIZEABLE  2 /* Resize using sqlite3_realloc64() */
-#define SQLITE_DESERIALIZE_READONLY    4 /* Database is read-only */
+#define SQLITE_DESERIALIZE_FREEONCLOSE 1 /* Call sqlite3_free() on close*/
+#define SQLITE_DESERIALIZE_RESIZEABLE  2 /* Resize using sqlite3_realloc64()*/
+#define SQLITE_DESERIALIZE_READONLY    4 /* Database is read-only*/
 
 /*
 ** Undo the hack that converts floating point types to integer for
@@ -10787,7 +10787,7 @@ SQLITE_API int sqlite3_deserialize(
 # undef SQLITE_WASI
 # define SQLITE_WASI 1
 # undef SQLITE_OMIT_WAL
-# define SQLITE_OMIT_WAL 1/* because it requires shared memory APIs */
+# define SQLITE_OMIT_WAL 1/* because it requires shared memory APIs*/
 # ifndef SQLITE_OMIT_LOAD_EXTENSION
 #  define SQLITE_OMIT_LOAD_EXTENSION
 # endif
@@ -10797,9 +10797,9 @@ SQLITE_API int sqlite3_deserialize(
 #endif
 
 #ifdef __cplusplus
-}  /* End of the 'extern "C"' block */
+}  /* End of the 'extern "C"' block*/
 #endif
-#endif /* SQLITE3_H */
+#endif /* SQLITE3_H*/
 
 /******** Begin file sqlite3rtree.h *********/
 /*
@@ -10854,11 +10854,11 @@ SQLITE_API int sqlite3_rtree_geometry_callback(
 ** argument to callbacks registered using rtree_geometry_callback().
 */
 struct sqlite3_rtree_geometry {
-  void *pContext;                 /* Copy of pContext passed to s_r_g_c() */
-  int nParam;                     /* Size of array aParam[] */
-  sqlite3_rtree_dbl *aParam;      /* Parameters passed to SQL geom function */
-  void *pUser;                    /* Callback implementation user data */
-  void (*xDelUser)(void *);       /* Called by SQLite to clean up pUser */
+  void *pContext;                 /* Copy of pContext passed to s_r_g_c()*/
+  int nParam;                     /* Size of array aParam[]*/
+  sqlite3_rtree_dbl *aParam;      /* Parameters passed to SQL geom function*/
+  void *pUser;                    /* Callback implementation user data*/
+  void (*xDelUser)(void *);       /* Called by SQLite to clean up pUser*/
 };
 
 /*
@@ -10886,38 +10886,38 @@ SQLITE_API int sqlite3_rtree_query_callback(
 ** sqlite3_rtree_geometry.
 */
 struct sqlite3_rtree_query_info {
-  void *pContext;                   /* pContext from when function registered */
-  int nParam;                       /* Number of function parameters */
-  sqlite3_rtree_dbl *aParam;        /* value of function parameters */
-  void *pUser;                      /* callback can use this, if desired */
-  void (*xDelUser)(void*);          /* function to free pUser */
-  sqlite3_rtree_dbl *aCoord;        /* Coordinates of node or entry to check */
-  unsigned int *anQueue;            /* Number of pending entries in the queue */
-  int nCoord;                       /* Number of coordinates */
-  int iLevel;                       /* Level of current node or entry */
-  int mxLevel;                      /* The largest iLevel value in the tree */
-  sqlite3_int64 iRowid;             /* Rowid for current entry */
-  sqlite3_rtree_dbl rParentScore;   /* Score of parent node */
-  int eParentWithin;                /* Visibility of parent node */
-  int eWithin;                      /* OUT: Visibility */
-  sqlite3_rtree_dbl rScore;         /* OUT: Write the score here */
-  /* The following fields are only available in 3.8.11 and later */
-  sqlite3_value **apSqlParam;       /* Original SQL values of parameters */
+  void *pContext;                   /* pContext from when function registered*/
+  int nParam;                       /* Number of function parameters*/
+  sqlite3_rtree_dbl *aParam;        /* value of function parameters*/
+  void *pUser;                      /* callback can use this, if desired*/
+  void (*xDelUser)(void*);          /* function to free pUser*/
+  sqlite3_rtree_dbl *aCoord;        /* Coordinates of node or entry to check*/
+  unsigned int *anQueue;            /* Number of pending entries in the queue*/
+  int nCoord;                       /* Number of coordinates*/
+  int iLevel;                       /* Level of current node or entry*/
+  int mxLevel;                      /* The largest iLevel value in the tree*/
+  sqlite3_int64 iRowid;             /* Rowid for current entry*/
+  sqlite3_rtree_dbl rParentScore;   /* Score of parent node*/
+  int eParentWithin;                /* Visibility of parent node*/
+  int eWithin;                      /* OUT: Visibility*/
+  sqlite3_rtree_dbl rScore;         /* OUT: Write the score here*/
+  /* The following fields are only available in 3.8.11 and later*/
+  sqlite3_value **apSqlParam;       /* Original SQL values of parameters*/
 };
 
 /*
 ** Allowed values for sqlite3_rtree_query.eWithin and .eParentWithin.
 */
-#define NOT_WITHIN       0   /* Object completely outside of query region */
-#define PARTLY_WITHIN    1   /* Object partially overlaps query region */
-#define FULLY_WITHIN     2   /* Object fully contained within query region */
+#define NOT_WITHIN       0   /* Object completely outside of query region*/
+#define PARTLY_WITHIN    1   /* Object partially overlaps query region*/
+#define FULLY_WITHIN     2   /* Object fully contained within query region*/
 
 
 #ifdef __cplusplus
-}  /* end of the 'extern "C"' block */
+}  /* end of the 'extern "C"' block*/
 #endif
 
-#endif  /* ifndef _SQLITE3RTREE_H_ */
+#endif  /* ifndef _SQLITE3RTREE_H_*/
 
 /******** End of sqlite3rtree.h *********/
 /******** Begin file sqlite3session.h *********/
@@ -10981,9 +10981,9 @@ typedef struct sqlite3_changeset_iter sqlite3_changeset_iter;
 ** to the database when the session object is created.
 */
 SQLITE_API int sqlite3session_create(
-  sqlite3 *db,                    /* Database handle */
-  const char *zDb,                /* Name of db (e.g. "main") */
-  sqlite3_session **ppSession     /* OUT: New session object */
+  sqlite3 *db,                    /* Database handle*/
+  const char *zDb,                /* Name of db (e.g. "main")*/
+  sqlite3_session **ppSession     /* OUT: New session object*/
 );
 
 /*
@@ -11156,8 +11156,8 @@ SQLITE_API int sqlite3session_indirect(sqlite3_session *pSession, int bIndirect)
 ** sqlite_stat1 table that are part of a changeset or patchset.
 */
 SQLITE_API int sqlite3session_attach(
-  sqlite3_session *pSession,      /* Session object */
-  const char *zTab                /* Table name */
+  sqlite3_session *pSession,      /* Session object*/
+  const char *zTab                /* Table name*/
 );
 
 /*
@@ -11171,12 +11171,12 @@ SQLITE_API int sqlite3session_attach(
 ** attached, xFilter will not be called again.
 */
 SQLITE_API void sqlite3session_table_filter(
-  sqlite3_session *pSession,      /* Session object */
+  sqlite3_session *pSession,      /* Session object*/
   int(*xFilter)(
-    void *pCtx,                   /* Copy of third arg to _filter_table() */
-    const char *zTab              /* Table name */
+    void *pCtx,                   /* Copy of third arg to _filter_table()*/
+    const char *zTab              /* Table name*/
   ),
-  void *pCtx                      /* First argument passed to xFilter */
+  void *pCtx                      /* First argument passed to xFilter*/
 );
 
 /*
@@ -11285,9 +11285,9 @@ SQLITE_API void sqlite3session_table_filter(
 ** resulting changeset will contain an UPDATE change that updates both fields.
 */
 SQLITE_API int sqlite3session_changeset(
-  sqlite3_session *pSession,      /* Session object */
-  int *pnChangeset,               /* OUT: Size of buffer at *ppChangeset */
-  void **ppChangeset              /* OUT: Buffer containing changeset */
+  sqlite3_session *pSession,      /* Session object*/
+  int *pnChangeset,               /* OUT: Size of buffer at *ppChangeset*/
+  void **ppChangeset              /* OUT: Buffer containing changeset*/
 );
 
 /*
@@ -11401,9 +11401,9 @@ SQLITE_API int sqlite3session_diff(
 ** they were attached to the session object).
 */
 SQLITE_API int sqlite3session_patchset(
-  sqlite3_session *pSession,      /* Session object */
-  int *pnPatchset,                /* OUT: Size of buffer at *ppPatchset */
-  void **ppPatchset               /* OUT: Buffer containing patchset */
+  sqlite3_session *pSession,      /* Session object*/
+  int *pnPatchset,                /* OUT: Size of buffer at *ppPatchset*/
+  void **ppPatchset               /* OUT: Buffer containing patchset*/
 );
 
 /*
@@ -11473,15 +11473,15 @@ SQLITE_API sqlite3_int64 sqlite3session_memory_used(sqlite3_session *pSession);
 ** and therefore subject to change.
 */
 SQLITE_API int sqlite3changeset_start(
-  sqlite3_changeset_iter **pp,    /* OUT: New changeset iterator handle */
-  int nChangeset,                 /* Size of changeset blob in bytes */
-  void *pChangeset                /* Pointer to blob containing changeset */
+  sqlite3_changeset_iter **pp,    /* OUT: New changeset iterator handle*/
+  int nChangeset,                 /* Size of changeset blob in bytes*/
+  void *pChangeset                /* Pointer to blob containing changeset*/
 );
 SQLITE_API int sqlite3changeset_start_v2(
-  sqlite3_changeset_iter **pp,    /* OUT: New changeset iterator handle */
-  int nChangeset,                 /* Size of changeset blob in bytes */
-  void *pChangeset,               /* Pointer to blob containing changeset */
-  int flags                       /* SESSION_CHANGESETSTART_* flags */
+  sqlite3_changeset_iter **pp,    /* OUT: New changeset iterator handle*/
+  int nChangeset,                 /* Size of changeset blob in bytes*/
+  void *pChangeset,               /* Pointer to blob containing changeset*/
+  int flags                       /* SESSION_CHANGESETSTART_* flags*/
 );
 
 /*
@@ -11556,11 +11556,11 @@ SQLITE_API int sqlite3changeset_next(sqlite3_changeset_iter *pIter);
 ** be trusted in this case.
 */
 SQLITE_API int sqlite3changeset_op(
-  sqlite3_changeset_iter *pIter,  /* Iterator object */
-  const char **pzTab,             /* OUT: Pointer to table name */
-  int *pnCol,                     /* OUT: Number of columns in table */
-  int *pOp,                       /* OUT: SQLITE_INSERT, DELETE or UPDATE */
-  int *pbIndirect                 /* OUT: True for an 'indirect' change */
+  sqlite3_changeset_iter *pIter,  /* Iterator object*/
+  const char **pzTab,             /* OUT: Pointer to table name*/
+  int *pnCol,                     /* OUT: Number of columns in table*/
+  int *pOp,                       /* OUT: SQLITE_INSERT, DELETE or UPDATE*/
+  int *pbIndirect                 /* OUT: True for an 'indirect' change*/
 );
 
 /*
@@ -11590,9 +11590,9 @@ SQLITE_API int sqlite3changeset_op(
 ** above.
 */
 SQLITE_API int sqlite3changeset_pk(
-  sqlite3_changeset_iter *pIter,  /* Iterator object */
-  unsigned char **pabPK,          /* OUT: Array of boolean - true for PK cols */
-  int *pnCol                      /* OUT: Number of entries in output array */
+  sqlite3_changeset_iter *pIter,  /* Iterator object*/
+  unsigned char **pabPK,          /* OUT: Array of boolean - true for PK cols*/
+  int *pnCol                      /* OUT: Number of entries in output array*/
 );
 
 /*
@@ -11621,9 +11621,9 @@ SQLITE_API int sqlite3changeset_pk(
 ** is returned and *ppValue is set to NULL.
 */
 SQLITE_API int sqlite3changeset_old(
-  sqlite3_changeset_iter *pIter,  /* Changeset iterator */
-  int iVal,                       /* Column number */
-  sqlite3_value **ppValue         /* OUT: Old value (or NULL pointer) */
+  sqlite3_changeset_iter *pIter,  /* Changeset iterator*/
+  int iVal,                       /* Column number*/
+  sqlite3_value **ppValue         /* OUT: Old value (or NULL pointer)*/
 );
 
 /*
@@ -11655,9 +11655,9 @@ SQLITE_API int sqlite3changeset_old(
 ** is returned and *ppValue is set to NULL.
 */
 SQLITE_API int sqlite3changeset_new(
-  sqlite3_changeset_iter *pIter,  /* Changeset iterator */
-  int iVal,                       /* Column number */
-  sqlite3_value **ppValue         /* OUT: New value (or NULL pointer) */
+  sqlite3_changeset_iter *pIter,  /* Changeset iterator*/
+  int iVal,                       /* Column number*/
+  sqlite3_value **ppValue         /* OUT: New value (or NULL pointer)*/
 );
 
 /*
@@ -11683,9 +11683,9 @@ SQLITE_API int sqlite3changeset_new(
 ** is returned and *ppValue is set to NULL.
 */
 SQLITE_API int sqlite3changeset_conflict(
-  sqlite3_changeset_iter *pIter,  /* Changeset iterator */
-  int iVal,                       /* Column number */
-  sqlite3_value **ppValue         /* OUT: Value from conflicting row */
+  sqlite3_changeset_iter *pIter,  /* Changeset iterator*/
+  int iVal,                       /* Column number*/
+  sqlite3_value **ppValue         /* OUT: Value from conflicting row*/
 );
 
 /*
@@ -11700,8 +11700,8 @@ SQLITE_API int sqlite3changeset_conflict(
 ** In all other cases this function returns SQLITE_MISUSE.
 */
 SQLITE_API int sqlite3changeset_fk_conflicts(
-  sqlite3_changeset_iter *pIter,  /* Changeset iterator */
-  int *pnOut                      /* OUT: Number of FK violations */
+  sqlite3_changeset_iter *pIter,  /* Changeset iterator*/
+  int *pnOut                      /* OUT: Number of FK violations*/
 );
 
 
@@ -11766,8 +11766,8 @@ SQLITE_API int sqlite3changeset_finalize(sqlite3_changeset_iter *pIter);
 ** changeset. If it is not, the results are undefined.
 */
 SQLITE_API int sqlite3changeset_invert(
-  int nIn, const void *pIn,       /* Input changeset */
-  int *pnOut, void **ppOut        /* OUT: Inverse of input */
+  int nIn, const void *pIn,       /* Input changeset*/
+  int *pnOut, void **ppOut        /* OUT: Inverse of input*/
 );
 
 /*
@@ -11797,12 +11797,12 @@ SQLITE_API int sqlite3changeset_invert(
 ** Refer to the sqlite3_changegroup documentation below for details.
 */
 SQLITE_API int sqlite3changeset_concat(
-  int nA,                         /* Number of bytes in buffer pA */
-  void *pA,                       /* Pointer to buffer containing changeset A */
-  int nB,                         /* Number of bytes in buffer pB */
-  void *pB,                       /* Pointer to buffer containing changeset B */
-  int *pnOut,                     /* OUT: Number of bytes in output changeset */
-  void **ppOut                    /* OUT: Buffer containing output changeset */
+  int nA,                         /* Number of bytes in buffer pA*/
+  void *pA,                       /* Pointer to buffer containing changeset A*/
+  int nB,                         /* Number of bytes in buffer pB*/
+  void *pB,                       /* Pointer to buffer containing changeset B*/
+  int *pnOut,                     /* OUT: Number of bytes in output changeset*/
+  void **ppOut                    /* OUT: Buffer containing output changeset*/
 );
 
 
@@ -11812,8 +11812,8 @@ SQLITE_API int sqlite3changeset_concat(
 SQLITE_API int sqlite3changeset_upgrade(
   sqlite3 *db,
   const char *zDb,
-  int nIn, const void *pIn,       /* Input changeset */
-  int *pnOut, void **ppOut        /* OUT: Inverse of input */
+  int nIn, const void *pIn,       /* Input changeset*/
+  int *pnOut, void **ppOut        /* OUT: Inverse of input*/
 );
 
 
@@ -12006,8 +12006,8 @@ SQLITE_API int sqlite3changegroup_add(sqlite3_changegroup*, int nData, void *pDa
 */
 SQLITE_API int sqlite3changegroup_output(
   sqlite3_changegroup*,
-  int *pnData,                    /* OUT: Size of output buffer in bytes */
-  void **ppData                   /* OUT: Pointer to output buffer */
+  int *pnData,                    /* OUT: Size of output buffer in bytes*/
+  void **ppData                   /* OUT: Pointer to output buffer*/
 );
 
 /*
@@ -12175,36 +12175,36 @@ SQLITE_API void sqlite3changegroup_delete(sqlite3_changegroup*);
 ** and therefore subject to change.
 */
 SQLITE_API int sqlite3changeset_apply(
-  sqlite3 *db,                    /* Apply change to "main" db of this handle */
-  int nChangeset,                 /* Size of changeset in bytes */
-  void *pChangeset,               /* Changeset blob */
+  sqlite3 *db,                    /* Apply change to "main" db of this handle*/
+  int nChangeset,                 /* Size of changeset in bytes*/
+  void *pChangeset,               /* Changeset blob*/
   int(*xFilter)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    const char *zTab              /* Table name */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    const char *zTab              /* Table name*/
   ),
   int(*xConflict)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT */
-    sqlite3_changeset_iter *p     /* Handle describing change and conflict */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT*/
+    sqlite3_changeset_iter *p     /* Handle describing change and conflict*/
   ),
-  void *pCtx                      /* First argument passed to xConflict */
+  void *pCtx                      /* First argument passed to xConflict*/
 );
 SQLITE_API int sqlite3changeset_apply_v2(
-  sqlite3 *db,                    /* Apply change to "main" db of this handle */
-  int nChangeset,                 /* Size of changeset in bytes */
-  void *pChangeset,               /* Changeset blob */
+  sqlite3 *db,                    /* Apply change to "main" db of this handle*/
+  int nChangeset,                 /* Size of changeset in bytes*/
+  void *pChangeset,               /* Changeset blob*/
   int(*xFilter)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    const char *zTab              /* Table name */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    const char *zTab              /* Table name*/
   ),
   int(*xConflict)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT */
-    sqlite3_changeset_iter *p     /* Handle describing change and conflict */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT*/
+    sqlite3_changeset_iter *p     /* Handle describing change and conflict*/
   ),
-  void *pCtx,                     /* First argument passed to xConflict */
-  void **ppRebase, int *pnRebase, /* OUT: Rebase data */
-  int flags                       /* SESSION_CHANGESETAPPLY_* flags */
+  void *pCtx,                     /* First argument passed to xConflict*/
+  void **ppRebase, int *pnRebase, /* OUT: Rebase data*/
+  int flags                       /* SESSION_CHANGESETAPPLY_* flags*/
 );
 
 /*
@@ -12594,34 +12594,34 @@ SQLITE_API void sqlite3rebaser_delete(sqlite3_rebaser *p);
 ** no guarantees are made as to the size of the chunks of data returned.
 */
 SQLITE_API int sqlite3changeset_apply_strm(
-  sqlite3 *db,                    /* Apply change to "main" db of this handle */
-  int (*xInput)(void *pIn, void *pData, int *pnData), /* Input function */
-  void *pIn,                                          /* First arg for xInput */
+  sqlite3 *db,                    /* Apply change to "main" db of this handle*/
+  int (*xInput)(void *pIn, void *pData, int *pnData), /* Input function*/
+  void *pIn,                                          /* First arg for xInput*/
   int(*xFilter)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    const char *zTab              /* Table name */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    const char *zTab              /* Table name*/
   ),
   int(*xConflict)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT */
-    sqlite3_changeset_iter *p     /* Handle describing change and conflict */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT*/
+    sqlite3_changeset_iter *p     /* Handle describing change and conflict*/
   ),
-  void *pCtx                      /* First argument passed to xConflict */
+  void *pCtx                      /* First argument passed to xConflict*/
 );
 SQLITE_API int sqlite3changeset_apply_v2_strm(
-  sqlite3 *db,                    /* Apply change to "main" db of this handle */
-  int (*xInput)(void *pIn, void *pData, int *pnData), /* Input function */
-  void *pIn,                                          /* First arg for xInput */
+  sqlite3 *db,                    /* Apply change to "main" db of this handle*/
+  int (*xInput)(void *pIn, void *pData, int *pnData), /* Input function*/
+  void *pIn,                                          /* First arg for xInput*/
   int(*xFilter)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    const char *zTab              /* Table name */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    const char *zTab              /* Table name*/
   ),
   int(*xConflict)(
-    void *pCtx,                   /* Copy of sixth arg to _apply() */
-    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT */
-    sqlite3_changeset_iter *p     /* Handle describing change and conflict */
+    void *pCtx,                   /* Copy of sixth arg to _apply()*/
+    int eConflict,                /* DATA, MISSING, CONFLICT, CONSTRAINT*/
+    sqlite3_changeset_iter *p     /* Handle describing change and conflict*/
   ),
-  void *pCtx,                     /* First argument passed to xConflict */
+  void *pCtx,                     /* First argument passed to xConflict*/
   void **ppRebase, int *pnRebase,
   int flags
 );
@@ -12723,7 +12723,7 @@ SQLITE_API int sqlite3session_config(int op, void *pArg);
 }
 #endif
 
-#endif  /* !defined(__SQLITESESSION_H_) && defined(SQLITE_ENABLE_SESSION) */
+#endif  /* !defined(__SQLITESESSION_H_) && defined(SQLITE_ENABLE_SESSION)*/
 
 /******** End of sqlite3session.h *********/
 /******** Begin file fts5.h *********/
@@ -12767,11 +12767,11 @@ typedef struct Fts5Context Fts5Context;
 typedef struct Fts5PhraseIter Fts5PhraseIter;
 
 typedef void (*fts5_extension_function)(
-  const Fts5ExtensionApi *pApi,   /* API offered by current FTS version */
-  Fts5Context *pFts,              /* First arg to pass to pApi functions */
-  sqlite3_context *pCtx,          /* Context for returning result/error */
-  int nVal,                       /* Number of values in apVal[] array */
-  sqlite3_value **apVal           /* Array of trailing arguments */
+  const Fts5ExtensionApi *pApi,   /* API offered by current FTS version*/
+  Fts5Context *pFts,              /* First arg to pass to pApi functions*/
+  sqlite3_context *pCtx,          /* Context for returning result/error*/
+  int nVal,                       /* Number of values in apVal[] array*/
+  sqlite3_value **apVal           /* Array of trailing arguments*/
 );
 
 struct Fts5PhraseIter {
@@ -13034,7 +13034,7 @@ struct Fts5PhraseIter {
 **   "detail=none" or "detail=column" option.
 */
 struct Fts5ExtensionApi {
-  int iVersion;                   /* Currently always set to 3 */
+  int iVersion;                   /* Currently always set to 3*/
 
   void *(*xUserData)(Fts5Context*);
 
@@ -13043,9 +13043,9 @@ struct Fts5ExtensionApi {
   int (*xColumnTotalSize)(Fts5Context*, int iCol, sqlite3_int64 *pnToken);
 
   int (*xTokenize)(Fts5Context*,
-    const char *pText, int nText, /* Text to tokenize */
-    void *pCtx,                   /* Context passed to xToken() */
-    int (*xToken)(void*, int, const char*, int, int, int)       /* Callback */
+    const char *pText, int nText, /* Text to tokenize*/
+    void *pCtx,                   /* Context passed to xToken()*/
+    int (*xToken)(void*, int, const char*, int, int, int)       /* Callback*/
   );
 
   int (*xPhraseCount)(Fts5Context*);
@@ -13070,7 +13070,7 @@ struct Fts5ExtensionApi {
   int (*xPhraseFirstColumn)(Fts5Context*, int iPhrase, Fts5PhraseIter*, int*);
   void (*xPhraseNextColumn)(Fts5Context*, Fts5PhraseIter*, int *piCol);
 
-  /* Below this point are iVersion>=3 only */
+  /* Below this point are iVersion>=3 only*/
   int (*xQueryToken)(Fts5Context*,
       int iPhrase, int iToken,
       const char **ppToken, int *pnToken
@@ -13281,28 +13281,28 @@ struct fts5_tokenizer {
   void (*xDelete)(Fts5Tokenizer*);
   int (*xTokenize)(Fts5Tokenizer*,
       void *pCtx,
-      int flags,            /* Mask of FTS5_TOKENIZE_* flags */
+      int flags,            /* Mask of FTS5_TOKENIZE_* flags*/
       const char *pText, int nText,
       int (*xToken)(
-        void *pCtx,         /* Copy of 2nd argument to xTokenize() */
-        int tflags,         /* Mask of FTS5_TOKEN_* flags */
-        const char *pToken, /* Pointer to buffer containing token */
-        int nToken,         /* Size of token in bytes */
-        int iStart,         /* Byte offset of token within input text */
-        int iEnd            /* Byte offset of end of token within input text */
+        void *pCtx,         /* Copy of 2nd argument to xTokenize()*/
+        int tflags,         /* Mask of FTS5_TOKEN_* flags*/
+        const char *pToken, /* Pointer to buffer containing token*/
+        int nToken,         /* Size of token in bytes*/
+        int iStart,         /* Byte offset of token within input text*/
+        int iEnd            /* Byte offset of end of token within input text*/
       )
   );
 };
 
-/* Flags that may be passed as the third argument to xTokenize() */
+/* Flags that may be passed as the third argument to xTokenize()*/
 #define FTS5_TOKENIZE_QUERY     0x0001
 #define FTS5_TOKENIZE_PREFIX    0x0002
 #define FTS5_TOKENIZE_DOCUMENT  0x0004
 #define FTS5_TOKENIZE_AUX       0x0008
 
 /* Flags that may be passed by the tokenizer implementation back to FTS5
-** as the third argument to the supplied xToken callback. */
-#define FTS5_TOKEN_COLOCATED    0x0001      /* Same position as prev. token */
+** as the third argument to the supplied xToken callback.*/
+#define FTS5_TOKEN_COLOCATED    0x0001      /* Same position as prev. token*/
 
 /*
 ** END OF CUSTOM TOKENIZERS
@@ -13313,9 +13313,9 @@ struct fts5_tokenizer {
 */
 typedef struct fts5_api fts5_api;
 struct fts5_api {
-  int iVersion;                   /* Currently always set to 2 */
+  int iVersion;                   /* Currently always set to 2*/
 
-  /* Create a new tokenizer */
+  /* Create a new tokenizer*/
   int (*xCreateTokenizer)(
     fts5_api *pApi,
     const char *zName,
@@ -13324,7 +13324,7 @@ struct fts5_api {
     void (*xDestroy)(void*)
   );
 
-  /* Find an existing tokenizer */
+  /* Find an existing tokenizer*/
   int (*xFindTokenizer)(
     fts5_api *pApi,
     const char *zName,
@@ -13332,7 +13332,7 @@ struct fts5_api {
     fts5_tokenizer *pTokenizer
   );
 
-  /* Create a new auxiliary function */
+  /* Create a new auxiliary function*/
   int (*xCreateFunction)(
     fts5_api *pApi,
     const char *zName,
@@ -13347,9 +13347,9 @@ struct fts5_api {
 *************************************************************************/
 
 #ifdef __cplusplus
-}  /* end of the 'extern "C"' block */
+}  /* end of the 'extern "C"' block*/
 #endif
 
-#endif /* _FTS5_H */
+#endif /* _FTS5_H*/
 
 /******** End of fts5.h *********/

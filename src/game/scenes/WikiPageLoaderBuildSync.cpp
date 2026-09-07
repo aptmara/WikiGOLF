@@ -1,7 +1,7 @@
 /**
  * @file WikiPageLoaderBuildSync.cpp
  * @brief 同期ページ構築処理を実装します。
- */
+*/
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"

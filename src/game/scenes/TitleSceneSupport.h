@@ -2,7 +2,7 @@
 /**
  * @file TitleSceneSupport.h
  * @brief タイトル画面で共有する小さな変換処理
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../components/WikiComponents.h"
@@ -16,7 +16,7 @@ inline constexpr float kStartConnectionTimeoutSeconds = 8.0f;
 /**
  * @brief 標準スタート用にWiki開始情報を初期化します。
  * @details 前回のカスタムコースやロード済みデータを破棄し、通常開始の抽選へ戻します。
- */
+*/
 inline void ResetStandardStartData(core::GameContext &ctx) {
   game::components::WikiGlobalData data;
   ctx.world.SetGlobal(std::move(data));
@@ -25,7 +25,7 @@ inline void ResetStandardStartData(core::GameContext &ctx) {
 
 /**
  * @brief URLのパーセントエンコードを復元します。
- */
+*/
 inline std::string UrlDecode(const std::string &src) {
   std::string result;
   for (size_t index = 0; index < src.length(); ++index) {
@@ -48,7 +48,7 @@ inline std::string UrlDecode(const std::string &src) {
 
 /**
  * @brief WikiのURLまたは記事名から記事タイトルを抽出します。
- */
+*/
 inline std::string ExtractWikiTitle(const std::string &input) {
   const std::string prefix = "wikipedia.org/wiki/";
   const size_t position = input.find(prefix);

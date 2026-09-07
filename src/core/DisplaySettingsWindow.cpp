@@ -1,7 +1,7 @@
 /**
  * @file DisplaySettingsWindow.cpp
  * @brief ウィンドウモード、解像度、モニタ領域の適用。
- */
+*/
 
 #include "DisplaySettings.h"
 #include "DisplaySettingsInternals.h"

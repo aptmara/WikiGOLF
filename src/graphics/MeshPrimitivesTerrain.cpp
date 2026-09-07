@@ -1,7 +1,7 @@
 /**
  * @file MeshPrimitivesTerrain.cpp
  * @brief プリミティブメッシュ生成ファクトリの実装
- */
+*/
 
 #include "MeshPrimitives.h"
 #include "TangentGenerator.h"

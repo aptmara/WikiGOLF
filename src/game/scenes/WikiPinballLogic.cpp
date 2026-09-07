@@ -1,3 +1,8 @@
+/**
+ * @file WikiPinballLogic.cpp
+ * @brief WikiPinballLogic の実装
+*/
+
 #include "../../core/GameContext.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../core/Input.h"

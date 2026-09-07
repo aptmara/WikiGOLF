@@ -1,3 +1,8 @@
+/**
+ * @file SkyboxTextureGeneratorImage.cpp
+ * @brief SkyboxTextureGeneratorImage の実装
+ */
+
 #include "SkyboxTextureGenerator.h"
 #include "SkyboxTextureGeneratorInternals.h"
 #include <algorithm>

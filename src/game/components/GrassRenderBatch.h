@@ -2,7 +2,7 @@
 /**
  * @file GrassRenderBatch.h
  * @brief 空間チャンク単位で描画する芝インスタンス群
- */
+*/
 
 #include "../../resources/ResourceManager.h"
 #include "../../ecs/Entity.h"

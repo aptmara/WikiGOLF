@@ -1,3 +1,8 @@
+/**
+ * @file TerrainGeneratorPlatforms.cpp
+ * @brief TerrainGeneratorPlatforms の実装
+*/
+
 #include "TerrainGeneratorInternals.h"
 #include "TerrainGenerator.h"
 #include "../../core/Logger.h"
@@ -143,6 +148,6 @@ void TerrainGenerator::CreatePlatforms(
 
 /**
  * @brief ハイト�（チ（�（にスムージング処理��適用します、（
- */
+*/
 
 } // namespace game::systems

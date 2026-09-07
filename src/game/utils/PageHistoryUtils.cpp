@@ -1,3 +1,8 @@
+/**
+ * @file PageHistoryUtils.cpp
+ * @brief PageHistoryUtils の実装
+*/
+
 #include "PageHistoryUtils.h"
 
 namespace game::utils {

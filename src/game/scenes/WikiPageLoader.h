@@ -2,7 +2,7 @@
 /**
  * @file WikiPageLoader.h
  * @brief Wikipedia記事のロード・フィールド生成・ホール配置を行うクラス
- */
+*/
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
@@ -45,7 +45,7 @@ namespace game::scenes {
 
 /**
  * @brief 近隣ホール用サムネイル取得（バックグラウンドスレッド）の結果
- */
+*/
 struct PendingHoleThumbnail {
     bool found = false;
     std::vector<uint8_t> pixelsBGRA;
@@ -55,7 +55,7 @@ struct PendingHoleThumbnail {
 
 /**
  * @brief ページロードの結果
- */
+*/
 struct PageLoadResult {
     float fieldWidth  = 80.0f;
     float fieldDepth  = 120.0f;
@@ -66,7 +66,7 @@ struct PageLoadResult {
 /**
  * @brief ページロード用コントローラ
  * WikiGolfScene の LoadPage / CreateHole / CreateLinksFromTexture を移管する。
- */
+*/
 class WikiPageLoader {
 public:
     WikiPageLoader() = default;
@@ -74,14 +74,14 @@ public:
 
     /**
      * @brief 実行中の経路評価へ中断を要求します。
-     */
+*/
     void CancelAsyncPathEvaluations();
 
     /**
      * @brief ページ構築タスクと生成済みEntityを終了処理します。
      * @param ctx ゲーム全体の共有コンテキストです。
      * @param minimapController ページに対応するマップ表示です。
-     */
+*/
     void Shutdown(
         core::GameContext& ctx,
         game::controllers::MinimapController* minimapController);
@@ -92,15 +92,15 @@ public:
      * @param terrainSys  地形システム（非 null 必須）
      * @param skyboxGen   スカイボックスジェネレータ（非 null 必須）
      * @param shortestPath SDOW 最短パスシステム（null 許容）
-     */
+*/
     void SetSystems(graphics::WikiTextureGenerator* textureGen,
                     game::systems::WikiTerrainSystem* terrainSys,
                     graphics::SkyboxTextureGenerator* skyboxGen,
                     game::systems::WikiShortestPath* shortestPath);
 
     /**
-     * @brief チュートリアル専用の固定教材コースを使うか設定します。 山内陽
-     */
+     * @brief チュートリアル専用の固定教材コースを使うか設定します。
+*/
     void SetTutorialMode(bool enabled);
 
     /**
@@ -112,7 +112,7 @@ public:
      * @param skyboxEntity スカイボックスエンティティ（テーマ更新に使用）
      * @param minimapController ミニマップ（中心同期に使用。null 許容）
      * @return ロード結果（フィールドサイズ・Par 等）
-     */
+*/
     PageLoadResult LoadPage(core::GameContext& ctx,
                             const std::string& pageName,
                             ecs::Entity ballEntity,
@@ -124,12 +124,12 @@ public:
      * @brief 記事データとリンクを非同期で取得する（通信・DB処理）
      * @param pageName ロードする記事名
      * @return 取得したデータ
-     */
+*/
     PageDataAsyncResult FetchPageDataAsync(const std::string& pageName);
 
     /**
      * @brief 取得したデータをもとに、メインスレッドでGPUリソースとエンティティを生成する
-     */
+*/
     PageLoadResult BuildPageSync(core::GameContext& ctx,
                                  PageDataAsyncResult asyncData,
                                  ecs::Entity ballEntity,
@@ -139,7 +139,7 @@ public:
 
     /**
      * @brief インクリメンタルな構築を開始する
-     */
+*/
     void BeginBuildPage(core::GameContext& ctx,
                         PageDataAsyncResult asyncData,
                         ecs::Entity ballEntity,
@@ -150,33 +150,33 @@ public:
     /**
      * @brief 構築を 1 ステップ進める
      * @return 完了したら true
-     */
+*/
     bool StepBuildPage(core::GameContext& ctx);
 
     /**
-     * @brief 1フレーム内の時間予算内で構築を進めます。 山内陽
+     * @brief 1フレーム内の時間予算内で構築を進めます。
      * @param ctx ゲームコンテキスト
      * @param budget メインスレッド構築に使える最大時間
      * @return 完了したら true
-     */
+*/
     bool StepBuildPageWithinFrameBudget(core::GameContext& ctx,
                                         std::chrono::milliseconds budget);
 
     /**
-     * @brief 遅延中の経路評価が完了していれば反映します。 山内陽
+     * @brief 遅延中の経路評価が完了していれば反映します。
      * @param ctx ゲームコンテキスト
      * @return 経路評価結果を反映した場合は true
-     */
+*/
     bool UpdateAsyncPathEvaluation(core::GameContext& ctx);
 
-    /// @brief 構築の進捗 (0.0 - 1.0)
+    /** @brief 構築の進捗 (0.0 - 1.0)*/
     float GetBuildProgress() const { return m_buildProgress; }
 
     /**
      * @brief 事前ロードデータをセットする（キャッシュとして使用）
      * @param links   事前取得済みリンク一覧
      * @param extract 事前取得済み記事テキスト
-     */
+*/
     void SetPreloadedData(std::vector<game::WikiLink> links, std::string extract);
 
     /**
@@ -187,7 +187,7 @@ public:
      * @param pixelsBGRA デコード済み32bpp BGRAピクセル列
      * @param width 画像幅
      * @param height 画像高さ
-     */
+*/
     void SetTargetThumbnail(core::GameContext& ctx,
                             const std::vector<uint8_t>& pixelsBGRA,
                             uint32_t width, uint32_t height);
@@ -200,52 +200,54 @@ public:
      * @param ctx ゲームコンテキスト
      * @param ballPos ボールのワールド座標（距離判定の基準）
      * @param cameraEntity ビルボード回転の基準にするカメラエンティティ
-     */
+*/
     void UpdateNearbyHoleSignboards(core::GameContext& ctx,
                                     const DirectX::XMFLOAT3& ballPos,
                                     ecs::Entity cameraEntity);
 
     /**
      * @brief ホールを生成します。
-     */
+*/
     void CreateHole(core::GameContext& ctx, float x, float z,
                     const std::string& linkTarget, bool isTargetHole,
                     int hopsToTarget = -1, bool addMapIcon = true);
 
     /**
      * @brief 最後に生成したテクスチャ結果を取得します。
-     */
+*/
     const graphics::WikiTextureResult* GetWikiTexture() const {
         return m_wikiTexture.get();
     }
 
     /**
      * @brief フィールドの幅を取得します。
-     */
+*/
     float GetFieldWidth() const { return m_fieldWidth; }
-    
+
     /**
      * @brief フィールドの奥行きを取得します。
-     */
+*/
     float GetFieldDepth() const { return m_fieldDepth; }
 
 private:
     /**
-     * @brief 生成済みのページ関連エンティティを破棄します。 山内陽
-     */
+     * @brief 生成済みのページ関連エンティティを破棄します。
+*/
     void ClearGeneratedPageObjects(core::GameContext& ctx,
                                    game::controllers::MinimapController* minimapController);
 
-    /// @brief テクスチャのリンク領域からホールを一括配置する
+    /** @brief テクスチャのリンク領域からホールを一括配置する*/
     void CreateLinksFromTexture(core::GameContext& ctx);
 
-    /// @brief デコード済みBGRAピクセル列からD3D11 SRVを作成する（失敗時nullptr）
+    /** @brief デコード済みBGRAピクセル列からD3D11 SRVを作成する（失敗時nullptr）*/
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> CreateSRVFromPixels(
         core::GameContext& ctx, const std::vector<uint8_t>& pixelsBGRA,
         uint32_t width, uint32_t height);
 
-    /// @brief 記事サムネイル看板（ビルボード）を旗ポールの真上に1枚生成する。
-    ///        額縁の色・演出強度はhopsToTarget（GetHoleColorと同じ配色）で決まる。
+    /**
+     * @brief 記事サムネイル看板（ビルボード）を旗ポールの真上に1枚生成する。
+     *        額縁の色・演出強度はhopsToTarget（GetHoleColorと同じ配色）で決まる。
+*/
     ecs::Entity CreateHoleSignboardEntity(
         core::GameContext& ctx, float x, float z, float terrainH,
         bool isTargetHole, int hopsToTarget, ID3D11ShaderResourceView* srv,
@@ -269,7 +271,7 @@ private:
 
     /**
      * @brief 記事タイトルごとのサムネイル取得状況（ゲームセッション全体で使い回すキャッシュ）。
-     */
+*/
     struct HoleThumbnailState {
         enum class Status { Fetching, Ready, Failed };
         Status status = Status::Fetching;
@@ -298,70 +300,70 @@ private:
         BeginTexture,
         GenerateTextureTiles,
         ApplySkybox,
-        BeginTerrain,     ///< 地形生成処理の開始
-        BuildTerrainStep, ///< 地形生成処理のインクリメンタル更新
+        BeginTerrain,     /**< 地形生成処理の開始*/
+        BuildTerrainStep, /**< 地形生成処理のインクリメンタル更新*/
         RepositionBall,
-        EvaluateHoles,    ///< 全リンク領域のホール候補化
-        EvaluateHolePaths, ///< 一部候補のリンク距離評価
-        CreateMapIcons,   ///< マップビュー用の軽量リンク表示
+        EvaluateHoles,    /**< 全リンク領域のホール候補化*/
+        EvaluateHolePaths, /**< 一部候補のリンク距離評価*/
+        CreateMapIcons,   /**< マップビュー用の軽量リンク表示*/
         CreateHoles,
         SetupWind,
         Finish
     };
 
     /**
-     * @brief ビルドステップ名をログ用に返します。 山内陽
-     */
+     * @brief ビルドステップ名をログ用に返します。
+*/
     static const char* BuildStepName(BuildStep step);
 
     /**
-     * @brief ステップ変更時に前ステップ完了と次ステップ開始を記録します。 山内陽
-     */
+     * @brief ステップ変更時に前ステップ完了と次ステップ開始を記録します。
+*/
     void LogBuildStepTransition();
 
     /**
-     * @brief 長時間継続しているステップの進捗を間隔を空けて記録します。 山内陽
-     */
+     * @brief 長時間継続しているステップの進捗を間隔を空けて記録します。
+*/
     void LogLongRunningBuildStep();
 
     /**
-     * @brief 完了済みの経路評価タスクを候補と既存ホールへ反映します。 山内陽
-     */
+     * @brief 完了済みの経路評価タスクを候補と既存ホールへ反映します。
+*/
     bool TryConsumePathEvaluation(core::GameContext& ctx, bool updateWorld);
 
     /**
-     * @brief 既に生成済みのホール表示へ経路評価結果を反映します。 山内陽
-     */
+     * @brief 既に生成済みのホール表示へ経路評価結果を反映します。
+*/
     void ApplyPathEvaluationToWorld(
         core::GameContext& ctx,
         const std::vector<HolePlacementCandidate>& evaluatedCandidates);
 
     /**
-     * @brief 評価結果を同じリンク候補へ反映します。 山内陽
-     */
+     * @brief 評価結果を同じリンク候補へ反映します。
+*/
     void ApplyPathEvaluationResults(
         const std::vector<HolePlacementCandidate>& evaluatedCandidates);
 
     /**
-     * @brief 現在の経路評価候補から最短ホップ数を取得します。 山内陽
-     */
+     * @brief 現在の経路評価候補から最短ホップ数を取得します。
+*/
     int FindMinResolvedHopsToTarget() const;
 
     /**
-     * @brief 経路評価結果を元に Par を再計算します。 山内陽
-     */
+     * @brief 経路評価結果を元に Par を再計算します。
+*/
     void RefreshParFromPathEvaluation(core::GameContext& ctx,
                                       bool allowFallback);
 
     /**
-     * @brief 候補のリンク距離を評価します。 山内陽
-     */
+     * @brief 候補のリンク距離を評価します。
+*/
     void EvaluateCandidatePath(core::GameContext& ctx,
                                HolePlacementCandidate& candidate);
 
     /**
-     * @brief マップ候補がプレイ可能ホールとして選ばれたかを判定します。 山内陽
-     */
+     * @brief マップ候補がプレイ可能ホールとして選ばれたかを判定します。
+*/
     bool IsPlayableCandidate(const HolePlacementCandidate& candidate) const;
 
     BuildStep m_buildStep = BuildStep::None;

@@ -1,34 +1,54 @@
+/**
+ * @file TerrainPS.hlsl
+ * @brief 地形マルチテクスチャ・プロシージャル表現用ピクセルシェーダー
+ */
+
+/**
+ * @struct PS_INPUT
+ * @brief ピクセルシェーダー入力
+ */
 struct PS_INPUT {
-    float4 Pos : SV_POSITION;
-    float3 WorldPos : POSITION;
-    float3 Normal : NORMAL;
-    float2 Tex : TEXCOORD0;
-    float4 Color : COLOR0;
-    float3 Tangent : TANGENT;
-    float3 Bitangent : BINORMAL;
+    float4 Pos : SV_POSITION;    /**< 射影座標 */
+    float3 WorldPos : POSITION;  /**< ワールド座標 */
+    float3 Normal : NORMAL;      /**< ワールド法線 */
+    float2 Tex : TEXCOORD0;      /**< UV座標 */
+    float4 Color : COLOR0;       /**< 頂点カラー（マテリアルパレット色） */
+    float3 Tangent : TANGENT;    /**< ワールド接線 */
+    float3 Bitangent : BINORMAL; /**< ワールド従法線 */
 };
 
 cbuffer ConstantBuffer : register(b0) {
-    matrix World;
-    matrix View;
-    matrix Projection;
-    float4 MaterialColor;
-    float4 MaterialFlags; // x: hasTexture, y: hasNormalMap, z: uvScale
-    float4 LightDir;
-    float4 CameraPos;
+    matrix World;          /**< ワールド行列 */
+    matrix View;           /**< ビュー行列 */
+    matrix Projection;     /**< 射影行列 */
+    float4 MaterialColor;  /**< マテリアルカラー */
+    float4 MaterialFlags;  /**< x: hasTexture, y: hasNormalMap, z: uvScale */
+    float4 LightDir;       /**< 光源方向 */
+    float4 CameraPos;      /**< カメラワールド座標 */
 };
 
-// t0: Albedo Array (8 layers), t1: Normal Array (8 layers)
-Texture2DArray g_AlbedoArray : register(t0);
-Texture2DArray g_NormalArray : register(t1);
-SamplerState g_Sampler : register(s0);
+Texture2DArray g_AlbedoArray : register(t0); /**< アルベドテクスチャ配列（8層） */
+Texture2DArray g_NormalArray : register(t1); /**< ノーマルマップ配列（8層） */
+SamplerState g_Sampler : register(s0);       /**< サンプラーステート */
 
+/**
+ * @brief 2Dワールド座標から砂粒・ノイズ用ハッシュ値を算出します。
+ * @param p 2D入力座標
+ * @return 0～1の乱数値
+ */
 float SandHash(float2 p) {
     p = frac(p * float2(123.34f, 456.21f));
     p += dot(p, p + 45.32f);
     return frac(p.x * p.y);
 }
 
+/**
+ * @brief 芝生表面の繊維状プロシージャル陰影を計算します。
+ * @param worldXZ ワールドXZ座標
+ * @param bladeDirection 芝の配向ベクトル
+ * @param density 密度スケール
+ * @return 繊維テクスチャ強度 (0～1)
+ */
 float TurfFibers(float2 worldXZ, float2 bladeDirection, float density) {
     float2 direction = normalize(bladeDirection);
     float2 across = float2(-direction.y, direction.x);
@@ -47,6 +67,7 @@ float TurfFibers(float2 worldXZ, float2 bladeDirection, float density) {
     return fiber * (0.55f + seed * 0.45f);
 }
 
+/** @brief 地形マテリアルパレット色定義（8種） */
 static const float3 kTerrainPalette[8] = {
     float3(0.25f, 0.43f, 0.16f),
     float3(0.18f, 0.32f, 0.11f),
@@ -58,6 +79,13 @@ static const float3 kTerrainPalette[8] = {
     float3(0.50f, 0.48f, 0.52f)
 };
 
+/**
+ * @brief 頂点カラーから近傍2つのテクスチャ層インデックスとブレンド比率を求めます。
+ * @param color 入力頂点色
+ * @param layerA 第1候補テクスチャ層インデックス
+ * @param layerB 第2候補テクスチャ層インデックス
+ * @param blend 第2候補のブレンド比率 (0～1)
+ */
 void FindMaterialBlend(float3 color, out float layerA, out float layerB,
                        out float blend) {
     float nearestDistance = 1e9f;
@@ -87,6 +115,11 @@ void FindMaterialBlend(float3 color, out float layerA, out float layerB,
     blend = secondWeight / (nearestWeight + secondWeight);
 }
 
+/**
+ * @brief 地形ピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 陰影・マテリアル合成済みピクセルカラー
+ */
 float4 main(PS_INPUT input) : SV_TARGET {
     // UVスケール適用
     float uvScale = max(MaterialFlags.z, 1.0f);

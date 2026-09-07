@@ -297,7 +297,7 @@ STBIW_EXTERN __declspec(dllimport) int __stdcall WideCharToMultiByte(unsigned in
 
 STBIWDEF int stbiw_convert_wchar_to_utf8(char *buffer, size_t bufferlen, const wchar_t* input)
 {
-   return WideCharToMultiByte(65001 /* UTF8 */, 0, input, -1, buffer, (int) bufferlen, NULL, NULL);
+   return WideCharToMultiByte(65001 /* UTF8*/, 0, input, -1, buffer, (int) bufferlen, NULL, NULL);
 }
 #endif
 
@@ -307,10 +307,10 @@ static FILE *stbiw__fopen(char const *filename, char const *mode)
 #if defined(_WIN32) && defined(STBIW_WINDOWS_UTF8)
    wchar_t wMode[64];
    wchar_t wFilename[1024];
-   if (0 == MultiByteToWideChar(65001 /* UTF8 */, 0, filename, -1, wFilename, sizeof(wFilename)/sizeof(*wFilename)))
+   if (0 == MultiByteToWideChar(65001 /* UTF8*/, 0, filename, -1, wFilename, sizeof(wFilename)/sizeof(*wFilename)))
       return 0;
 
-   if (0 == MultiByteToWideChar(65001 /* UTF8 */, 0, mode, -1, wMode, sizeof(wMode)/sizeof(*wMode)))
+   if (0 == MultiByteToWideChar(65001 /* UTF8*/, 0, mode, -1, wMode, sizeof(wMode)/sizeof(*wMode)))
       return 0;
 
 #if defined(_MSC_VER) && _MSC_VER >= 1400
@@ -439,7 +439,7 @@ static void stbiw__write_pixel(stbi__write_context *s, int rgb_dir, int comp, in
             stbiw__write3(s, px[1 - rgb_dir], px[1], px[1 + rgb_dir]);
             break;
          }
-         /* FALLTHROUGH */
+         /* FALLTHROUGH*/
       case 3:
          stbiw__write3(s, d[1 - rgb_dir], d[1], d[1 + rgb_dir]);
          break;
@@ -679,11 +679,11 @@ static void stbiw__write_hdr_scanline(stbi__write_context *s, int width, int nco
    scanlineheader[2] = (width&0xff00)>>8;
    scanlineheader[3] = (width&0x00ff);
 
-   /* skip RLE for images too small or large */
+   /* skip RLE for images too small or large*/
    if (width < 8 || width >= 32768) {
       for (x=0; x < width; x++) {
          switch (ncomp) {
-            case 4: /* fallthrough */
+            case 4: /* fallthrough*/
             case 3: linear[2] = scanline[x*ncomp + 2];
                     linear[1] = scanline[x*ncomp + 1];
                     linear[0] = scanline[x*ncomp + 0];
@@ -697,10 +697,10 @@ static void stbiw__write_hdr_scanline(stbi__write_context *s, int width, int nco
       }
    } else {
       int c,r;
-      /* encode into scratch buffer */
+      /* encode into scratch buffer*/
       for (x=0; x < width; x++) {
          switch(ncomp) {
-            case 4: /* fallthrough */
+            case 4: /* fallthrough*/
             case 3: linear[2] = scanline[x*ncomp + 2];
                     linear[1] = scanline[x*ncomp + 1];
                     linear[0] = scanline[x*ncomp + 0];
@@ -718,7 +718,7 @@ static void stbiw__write_hdr_scanline(stbi__write_context *s, int width, int nco
 
       s->func(s->context, scanlineheader, 4);
 
-      /* RLE each component separately */
+      /* RLE each component separately*/
       for (c=0; c < 4; c++) {
          unsigned char *comp = &scratch[width*c];
 
@@ -1245,7 +1245,7 @@ STBIWDEF int stbi_write_png_to_func(stbi_write_func *func, void *context, int x,
  *
  * This is based on Jon Olick's jo_jpeg.cpp:
  * public domain Simple, Minimalistic JPEG writer - http://www.jonolick.com/code.html
- */
+*/
 
 static const unsigned char stbiw__jpg_ZigZag[] = { 0,1,5,6,14,15,27,28,2,4,7,13,16,26,29,42,3,8,12,17,25,30,41,43,9,11,18,
       24,31,40,44,53,10,19,23,32,39,45,52,54,20,22,33,38,46,51,55,60,21,34,37,47,50,56,59,61,35,36,48,49,57,58,62,63 };

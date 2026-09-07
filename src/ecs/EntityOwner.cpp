@@ -1,7 +1,7 @@
 /**
  * @file EntityOwner.cpp
  * @brief ECS Entity所有クラスの実装
- */
+*/
 
 #include "EntityOwner.h"
 #include "World.h"

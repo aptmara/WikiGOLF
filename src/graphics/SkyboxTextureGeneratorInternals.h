@@ -2,7 +2,7 @@
 /**
  * @file SkyboxTextureGeneratorInternals.h
  * @brief スカイボックス生成で共有する内部処理の宣言
- */
+*/
 
 #include "SkyboxTextureGenerator.h"
 #include <wincodec.h>
@@ -14,7 +14,7 @@ inline constexpr int kDefaultFaceSize = 512;
 
 /**
  * @brief テーマごとのプロシージャル生成パラメータ
- */
+*/
 struct ThemeParams {
   float starMult = 1.0f;
   float cloudMult = 1.0f;
@@ -41,54 +41,67 @@ struct ThemeParams {
 
 /**
  * @brief テキストを小文字へ変換します。
- */
+*/
 std::string ToLower(const std::string &text);
 
 /**
  * @brief 指定キーワードの有無を判定します。
- */
+*/
 bool ContainsKeyword(const std::string &text, const std::string &keyword);
 
 /**
  * @brief 複数キーワードのいずれかを判定します。
- */
+*/
 bool ContainsAnyKeyword(const std::string &text,
                         const std::vector<std::string> &keywords);
 
 /**
  * @brief 決定論的なノイズ値を計算します。
- */
+*/
 float HashNoise(int x, int y, int z);
 
 /**
  * @brief WIC画像ファクトリを取得します。
- */
+*/
 Microsoft::WRL::ComPtr<IWICImagingFactory> GetWicFactory();
 
 /**
  * @brief RGBA面データをPNGへ保存します。
- */
+*/
 bool SaveFaceToFile(const std::vector<uint8_t> &data, int faceSize,
                     const std::wstring &path);
 
 /**
  * @brief PNGをRGBA面データへ読み込みます。
- */
+*/
 bool LoadFaceFromFile(const std::wstring &path, int targetSize,
                       std::vector<uint8_t> &outData);
 
+/** @brief 3次元空間における基本グラディエントノイズを計算します。 */
 float GenerateNoise(float x, float y, float z);
+
+/** @brief 恒星・星空の強度を計算します。 */
 float GenerateStars(float x, float y, float z);
+
+/** @brief 雲模様の密度を計算します。 */
 float GenerateClouds(float x, float y, float z);
+
+/** @brief フラクタル・ブラウン運動（fBM）による合成ノイズを計算します。 */
 float GenerateFBM(float x, float y, float z, int octaves = 6);
+
+/** @brief ウォーリーノイズ（ボロノイ細胞状ノイズ）を計算します。 */
 float GenerateWorleyNoise(float x, float y, float z);
+
+/** @brief 銀河・星雲の輝度分布を計算します。 */
 float GenerateGalaxy(float x, float y, float z);
+
+/** @brief 太陽光球およびハローの輝度を計算します。 */
 float GenerateSun(const DirectX::XMFLOAT3 &dir,
                   const DirectX::XMFLOAT3 &sunDir);
 
 /**
  * @brief テーマのプロシージャルパラメータを取得します。
- */
+*/
 ThemeParams GetThemeParams(SkyboxTheme theme);
 
 } // namespace graphics::skybox_detail

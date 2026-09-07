@@ -1,7 +1,7 @@
 /**
  * @file EnvironmentState.h
  * @brief 環境状態コンポーネント - テーマに応じた環境パラメータを管理
- */
+*/
 
 #pragma once
 
@@ -11,7 +11,7 @@ namespace game::components {
 
 /**
  * @brief ライティングムード - 環境光の雰囲気
- */
+*/
 enum class LightingMood {
   // 自然環境
   SunriseDawn,
@@ -35,7 +35,7 @@ enum class LightingMood {
 
 /**
  * @brief パーティクルプリセット - 大気効果
- */
+*/
 enum class ParticlePreset {
   None,
   Dust,
@@ -55,7 +55,7 @@ enum class ParticlePreset {
 
 /**
  * @brief 環境状態 - テーマに応じた全環境パラメータ
- */
+*/
 struct EnvironmentState {
   // === ライティング ===
   LightingMood lightingMood = LightingMood::GoldenAfternoon;
@@ -93,7 +93,7 @@ struct EnvironmentState {
 
 /**
  * @brief テーマ別ライティングパラメータを取得
- */
+*/
 inline void GetLightingForMood(LightingMood mood,
                                DirectX::XMFLOAT3 &outSunColor,
                                DirectX::XMFLOAT3 &outAmbientColor,

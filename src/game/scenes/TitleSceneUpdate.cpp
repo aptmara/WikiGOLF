@@ -1,3 +1,8 @@
+/**
+ * @file TitleSceneUpdate.cpp
+ * @brief TitleSceneUpdate の実装
+*/
+
 #include "ResultScene.h"
 #include "TitleScene.h"
 #include "TitleSceneSupport.h"
@@ -43,7 +48,7 @@ using namespace DirectX;
 
 /**
  * @brief シーンの毎フレーム更新処理を行います。
- */
+*/
 void TitleScene::OnUpdate(core::GameContext &ctx) {
   // Cheat code to force transition to ResultScene
   if (ctx.input.GetKey(VK_CONTROL) &&
@@ -274,7 +279,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       alpha = (2.0f - m_popupTimer) * 2.0f; // 最初の0.5秒でフェードイン
     }
     alpha = std::clamp(alpha, 0.0f, 1.0f);
-    
+
     auto *pbg = ctx.world.Get<components::UIText>(m_popupBgEntity);
     auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
     if (pbg && ptxt) {

@@ -1,7 +1,7 @@
 /**
  * @file TextRendererInternals.h
  * @brief TextRenderer 内部で共有するハッシュ計算処理
- */
+*/
 #pragma once
 
 #include "TextStyle.h"
@@ -12,19 +12,19 @@
 
 namespace graphics::text_renderer_detail {
 
-/// @brief float のビット表現をキャッシュキーへ変換します。
+/** @brief float のビット表現をキャッシュキーへ変換します。 */
 inline uint32_t FloatBits(float value) {
   uint32_t bits = 0;
   std::memcpy(&bits, &value, sizeof(bits));
   return bits;
 }
 
-/// @brief FNV-1a 風の結合でハッシュ値を拡張します。
+/** @brief FNV-1a 風の結合でハッシュ値を拡張します。 */
 inline size_t HashCombine(size_t seed, size_t value) {
   return seed * 1099511628211ull ^ value;
 }
 
-/// @brief RGBA 色の全成分をハッシュ化します。
+/** @brief RGBA 色の全成分をハッシュ化します。 */
 inline size_t HashColor(const DirectX::XMFLOAT4 &color) {
   size_t hash = 1469598103934665603ull;
   hash = HashCombine(hash, FloatBits(color.x));
@@ -34,7 +34,7 @@ inline size_t HashColor(const DirectX::XMFLOAT4 &color) {
   return hash;
 }
 
-/// @brief テキスト描画スタイルをキャッシュキー用にハッシュ化します。
+/** @brief テキスト描画スタイルをキャッシュキー用にハッシュ化します。 */
 inline size_t HashStyle(const TextStyle &style) {
   size_t hash = 1469598103934665603ull;
   hash = HashCombine(hash, std::hash<std::string>{}(style.fontFamily));

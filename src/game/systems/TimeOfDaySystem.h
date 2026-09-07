@@ -1,7 +1,7 @@
 /**
  * @file TimeOfDaySystem.h
  * @brief 時間変化システム - 昼夜サイクル、太陽位置、ライティング変化
- */
+*/
 
 #pragma once
 
@@ -15,7 +15,7 @@ using namespace DirectX;
 
 /**
  * @brief 時間帯
- */
+*/
 enum class TimeOfDay {
   Night,     // 0:00-5:00
   Dawn,      // 5:00-7:00
@@ -29,7 +29,7 @@ enum class TimeOfDay {
 
 /**
  * @brief 時間から時間帯を取得
- */
+*/
 inline TimeOfDay GetTimeOfDay(float hour) {
   if (hour < 5.0f)
     return TimeOfDay::Night;
@@ -50,14 +50,14 @@ inline TimeOfDay GetTimeOfDay(float hour) {
 
 /**
  * @brief 時間変化システム
- */
+*/
 class TimeOfDaySystem {
 public:
   /**
    * @brief 初期化
    * @param startHour 開始時刻 (0-24)
    * @param timeScale 時間スケール (0=静止, 1=リアルタイム, 60=1分が1秒)
-   */
+*/
   void Initialize(float startHour = 12.0f, float timeScale = 0.0f) {
     m_currentHour = startHour;
     m_timeScale = timeScale;
@@ -68,7 +68,7 @@ public:
   /**
    * @brief 更新（連続的な時間進行が必要な場合のみ使用）
    * @param dt デルタタイム（秒）
-   */
+*/
   void Update(float dt) {
     if (m_timeScale <= 0.0f)
       return;
@@ -83,7 +83,7 @@ public:
   /**
    * @brief ショット時に時間を進める（ゲーム内時間）
    * @param hoursPerShot ショットあたりの進行時間（デフォルト0.5時間=30分）
-   */
+*/
   void OnShot(float hoursPerShot = 0.5f) {
     m_currentHour += hoursPerShot;
     NormalizeTime();
@@ -94,7 +94,7 @@ public:
   /**
    * @brief ページ遷移時に時間を進める（ゲーム内時間）
    * @param hoursPerPage ページあたりの進行時間（デフォルト2時間）
-   */
+*/
   void OnPageTransition(float hoursPerPage = 2.0f) {
     m_currentHour += hoursPerPage;
     NormalizeTime();
@@ -105,7 +105,7 @@ public:
   /**
    * @brief カップイン時に時間を進める（ゲーム内時間）
    * @param hoursPerCupIn カップインあたりの進行時間（デフォルト1時間）
-   */
+*/
   void OnCupIn(float hoursPerCupIn = 1.0f) {
     m_currentHour += hoursPerCupIn;
     NormalizeTime();
@@ -115,7 +115,7 @@ public:
 
   /**
    * @brief 時間を正規化（0-24範囲に収める）
-   */
+*/
   void NormalizeTime() {
     while (m_currentHour >= 24.0f)
       m_currentHour -= 24.0f;
@@ -125,7 +125,7 @@ public:
 
   /**
    * @brief 時刻を設定
-   */
+*/
   void SetTime(float hour) {
     m_currentHour = fmodf(hour, 24.0f);
     if (m_currentHour < 0.0f)
@@ -136,42 +136,42 @@ public:
 
   /**
    * @brief 時間スケール設定
-   */
+*/
   void SetTimeScale(float scale) { m_timeScale = scale; }
 
   /**
    * @brief 現在時刻取得
-   */
+*/
   float GetCurrentHour() const { return m_currentHour; }
 
   /**
    * @brief 現在の時間帯取得
-   */
+*/
   TimeOfDay GetCurrentTimeOfDay() const { return GetTimeOfDay(m_currentHour); }
 
   /**
    * @brief 太陽方向取得（正規化済み）
-   */
+*/
   XMFLOAT3 GetSunDirection() const { return m_sunDirection; }
 
   /**
    * @brief 太陽色取得
-   */
+*/
   XMFLOAT3 GetSunColor() const { return m_sunColor; }
 
   /**
    * @brief 太陽強度取得
-   */
+*/
   float GetSunIntensity() const { return m_sunIntensity; }
 
   /**
    * @brief アンビエント色取得
-   */
+*/
   XMFLOAT3 GetAmbientColor() const { return m_ambientColor; }
 
   /**
    * @brief 環境ステートに適用
-   */
+*/
   void ApplyToEnvironment(components::EnvironmentState &env) const {
     env.sunDirection = m_sunDirection;
     env.sunColor = m_sunColor;
@@ -182,14 +182,14 @@ public:
 
   /**
    * @brief 夜かどうか
-   */
+*/
   bool IsNight() const {
     return m_currentHour < 6.0f || m_currentHour >= 20.0f;
   }
 
   /**
    * @brief ゴールデンアワーかどうか
-   */
+*/
   bool IsGoldenHour() const {
     return (m_currentHour >= 6.0f && m_currentHour < 8.0f) ||
            (m_currentHour >= 17.0f && m_currentHour < 19.0f);

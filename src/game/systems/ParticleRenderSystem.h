@@ -1,7 +1,7 @@
 /**
  * @file ParticleRenderSystem.h
  * @brief パーティクルレンダリングシステム - ビルボードスプライト描画
- */
+*/
 
 #pragma once
 
@@ -20,7 +20,7 @@ using namespace DirectX;
 
 /**
  * @brief パーティクル用頂点
- */
+*/
 struct ParticleVertex {
   XMFLOAT3 position;
   XMFLOAT2 texCoord;
@@ -30,14 +30,14 @@ struct ParticleVertex {
 
 /**
  * @brief パーティクルレンダリングシステム
- */
+*/
 class ParticleRenderSystem {
 public:
   /**
    * @brief 初期化
    * @param device DirectX11デバイス
    * @return 成功ならtrue
-   */
+*/
   bool Initialize(ID3D11Device *device) {
     m_device = device;
 
@@ -127,7 +127,7 @@ public:
    * @param proj プロジェクション行列
    * @param cameraRight カメラ右ベクトル（ビルボード用）
    * @param cameraUp カメラ上ベクトル（ビルボード用）
-   */
+*/
   void Render(ID3D11DeviceContext *context,
               const std::vector<Particle> &particles, const XMMATRIX &view,
               const XMMATRIX &proj, const XMFLOAT3 &cameraRight,

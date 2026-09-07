@@ -1,7 +1,7 @@
 /**
  * @file WikiGolfSceneUpdate.cpp
  * @brief WikiGolfシーンの毎フレーム更新を実装します。
- */
+*/
 
 #include "WikiGolfScene.h"
 #include "WikiGolfSceneSupport.h"
@@ -48,7 +48,7 @@ using namespace game::components;
 
 /**
  * @brief シーンの毎フレーム更新処理を行います。
- */
+*/
 void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   PROFILE_SCOPE("WikiGolf.Update");
   const float dt = ctx.dt;
@@ -260,7 +260,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           }
       }
   }
-  
+
   // クラブアニメーション更新
   if (m_clubController && !tutorialInputLocked) {
       PROFILE_SCOPE("WikiGolf.ClubAnimation");
@@ -270,7 +270,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       }
       m_clubController->UpdateAnimation(ctx, dt, m_ballEntity, shotDir);
   }
-  
+
   // 物理更新
   game::systems::PhysicsSystem(ctx, dt);
 
@@ -279,7 +279,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       PROFILE_SCOPE("WikiGolf.CameraFollow");
       m_cameraController->Update(ctx);
   }
-  
+
   // カップイン判定を地形判定の前に行う（遷移時は以降の処理をスキップ）
   if (CheckCupIn(ctx)) return;
 
@@ -313,7 +313,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                       ballT->position.y += 0.5f;
                   }
                   state->isOB = false;
-                  
+
                   if (ctx.audio) {
                       if (std::filesystem::exists("Assets/sounds/se_OB.wav")) {
                           ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);

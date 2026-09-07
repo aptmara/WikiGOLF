@@ -1,7 +1,7 @@
 /**
  * @file LoadingSceneGameplay.cpp
  * @brief LoadingSceneの責務別実装です。
- */
+*/
 
 #include "LoadingScene.h"
 #include "../../core/GameContext.h"

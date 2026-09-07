@@ -2,7 +2,7 @@
 /**
  * @file View.h
  * @brief コンポーネントクエリ・イテレータ
- */
+*/
 
 #include "ComponentPool.h"
 #include <algorithm>
@@ -11,14 +11,18 @@
 
 namespace ecs {
 
-/// @brief 指定したコンポーネントセットを持つエンティティへのビュー
-/// @tparam Ts 必要なコンポーネント型
+/**
+ * @brief 指定したコンポーネントセットを持つエンティティへのビュー
+ * @tparam Ts 必要なコンポーネント型
+*/
 template <typename... Ts> class View {
 public:
   View(ComponentPool<Ts> *...pools) : m_pools(pools...) {}
 
-  /// @brief イテレーション実行
-  /// @param func コールバック関数 (Entity, Ts&...)
+  /**
+   * @brief イテレーション実行
+   * @param func コールバック関数 (Entity, Ts&...)
+*/
   template <typename Func> void Each(Func &&func) {
     // プールが1つでも欠けていれば何もしない
     if (!IsValid())

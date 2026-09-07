@@ -15,13 +15,22 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags_unused;
 };
 
-// シンプルな擬似ノイズ
+/**
+ * @brief 2D座標から擬似乱数ハッシュ値を生成します。
+ * @param p 入力座標
+ * @return 0～1の乱数値
+ */
 float hash21(float2 p) {
     p = frac(p * float2(123.34, 456.21));
     p += dot(p, p + 45.32);
     return frac(p.x * p.y);
 }
 
+/**
+ * @brief 2次元バリューノイズを計算します。
+ * @param p 入力座標
+ * @return 補間されたノイズ値
+ */
 float noise2d(float2 p) {
     float2 i = floor(p);
     float2 f = frac(p);
@@ -33,6 +42,11 @@ float noise2d(float2 p) {
     return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
 }
 
+/**
+ * @brief 4オクターブのフラクタル・ブラウン運動（fBM）ノイズを計算します。
+ * @param p 入力座標
+ * @return 合成ノイズ値
+ */
 float fbm(float2 p) {
     float v = 0.0;
     float a = 0.5;
@@ -45,17 +59,26 @@ float fbm(float2 p) {
     return v;
 }
 
+/**
+ * @struct PS_INPUT
+ * @brief ピクセルシェーダー入力
+ */
 struct PS_INPUT {
-    float4 position : SV_POSITION;
-    float3 normal : NORMAL;
-    float2 texCoord : TEXCOORD;
-    float4 color : COLOR;
-    float3 tangent : TANGENT;
-    float3 bitangent : BINORMAL;
-    float2 worldXZ : TEXCOORD1;
-    float4 materialFlags : TEXCOORD4;
+    float4 position : SV_POSITION;   /**< 射影座標 */
+    float3 normal : NORMAL;          /**< ワールド法線 */
+    float2 texCoord : TEXCOORD;      /**< UV座標 */
+    float4 color : COLOR;            /**< 頂点カラー */
+    float3 tangent : TANGENT;        /**< ワールド接線 */
+    float3 bitangent : BINORMAL;     /**< ワールド従法線 */
+    float2 worldXZ : TEXCOORD1;      /**< ワールドXZ座標 */
+    float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
 };
 
+/**
+ * @brief 基本ピクセルシェーダーメインエントリ
+ * @param input ピクセル入力情報
+ * @return 陰影計算済みピクセルカラー
+ */
 float4 main(PS_INPUT input) : SV_TARGET {
     float hasDiffuse = input.materialFlags.x;
     float hasNormalMap = input.materialFlags.y;

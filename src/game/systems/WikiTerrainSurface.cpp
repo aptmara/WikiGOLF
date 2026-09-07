@@ -1,7 +1,7 @@
 /**
  * @file WikiTerrainSurface.cpp
  * @brief 地形表面の芝生成を実装します。
- */
+*/
 
 #include "WikiTerrainSystem.h"
 #include "../../core/DisplaySettings.h"

@@ -2,35 +2,37 @@
 /**
  * @file LoadingSceneUtils.h
  * @brief ローディング演出用の軽量ヘルパー
- */
+*/
 
 #include <algorithm>
 
 namespace game::scenes::loading_detail {
 
-/// @brief イージング（ease-out cubic）
+/** @brief イージング（ease-out cubic）*/
 inline float EaseOutCubic(float t) {
   t = std::clamp(t, 0.0f, 1.0f);
   float inv = 1.0f - t;
   return 1.0f - inv * inv * inv;
 }
 
-/// @brief スポーン進行と静止率を混ぜて見栄えの良い進捗を返す
+/** @brief スポーン進行と静止率を混ぜて見栄えの良い進捗を返す*/
 inline float BlendProgress(float spawnRatio, float settledRatio) {
   spawnRatio = std::clamp(spawnRatio, 0.0f, 1.0f);
   settledRatio = std::clamp(settledRatio, 0.0f, 1.0f);
   return std::clamp(spawnRatio * 0.65f + settledRatio * 0.35f, 0.0f, 1.0f);
 }
 
-/// @brief 非同期ロード進捗と演出進捗を統合（実質は大きい方を採用）
+/** @brief 非同期ロード進捗と演出進捗を統合（実質は大きい方を採用）*/
 inline float CombineLoadingProgress(float asyncProgress, float visualProgress) {
   asyncProgress = std::clamp(asyncProgress, 0.0f, 1.0f);
   visualProgress = std::clamp(visualProgress, 0.0f, 1.0f);
   return std::max(asyncProgress, visualProgress);
 }
 
-/// @brief ページ遷移ロードの段階別進捗を単調増加で合成する
-/// @details 山内陽 通信取得は70%、構築待機は95%、完了は100%として表示用進捗を安定させる。
+/**
+ * @brief ページ遷移ロードの段階別進捗を単調増加で合成する
+ * @details  通信取得は70%、構築待機は95%、完了は100%として表示用進捗を安定させる。
+*/
 inline float CombineTransitionProgress(float fetchProgress,
                                        float buildProgress,
                                        bool buildComplete,
@@ -44,7 +46,7 @@ inline float CombineTransitionProgress(float fetchProgress,
   return std::clamp(std::max(currentProgress, targetProgress), 0.0f, 1.0f);
 }
 
-/// @brief フェードオーバーレイ用のアルファ値を算出（未開始なら0）
+/** @brief フェードオーバーレイ用のアルファ値を算出（未開始なら0）*/
 inline float FadeOverlayAlpha(float fadeAlpha, bool fadeStarted) {
   if (!fadeStarted) {
     return 0.0f;
