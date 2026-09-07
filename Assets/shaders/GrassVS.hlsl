@@ -124,11 +124,20 @@ VS_OUTPUT main(VS_INPUT input) {
     float greenClass =
         1.0f - smoothstep(0.020f, 0.055f, abs(materialClass - 0.06f));
     float shortTurfClass = max(fairwayClass, greenClass);
+    // ラフ／セミラフも同様に、パッチ単位の株がほぼ真上から見ると
+    // 地面に貼り付いた正方形の塊として点在して見えてしまう。丈があり
+    // 通常のプレイ視点では立体感を保ちたいため、フェアウェイよりかなり
+    // 急な見下ろし角（ほぼ真上）でだけ地形側の短芝表現へ切り替える。
+    float roughClass =
+        1.0f - smoothstep(0.15f, 0.25f, abs(materialClass - 0.73f));
     float3 viewDirection = normalize(CameraPos.xyz - worldPos.xyz);
     float overheadRatio = abs(viewDirection.y);
-    float overheadFade = 1.0f - smoothstep(0.55f, 0.75f, overheadRatio);
-    output.distanceFade =
-        distanceFade * lerp(1.0f, overheadFade, shortTurfClass);
+    float shortTurfOverheadFade = 1.0f - smoothstep(0.55f, 0.75f, overheadRatio);
+    float roughOverheadFade = 1.0f - smoothstep(0.80f, 0.93f, overheadRatio);
+    float overheadFade = 1.0f;
+    overheadFade = lerp(overheadFade, shortTurfOverheadFade, shortTurfClass);
+    overheadFade = lerp(overheadFade, roughOverheadFade, roughClass);
+    output.distanceFade = distanceFade * overheadFade;
     output.materialClass = materialClass;
     return output;
 }

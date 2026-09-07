@@ -1232,26 +1232,42 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
 
   // パッチはセル中心1点のマテリアルだけで配置を決めるが、実際の描画サイズは
   // ほぼセル間隔と同じ幅を持つため、中心が芝地でもパッチの四隅がバンカー等の
-  // 隣接セルへはみ出すことがある。四隅を確認し、非対応マテリアルへ食い込む
-  // パッチは配置しない。
-  auto patchOverhangsForeignSurface = [&](float x, float z,
-                                          float halfExtent) {
+  // 隣接セルへはみ出すことがある。四隅を複数半径で確認し、非対応マテリアルに
+  // 食い込まない最大の確認半径を、そのまま「配置してよい確率」として返す
+  // （1.0=常に配置、0.0=配置しない）。パッチ自体のサイズはフルサイズのまま
+  // 確率的に間引くことで密度を滑らかに下げる。パッチを縮小してしまうと、
+  // 地形テクスチャがなめらかに混ざる境界の上に周囲より一回り小さい正方形が
+  // ぽつぽつ浮いて見え、むしろ形状が目立ってしまうため採らない。
+  auto computeEdgeCoverage = [&](float x, float z, float halfExtent) {
+    static constexpr float kProbeSteps[] = {1.0f, 0.8f, 0.6f, 0.4f, 0.2f};
     static constexpr float kCornerOffsets[4][2] = {
         {-1.0f, -1.0f}, {1.0f, -1.0f}, {-1.0f, 1.0f}, {1.0f, 1.0f}};
-    for (const auto &offset : kCornerOffsets) {
-      const TerrainMaterial cornerMaterial = materialAt(
-          x + offset[0] * halfExtent, z + offset[1] * halfExtent);
-      if (!isGrassCompatibleMaterial(cornerMaterial)) {
-        return true;
+    for (const float step : kProbeSteps) {
+      const float testExtent = halfExtent * step;
+      bool allInside = true;
+      for (const auto &offset : kCornerOffsets) {
+        const TerrainMaterial cornerMaterial = materialAt(
+            x + offset[0] * testExtent, z + offset[1] * testExtent);
+        if (!isGrassCompatibleMaterial(cornerMaterial)) {
+          allInside = false;
+          break;
+        }
+      }
+      if (allInside) {
+        return step;
       }
     }
-    return false;
+    return 0.0f;
   };
 
   // 近傍の高さから地形の法線を求め、株の「上」をその法線に合わせる
   // 回転を返す。坂の途中で根本が斜面にめり込んだり浮いたりしないよう、
-  // ラフと境界のセミラフで共通利用する。
-  auto computeSlopeAlignQuat = [&](float x, float z) {
+  // ラフと境界のセミラフで共通利用する。あわせて、株を法線に合わせて
+  // 傾けるほど水平面から見た footprint が斜面の cos 分だけ縮み、同じ
+  // グリッド間隔でも急な坂ほど株の間に隙間が見えてまばらになるため、
+  // その分を補う横方向の拡大率も返す。
+  auto computeSlopeAlignQuat = [&](float x, float z,
+                                   float *outFootprintScale) {
     constexpr float normalSampleOffset = 0.15f;
     const float heightLeft = GetHeight(x - normalSampleOffset, z);
     const float heightRight = GetHeight(x + normalSampleOffset, z);
@@ -1260,6 +1276,12 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
     XMVECTOR slopeNormal = XMVector3Normalize(XMVectorSet(
         (heightLeft - heightRight) / (2.0f * normalSampleOffset), 1.0f,
         (heightDown - heightUp) / (2.0f * normalSampleOffset), 0.0f));
+
+    if (outFootprintScale) {
+      const float slopeCos =
+          std::clamp(XMVectorGetY(slopeNormal), 0.55f, 1.0f);
+      *outFootprintScale = 1.0f / slopeCos;
+    }
 
     XMVECTOR worldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     XMVECTOR alignAxis = XMVector3Cross(worldUp, slopeNormal);
@@ -1417,7 +1439,11 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
   int semiRoughCount = 0;
   const float startX = -0.5f * static_cast<float>(columns - 1) * spacing;
   const float startZ = -0.5f * static_cast<float>(rows - 1) * spacing;
-  const float horizontalScale = spacing * 1.08f;
+  // パッチ数（＝間隔spacing）を増やすと描画インスタンスが増えて重くなる
+  // ため、パッチ1枚自体を大きく描画して隣接パッチへの重なりを広く取る
+  // ことで、追加コストなしに隙間を埋める。1.08倍程度の重なりだと共有幅が
+  // 数%しかなく、株の塊同士の間に隙間ができて四角く点在して見えていた。
+  const float horizontalScale = spacing * 1.7f;
 
   for (int row = 0; row < rows; ++row) {
     // 一行ごとに半間隔ずらす千鳥配置で、格子模様の集合体に見えるのを防ぐ。
@@ -1440,7 +1466,12 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       if (!isRough && !isSemiRough) {
         continue;
       }
-      if (patchOverhangsForeignSurface(x, z, horizontalScale * 0.5f)) {
+      const float edgeCoverage =
+          computeEdgeCoverage(x, z, horizontalScale * 0.5f);
+      if (edgeCoverage <= 0.0f) {
+        continue;
+      }
+      if (edgeCoverage < 1.0f && dist01(rng) > edgeCoverage) {
         continue;
       }
 
@@ -1463,7 +1494,9 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
 
       const float yaw = distYaw(rng);
       const float terrainHeight = GetHeight(x, z);
-      const XMVECTOR alignQuat = computeSlopeAlignQuat(x, z);
+      float slopeFootprintScale = 1.0f;
+      const XMVECTOR alignQuat =
+          computeSlopeAlignQuat(x, z, &slopeFootprintScale);
       const XMVECTOR yawQuat = XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
 
       XMFLOAT4 rotation;
@@ -1480,7 +1513,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           isSemiRough ? GrassSurfaceGroup::SemiRough
                       : GrassSurfaceGroup::Rough;
       appendGrassInstance(
-          x, terrainHeight + 0.003f, z, horizontalScale, heightScale,
+          x, terrainHeight + 0.003f, z,
+          horizontalScale * slopeFootprintScale, heightScale,
           rotation, color, grassMeshVariants[variantIndex],
           resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
           isSemiRough ? quality.semiRoughDrawDistance
@@ -1563,7 +1597,14 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           material != TerrainMaterial::Green) {
         continue;
       }
-      if (patchOverhangsForeignSurface(x, z, turfHorizontalScale * 0.5f)) {
+      // ターフは平たいカード状メッシュで隙間なく敷き詰める設計のため、
+      // 間引いたり縮小したりすると孤立したカード1枚がそのまま正方形の
+      // シルエットとして浮いて見える。境界に一部でもかかるカードは
+      // 確率で残さず一律に置かず、地形シェーダー側のなめらかな短芝表現
+      // （TerrainPS.hlslのTurfFibers）へ委ねる。
+      const float edgeCoverage =
+          computeEdgeCoverage(x, z, turfHorizontalScale * 0.5f);
+      if (edgeCoverage < 1.0f) {
         continue;
       }
 
@@ -1583,7 +1624,9 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
       const float yaw = baseYaw + reverseYaw;
 
       const float terrainHeight = GetHeight(x, z);
-      const XMVECTOR alignQuat = computeSlopeAlignQuat(x, z);
+      float slopeFootprintScale = 1.0f;
+      const XMVECTOR alignQuat =
+          computeSlopeAlignQuat(x, z, &slopeFootprintScale);
       const XMVECTOR yawQuat =
           XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
 
@@ -1614,7 +1657,8 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
                               : denseFairwayMeshVariants[variantIndex];
       }
       appendGrassInstance(
-          x, terrainHeight + 0.0015f, z, turfHorizontalScale, heightScale,
+          x, terrainHeight + 0.0015f, z,
+          turfHorizontalScale * slopeFootprintScale, heightScale,
           rotation, color, nearTurfMesh, midTurfMesh, variantIndex, surface,
           isGreen ? quality.greenLodDistance : quality.fairwayLodDistance,
           isGreen ? quality.greenDrawDistance : quality.fairwayDrawDistance,

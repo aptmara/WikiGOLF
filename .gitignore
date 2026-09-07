@@ -16,6 +16,8 @@
 !Assets/**
 !docs/
 !docs/**
+!.Agents/
+!.Agents/**
 
 # --- Whitelist: Root Files ---
 !.gitignore
