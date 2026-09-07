@@ -4,10 +4,8 @@
  * @brief シーン基底クラス
  */
 
-#include "../ecs/Entity.h"
+#include "../ecs/EntityOwner.h"
 #include "../ecs/World.h"
-#include <algorithm>
-#include <vector>
 
 
 namespace core {
@@ -44,22 +42,19 @@ public:
 
   /// @brief 指定エンティティがこのシーンで作成されたものか。
   bool OwnsEntity(ecs::Entity entity) const {
-    return std::find(m_entities.begin(), m_entities.end(), entity) !=
-           m_entities.end();
+    return m_entityOwner.Owns(entity);
   }
 
 protected:
   /// @brief エンティティを作成し、追跡リストに追加
   ecs::Entity CreateEntity(ecs::World &world) {
-    auto e = world.CreateEntity();
-    m_entities.push_back(e);
-    return e;
+    return m_entityOwner.Create(world);
   }
 
   /// @brief このシーンが作成した全エンティティを破棄
   void DestroyAllEntities(GameContext &ctx);
 
-  std::vector<ecs::Entity> m_entities;
+  ecs::EntityOwner m_entityOwner;
 };
 
 } // namespace core

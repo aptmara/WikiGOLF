@@ -6,6 +6,7 @@
  */
 
 #include "../../ecs/Entity.h"
+#include "../../ecs/EntityOwner.h"
 #include "../utils/CarryDistanceTable.h"
 #include "TrajectoryPredictor.h"
 #include <DirectXMath.h>
@@ -53,6 +54,12 @@ public:
   };
 
   void Initialize(core::GameContext &ctx);
+
+  /**
+   * @brief クラブ表示が生成したEntityを破棄します。
+   * @param ctx ゲーム全体の共有コンテキストです。
+   */
+  void Shutdown(core::GameContext &ctx);
   InputResult UpdateInput(core::GameContext &ctx, const InputParams &params);
   void UpdateAnimation(core::GameContext &ctx, float dt, ecs::Entity ballEntity,
                        const DirectX::XMFLOAT3 &shotDirection);
@@ -96,6 +103,7 @@ private:
   float m_clubSwingAngle = 0.0f;
   float m_clubSwingSpeed = 0.0f;
   float m_clubAnimTimer = 0.0f;
+  ecs::EntityOwner m_entityOwner;
 };
 
 } // namespace game::controllers

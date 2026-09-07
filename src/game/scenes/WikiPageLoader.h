@@ -6,8 +6,14 @@
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
+#include "../../ecs/EntityOwner.h"
 #include "../../graphics/SkyboxTextureGenerator.h"
 #include "../../graphics/WikiTextureGenerator.h"
+#include "HolePlacementPlanner.h"
+#include "AsyncPathEvaluator.h"
+#include "TutorialCourseLayout.h"
+#include "WikiPageDataFetcher.h"
+#include "PageLinkSelector.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
@@ -17,7 +23,6 @@
 #include <cstdint>
 #include <future>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -36,6 +41,7 @@ class MinimapController;
 } // namespace game::controllers
 
 namespace game::scenes {
+
 
 /**
  * @brief 近隣ホール用サムネイル取得（バックグラウンドスレッド）の結果
@@ -58,18 +64,6 @@ struct PageLoadResult {
 };
 
 /**
- * @brief 非同期取得する記事データ
- */
-struct PageDataAsyncResult {
-    std::string pageName;
-    std::string articleText;
-    std::vector<game::WikiLink> allLinks;
-    std::vector<std::string> pageCategories;
-    std::vector<graphics::PendingWikiImage> pendingImages;
-    bool hasData = false;
-};
-
-/**
  * @brief ページロード用コントローラ
  * WikiGolfScene の LoadPage / CreateHole / CreateLinksFromTexture を移管する。
  */
@@ -82,6 +76,15 @@ public:
      * @brief 実行中の経路評価へ中断を要求します。
      */
     void CancelAsyncPathEvaluations();
+
+    /**
+     * @brief ページ構築タスクと生成済みEntityを終了処理します。
+     * @param ctx ゲーム全体の共有コンテキストです。
+     * @param minimapController ページに対応するマップ表示です。
+     */
+    void Shutdown(
+        core::GameContext& ctx,
+        game::controllers::MinimapController* minimapController);
 
     /**
      * @brief 内部システムの参照を設定する（所有権は WikiGolfScene 側が持つ）
@@ -257,6 +260,7 @@ private:
 
     // ---- 所有リソース ----
     std::unique_ptr<graphics::WikiTextureResult> m_wikiTexture;
+    ecs::EntityOwner m_pageEntityOwner;
 
     // ---- 目的記事サムネイル（ゲーム開始時に1回だけ生成し使い回す） ----
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_targetThumbnailSRV;
@@ -286,11 +290,6 @@ private:
     float m_fieldWidth = 80.0f;
     float m_fieldDepth = 120.0f;
 
-    // ---- 事前ロードキャッシュ ----
-    bool                          m_hasPreloadedData = false;
-    std::vector<game::WikiLink>   m_preloadedLinks;
-    std::string                   m_preloadedExtract;
-
     // 構築状態
     enum class BuildStep {
         None,
@@ -311,19 +310,6 @@ private:
     };
 
     /**
-     * @brief テクスチャリンクから作ったホール配置候補です。 山内陽
-     */
-    struct HolePlacementCandidate {
-        float x = 0.0f;
-        float z = 0.0f;
-        std::string linkTarget;
-        bool isTarget = false;
-        int hopsToTarget = -1;
-        size_t originalIndex = 0;
-        bool isPlayable = false;
-    };
-
-    /**
      * @brief ビルドステップ名をログ用に返します。 山内陽
      */
     static const char* BuildStepName(BuildStep step);
@@ -339,22 +325,9 @@ private:
     void LogLongRunningBuildStep();
 
     /**
-     * @brief 経路評価タスクを非同期で開始します。 山内陽
-     * @param targetPageId 目標ページIDです。山内陽
-     * @param maxDepth 探索する最大リンク深度です。山内陽
-     */
-    void StartAsyncPathEvaluation(int targetPageId, int maxDepth);
-
-    /**
      * @brief 完了済みの経路評価タスクを候補と既存ホールへ反映します。 山内陽
      */
     bool TryConsumePathEvaluation(core::GameContext& ctx, bool updateWorld);
-
-    /**
-     * @brief 経路評価タスクから届いた部分結果を未消費分だけ反映します。山内陽
-     */
-    size_t ConsumePartialPathEvaluation(core::GameContext& ctx,
-                                        bool updateWorld);
 
     /**
      * @brief 既に生成済みのホール表示へ経路評価結果を反映します。 山内陽
@@ -362,24 +335,6 @@ private:
     void ApplyPathEvaluationToWorld(
         core::GameContext& ctx,
         const std::vector<HolePlacementCandidate>& evaluatedCandidates);
-
-    /**
-     * @brief 古い経路評価タスクをロード処理から切り離します。 山内陽
-     */
-    void RetireActivePathEvaluationTask();
-
-    /**
-     * @brief リンク領域からホール候補を作ります。 山内陽
-     */
-    HolePlacementCandidate BuildHolePlacementCandidate(
-        const graphics::LinkRegion& link,
-        size_t originalIndex) const;
-
-    /**
-     * @brief マップビューに残す軽量リンク候補を選びます。 山内陽
-     */
-    std::vector<HolePlacementCandidate> SelectMapHoleIconCandidates(
-        const std::vector<HolePlacementCandidate>& candidates) const;
 
     /**
      * @brief 評価結果を同じリンク候補へ反映します。 山内陽
@@ -409,14 +364,6 @@ private:
      */
     bool IsPlayableCandidate(const HolePlacementCandidate& candidate) const;
 
-    /**
-     * @brief 既存選抜候補から十分離れているかを判定します。 山内陽
-     */
-    bool IsFarEnoughFromSelected(
-        const std::vector<HolePlacementCandidate>& selected,
-        const HolePlacementCandidate& candidate,
-        float minDistance) const;
-
     BuildStep m_buildStep = BuildStep::None;
     BuildStep m_loggedBuildStep = BuildStep::None;
     PageDataAsyncResult m_buildData;
@@ -439,24 +386,18 @@ private:
 
     std::vector<std::pair<std::string, std::wstring>> m_buildValidLinks;
     std::vector<std::pair<std::wstring, std::string>> m_buildLinkPairs;
+    HolePlacementPlanner m_holePlacementPlanner;
+    TutorialCourseLayout m_tutorialCourseLayout;
+    WikiPageDataFetcher m_pageDataFetcher;
+    PageLinkSelector m_pageLinkSelector;
+    AsyncPathEvaluator m_pathEvaluator;
     std::vector<HolePlacementCandidate> m_buildHoleCandidates;
     std::vector<HolePlacementCandidate> m_buildPathCandidates;
     std::vector<HolePlacementCandidate> m_buildMapHoleCandidates;
     std::vector<graphics::LinkRegion> m_buildGameplayLinks;
     std::unordered_map<std::string, int> m_pathHopCache;
-    std::future<std::vector<HolePlacementCandidate>> m_pathEvaluationTask;
-    std::vector<std::future<std::vector<HolePlacementCandidate>>> m_retiredPathEvaluationTasks;
-    std::shared_ptr<std::atomic<bool>> m_pathEvaluationCancel;
-    std::shared_ptr<std::atomic<size_t>> m_pathEvaluationProgress;
-    std::shared_ptr<std::atomic<size_t>> m_pathEvaluationTotal;
-    std::shared_ptr<std::mutex> m_pathEvaluationPartialMutex;
-    std::shared_ptr<std::vector<HolePlacementCandidate>> m_pathEvaluationPartialResults;
-    size_t m_pathEvaluationConsumedResults = 0;
-    bool m_pathEvaluationStarted = false;
-
     size_t m_nextHoleIndex = 0;
     size_t m_nextMapIconIndex = 0;
-    size_t m_nextPathIndex = 0;
     graphics::WikiTextureGenerationState m_textureState;
 
     float m_buildFieldWidth = 80.0f;

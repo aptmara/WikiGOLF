@@ -9,16 +9,13 @@
 namespace core {
 
 void Scene::DestroyAllEntities(GameContext& ctx) {
-    LOG_INFO("Scene", "Destroying {} entities for scene: {}", m_entities.size(), GetName());
-    int count = 0;
-    for (auto e : m_entities) {
-        if (ctx.world.IsAlive(e)) {
-            ctx.world.DestroyEntity(e);
-            count++;
-        }
-    }
-    LOG_INFO("Scene", "Actually destroyed {}/{} entities", count, m_entities.size());
-    m_entities.clear();
+    const std::size_t trackedCount = m_entityOwner.GetTrackedCount();
+    LOG_INFO("Scene", "Destroying {} entities for scene: {}", trackedCount,
+             GetName());
+
+    const std::size_t destroyedCount = m_entityOwner.DestroyAll(ctx.world);
+    LOG_INFO("Scene", "Actually destroyed {}/{} entities", destroyedCount,
+             trackedCount);
 }
 
 } // namespace core

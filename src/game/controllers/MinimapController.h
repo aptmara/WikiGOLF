@@ -6,6 +6,7 @@
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
+#include "../../ecs/EntityOwner.h"
 #include "../systems/MapSys.h"
 #include "../utils/MapViewState.h"
 #include <DirectXMath.h>
@@ -27,6 +28,12 @@ public:
   };
 
   void Initialize(Config cfg, core::GameContext &ctx);
+
+  /**
+   * @brief ミニマップが生成したEntityと描画資源を破棄します。
+   * @param ctx ゲーム全体の共有コンテキストです。
+   */
+  void Shutdown(core::GameContext &ctx);
   void SetBallEntity(ecs::Entity ballEntity) { m_cfg.ballEntity = ballEntity; }
 
   /// @brief ミニマップ・マップUIなどのEntityを初期化・登録
@@ -87,7 +94,12 @@ public:
 
   /// @brief 現在マップビュー状態かどうか
   bool IsMapView() const { return m_isMapView; }
-  void* GetMapSRV() const { return m_minimapRenderer ? m_minimapRenderer->GetSRV() : nullptr; }
+  void* GetMapSRV() const {
+    if (!m_minimapRenderer) {
+      return nullptr;
+    }
+    return m_minimapRenderer->GetSRV();
+  }
 
   /// @brief ミニマップUI全体の表示/非表示切り替え（ロード中は非表示にするため）
   void SetVisible(core::GameContext& ctx, bool visible);
@@ -153,7 +165,7 @@ private:
   ecs::Entity m_minimapMarkerEntity = UINT32_MAX;      ///< 自ボール用内側ドットマーカー（●）
   ecs::Entity m_minimapBallIconEntity = UINT32_MAX;    ///< 自ボール用画像アイコンです。山内陽
   ecs::Entity m_minimapPulseMarkerEntity = UINT32_MAX; ///< 自ボール用外側パルスサークル（○）
-  ecs::Entity m_minimapFlagMarkerEntity = UINT32_MAX;  ///< ターゲットピン用パルスマーカー（🚩）
+  ecs::Entity m_minimapFlagMarkerEntity = UINT32_MAX;  ///< ターゲットピン用パルスマーカー（）
   std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）
   ecs::Entity m_minimapHelpEntity = UINT32_MAX;
 
@@ -187,6 +199,7 @@ private:
     int hopsToTarget;
   };
   std::vector<MapHoleIcon> m_mapHoleIcons;
+  ecs::EntityOwner m_entityOwner;
 };
 
 } // namespace game::controllers

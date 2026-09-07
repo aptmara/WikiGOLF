@@ -7,7 +7,6 @@
 #include "../components/WikiComponents.h"
 
 
-// TODO: フェーズ2で共通ユーティリティへ移動推奨
 static std::wstring LocalToWString(const std::string &str) {
   if (str.empty())
     return L"";
@@ -57,7 +56,7 @@ void WikiGameSystem(core::GameContext &ctx) {
           if (gameState->infoEntity != 0) {
             auto *infoUI = ctx.world.Get<UIText>(gameState->infoEntity);
             if (infoUI) {
-              infoUI->text = L"💡 移動可能: 「" +
+              infoUI->text = L" 移動可能: 「" +
                              LocalToWString(h->linkTarget) + L"」 ↑で遷移";
             }
           }

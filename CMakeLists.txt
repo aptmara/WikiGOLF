@@ -105,11 +105,20 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tools/WikiImagePreview.cpp")
     add_executable(WikiImagePreview
         tools/WikiImagePreview.cpp
         src/graphics/WikiTextureGenerator.cpp
+        src/graphics/WikiTextureGeneratorDecode.cpp
+        src/graphics/WikiTextureGeneratorLayout.cpp
+        src/graphics/WikiTextureGeneratorRendering.cpp
         src/graphics/Shader.cpp
         src/graphics/Mesh.cpp
         src/graphics/MeshPrimitives.cpp
+        src/graphics/MeshPrimitivesGrass.cpp
+        src/graphics/MeshPrimitivesTerrain.cpp
         src/graphics/TangentGenerator.cpp
         src/game/systems/WikiClient.cpp
+        src/game/systems/WikiClientContent.cpp
+        src/game/systems/WikiClientJson.cpp
+        src/game/systems/WikiClientJsonHtml.cpp
+        src/game/systems/WikiClientLinks.cpp
         src/core/Logger.cpp
         src/core/StringUtils.cpp
     )
@@ -210,7 +219,11 @@ add_test(NAME post_process_readability COMMAND test_post_process_readability)
 # WikiTextureGeneratorのリンク生成テスト
 add_executable(test_wiki_texture_links test_wiki_texture_links.cpp
                                        src/graphics/WikiTextureGenerator.cpp
-                                       src/core/Logger.cpp)
+                                       src/graphics/WikiTextureGeneratorDecode.cpp
+                                       src/graphics/WikiTextureGeneratorLayout.cpp
+                                       src/graphics/WikiTextureGeneratorRendering.cpp
+                                       src/core/Logger.cpp
+                                       src/core/StringUtils.cpp)
 target_precompile_headers(test_wiki_texture_links PRIVATE src/pch.h)
 target_include_directories(test_wiki_texture_links PRIVATE src)
 target_link_libraries(test_wiki_texture_links
@@ -224,6 +237,8 @@ if(MSVC)
                                                                 -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_texture_links PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
+add_test(NAME wiki_texture_links COMMAND test_wiki_texture_links)
+
 add_executable(test_physics_friction test_physics_friction.cpp)
 target_precompile_headers(test_physics_friction PRIVATE src/pch.h)
 target_include_directories(test_physics_friction PRIVATE src)
@@ -277,6 +292,10 @@ add_test(NAME page_history_utils COMMAND test_page_history_utils)
 
 add_executable(test_terrain_generation test_terrain_generation.cpp
                                        src/game/systems/TerrainGenerator.cpp
+                                       src/game/systems/TerrainGeneratorMesh.cpp
+                                       src/game/systems/TerrainGeneratorNoise.cpp
+                                       src/game/systems/TerrainGeneratorPlatforms.cpp
+                                       src/game/systems/TerrainGeneratorPostProcess.cpp
                                        src/graphics/TangentGenerator.cpp)
 target_precompile_headers(test_terrain_generation PRIVATE src/pch.h)
 target_include_directories(test_terrain_generation PRIVATE src)
@@ -307,3 +326,242 @@ if(MSVC)
     target_compile_options(test_logger_warning_output PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME logger_warning_output COMMAND test_logger_warning_output)
+
+# --- Additional Refactored Unit Tests ---
+
+add_executable(test_wiki_texture_generation
+    test_wiki_texture_generation.cpp
+    src/graphics/WikiTextureGenerator.cpp
+    src/graphics/WikiTextureGeneratorDecode.cpp
+    src/graphics/WikiTextureGeneratorLayout.cpp
+    src/graphics/WikiTextureGeneratorRendering.cpp
+    src/core/Logger.cpp)
+target_precompile_headers(test_wiki_texture_generation PRIVATE src/pch.h)
+target_include_directories(test_wiki_texture_generation PRIVATE src)
+target_link_libraries(test_wiki_texture_generation d3d11 d2d1 dwrite dxguid)
+if(MSVC)
+    target_compile_definitions(test_wiki_texture_generation PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_texture_generation PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME wiki_texture_generation COMMAND test_wiki_texture_generation)
+
+add_executable(test_text_renderer_lifecycle
+    test_text_renderer_lifecycle.cpp
+    src/graphics/TextRenderer.cpp
+    src/graphics/TextRendererImage.cpp
+    src/graphics/TextRendererText.cpp
+    src/graphics/TextRendererRaster.cpp
+    src/core/Logger.cpp)
+target_precompile_headers(test_text_renderer_lifecycle PRIVATE src/pch.h)
+target_include_directories(test_text_renderer_lifecycle PRIVATE src)
+target_link_libraries(test_text_renderer_lifecycle d3d11 d2d1 dwrite dxguid windowscodecs ole32)
+if(MSVC)
+    target_compile_definitions(test_text_renderer_lifecycle PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_text_renderer_lifecycle PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME text_renderer_lifecycle COMMAND test_text_renderer_lifecycle)
+
+add_executable(test_resource_manager_rules
+    test_resource_manager_rules.cpp
+    src/resources/ResourceManager.cpp
+    src/resources/ResourceManagerTextures.cpp
+    src/resources/ResourceManagerMeshes.cpp
+    src/resources/ResourceManagerShaders.cpp
+    src/core/Logger.cpp
+    src/core/StringUtils.cpp
+    src/graphics/FbxLoader.cpp
+    src/graphics/ObjLoader.cpp
+    src/graphics/Mesh.cpp
+    src/graphics/MeshPrimitives.cpp
+    src/graphics/MeshPrimitivesGrass.cpp
+    src/graphics/MeshPrimitivesTerrain.cpp
+    src/graphics/TangentGenerator.cpp
+    src/graphics/Shader.cpp)
+target_precompile_headers(test_resource_manager_rules PRIVATE src/pch.h)
+target_include_directories(test_resource_manager_rules PRIVATE src libs/assimp-6.0.2/include)
+target_link_directories(test_resource_manager_rules PRIVATE libs/assimp-6.0.2)
+target_link_libraries(test_resource_manager_rules d3d11 dxguid windowscodecs d3dcompiler assimp-vc143-mt)
+if(MSVC)
+    target_compile_definitions(test_resource_manager_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_resource_manager_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME resource_manager_rules COMMAND test_resource_manager_rules)
+
+add_executable(test_mesh_primitives_rules
+    test_mesh_primitives_rules.cpp
+    src/graphics/Mesh.cpp
+    src/graphics/MeshPrimitives.cpp
+    src/graphics/MeshPrimitivesGrass.cpp
+    src/graphics/MeshPrimitivesTerrain.cpp
+    src/graphics/TangentGenerator.cpp)
+target_precompile_headers(test_mesh_primitives_rules PRIVATE src/pch.h)
+target_include_directories(test_mesh_primitives_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_mesh_primitives_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_mesh_primitives_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME mesh_primitives_rules COMMAND test_mesh_primitives_rules)
+
+add_executable(test_terrain_layout_rules
+    test_terrain_layout_rules.cpp
+    src/game/systems/TerrainLayoutRules.cpp
+    src/game/systems/TerrainObstacleLayout.cpp)
+target_precompile_headers(test_terrain_layout_rules PRIVATE src/pch.h)
+target_include_directories(test_terrain_layout_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_terrain_layout_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_terrain_layout_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME terrain_layout_rules COMMAND test_terrain_layout_rules)
+
+add_executable(test_scene_entity_lifecycle
+    test_scene_entity_lifecycle.cpp
+    src/core/Scene.cpp
+    src/ecs/EntityOwner.cpp
+    src/core/Logger.cpp)
+target_precompile_headers(test_scene_entity_lifecycle PRIVATE src/pch.h)
+target_include_directories(test_scene_entity_lifecycle PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_scene_entity_lifecycle PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_scene_entity_lifecycle PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME scene_entity_lifecycle COMMAND test_scene_entity_lifecycle)
+
+add_executable(test_wiki_golf_hud_lifecycle
+    test_wiki_golf_hud_lifecycle.cpp
+    src/game/controllers/WikiGolfHUD.cpp
+    src/game/controllers/hud/ClubSelectionPanel.cpp
+    src/game/controllers/hud/CourseInfoPanel.cpp
+    src/game/controllers/hud/GameplayControlsPanel.cpp
+    src/game/controllers/hud/HudStyles.cpp
+    src/game/controllers/hud/LiePanel.cpp
+    src/game/controllers/hud/MinimapDecorationPanel.cpp
+    src/game/controllers/hud/ShotGaugePanel.cpp
+    src/game/controllers/hud/ShotGaugePanelUpdate.cpp
+    src/game/controllers/hud/ShotGaugePanelVisibility.cpp
+    src/game/controllers/hud/WindPanel.cpp
+    src/core/StringUtils.cpp
+    src/ecs/EntityOwner.cpp)
+target_precompile_headers(test_wiki_golf_hud_lifecycle PRIVATE src/pch.h)
+target_include_directories(test_wiki_golf_hud_lifecycle PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_wiki_golf_hud_lifecycle PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_golf_hud_lifecycle PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME wiki_golf_hud_lifecycle COMMAND test_wiki_golf_hud_lifecycle)
+
+add_executable(test_wiki_page_layout
+    test_wiki_page_layout.cpp
+    src/game/scenes/AsyncPathEvaluator.cpp
+    src/game/scenes/HolePlacementPlanner.cpp
+    src/game/scenes/HoleVisualRules.cpp
+    src/game/scenes/PageLinkSelector.cpp
+    src/game/scenes/TutorialCourseLayout.cpp
+    src/game/systems/WikiShortestPath.cpp
+    src/game/systems/WikiShortestPathSearch.cpp
+    src/game/systems/WikiShortestPathDistances.cpp
+    src/game/systems/WikiShortestPathPopular.cpp
+    src/core/Logger.cpp
+    src/core/StringUtils.cpp
+    src/thirdparty/sqlite3/sqlite3.c)
+target_precompile_headers(test_wiki_page_layout PRIVATE src/pch.h)
+target_include_directories(test_wiki_page_layout PRIVATE src src/thirdparty/sqlite3)
+if(MSVC)
+    target_compile_definitions(test_wiki_page_layout PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_page_layout PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME wiki_page_layout COMMAND test_wiki_page_layout)
+
+add_executable(test_wiki_client_json
+    test_wiki_client_json.cpp
+    src/game/systems/WikiClientJson.cpp
+    src/game/systems/WikiClientJsonHtml.cpp
+    src/core/Logger.cpp
+    src/core/StringUtils.cpp)
+target_precompile_headers(test_wiki_client_json PRIVATE src/pch.h)
+target_include_directories(test_wiki_client_json PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_wiki_client_json PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_client_json PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME wiki_client_json COMMAND test_wiki_client_json)
+
+add_library(game_juice_time_impl STATIC
+    src/game/systems/GameJuiceSystem.cpp
+    src/game/systems/GameJuiceSystemCelebration.cpp
+    src/game/systems/GameJuiceSystemEnvironment.cpp
+    src/game/systems/GameJuiceSystemEnvironmentUpdate.cpp
+    src/game/systems/GameJuiceSystemImpact.cpp
+    src/game/systems/GameJuiceSystemSurface.cpp
+    src/game/systems/GameJuiceSystemTrail.cpp
+    src/ecs/EntityOwner.cpp
+    src/core/Logger.cpp)
+target_include_directories(game_juice_time_impl PRIVATE src)
+if(MSVC)
+    target_compile_definitions(game_juice_time_impl PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(game_juice_time_impl PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+
+add_executable(test_game_juice_time test_game_juice_time.cpp)
+target_precompile_headers(test_game_juice_time PRIVATE src/pch.h)
+target_include_directories(test_game_juice_time PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_game_juice_time PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_game_juice_time PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+target_link_libraries(test_game_juice_time d3d11 d2d1 dwrite windowscodecs dxguid dinput8 user32 gdi32 ole32 shlwapi winmm game_juice_time_impl)
+add_test(NAME game_juice_time COMMAND test_game_juice_time)
+
+add_executable(test_physics_system_rules
+    test_physics_system_rules.cpp
+    src/game/systems/PhysicsSystemCollision.cpp
+    src/game/systems/PhysicsSystemSpatial.cpp)
+target_precompile_headers(test_physics_system_rules PRIVATE src/pch.h)
+target_include_directories(test_physics_system_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_physics_system_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_physics_system_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME physics_system_rules COMMAND test_physics_system_rules)
+
+add_executable(test_graphics_device_settings test_graphics_device_settings.cpp)
+target_precompile_headers(test_graphics_device_settings PRIVATE src/pch.h)
+target_include_directories(test_graphics_device_settings PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_graphics_device_settings PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_graphics_device_settings PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME graphics_device_settings COMMAND test_graphics_device_settings)
+
+add_executable(test_display_settings_rules
+    test_display_settings_rules.cpp
+    src/core/DisplaySettings.cpp
+    src/core/DisplaySettingsPersistence.cpp
+    src/core/DisplaySettingsQuality.cpp
+    src/core/DisplaySettingsWindow.cpp
+    src/core/Logger.cpp
+    src/core/StringUtils.cpp
+    src/graphics/GraphicsDevice.cpp
+    src/graphics/GraphicsDeviceAdapter.cpp
+    src/graphics/GraphicsDeviceState.cpp
+    src/graphics/GraphicsDeviceTargets.cpp
+    src/graphics/Shader.cpp)
+target_precompile_headers(test_display_settings_rules PRIVATE src/pch.h)
+target_include_directories(test_display_settings_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_display_settings_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_display_settings_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+target_link_libraries(test_display_settings_rules d3d11 d2d1 dwrite windowscodecs dxguid dinput8 user32 gdi32 ole32 shlwapi winmm)
+add_test(NAME display_settings_rules COMMAND test_display_settings_rules)
+
+add_executable(test_wiki_terrain_height
+    test_wiki_terrain_height.cpp
+    src/game/systems/WikiTerrainHeight.cpp)
+target_precompile_headers(test_wiki_terrain_height PRIVATE src/pch.h)
+target_include_directories(test_wiki_terrain_height PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_wiki_terrain_height PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_terrain_height PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME wiki_terrain_height COMMAND test_wiki_terrain_height)

@@ -8,6 +8,7 @@
  */
 
 #include "../../ecs/Entity.h"
+#include "../../ecs/EntityOwner.h"
 #include "../components/WikiComponents.h"
 #include <DirectXMath.h>
 #include <vector>
@@ -38,6 +39,12 @@ public:
   /// @brief 初期化（エンティティプール作成）
   /// @param ctx ゲームコンテキスト
   void Initialize(core::GameContext &ctx);
+
+  /**
+   * @brief 演出用に生成したEntityをすべて破棄します。
+   * @param ctx ゲーム全体の共有コンテキストです。
+   */
+  void Shutdown(core::GameContext &ctx);
 
   /// @brief 毎フレーム更新
   /// @param ctx ゲームコンテキスト
@@ -265,6 +272,7 @@ private:
                         const DirectX::XMFLOAT3 &position, float scale,
                         float lifetime, const DirectX::XMFLOAT4 &color);
   void CreateRippleEntities(core::GameContext &ctx);
+  ecs::EntityOwner m_entityOwner;
 };
 
 } // namespace game::systems

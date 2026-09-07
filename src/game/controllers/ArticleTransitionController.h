@@ -2,6 +2,7 @@
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
+#include "../../ecs/EntityOwner.h"
 #include "../../graphics/TextStyle.h"
 #include "WikiGolfHUD.h" // HUDなどへのアクセス用
 #include "../scenes/WikiPageLoader.h"
@@ -95,6 +96,7 @@ private:
     ecs::Entity m_textEntity = UINT32_MAX;
     ecs::Entity m_progressTextEntity = UINT32_MAX;
     ecs::Entity m_captionTextEntity = UINT32_MAX;
+    ecs::EntityOwner m_entityOwner;
     
     graphics::TextStyle m_primaryStyle{};
     graphics::TextStyle m_progressStyle{};

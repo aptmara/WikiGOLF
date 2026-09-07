@@ -69,7 +69,7 @@ private:
   /// @brief フィールド（床・壁）作成
   void CreateField(core::GameContext &ctx);
 
-  /// @brief チュートリアルの旗色解説用に、一時的な実旗モデルを配置します。山内陽
+  /** @brief チュートリアルの旗色解説用に実旗モデルを配置します。 */
   void CreateTutorialFlagSamples(core::GameContext &ctx);
 
   /// @brief チュートリアルの旗色解説用に配置した一時旗モデルを破棄します。山内陽
@@ -97,6 +97,20 @@ private:
   /// @brief トップビューの着弾点プレビュー(現在クラブのフルスイング着弾予測)を
   /// 計算し、MinimapControllerへ反映します。
   void RefreshLandingPreview(core::GameContext &ctx);
+
+  /// @brief 着地地形とショット判定の結果画像を更新します。
+  void UpdateResultVisuals(core::GameContext &ctx, float dt);
+
+  /// @brief 予測軌道と方向ガイドを更新します。
+  void UpdateTrajectoryAndGuide(core::GameContext &ctx,
+                                game::components::GolfGameState &state,
+                                game::components::ShotState &shot, float dt,
+                                bool tutorialInputLocked, bool isMapView);
+
+  /// @brief HUDとショット後の演出システムを更新します。
+  void UpdateHudAndEffects(core::GameContext &ctx,
+                           game::components::GolfGameState &state,
+                           game::components::ShotState &shot, float dt);
 
   ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;

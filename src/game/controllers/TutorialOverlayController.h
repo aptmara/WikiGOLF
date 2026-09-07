@@ -6,6 +6,7 @@
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
+#include "../../ecs/EntityOwner.h"
 #include <DirectXMath.h>
 #include <string>
 #include <vector>
@@ -118,6 +119,7 @@ private:
 
     // --- ステップクリア演出 ---
     ecs::Entity m_checkMarkEntity  = UINT32_MAX; ///< mark_check.png 表示用エンティティ
+    ecs::EntityOwner m_entityOwner;
     bool        m_checkMarkShown   = false;      ///< チェックマーク生成済みフラグ
     float       m_checkMarkTimer   = 0.0f;       ///< 生成後の経過時間
     bool        m_stepClearPending = false;      ///< NextStep 直前のアニメーション待機

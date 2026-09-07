@@ -115,7 +115,7 @@ void WikiPinballScene::OnEnter(core::GameContext &ctx) {
   // ヘッダー（現在記事→目的記事）
   m_titleEntity = ctx.world.CreateEntity();
   auto &ht = ctx.world.Add<UIText>(m_titleEntity);
-  ht.text = L"📍 " + core::ToWString(startPage) + L" → 🎯 " +
+  ht.text = L" " + core::ToWString(startPage) + L" →  " +
             core::ToWString(targetPage);
   ht.x = 10;
   ht.y = 10;
@@ -218,7 +218,7 @@ void WikiPinballScene::OnUpdate(core::GameContext &ctx) {
         // ゲームオーバー
         auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
         if (infoUI) {
-          infoUI->text = L"💀 GAME OVER - Rでリトライ";
+          infoUI->text = L" GAME OVER - Rでリトライ";
         }
       }
     }
@@ -408,7 +408,7 @@ void WikiPinballScene::TransitionToPage(core::GameContext &ctx,
     auto *headerUI = ctx.world.Get<UIText>(state->headerEntity);
     if (headerUI) {
       headerUI->text =
-          L"🎊 GOAL! " + core::ToWString(state->targetPage) + L" に到達！ 🎊";
+          L" GOAL! " + core::ToWString(state->targetPage) + L" に到達！ ";
     }
 
     // スコアUI更新（最終スコア）
@@ -421,7 +421,7 @@ void WikiPinballScene::TransitionToPage(core::GameContext &ctx,
     // 情報パネル更新
     auto *infoUI = ctx.world.Get<UIText>(state->infoEntity);
     if (infoUI) {
-      infoUI->text = L"🎉 クリアおめでとう！ Rでリトライ";
+      infoUI->text = L" クリアおめでとう！ Rでリトライ";
     }
 
     // ボールを停止
@@ -477,7 +477,7 @@ void WikiPinballScene::TransitionToPage(core::GameContext &ctx,
   // UI更新
   auto *headerUI = ctx.world.Get<UIText>(state->headerEntity);
   if (headerUI) {
-    headerUI->text = L"📍 " + core::ToWString(state->currentPage) + L" → 🎯 " +
+    headerUI->text = L" " + core::ToWString(state->currentPage) + L" →  " +
                      core::ToWString(state->targetPage);
   }
 

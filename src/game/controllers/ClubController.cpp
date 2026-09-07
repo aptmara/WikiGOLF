@@ -25,6 +25,14 @@ void ClubController::Initialize(core::GameContext &ctx) {
   InitializeClubModel(ctx);
 }
 
+void ClubController::Shutdown(core::GameContext &ctx) {
+  m_entityOwner.DestroyAll(ctx.world);
+  m_clubUIEntities.clear();
+  m_clubNameEntities.clear();
+  m_clubModelEntity = UINT32_MAX;
+  m_clubUIExpanded = false;
+}
+
 ClubController::InputResult
 ClubController::UpdateInput(core::GameContext &ctx, const InputParams &params) {
   InputResult result;
@@ -234,14 +242,14 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
 
   // 古いUIエンティティは非表示のまま残し、描画はHUD側の新規リストに委譲
   for (size_t i = 0; i < m_availableClubs.size(); ++i) {
-    auto e = ctx.world.CreateEntity();
+    auto e = m_entityOwner.Create(ctx.world);
     auto &img = ctx.world.Add<UIImage>(e);
     img = UIImage::Create(m_availableClubs[i].iconTexture, 0, 0);
     img.visible = false; // HUD に移管したため非表示
     img.layer = 20;
     m_clubUIEntities.push_back(e);
 
-    auto nameE = ctx.world.CreateEntity();
+    auto nameE = m_entityOwner.Create(ctx.world);
     auto &nameT = ctx.world.Add<UIText>(nameE);
     nameT.text = core::ToWString(m_availableClubs[i].name);
     nameT.visible = false; // HUD に移管したため非表示
@@ -252,19 +260,19 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   // Q/E キーアイコンも非表示 (操作ヘルプを HUD の ControlHint に移管)
 
   // Q/E キーアイコン: 非表示で生成 (ControlHint バーに移管)
-  auto qIconE = ctx.world.CreateEntity();
+  auto qIconE = m_entityOwner.Create(ctx.world);
   auto &qImg = ctx.world.Add<UIImage>(qIconE);
   qImg = UIImage::Create("Assets/ui/keyboard_q.png", 0, 0);
   qImg.visible = false;
 
-  auto eIconE = ctx.world.CreateEntity();
+  auto eIconE = m_entityOwner.Create(ctx.world);
   auto &eImg = ctx.world.Add<UIImage>(eIconE);
   eImg = UIImage::Create("Assets/ui/keyboard_e.png", 0, 0);
   eImg.visible = false;
 }
 
 void ClubController::InitializeClubModel(core::GameContext &ctx) {
-  m_clubModelEntity = ctx.world.CreateEntity();
+  m_clubModelEntity = m_entityOwner.Create(ctx.world);
 
   auto &tr = ctx.world.Add<Transform>(m_clubModelEntity);
   tr.position = {0.0f, 0.5f, 0.0f};

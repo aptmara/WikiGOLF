@@ -23,7 +23,7 @@ void TrajectoryPredictor::Initialize(core::GameContext &ctx, size_t dotCount) {
   m_dots.reserve(dotCount);
 
   for (size_t i = 0; i < dotCount; ++i) {
-    auto e = ctx.world.CreateEntity();
+    auto e = m_entityOwner.Create(ctx.world);
     auto &t = ctx.world.Add<Transform>(e);
     t.scale = {0.15f, 0.15f, 0.15f};
 
@@ -39,7 +39,7 @@ void TrajectoryPredictor::Initialize(core::GameContext &ctx, size_t dotCount) {
   }
 
   // 着地点マーカーエンティティの作成
-  m_landingEntity = ctx.world.CreateEntity();
+  m_landingEntity = m_entityOwner.Create(ctx.world);
   auto &lt = ctx.world.Add<Transform>(m_landingEntity);
   lt.scale = {0.45f, 0.08f, 0.45f}; // 扁平な円盤形
 
@@ -50,6 +50,12 @@ void TrajectoryPredictor::Initialize(core::GameContext &ctx, size_t dotCount) {
   lmr.color = {1.0f, 1.0f, 1.0f, 0.75f};
   lmr.isTransparent = true;
   lmr.isVisible = false;
+}
+
+void TrajectoryPredictor::Shutdown(core::GameContext &ctx) {
+  m_entityOwner.DestroyAll(ctx.world);
+  m_dots.clear();
+  m_landingEntity = UINT32_MAX;
 }
 
 void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {

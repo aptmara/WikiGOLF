@@ -127,7 +127,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     CaptureMainCamera(ctx);
 
     // トランジション専用カメラ（既存フィールドと干渉しないよう遥か上空に配置）
-    m_cameraEntity = ctx.world.CreateEntity();
+    m_cameraEntity = m_entityOwner.Create(ctx.world);
     auto& camTr = ctx.world.Add<components::Transform>(m_cameraEntity);
     camTr.position = {0.0f, 5000.0f, -30.0f}; 
     camTr.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -139,7 +139,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     cam.isMainCamera = true; // メインカメラをジャックする
 
     // 地球儀エンティティの生成
-    m_globeEntity = ctx.world.CreateEntity();
+    m_globeEntity = m_entityOwner.Create(ctx.world);
     auto& globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
     globeTr.position = {0.0f, 5000.0f, 0.0f};
     globeTr.scale = {2.0f, 2.0f, 2.0f};
@@ -151,7 +151,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     globeMr.isVisible = true;
 
     // 背景エンティティの生成（暗転用）
-    m_bgEntity = ctx.world.CreateEntity();
+    m_bgEntity = m_entityOwner.Create(ctx.world);
     auto& bgTr = ctx.world.Add<components::Transform>(m_bgEntity);
     bgTr.position = {0.0f, 5000.0f, 50.0f};
     bgTr.scale = {200.0f, 200.0f, 1.0f};
@@ -163,7 +163,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     bgMr.isVisible = true;
 
     // UIテキストエンティティの生成
-    m_textEntity = ctx.world.CreateEntity();
+    m_textEntity = m_entityOwner.Create(ctx.world);
     auto& titleText = ctx.world.Add<components::UIText>(m_textEntity);
     titleText.text = L"Traveling to " + core::ToWString(m_targetPage) + L"...";
     titleText.x = 0.0f;
@@ -173,7 +173,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     titleText.visible = true;
     titleText.layer = 20;
 
-    m_progressTextEntity = ctx.world.CreateEntity();
+    m_progressTextEntity = m_entityOwner.Create(ctx.world);
     auto& progText = ctx.world.Add<components::UIText>(m_progressTextEntity);
     progText.text = L"0%";
     progText.x = 0.0f;
@@ -183,7 +183,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     progText.visible = true;
     progText.layer = 20;
 
-    m_captionTextEntity = ctx.world.CreateEntity();
+    m_captionTextEntity = m_entityOwner.Create(ctx.world);
     auto& capText = ctx.world.Add<components::UIText>(m_captionTextEntity);
     capText.text = L"Loading Wiki Data...";
     capText.x = 0.0f;
@@ -197,12 +197,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
 void ArticleTransitionController::DestroyEntities(core::GameContext& ctx) {
     RestoreMainCamera(ctx);
 
-    if (ctx.world.IsAlive(m_globeEntity)) ctx.world.DestroyEntity(m_globeEntity);
-    if (ctx.world.IsAlive(m_bgEntity)) ctx.world.DestroyEntity(m_bgEntity);
-    if (ctx.world.IsAlive(m_cameraEntity)) ctx.world.DestroyEntity(m_cameraEntity);
-    if (ctx.world.IsAlive(m_textEntity)) ctx.world.DestroyEntity(m_textEntity);
-    if (ctx.world.IsAlive(m_progressTextEntity)) ctx.world.DestroyEntity(m_progressTextEntity);
-    if (ctx.world.IsAlive(m_captionTextEntity)) ctx.world.DestroyEntity(m_captionTextEntity);
+    m_entityOwner.DestroyAll(ctx.world);
 
     m_globeEntity = m_bgEntity = m_cameraEntity = UINT32_MAX;
     m_textEntity = m_progressTextEntity = m_captionTextEntity = UINT32_MAX;

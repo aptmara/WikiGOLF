@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../ecs/Entity.h"
+#include "../../ecs/EntityOwner.h"
 #include "../utils/CarryDistanceTable.h"
 #include <DirectXMath.h>
 #include <cstddef>
@@ -33,6 +34,12 @@ public:
   };
 
   void Initialize(core::GameContext &ctx, size_t dotCount = 30);
+
+  /**
+   * @brief 軌道予測表示が生成したEntityを破棄します。
+   * @param ctx ゲーム全体の共有コンテキストです。
+   */
+  void Shutdown(core::GameContext &ctx);
   void Update(core::GameContext &ctx, const Params &params);
   void Hide(core::GameContext &ctx);
   const std::vector<ecs::Entity> &GetDots() const;
@@ -40,6 +47,7 @@ public:
 private:
   std::vector<ecs::Entity> m_dots;
   ecs::Entity m_landingEntity = UINT32_MAX; ///< 着地点マーカーエンティティ
+  ecs::EntityOwner m_entityOwner;
 };
 
 } // namespace game::controllers
