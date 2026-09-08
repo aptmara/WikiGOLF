@@ -76,11 +76,14 @@ inline constexpr Entity MakeEntity(uint32_t index, uint16_t generation) noexcept
  * @return 有効ならtrue
 */
 inline constexpr bool IsValidEntity(Entity entity) noexcept {
-    return entity != NULL_ENTITY;
+    return entity != NULL_ENTITY &&
+           GetEntityGeneration(entity) != ENTITY_GENERATION_MASK;
 }
 
 static_assert(GetEntityIndex(MakeEntity(65536u, 1u)) == 65536u);
 static_assert(GetEntityGeneration(MakeEntity(65536u, 1u)) == 1u);
 static_assert(MakeEntity(ENTITY_INDEX_MASK, MAX_ENTITY_GENERATION) != NULL_ENTITY);
+static_assert(!IsValidEntity(NULL_ENTITY));
+static_assert(!IsValidEntity(MakeEntity(0u, static_cast<uint16_t>(ENTITY_GENERATION_MASK))));
 
 } // namespace ecs
