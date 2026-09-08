@@ -43,21 +43,25 @@ public:
 
     /**
      * @brief 新しいエンティティを生成
-     * @return 生成されたEntity ID
+     * @return 生成されたEntity ID。上限到達時はNULL_ENTITY
 */
     Entity CreateEntity() {
-        Entity entity;
         if (!m_freeIndices.empty()) {
-            const uint16_t index = m_freeIndices.front();
+            const uint32_t index = m_freeIndices.front();
             m_freeIndices.pop();
             const uint16_t generation = m_generations[index];
-            entity = MakeEntity(index, generation);
-        } else {
-            const uint16_t index = static_cast<uint16_t>(m_generations.size());
-            m_generations.push_back(0);
-            entity = MakeEntity(index, 0);
+            return MakeEntity(index, generation);
         }
-        return entity;
+
+        if (m_generations.size() >= MAX_ENTITY_COUNT) {
+            LOG_ERROR("World", "Entity capacity exceeded: max={} slots",
+                      MAX_ENTITY_COUNT);
+            return NULL_ENTITY;
+        }
+
+        const uint32_t index = static_cast<uint32_t>(m_generations.size());
+        m_generations.push_back(0);
+        return MakeEntity(index, 0);
     }
 
     /**
@@ -71,20 +75,24 @@ public:
             if (pool) pool->Remove(entity);
         }
 
-        const uint16_t index = GetEntityIndex(entity);
-        m_generations[index]++; // 世代を進める
+        const uint32_t index = GetEntityIndex(entity);
+        uint16_t& generation = m_generations[index];
+        generation = generation >= MAX_ENTITY_GENERATION
+                         ? 0
+                         : static_cast<uint16_t>(generation + 1u);
         m_freeIndices.push(index);
     }
 
     bool IsAlive(Entity entity) const {
         if (!IsValidEntity(entity)) return false;
-        const uint16_t index = GetEntityIndex(entity);
+        const uint32_t index = GetEntityIndex(entity);
         if (index >= m_generations.size()) return false;
         return m_generations[index] == GetEntityGeneration(entity);
     }
 
     /**
-     * @brief アクティブなエンティティ数を取得する     * @return 使用中スロット数に基づくアクティブエンティティ数
+     * @brief アクティブなエンティティ数を取得する
+     * @return 使用中スロット数に基づくアクティブエンティティ数
 */
     size_t GetEntityCount() const {
         return m_generations.size() - m_freeIndices.size();
@@ -170,10 +178,8 @@ public:
     // 統計情報 (ヘルスチェック)
 
     void DumpStatistics() const {
-        // アクティブなエンティティ数をカウント
         size_t activeCount = 0;
         size_t totalSlots = m_generations.size();
-        // 空きインデックスを参照してアクティブなエンティティの数を集計
         activeCount = totalSlots - m_freeIndices.size();
 
         LOG_INFO("WorldStats", "=== World Statistics ===");
@@ -219,7 +225,7 @@ private:
 
     // 内部データストレージ
     std::vector<uint16_t> m_generations;
-    std::queue<uint16_t> m_freeIndices;
+    std::queue<uint32_t> m_freeIndices;
     std::vector<std::unique_ptr<IComponentPool>> m_componentPools; // 配列構造によるコンポーネントプール
     std::unordered_map<ComponentTypeId, std::any> m_globals;
 };
