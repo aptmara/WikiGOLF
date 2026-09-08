@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <memory>
 #include <any>
+#include <stdexcept>
 #include <type_traits>
 
 namespace ecs {
@@ -43,7 +44,8 @@ public:
 
     /**
      * @brief 新しいエンティティを生成
-     * @return 生成されたEntity ID。上限到達時はNULL_ENTITY
+     * @return 生成されたEntity ID
+     * @throws std::overflow_error Entityスロット上限へ到達した場合
 */
     Entity CreateEntity() {
         if (!m_freeIndices.empty()) {
@@ -56,7 +58,7 @@ public:
         if (m_generations.size() >= MAX_ENTITY_COUNT) {
             LOG_ERROR("World", "Entity capacity exceeded: max={} slots",
                       MAX_ENTITY_COUNT);
-            return NULL_ENTITY;
+            throw std::overflow_error("ECS entity capacity exceeded");
         }
 
         const uint32_t index = static_cast<uint32_t>(m_generations.size());
@@ -104,9 +106,13 @@ public:
      * @brief コンポーネントを追加（または上書き）
      * @tparam T コンポーネント型
      * @return 追加されたコンポーネントへの参照
+     * @throws std::invalid_argument 生存していないEntityが指定された場合
 */
     template<typename T, typename... Args>
     T& Add(Entity entity, Args&&... args) {
+        if (!IsAlive(entity)) {
+            throw std::invalid_argument("Cannot add component to a dead entity");
+        }
         return GetOrCreatePool<T>().Add(entity, std::forward<Args>(args)...);
     }
 
@@ -116,12 +122,14 @@ public:
 */
     template<typename T>
     T* Get(Entity entity) {
+        if (!IsAlive(entity)) return nullptr;
         auto* pool = GetPool<T>();
         return pool ? pool->Get(entity) : nullptr;
     }
 
     template<typename T>
     const T* Get(Entity entity) const {
+        if (!IsAlive(entity)) return nullptr;
         auto* pool = GetPool<T>();
         return pool ? pool->Get(entity) : nullptr;
     }
@@ -129,6 +137,7 @@ public:
     /** @brief コンポーネントを削除*/
     template<typename T>
     void Remove(Entity entity) {
+        if (!IsAlive(entity)) return;
         if (auto* pool = GetPool<T>()) {
             pool->Remove(entity);
         }
@@ -136,6 +145,7 @@ public:
 
     template<typename T>
     bool Has(Entity entity) const {
+        if (!IsAlive(entity)) return false;
         auto* pool = GetPool<T>();
         return pool && pool->Has(entity);
     }
