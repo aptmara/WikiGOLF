@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <memory>
 #include <any>
+#include <stdexcept>
 #include <type_traits>
 
 namespace ecs {
@@ -44,20 +45,25 @@ public:
     /**
      * @brief 新しいエンティティを生成
      * @return 生成されたEntity ID
+     * @throws std::overflow_error Entityスロット上限へ到達した場合
 */
     Entity CreateEntity() {
-        Entity entity;
         if (!m_freeIndices.empty()) {
-            const uint16_t index = m_freeIndices.front();
+            const uint32_t index = m_freeIndices.front();
             m_freeIndices.pop();
             const uint16_t generation = m_generations[index];
-            entity = MakeEntity(index, generation);
-        } else {
-            const uint16_t index = static_cast<uint16_t>(m_generations.size());
-            m_generations.push_back(0);
-            entity = MakeEntity(index, 0);
+            return MakeEntity(index, generation);
         }
-        return entity;
+
+        if (m_generations.size() >= MAX_ENTITY_COUNT) {
+            LOG_ERROR("World", "Entity capacity exceeded: max={} slots",
+                      MAX_ENTITY_COUNT);
+            throw std::overflow_error("ECS entity capacity exceeded");
+        }
+
+        const uint32_t index = static_cast<uint32_t>(m_generations.size());
+        m_generations.push_back(0);
+        return MakeEntity(index, 0);
     }
 
     /**
@@ -71,20 +77,24 @@ public:
             if (pool) pool->Remove(entity);
         }
 
-        const uint16_t index = GetEntityIndex(entity);
-        m_generations[index]++; // 世代を進める
+        const uint32_t index = GetEntityIndex(entity);
+        uint16_t& generation = m_generations[index];
+        generation = generation >= MAX_ENTITY_GENERATION
+                         ? 0
+                         : static_cast<uint16_t>(generation + 1u);
         m_freeIndices.push(index);
     }
 
     bool IsAlive(Entity entity) const {
         if (!IsValidEntity(entity)) return false;
-        const uint16_t index = GetEntityIndex(entity);
+        const uint32_t index = GetEntityIndex(entity);
         if (index >= m_generations.size()) return false;
         return m_generations[index] == GetEntityGeneration(entity);
     }
 
     /**
-     * @brief アクティブなエンティティ数を取得する     * @return 使用中スロット数に基づくアクティブエンティティ数
+     * @brief アクティブなエンティティ数を取得する
+     * @return 使用中スロット数に基づくアクティブエンティティ数
 */
     size_t GetEntityCount() const {
         return m_generations.size() - m_freeIndices.size();
@@ -96,9 +106,13 @@ public:
      * @brief コンポーネントを追加（または上書き）
      * @tparam T コンポーネント型
      * @return 追加されたコンポーネントへの参照
+     * @throws std::invalid_argument 生存していないEntityが指定された場合
 */
     template<typename T, typename... Args>
     T& Add(Entity entity, Args&&... args) {
+        if (!IsAlive(entity)) {
+            throw std::invalid_argument("Cannot add component to a dead entity");
+        }
         return GetOrCreatePool<T>().Add(entity, std::forward<Args>(args)...);
     }
 
@@ -108,12 +122,14 @@ public:
 */
     template<typename T>
     T* Get(Entity entity) {
+        if (!IsAlive(entity)) return nullptr;
         auto* pool = GetPool<T>();
         return pool ? pool->Get(entity) : nullptr;
     }
 
     template<typename T>
     const T* Get(Entity entity) const {
+        if (!IsAlive(entity)) return nullptr;
         auto* pool = GetPool<T>();
         return pool ? pool->Get(entity) : nullptr;
     }
@@ -121,6 +137,7 @@ public:
     /** @brief コンポーネントを削除*/
     template<typename T>
     void Remove(Entity entity) {
+        if (!IsAlive(entity)) return;
         if (auto* pool = GetPool<T>()) {
             pool->Remove(entity);
         }
@@ -128,6 +145,7 @@ public:
 
     template<typename T>
     bool Has(Entity entity) const {
+        if (!IsAlive(entity)) return false;
         auto* pool = GetPool<T>();
         return pool && pool->Has(entity);
     }
@@ -170,10 +188,8 @@ public:
     // 統計情報 (ヘルスチェック)
 
     void DumpStatistics() const {
-        // アクティブなエンティティ数をカウント
         size_t activeCount = 0;
         size_t totalSlots = m_generations.size();
-        // 空きインデックスを参照してアクティブなエンティティの数を集計
         activeCount = totalSlots - m_freeIndices.size();
 
         LOG_INFO("WorldStats", "=== World Statistics ===");
@@ -219,7 +235,7 @@ private:
 
     // 内部データストレージ
     std::vector<uint16_t> m_generations;
-    std::queue<uint16_t> m_freeIndices;
+    std::queue<uint32_t> m_freeIndices;
     std::vector<std::unique_ptr<IComponentPool>> m_componentPools; // 配列構造によるコンポーネントプール
     std::unordered_map<ComponentTypeId, std::any> m_globals;
 };

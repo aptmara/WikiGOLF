@@ -7,6 +7,7 @@
 #include "src/resources/ResourceManager.h"
 #include <cstdlib>
 #include <iostream>
+#include <stdexcept>
 
 #define CHECK_TRUE(condition, message)                                         \
   do {                                                                         \
@@ -43,6 +44,79 @@ public:
     return CreateEntity(world);
   }
 };
+
+void TestEntityCapacityAndValidity() {
+  ecs::World world;
+
+  CHECK_TRUE(!ecs::IsValidEntity(ecs::NULL_ENTITY),
+             "NULL_ENTITYを無効Entityとして扱う");
+  CHECK_TRUE(!ecs::IsValidEntity(ecs::MakeEntity(
+                 0u, static_cast<uint16_t>(ecs::ENTITY_GENERATION_MASK))),
+             "予約Generationを持つEntityを無効として扱う");
+
+  bool sequentialIndices = true;
+  for (uint32_t i = 0; i < ecs::MAX_ENTITY_COUNT; ++i) {
+    const ecs::Entity entity = world.CreateEntity();
+    if (ecs::GetEntityIndex(entity) != i) {
+      sequentialIndices = false;
+      break;
+    }
+  }
+  CHECK_TRUE(sequentialIndices,
+             "Entity上限まではIndexをwrapせず生成する");
+
+  bool overflowThrown = false;
+  try {
+    (void)world.CreateEntity();
+  } catch (const std::overflow_error &) {
+    overflowThrown = true;
+  }
+  CHECK_TRUE(overflowThrown,
+             "Entity上限到達時は無効IDを返さずoverflow_errorで失敗する");
+}
+
+void TestGenerationWrap() {
+  ecs::World world;
+  ecs::Entity entity = world.CreateEntity();
+  bool sequenceValid = true;
+
+  for (uint32_t generation = 0;
+       generation <= static_cast<uint32_t>(ecs::MAX_ENTITY_GENERATION);
+       ++generation) {
+    if (ecs::GetEntityGeneration(entity) != generation) {
+      sequenceValid = false;
+      break;
+    }
+    world.DestroyEntity(entity);
+    entity = world.CreateEntity();
+  }
+
+  CHECK_TRUE(sequenceValid,
+             "Entity再利用時のGenerationが期待値どおり進む");
+  CHECK_TRUE(ecs::GetEntityGeneration(entity) == 0u,
+             "最大Generationの次は0へ循環する");
+}
+
+void TestDeadEntityComponentAccess() {
+  ecs::World world;
+  const ecs::Entity entity = world.CreateEntity();
+  world.Add<TestComponent>(entity, TestComponent{42});
+  world.DestroyEntity(entity);
+
+  CHECK_TRUE(world.Get<TestComponent>(entity) == nullptr,
+             "破棄済みEntityからComponentを取得しない");
+  CHECK_TRUE(!world.Has<TestComponent>(entity),
+             "破棄済みEntityをComponent保持中と判定しない");
+
+  bool addRejected = false;
+  try {
+    world.Add<TestComponent>(entity, TestComponent{99});
+  } catch (const std::invalid_argument &) {
+    addRejected = true;
+  }
+  CHECK_TRUE(addRejected,
+             "破棄済みEntityへのComponent追加を拒否する");
+}
 
 } // namespace
 
@@ -103,6 +177,10 @@ int main() {
              "機能単位の一括破棄でも外部Entityを維持する");
   CHECK_TRUE(featureOwner.GetTrackedCount() == 0,
              "一括破棄後に所有記録を空にする");
+
+  TestDeadEntityComponentAccess();
+  TestGenerationWrap();
+  TestEntityCapacityAndValidity();
 
   std::cout << "All scene entity lifecycle tests passed!\n";
   return 0;
