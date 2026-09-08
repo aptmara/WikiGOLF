@@ -35,6 +35,7 @@ constexpr uint16_t MAX_ENTITY_GENERATION =
     static_cast<uint16_t>(ENTITY_GENERATION_MASK - 1u);
 
 static_assert(ENTITY_INDEX_BITS + ENTITY_GENERATION_BITS == 32);
+static_assert(MAX_ENTITY_COUNT == 262144u);
 
 /** @brief 無効なエンティティを表す定数*/
 constexpr Entity NULL_ENTITY = (std::numeric_limits<Entity>::max)();
@@ -77,5 +78,9 @@ inline constexpr Entity MakeEntity(uint32_t index, uint16_t generation) noexcept
 inline constexpr bool IsValidEntity(Entity entity) noexcept {
     return entity != NULL_ENTITY;
 }
+
+static_assert(GetEntityIndex(MakeEntity(65536u, 1u)) == 65536u);
+static_assert(GetEntityGeneration(MakeEntity(65536u, 1u)) == 1u);
+static_assert(MakeEntity(ENTITY_INDEX_MASK, MAX_ENTITY_GENERATION) != NULL_ENTITY);
 
 } // namespace ecs
