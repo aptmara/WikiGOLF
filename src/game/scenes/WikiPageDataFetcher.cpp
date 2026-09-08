@@ -9,6 +9,9 @@
 #include <chrono>
 #include <unordered_map>
 #include <utility>
+#ifdef WIKIGOLF_HTML_COURSES
+#include "../../graphics/html/CourseHtml.h"
+#endif
 
 namespace game::scenes {
 namespace {
@@ -62,6 +65,30 @@ PageDataAsyncResult WikiPageDataFetcher::Fetch(const std::string& pageName) {
              pageName, result.pageCategories.size(),
              ElapsedMs(categoryStartedAt));
 
+#ifdef WIKIGOLF_HTML_COURSES
+    auto prepared = graphics::html::PrepareArticle(pageName, wikiClient.FetchPageHtml(pageName));
+    if (!prepared.html.empty()) {
+        result.articleHtml = std::move(prepared.html);
+        std::size_t imageBytes = 0;
+        for (const auto& url : prepared.imageUrls) {
+            if (imageBytes >= 48u * 1024 * 1024) break;
+            const auto bytes = wikiClient.DownloadBinary(url, 8u * 1024 * 1024);
+            if (bytes.size() > 8u * 1024 * 1024) continue;
+            graphics::PendingWikiImage image;
+            if (!graphics::DecodeWikiImageFromMemory(bytes, image.pixelsBGRA,
+                    image.pixelWidth, image.pixelHeight, 2048)) continue;
+            if (imageBytes + image.pixelsBGRA.size() > 48u * 1024 * 1024) continue;
+            image.sourceUrl = url;
+            imageBytes += image.pixelsBGRA.size();
+            result.pendingImages.push_back(std::move(image));
+        }
+        result.hasData = true;
+        LOG_INFO("WikiHtml", "Fetched page='{}' htmlBytes={} images={} elapsed={}ms",
+            pageName, result.articleHtml.size(), result.pendingImages.size(), ElapsedMs(loadStartedAt));
+        return result;
+    }
+    LOG_WARN("WikiHtml", "Using text fallback: {}", prepared.error);
+#endif
     const auto tableTextStartedAt = std::chrono::steady_clock::now();
     const std::string tableText = wikiClient.FetchPageTableText(pageName);
     if (!tableText.empty()) {

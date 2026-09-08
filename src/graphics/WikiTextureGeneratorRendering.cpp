@@ -13,6 +13,15 @@ namespace graphics {
 
 bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   if (!state.started || state.completed) return true;
+  if (state.htmlState) return GenerateHtmlTile(state);
+
+  auto fail = [&] {
+    m_d2dContext->SetTarget(nullptr);
+    m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
+    state.result = {};
+    state.failed = state.completed = true;
+    return true;
+  };
 
   // 描画負荷をフレーム分散するために最大タイル高さを半分に調整
   const uint32_t kMaxTileHeight = 512;
@@ -42,7 +51,7 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   texDesc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
 
   HRESULT hr = m_d3dDevice->CreateTexture2D(&texDesc, nullptr, &tex);
-  if (FAILED(hr)) return true;
+  if (FAILED(hr)) return fail();
 
   ComPtr<IDXGISurface> dxgiSurface;
   tex.As(&dxgiSurface);
@@ -54,7 +63,7 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
 
   ComPtr<ID2D1Bitmap1> bmp;
   hr = m_d2dContext->CreateBitmapFromDxgiSurface(dxgiSurface.Get(), &bmpProps, &bmp);
-  if (FAILED(hr)) return true;
+  if (FAILED(hr)) return fail();
 
   m_d2dContext->SetTarget(bmp.Get());
   m_d2dContext->BeginDraw();
@@ -177,14 +186,14 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
     }
   }
 
-  m_d2dContext->EndDraw();
+  if (FAILED(m_d2dContext->EndDraw())) return fail();
 
   ComPtr<ID3D11ShaderResourceView> srv;
   D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
   srvDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
   srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
   srvDesc.Texture2D.MipLevels = 1;
-  m_d3dDevice->CreateShaderResourceView(tex.Get(), &srvDesc, &srv);
+  if (FAILED(m_d3dDevice->CreateShaderResourceView(tex.Get(), &srvDesc, &srv))) return fail();
 
   WikiTextureResult::Tile tile;
   tile.texture = tex;

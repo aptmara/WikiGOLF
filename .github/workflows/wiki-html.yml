@@ -1,0 +1,21 @@
+name: Wiki HTML course
+on:
+  push:
+    branches: ['feat/html-course-rendering']
+  pull_request:
+    paths: ['src/**', 'test_course_html*', 'cmake/**', 'CMakeLists.txt', '.github/workflows/wiki-html.yml']
+permissions:
+  contents: read
+jobs:
+  html:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - run: cmake -S . -B build-html -DWIKIGOLF_HTML_TESTS_ONLY=ON
+      - run: cmake --build build-html --config Release --parallel 4
+      - run: ctest --test-dir build-html -C Release --output-on-failure

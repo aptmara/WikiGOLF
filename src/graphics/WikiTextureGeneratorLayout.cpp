@@ -137,8 +137,9 @@ bool WikiTextureGenerator::BeginGenerateTexture(
     const std::wstring &articleText,
     const std::vector<std::pair<std::wstring, std::string>> &links,
     const std::string &targetPage, uint32_t width, uint32_t height,
-    std::vector<PendingWikiImage> pendingImages) {
+    std::vector<PendingWikiImage> pendingImages, const std::string& articleHtml) {
 
+  if (!articleHtml.empty() && BeginHtmlTexture(state, articleHtml, targetPage, pendingImages)) return true;
   state = WikiTextureGenerationState(); // Reset
   state.title = title;
   state.links = links;

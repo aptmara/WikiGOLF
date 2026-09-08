@@ -5,6 +5,7 @@
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
+#include "HtmlHoleSpacing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
@@ -131,11 +132,13 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     auto texResult = m_textureGenerator->GenerateTexture(
         core::ToWString(pageName), core::ToWString(articleText),
         linkPairs, state->targetPage, texWidth, texHeight,
-        std::move(pendingImages));
+        std::move(pendingImages), m_tutorialMode ? std::string{} : asyncData.articleHtml);
     LOG_INFO("WikiPageLoader",
              "BuildPageSync texture generated size={}x{} links={} elapsed={}ms",
              texResult.width, texResult.height, texResult.links.size(),
              ElapsedMs(textureStartedAt));
+
+    if (!texResult.width || !texResult.height || texResult.tiles.empty()) return {};
 
     // 実際のピクセル数からフィールドサイズを逆算
     float actualFieldDepth = (float)texResult.height / (100.0f * texScale);
@@ -156,6 +159,11 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         fieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
     }
 
+    if (texResult.layoutWidth > 0) {
+        fieldWidth = std::clamp(kMinFieldWidth*std::pow(articleLengthFactor,0.45f),kMinFieldWidth,kMinFieldWidth*4.0f);
+        fieldDepth = std::clamp(fieldWidth * texResult.layoutHeight / texResult.layoutWidth,
+                               kMinFieldDepth, kMaxSafeDepth);
+    }
     m_wikiTexture =
         std::make_unique<graphics::WikiTextureResult>(std::move(texResult));
     m_buildGameplayLinks.clear();
@@ -164,6 +172,10 @@ PageLoadResult WikiPageLoader::BuildPageSync(
             m_tutorialCourseLayout.BuildGameplayLinks(*m_wikiTexture,
                                                      state->targetPage);
     }
+
+    if (m_wikiTexture->layoutWidth > 0)
+        m_buildGameplayLinks = SelectSpacedHtmlLinks(m_wikiTexture->links,
+            static_cast<float>(m_wikiTexture->width),static_cast<float>(m_wikiTexture->height),fieldWidth,fieldDepth);
 
     // 記事のテーマに応じたスカイボックスを適用します。
     auto* skyboxComp = ctx.world.Get<components::Skybox>(skyboxEntity);

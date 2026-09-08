@@ -108,6 +108,9 @@ public:
 */
   std::string FetchPageExtract(const std::string &title, int lengthLimit = 0);
 
+  /** @brief 記事本文のHTMLを取得します。 */
+  std::string FetchPageHtml(const std::string& title);
+
   /**
    * @brief 記事内の表・インフォボックスのテキストを取得します
    * @details FetchPageExtract（explaintext）は仕様上テーブル・インフォボックスを
@@ -142,7 +145,7 @@ public:
    * @param url ダウンロード対象URL（https://から始まる想定）
    * @return バイナリデータ（失敗時は空文字列）
 */
-  std::string DownloadBinary(const std::string &url);
+  std::string DownloadBinary(const std::string &url, size_t maxBytes = 0);
 
   /**
    * @brief URLエンコードを行います
@@ -153,7 +156,7 @@ public:
 
 private:
   std::string PerformGetRequest(const std::wstring &server,
-                                const std::wstring &path);
+                                const std::wstring &path, size_t maxBytes = 0);
 
   /** @brief 指定ホストへの接続を取得する（未接続なら新規に確立してキャッシュする）*/
   HINTERNET GetOrCreateConnection(const std::wstring &server);

@@ -8,6 +8,7 @@
 */
 
 #include <cstdint>
+#include <memory>
 #include <d2d1_1.h>
 #include <d3d11.h>
 #include <dwrite.h>
@@ -23,11 +24,16 @@ using Microsoft::WRL::ComPtr;
 /**
  * @brief リンク領域情報
 */
+struct WikiHtmlRenderState;
+struct LinkFragment { float x, y, width, height; };
+
 struct LinkRegion {
   std::string targetPage; /**< 遷移先ページ名 */
   float x, y;             /**< テクスチャ上の位置（ピクセル） */
   float width, height;    /**< サイズ（ピクセル） */
   bool isTarget;          /**< 目標リンクか */
+  uint32_t elementId = 0;
+  std::vector<LinkFragment> fragments;
 };
 
 /**
@@ -53,6 +59,7 @@ struct HeadingRegion {
  *        触れない範囲）で事前に済ませておける。
 */
 struct PendingWikiImage {
+  std::string sourceUrl;
   std::vector<uint8_t> pixelsBGRA; /**< 32bpp BGRA（premultiplied alpha）ピクセルデータ */
   uint32_t pixelWidth = 0;
   uint32_t pixelHeight = 0;
@@ -72,7 +79,7 @@ struct PendingWikiImage {
 */
 bool DecodeWikiImageFromMemory(const std::string &bytes,
                                std::vector<uint8_t> &outPixelsBGRA,
-                               uint32_t &outWidth, uint32_t &outHeight);
+                               uint32_t &outWidth, uint32_t &outHeight, uint32_t maxDimension = 0);
 
 /**
  * @brief Wikipedia風テクスチャ生成結果
@@ -96,6 +103,8 @@ struct WikiTextureResult {
   std::vector<LinkRegion> links;
   std::vector<ImageRegion> images;
   std::vector<HeadingRegion> headings;
+  std::vector<ImageRegion> tables;
+  float layoutWidth = 0, layoutHeight = 0;
 };
 
 /**
@@ -162,6 +171,9 @@ struct WikiTextureGenerationState {
   WikiTextureResult result;
   bool started = false;
   bool completed = false;
+  bool failed = false;
+  std::shared_ptr<WikiHtmlRenderState> htmlState;
+  std::string htmlCacheKey;
 };
 
 /**
@@ -200,7 +212,8 @@ public:
       const std::wstring &title, const std::wstring &articleText,
       const std::vector<std::pair<std::wstring, std::string>> &links,
       const std::string &targetPage, uint32_t width, uint32_t height,
-      std::vector<PendingWikiImage> pendingImages = {});
+      std::vector<PendingWikiImage> pendingImages = {},
+      const std::string& articleHtml = {});
 
   /** @brief インクリメンタル生成の開始 */
   bool BeginGenerateTexture(
@@ -208,12 +221,18 @@ public:
       const std::wstring &articleText,
       const std::vector<std::pair<std::wstring, std::string>> &links,
       const std::string &targetPage, uint32_t width, uint32_t height,
-      std::vector<PendingWikiImage> pendingImages = {});
+      std::vector<PendingWikiImage> pendingImages = {},
+      const std::string& articleHtml = {});
 
   /** @brief 次のタイルを生成。完了時は true を返す */
   bool GenerateNextTile(WikiTextureGenerationState &state);
 
 private:
+  bool BeginHtmlTexture(WikiTextureGenerationState&, const std::string&,
+                        const std::string&, const std::vector<PendingWikiImage>&);
+  bool GenerateHtmlTile(WikiTextureGenerationState&);
+  struct HtmlCacheEntry { std::string key; WikiTextureResult result; };
+  std::vector<HtmlCacheEntry> m_htmlCache;
   /** @brief D2Dオフスクリーンターゲット作成 */
   bool CreateOffscreenTarget(uint32_t width, uint32_t height);
 

@@ -5,6 +5,7 @@
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
+#include "HtmlHoleSpacing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -127,7 +128,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
     {
         const auto textureBeginStartedAt = std::chrono::steady_clock::now();
         if (m_textureGenerator) {
-            m_textureGenerator->BeginGenerateTexture(
+            if (!m_textureGenerator->BeginGenerateTexture(
                 m_textureState,
                 core::ToWString(m_buildData.pageName),
                 core::ToWString(m_buildData.articleText),
@@ -135,8 +136,13 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                 state->targetPage,
                 m_buildTexWidth,
                 m_buildTexHeight,
-                std::move(m_buildData.pendingImages)
-            );
+                m_buildData.pendingImages,
+                m_tutorialMode ? std::string{} : m_buildData.articleHtml
+            )) {
+                m_buildStep = BuildStep::None;
+                m_buildResult.success = false;
+                return true;
+            }
         }
         m_buildStep = BuildStep::GenerateTextureTiles;
         m_buildProgress = 0.25f;
@@ -157,6 +163,17 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
             }
             m_buildProgress = 0.25f + 0.35f * textureProgress;
 
+            if (textureDone && m_textureState.failed) {
+                if (m_buildData.articleHtml.empty()) {
+                    m_buildStep = BuildStep::None;
+                    m_buildResult.success = false;
+                    LOG_ERROR("WikiPageLoader", "Texture generation failed for {}", m_buildData.pageName);
+                    return true;
+                }
+                m_buildData.articleHtml.clear();
+                m_buildStep = BuildStep::BeginTexture;
+                return false;
+            }
             if (textureDone) {
                 // 実際のピクセル数からフィールドサイズを逆算
                 float actualFieldDepth = (float)m_textureState.result.height / (100.0f * m_buildTexScale);
@@ -177,6 +194,15 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                     m_buildFieldDepth = std::min(actualFieldDepth * scaleFix, kMaxSafeDepth);
                 }
 
+                if (m_textureState.result.layoutWidth > 0) {
+                    m_buildFieldWidth = std::clamp(kMinFieldWidth * std::pow(
+                        std::max(1.0f, static_cast<float>(m_buildData.articleText.size()) / 1500.0f),0.45f),
+                        kMinFieldWidth,kMinFieldWidth*4.0f);
+                    m_buildFieldDepth = std::clamp(m_buildFieldWidth *
+                        m_textureState.result.layoutHeight / m_textureState.result.layoutWidth,
+                        kMinFieldDepth, kMaxSafeDepth);
+                }
+                m_buildData.pendingImages.clear();
                 m_wikiTexture = std::make_unique<graphics::WikiTextureResult>(std::move(m_textureState.result));
                 if (m_tutorialMode &&
                     m_tutorialCourseLayout.IsPresetPage(m_buildData.pageName)) {
@@ -184,6 +210,10 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                         m_tutorialCourseLayout.BuildGameplayLinks(
                             *m_wikiTexture, state->targetPage);
                 }
+                if (m_wikiTexture->layoutWidth > 0)
+                    m_buildGameplayLinks = SelectSpacedHtmlLinks(m_wikiTexture->links,
+                        static_cast<float>(m_wikiTexture->width),static_cast<float>(m_wikiTexture->height),
+                        m_buildFieldWidth,m_buildFieldDepth);
                 size_t gameplayLinkCount = m_wikiTexture->links.size();
                 if (!m_buildGameplayLinks.empty()) {
                     gameplayLinkCount = m_buildGameplayLinks.size();

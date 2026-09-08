@@ -19,6 +19,7 @@ namespace game::scenes {
 struct PageDataAsyncResult {
     std::string pageName;
     std::string articleText;
+    std::string articleHtml;
     std::vector<game::WikiLink> allLinks;
     std::vector<std::string> pageCategories;
     std::vector<graphics::PendingWikiImage> pendingImages;

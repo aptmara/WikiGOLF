@@ -4,6 +4,7 @@
 */
 
 #include "WikiTerrainSystem.h"
+#include "HtmlTerrainRegions.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../../core/DisplaySettings.h"
 #include "../../core/GameContext.h"
@@ -93,6 +94,8 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   const int resZ = terrainResolution.z;
 
   TerrainConfig config;
+  config.htmlCourse = result.layoutWidth > 0;
+  config.htmlRegions = HtmlRegions(result);
   config.worldWidth = width;
   config.worldDepth = depth;
   config.resolutionX = resX;
