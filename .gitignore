@@ -70,3 +70,9 @@ Assets/data/jawiki_sdow-001.sqlite
 # Doxygen の生成物は設定ファイルと分離し、Git管理へ含めない
 docs/doxygen/
 docs/doxygen-warnings.log
+
+!cmake/
+!cmake/**
+!.github/
+!.github/workflows/
+!.github/workflows/wiki-html.yml

@@ -48,11 +48,33 @@ endif()
 # テスト有効化
 enable_testing()
 
+option(WIKIGOLF_HTML_COURSES "Render course articles with litehtml" ON)
+option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
+if(WIKIGOLF_HTML_COURSES OR WIKIGOLF_HTML_TESTS_ONLY)
+    include(cmake/WikiHtml.cmake)
+endif()
+if(WIKIGOLF_HTML_TESTS_ONLY)
+    return()
+endif()
+
 # ソースファイルの収集
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.h")
 
 # 実行可能なターゲットの作成
+list(FILTER SOURCES EXCLUDE REGEX "/graphics/html/.*")
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
+if(WIKIGOLF_HTML_COURSES)
+    target_link_libraries(DX_GAME wiki_html)
+    target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_HTML_COURSES=1)
+    add_custom_command(TARGET DX_GAME POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:DX_GAME>/licenses"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${litehtml_SOURCE_DIR}/LICENSE"
+                "$<TARGET_FILE_DIR:DX_GAME>/licenses/litehtml-LICENSE"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${litehtml_SOURCE_DIR}/src/gumbo/LICENSE"
+                "$<TARGET_FILE_DIR:DX_GAME>/licenses/gumbo-LICENSE"
+        VERBATIM)
+
+endif()
 target_precompile_headers(DX_GAME PRIVATE src/pch.h)
 
 # データベースの分割ファイルを自動的に結合するターゲット
@@ -146,6 +168,7 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tools/WikiImagePreview.cpp")
     add_executable(WikiImagePreview
         tools/WikiImagePreview.cpp
         src/graphics/WikiTextureGenerator.cpp
+        src/graphics/WikiTextureGeneratorHtml.cpp
         src/graphics/WikiTextureGeneratorDecode.cpp
         src/graphics/WikiTextureGeneratorLayout.cpp
         src/graphics/WikiTextureGeneratorRendering.cpp
@@ -260,6 +283,7 @@ add_test(NAME post_process_readability COMMAND test_post_process_readability)
 # WikiTextureGeneratorのリンク生成テスト
 add_executable(test_wiki_texture_links test_wiki_texture_links.cpp
                                        src/graphics/WikiTextureGenerator.cpp
+                                       src/graphics/WikiTextureGeneratorHtml.cpp
                                        src/graphics/WikiTextureGeneratorDecode.cpp
                                        src/graphics/WikiTextureGeneratorLayout.cpp
                                        src/graphics/WikiTextureGeneratorRendering.cpp
@@ -373,6 +397,7 @@ add_test(NAME logger_warning_output COMMAND test_logger_warning_output)
 add_executable(test_wiki_texture_generation
     test_wiki_texture_generation.cpp
     src/graphics/WikiTextureGenerator.cpp
+    src/graphics/WikiTextureGeneratorHtml.cpp
     src/graphics/WikiTextureGeneratorDecode.cpp
     src/graphics/WikiTextureGeneratorLayout.cpp
     src/graphics/WikiTextureGeneratorRendering.cpp

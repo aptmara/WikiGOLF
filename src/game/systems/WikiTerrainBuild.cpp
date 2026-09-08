@@ -4,6 +4,7 @@
 */
 
 #include "WikiTerrainSystem.h"
+#include "HtmlTerrainRegions.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -82,6 +83,8 @@ void WikiTerrainSystem::BeginBuildField(
   m_biome = biome;
 
   TerrainConfig config;
+  config.htmlCourse = textureResult.layoutWidth > 0;
+  config.htmlRegions = HtmlRegions(textureResult);
   config.worldWidth   = fieldWidth;
   config.worldDepth   = fieldDepth;
   config.resolutionX  = m_buildResX;

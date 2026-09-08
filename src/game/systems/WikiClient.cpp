@@ -85,7 +85,7 @@ HINTERNET WikiClient::GetOrCreateConnection(const std::wstring &server) {
 }
 
 std::string WikiClient::PerformGetRequest(const std::wstring &server,
-                                          const std::wstring &path) {
+                                          const std::wstring &path, size_t maxBytes) {
   HINTERNET hConnect = GetOrCreateConnection(server);
   if (!hConnect)
     return "";
@@ -124,9 +124,16 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
     if (dwSize == 0)
       break;
 
-    std::vector<char> buffer(dwSize + 1);
+    if (maxBytes && (response.size() > maxBytes || dwSize > maxBytes-response.size())) {
+      WinHttpCloseHandle(hRequest);
+      return {};
+    }
+    std::vector<char> buffer(static_cast<size_t>(dwSize) + 1);
     if (WinHttpReadData(hRequest, buffer.data(), dwSize, &dwDownloaded)) {
       response.append(buffer.data(), dwDownloaded);
+    } else {
+      WinHttpCloseHandle(hRequest);
+      return {};
     }
   } while (dwSize > 0);
 

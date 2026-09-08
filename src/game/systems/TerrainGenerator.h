@@ -6,12 +6,15 @@
 
 #include "../../graphics/Mesh.h"
 #include <DirectXMath.h>
+#include "HtmlTerrainRules.h"
 #include <string>
 #include <vector>
 
 namespace game::systems {
 
 struct TerrainConfig {
+  bool htmlCourse = false;
+  std::vector<HtmlTerrainRegion> htmlRegions;
   int resolutionX = 128;
   int resolutionZ = 128;
   float worldWidth = 20.0f;

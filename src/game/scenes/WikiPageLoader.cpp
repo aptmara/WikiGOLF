@@ -240,6 +240,8 @@ void WikiPageLoader::Shutdown(
     m_holeThumbnailCache.clear();
     m_activeThumbnailFetches = 0;
     m_wikiTexture.reset();
+    m_textureState = graphics::WikiTextureGenerationState();
+    m_buildData = PageDataAsyncResult();
     m_targetThumbnailSRV.Reset();
     m_hasTargetThumbnail = false;
 }

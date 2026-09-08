@@ -30,7 +30,7 @@ Microsoft::WRL::ComPtr<IWICImagingFactory> GetWicFactory() {
 
 bool DecodeWikiImageFromMemory(const std::string &bytes,
                                std::vector<uint8_t> &outPixelsBGRA,
-                               uint32_t &outWidth, uint32_t &outHeight) {
+                               uint32_t &outWidth, uint32_t &outHeight, uint32_t maxDimension) {
   if (bytes.empty()) {
     return false;
   }
@@ -72,13 +72,25 @@ bool DecodeWikiImageFromMemory(const std::string &bytes,
     return false;
   }
 
+  if (width > 32768 || height > 32768 || static_cast<uint64_t>(width) * height > 64ull * 1024 * 1024) return false;
+  Microsoft::WRL::ComPtr<IWICBitmapSource> source;
+  frame.As(&source);
+  Microsoft::WRL::ComPtr<IWICBitmapScaler> scaler;
+  if (maxDimension && (width > maxDimension || height > maxDimension)) {
+    const double scale = static_cast<double>(maxDimension) / std::max(width, height);
+    width = std::max(1u, static_cast<UINT>(width * scale));
+    height = std::max(1u, static_cast<UINT>(height * scale));
+    if (FAILED(factory->CreateBitmapScaler(&scaler)) ||
+        FAILED(scaler->Initialize(frame.Get(), width, height, WICBitmapInterpolationModeFant))) return false;
+    scaler.As(&source);
+  }
   Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
   hr = factory->CreateFormatConverter(&converter);
   if (FAILED(hr)) {
     return false;
   }
 
-  hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA,
+  hr = converter->Initialize(source.Get(), GUID_WICPixelFormat32bppPBGRA,
                              WICBitmapDitherTypeNone, nullptr, 0.0,
                              WICBitmapPaletteTypeCustom);
   if (FAILED(hr)) {

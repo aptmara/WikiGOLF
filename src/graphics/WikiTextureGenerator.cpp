@@ -7,6 +7,7 @@
 #include "../core/Logger.h"
 #include <d2d1_1.h>
 #include <dwrite.h>
+#include <thread>
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
@@ -104,6 +105,7 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
 }
 
 void WikiTextureGenerator::Shutdown() {
+  m_htmlCache.clear();
   m_offscreenBitmap.Reset();
   m_offscreenTexture.Reset();
   m_titleFormat.Reset();
@@ -182,18 +184,20 @@ WikiTextureResult WikiTextureGenerator::GenerateTexture(
     const std::wstring &title, const std::wstring &articleText,
     const std::vector<std::pair<std::wstring, std::string>> &links,
     const std::string &targetPage, uint32_t width, uint32_t height,
-    std::vector<PendingWikiImage> pendingImages) {
+    std::vector<PendingWikiImage> pendingImages, const std::string& articleHtml) {
 
   WikiTextureGenerationState state;
   if (!BeginGenerateTexture(state, title, articleText, links, targetPage,
-                           width, height, std::move(pendingImages))) {
+                           width, height, pendingImages, articleHtml)) {
     return WikiTextureResult();
   }
 
   while (!GenerateNextTile(state)) {
-    // タイル生成ループを継続
+    std::this_thread::yield();
   }
 
+  if (state.failed && !articleHtml.empty())
+    return GenerateTexture(title, articleText, links, targetPage, width, height, std::move(pendingImages));
   return std::move(state.result);
 }
 

@@ -101,14 +101,14 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
   return "(Failed to fetch extract)";
 }
 
-std::string WikiClient::FetchPageTableText(const std::string &title) {
+std::string WikiClient::FetchPageHtml(const std::string &title) {
   std::string encodedTitle = UrlEncode(title);
   std::wstring wtitle = core::ToWString(encodedTitle);
 
   std::wstring path = L"/w/api.php?action=parse&page=" + wtitle +
                       L"&prop=text&redirects=1&format=json&formatversion=2";
 
-  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+  std::string response = PerformGetRequest(L"ja.wikipedia.org", path, 8u * 1024 * 1024);
   if (response.empty() ||
       response.find("\"missing\":true") != std::string::npos) {
     return "";
@@ -144,6 +144,11 @@ std::string WikiClient::FetchPageTableText(const std::string &title) {
   html = wiki_json::ReplaceAll(html, "\\\"", "\"");
   html = wiki_json::ReplaceAll(html, "\\/", "/");
 
+  return html;
+}
+
+std::string WikiClient::FetchPageTableText(const std::string& title) {
+  const auto html = FetchPageHtml(title);
   const auto tableBlocks = wiki_json::ExtractTableBlocks(html);
   std::string combined;
   for (const auto &block : tableBlocks) {
@@ -286,7 +291,7 @@ std::vector<WikiSectionInfo> WikiClient::FetchPageSections(const std::string &ti
   return result;
 }
 
-std::string WikiClient::DownloadBinary(const std::string &url) {
+std::string WikiClient::DownloadBinary(const std::string &url, size_t maxBytes) {
   std::string u = url;
   if (u.rfind("https://", 0) == 0) {
     u = u.substr(8);
@@ -302,7 +307,7 @@ std::string WikiClient::DownloadBinary(const std::string &url) {
 
   std::wstring host = core::ToWString(u.substr(0, slashPos));
   std::wstring path = core::ToWString(u.substr(slashPos));
-  std::string data = PerformGetRequest(host, path);
+  std::string data = PerformGetRequest(host, path, maxBytes);
   LOG_INFO("WikiClient", "Downloaded binary: {} bytes", data.size());
   return data;
 }
