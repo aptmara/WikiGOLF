@@ -21,8 +21,11 @@
 
 namespace ecs {
 
+/** @brief Sparse Set内部のDenseIndex型*/
+using SparseIndex = uint32_t;
 /** @brief Sparse Set用の無効インデックス定数*/
-constexpr size_t INVALID_SPARSE_INDEX = (std::numeric_limits<size_t>::max)();
+constexpr SparseIndex INVALID_SPARSE_INDEX =
+    (std::numeric_limits<SparseIndex>::max)();
 
 /** @brief 型消去されたコンポーネントプールの基底クラス*/
 class IComponentPool {
@@ -55,10 +58,12 @@ public:
 
     /** @brief エンティティがこのコンポーネントを持っているか*/
     bool Has(Entity entity) const override {
-        const uint16_t index = GetEntityIndex(entity);
+        const uint32_t index = GetEntityIndex(entity);
         if (index >= m_sparse.size()) return false;
-        const size_t denseIndex = m_sparse[index];
-        return denseIndex != INVALID_SPARSE_INDEX && denseIndex < m_dense.size() && m_entities[denseIndex] == entity;
+        const SparseIndex denseIndex = m_sparse[index];
+        return denseIndex != INVALID_SPARSE_INDEX &&
+               denseIndex < m_dense.size() &&
+               m_entities[denseIndex] == entity;
     }
 
     /** @brief コンポーネントを取得（存在しない場合はnullptr）*/
@@ -75,7 +80,7 @@ public:
     /** @brief コンポーネントを追加（既に存在する場合は上書き）*/
     template<typename... Args>
     T& Add(Entity entity, Args&&... args) {
-        const uint16_t index = GetEntityIndex(entity);
+        const uint32_t index = GetEntityIndex(entity);
 
         // Sparse配列を必要に応じて拡張
         if (index >= m_sparse.size()) {
@@ -91,7 +96,8 @@ public:
 
         // 新規追加
         const size_t denseIndex = m_dense.size();
-        m_sparse[index] = denseIndex;
+        assert(denseIndex < INVALID_SPARSE_INDEX);
+        m_sparse[index] = static_cast<SparseIndex>(denseIndex);
         m_dense.emplace_back(std::forward<Args>(args)...);
         m_entities.push_back(entity);
 
@@ -102,15 +108,16 @@ public:
     void Remove(Entity entity) override {
         if (!Has(entity)) return;
 
-        const uint16_t index = GetEntityIndex(entity);
-        const size_t denseIndex = m_sparse[index];
+        const uint32_t index = GetEntityIndex(entity);
+        const SparseIndex denseIndex = m_sparse[index];
         const size_t lastIndex = m_dense.size() - 1;
 
         if (denseIndex != lastIndex) {
             // 最後の要素と入れ替え（Swap & Pop）
             m_dense[denseIndex] = std::move(m_dense[lastIndex]);
             m_entities[denseIndex] = m_entities[lastIndex];
-            m_sparse[GetEntityIndex(m_entities[denseIndex])] = denseIndex;
+            m_sparse[GetEntityIndex(m_entities[denseIndex])] =
+                static_cast<SparseIndex>(denseIndex);
         }
 
         m_dense.pop_back();
@@ -151,9 +158,9 @@ public:
     }
 
 private:
-    std::vector<size_t> m_sparse;   ///< EntityIndex → DenseIndex
-    std::vector<T> m_dense;          ///< 連続したコンポーネントデータ
-    std::vector<Entity> m_entities;  ///< DenseIndex → Entity
+    std::vector<SparseIndex> m_sparse; ///< EntityIndex → DenseIndex
+    std::vector<T> m_dense;            ///< 連続したコンポーネントデータ
+    std::vector<Entity> m_entities;    ///< DenseIndex → Entity
 };
 
 } // namespace ecs
