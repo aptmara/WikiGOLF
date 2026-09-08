@@ -18,24 +18,24 @@ std::vector<WallLayout> TerrainObstacleLayout::BuildWalls(
     walls.reserve(4);
     walls.push_back({
         {-halfWidth - wallThickness * 0.5f, wallHeight * 0.5f, 0.0f},
-        {wallHeight, 1.0f, fieldDepth},
-        {0.0f, 0.0f, -0.70710677f, 0.70710677f},
-        {1.0f, wallThickness, 1.0f}});
+        {wallThickness, wallHeight, fieldDepth},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f}});
     walls.push_back({
         {halfWidth + wallThickness * 0.5f, wallHeight * 0.5f, 0.0f},
-        {wallHeight, 1.0f, fieldDepth},
-        {0.0f, 0.0f, 0.70710677f, 0.70710677f},
-        {1.0f, wallThickness, 1.0f}});
+        {wallThickness, wallHeight, fieldDepth},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f}});
     walls.push_back({
         {0.0f, wallHeight * 0.5f, halfDepth + wallThickness * 0.5f},
-        {fieldWidth, 1.0f, wallHeight},
-        {-0.70710677f, 0.0f, 0.0f, 0.70710677f},
-        {1.0f, wallThickness, 1.0f}});
+        {fieldWidth, wallHeight, wallThickness},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f}});
     walls.push_back({
         {0.0f, wallHeight * 0.5f, -halfDepth - wallThickness * 0.5f},
-        {fieldWidth, 1.0f, wallHeight},
-        {0.70710677f, 0.0f, 0.0f, 0.70710677f},
-        {1.0f, wallThickness, 1.0f}});
+        {fieldWidth, wallHeight, wallThickness},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {1.0f, 1.0f, 1.0f}});
     return walls;
 }
 

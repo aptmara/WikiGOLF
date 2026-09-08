@@ -65,7 +65,23 @@ int main() {
     CHECK(walls.size() == 4 &&
               std::fabs(walls[0].position.x + 43.0f) < 0.0001f &&
               std::fabs(walls[2].position.z - 63.0f) < 0.0001f,
-          "フィールド外周の4枚の壁を従来の位置へ配置する");
+          "フィールド外周へ4枚の壁を配置する");
+    CHECK(std::fabs(walls[0].position.x + walls[0].scale.x * 0.5f +
+                    40.0f) < 0.0001f &&
+              std::fabs(walls[1].position.x - walls[1].scale.x * 0.5f -
+                        40.0f) < 0.0001f &&
+              std::fabs(walls[2].position.z - walls[2].scale.z * 0.5f -
+                        60.0f) < 0.0001f &&
+              std::fabs(walls[3].position.z + walls[3].scale.z * 0.5f +
+                        60.0f) < 0.0001f,
+          "壁の内側面をフィールド外周へ一致させる");
+    CHECK(std::fabs(walls[0].scale.x - 6.0f) < 0.0001f &&
+              std::fabs(walls[0].scale.y - 100.0f) < 0.0001f &&
+              std::fabs(walls[0].scale.z - 120.0f) < 0.0001f &&
+              std::fabs(walls[2].scale.x - 80.0f) < 0.0001f &&
+              std::fabs(walls[2].scale.y - 100.0f) < 0.0001f &&
+              std::fabs(walls[2].scale.z - 6.0f) < 0.0001f,
+          "壁の表示寸法をコライダー寸法と一致させる");
 
     graphics::ImageRegion image;
     image.x = 100.0f;

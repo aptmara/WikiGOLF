@@ -244,6 +244,13 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           resources::MeshHandle mesh, resources::MeshHandle lodMesh,
           int variantIndex, GrassSurfaceGroup surface, float lodSwitchDistance,
           float maxDrawDistance, bool twoSided) {
+        // GrassVSの距離ディザーが完了する前にCPU側でインスタンスを
+        // 丸ごと落とすと、残っていた葉がパッチ形状のまま瞬時に消える。
+        // 最遠頂点までフェード終了距離へ到達できる余白を確保する。
+        const float shaderFadeEnd = 14.0f + color.w * 50.0f;
+        const float effectiveMaxDrawDistance =
+            std::max(maxDrawDistance, shaderFadeEnd + horizontalScale);
+
         GrassBatchKey key;
         key.chunkX = static_cast<int>(std::floor(x / kGrassChunkSize));
         key.chunkZ = static_cast<int>(std::floor(z / kGrassChunkSize));
@@ -259,7 +266,7 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
           newBatch.lodMesh = lodMesh;
           newBatch.shader = grassShader;
           newBatch.lodSwitchDistance = lodSwitchDistance;
-          newBatch.maxDrawDistance = maxDrawDistance;
+          newBatch.maxDrawDistance = effectiveMaxDrawDistance;
           newBatch.maxThreeDOverheadRatio = 1.1f;
           if (surface == GrassSurfaceGroup::Fairway ||
               surface == GrassSurfaceGroup::Green) {
@@ -282,8 +289,10 @@ void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
         if (!batch) {
           return;
         }
-        grassSpatialIndex.maxDrawDistance =
-            std::max(grassSpatialIndex.maxDrawDistance, maxDrawDistance);
+        batch->maxDrawDistance =
+            std::max(batch->maxDrawDistance, effectiveMaxDrawDistance);
+        grassSpatialIndex.maxDrawDistance = std::max(
+            grassSpatialIndex.maxDrawDistance, batch->maxDrawDistance);
         grassSpatialIndex.maxHorizontalExtent =
             std::max(grassSpatialIndex.maxHorizontalExtent, horizontalScale);
 

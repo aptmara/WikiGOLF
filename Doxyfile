@@ -100,8 +100,15 @@ GENERATE_TREEVIEW      = YES
 TREEVIEW_WIDTH         = 250
 SEARCHENGINE           = YES
 
-# LaTeX出力
-GENERATE_LATEX         = NO
+# LaTeX / PDF出力
+GENERATE_LATEX         = YES
+LATEX_OUTPUT           = latex
+LATEX_CMD_NAME         = xelatex
+USE_PDFLATEX           = YES
+LATEX_BATCHMODE        = YES
+PDF_HYPERLINKS         = YES
+LATEX_HIDE_INDICES     = NO
+GENERATE_RTF           = NO
 
 # プリプロセッサ
 ENABLE_PREPROCESSING   = YES

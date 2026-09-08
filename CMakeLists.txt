@@ -16,6 +16,31 @@ if(Doxygen_FOUND)
         COMMENT "Generating WikiGOLF API documentation..."
         VERBATIM
     )
+
+    if(WIN32)
+        find_program(XELATEX_EXECUTABLE
+            NAMES xelatex
+            HINTS "$ENV{LOCALAPPDATA}/Programs/MiKTeX/miktex/bin/x64"
+        )
+        if(XELATEX_EXECUTABLE)
+            add_custom_target(doxygen-pdf
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                        "${CMAKE_SOURCE_DIR}/output/pdf"
+                COMMAND ${CMAKE_COMMAND} -E chdir
+                        "${CMAKE_SOURCE_DIR}/docs/doxygen/latex"
+                        cmd /c make.bat
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${CMAKE_SOURCE_DIR}/docs/doxygen/latex/refman.pdf"
+                        "${CMAKE_SOURCE_DIR}/output/pdf/WikiGOLF-API-Reference.pdf"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                COMMENT "Generating WikiGOLF API documentation PDF..."
+                VERBATIM
+            )
+            add_dependencies(doxygen-pdf doxygen-docs)
+        else()
+            message(STATUS "XeLaTeX was not found; the doxygen-pdf target is disabled.")
+        endif()
+    endif()
 else()
     message(STATUS "Doxygen was not found; the doxygen-docs target is disabled.")
 endif()
