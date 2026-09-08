@@ -54,11 +54,16 @@ void TestEntityCapacityAndValidity() {
                  0u, static_cast<uint16_t>(ecs::ENTITY_GENERATION_MASK))),
              "予約Generationを持つEntityを無効として扱う");
 
+  bool sequentialIndices = true;
   for (uint32_t i = 0; i < ecs::MAX_ENTITY_COUNT; ++i) {
     const ecs::Entity entity = world.CreateEntity();
-    CHECK_TRUE(ecs::GetEntityIndex(entity) == i,
-               "Entity上限まではIndexをwrapせず生成する");
+    if (ecs::GetEntityIndex(entity) != i) {
+      sequentialIndices = false;
+      break;
+    }
   }
+  CHECK_TRUE(sequentialIndices,
+             "Entity上限まではIndexをwrapせず生成する");
 
   bool overflowThrown = false;
   try {
@@ -73,16 +78,21 @@ void TestEntityCapacityAndValidity() {
 void TestGenerationWrap() {
   ecs::World world;
   ecs::Entity entity = world.CreateEntity();
+  bool sequenceValid = true;
 
   for (uint32_t generation = 0;
        generation <= static_cast<uint32_t>(ecs::MAX_ENTITY_GENERATION);
        ++generation) {
-    CHECK_TRUE(ecs::GetEntityGeneration(entity) == generation,
-               "Entity再利用時のGenerationが期待値と一致する");
+    if (ecs::GetEntityGeneration(entity) != generation) {
+      sequenceValid = false;
+      break;
+    }
     world.DestroyEntity(entity);
     entity = world.CreateEntity();
   }
 
+  CHECK_TRUE(sequenceValid,
+             "Entity再利用時のGenerationが期待値どおり進む");
   CHECK_TRUE(ecs::GetEntityGeneration(entity) == 0u,
              "最大Generationの次は0へ循環する");
 }
