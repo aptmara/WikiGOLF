@@ -5,8 +5,8 @@
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
+#include "HtmlCourseSizing.h"
 #include "HtmlHoleSpacing.h"
-#include "HtmlFieldSizing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -196,17 +196,11 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                 }
 
                 if (m_textureState.result.layoutWidth > 0) {
-                    const float desiredWidth = std::clamp(kMinFieldWidth * std::pow(
-                        std::max(1.0f, static_cast<float>(m_buildData.articleText.size()) / 1500.0f),0.45f),
-                        kMinFieldWidth,kMinFieldWidth*4.0f);
-                    // 幅と奥行きを個別にクランプすると記事本文（テクスチャ）が
-                    // 縦横に引き伸ばされて見えるため、アスペクト比を保ったまま
-                    // 範囲へ収める。
-                    ResolveHtmlFieldSize(desiredWidth,
-                        static_cast<float>(m_textureState.result.layoutWidth),
-                        static_cast<float>(m_textureState.result.layoutHeight),
-                        kMinFieldWidth, kMinFieldDepth, kMaxSafeWidth, kMaxSafeDepth,
-                        m_buildFieldWidth, m_buildFieldDepth);
+                    const auto htmlField = CalculateHtmlCourseFieldSize(
+                        m_textureState.result.layoutWidth,
+                        m_textureState.result.layoutHeight);
+                    m_buildFieldWidth = htmlField.width;
+                    m_buildFieldDepth = htmlField.depth;
                 }
                 m_buildData.pendingImages.clear();
                 m_wikiTexture = std::make_unique<graphics::WikiTextureResult>(std::move(m_textureState.result));

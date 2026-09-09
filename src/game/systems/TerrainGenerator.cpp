@@ -27,25 +27,15 @@ TerrainData TerrainGenerator::GenerateTerrain(
   data.heightMap.resize(totalVerts, 0.0f);
   data.materialMap.resize(totalVerts, 0); // 0: Fairway
 
-  if (config.htmlCourse) {
-    std::vector<HtmlTerrainPoint> holes;
-    for (const auto& p : holePositions) holes.push_back({p.x, p.y});
-    BuildHtmlTerrain(config.resolutionX, config.resolutionZ, config.worldWidth,
-        config.worldDepth, config.htmlRegions, holes, data.heightMap, data.materialMap,
-        config.heightScale);
-    // 非HTML経路と同様に、孤立したマテリアルの整理と起伏の平滑化を行う。
-    // HTMLコースはフェザリング幅がグリッド解像度に依存するため、これを
-    // 省くと解像度によっては段差やマテリアルのノイズが目立ちやすい。
-    ApplyMaterialCleanup(data);
-    GenerateVisualMaterialColors(data);
-    ApplySmoothing(data, 2);
-    CalculateNormals(data);
-    GenerateMesh(data, holePositions);
-    return data;
-  }
-
   // 基本形状の生成
   GenerateBaseHeightMap(data, articleText);
+
+  if (config.htmlCourse) {
+    ApplyHtmlTerrainLayout(config.resolutionX, config.resolutionZ,
+                           config.worldWidth, config.worldDepth,
+                           config.heightScale, config.htmlRegions,
+                           data.heightMap, data.materialMap);
+  }
 
   // リンク位置に基づくプラットフォームの生成
   CreatePlatforms(data, holePositions);

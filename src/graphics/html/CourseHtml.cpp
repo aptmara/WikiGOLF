@@ -159,25 +159,23 @@ RasterSize FitRaster(float width, float height, std::uint64_t maxPixels) {
     return out;
 }
 const std::string& CourseCss() {
-    // 横幅3倍化（kLayoutWidth）とあわせて文字サイズ・余白も縮小し、
-    // 記事が長いほどレイアウト高さ（＝コース奥行き）が際限なく伸びるのを抑える。
     static const std::string css = R"CSS(
 html, body { margin:0; padding:0; background:white; color:#202122; }
-body { padding:24px; font-family:Meiryo; font-size:24px; line-height:1.55; }
-h1 { font-size:48px; margin:0 0 20px; border-bottom:2px solid #a2a9b1; }
-h2 { font-size:38px; margin:28px 0 12px; border-bottom:2px solid #a2a9b1; clear:both; }
-h3,h4,h5,h6 { font-size:28px; margin:20px 0 10px; }
-p { margin:10px 0; }
+body { padding:18px; font-family:Meiryo; font-size:18px; line-height:1.55; }
+h1 { font-size:36px; margin:0 0 14px; border-bottom:1px solid #a2a9b1; }
+h2 { font-size:28px; margin:22px 0 9px; border-bottom:1px solid #a2a9b1; clear:both; }
+h3,h4,h5,h6 { font-size:22px; margin:14px 0 7px; }
+p { margin:7px 0; }
 a[data-course-target] { color:#0645ad; background-color:#e6f2ff; text-decoration:underline; }
 a[data-course-goal] { color:#806300; background-color:#fff4bb; }
-table { border-collapse:collapse; width:100%; max-width:100%; margin:14px 0; font-size:20px; }
-th,td { border:1px solid #a2a9b1; padding:6px; word-break:break-word; }
+table { border-collapse:collapse; max-width:100%; margin:11px 0; font-size:15px; }
+th,td { border:1px solid #a2a9b1; padding:5px; }
 th { background-color:#eaecf0; }
 img { max-width:560px; max-height:700px; }
-figure,.course-float { float:right; clear:right; width:560px; max-width:40%; margin:10px 0 14px 16px; }
-figcaption,caption { font-size:16px; }
+figure,.course-float { float:right; clear:right; width:560px; max-width:40%; margin:7px 0 11px 13px; }
+figcaption,caption { font-size:13px; }
 pre,code { white-space:normal; }
-ul,ol { padding-left:36px; }
+ul,ol { padding-left:27px; }
 )CSS";
     return css;
 }

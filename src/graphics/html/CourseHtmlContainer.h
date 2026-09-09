@@ -16,7 +16,7 @@ public:
     void ClearDocument();
 
     litehtml::pixel_t pt_to_px(float pt) const override { return pt * 96.0f / 72.0f; }
-    litehtml::pixel_t get_default_font_size() const override { return 40; }
+    litehtml::pixel_t get_default_font_size() const override { return 18; }
     const char* get_default_font_name() const override { return "Meiryo"; }
     void load_image(const char*, const char*, bool) override {}
     void set_caption(const char*) override {}

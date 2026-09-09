@@ -356,6 +356,7 @@ endif()
 add_test(NAME page_history_utils COMMAND test_page_history_utils)
 
 add_executable(test_terrain_generation test_terrain_generation.cpp
+                                       src/game/systems/HtmlTerrainRules.cpp
                                        src/game/systems/TerrainGenerator.cpp
                                        src/game/systems/TerrainGeneratorMesh.cpp
                                        src/game/systems/TerrainGeneratorNoise.cpp
