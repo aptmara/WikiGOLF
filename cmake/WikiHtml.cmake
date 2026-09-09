@@ -14,7 +14,9 @@ target_link_libraries(wiki_html PUBLIC litehtml)
 if(MSVC)
     target_compile_options(wiki_html PRIVATE /utf-8)
 endif()
-add_executable(test_course_html ${CMAKE_CURRENT_LIST_DIR}/../test_course_html.cpp)
+add_executable(test_course_html
+    ${CMAKE_CURRENT_LIST_DIR}/../test_course_html.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../src/game/systems/HtmlTerrainRules.cpp)
 target_link_libraries(test_course_html PRIVATE wiki_html)
 if(MSVC)
     target_compile_options(test_course_html PRIVATE /utf-8)

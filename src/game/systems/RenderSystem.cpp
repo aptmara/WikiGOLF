@@ -320,12 +320,16 @@ void RenderSystem(core::GameContext &ctx) {
         }
         ++stats.visibleCandidates;
 
+        // ステージ外周壁はカメラのすぐ側まで迫るため、視錐台/距離カリングで
+        // 誤って消えないよう常時候補に残す（裏面カリングのみ通常通り効かせる）
+        const bool isBoundaryWall = world.Has<components::Wall>(e);
+
         const float dx = t.position.x - camPos.x;
         const float dy = t.position.y - camPos.y;
         const float dz = t.position.z - camPos.z;
         const float distSq = dx * dx + dy * dy + dz * dz;
 
-        if (r.maxDrawDistance > 0.0f &&
+        if (!isBoundaryWall && r.maxDrawDistance > 0.0f &&
             distSq > r.maxDrawDistance * r.maxDrawDistance) {
           ++stats.lodDistanceSkipped;
           return;
@@ -340,7 +344,8 @@ void RenderSystem(core::GameContext &ctx) {
         DirectX::BoundingSphere worldBounds;
         candidateMesh->GetBounds().Transform(worldBounds, t.GetWorldMatrix());
         worldBounds.Radius *= std::max(1.0f, r.boundsScale);
-        if (worldFrustum.Contains(worldBounds) == DirectX::DISJOINT) {
+        if (!isBoundaryWall &&
+            worldFrustum.Contains(worldBounds) == DirectX::DISJOINT) {
           ++stats.frustumSkipped;
           return;
         }
@@ -353,7 +358,7 @@ void RenderSystem(core::GameContext &ctx) {
           const bool keepsReadableOverlay =
               world.Has<components::TerrainObject>(e) &&
               r.blendMode == components::BlendMode::Multiply;
-          if (distSq > 220.0f * 220.0f &&
+          if (!isBoundaryWall && distSq > 220.0f * 220.0f &&
               !world.Has<components::HoleFlag>(e) && !keepsReadableOverlay) {
             ++stats.transparentDistanceSkipped;
             return;

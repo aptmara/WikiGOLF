@@ -218,15 +218,18 @@ bool WikiTextureGenerator::GenerateHtmlTile(WikiTextureGenerationState& state) {
             return false;
         }
         const auto height = std::min(512u, state.remainingHeight);
-        D3D11_TEXTURE2D_DESC desc{};
-        desc.Width=state.actualWidth; desc.Height=height; desc.MipLevels=desc.ArraySize=1;
-        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM; desc.SampleDesc.Count=1;
-        desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+        D3D11_TEXTURE2D_DESC renderDesc{};
+        renderDesc.Width=state.actualWidth; renderDesc.Height=height;
+        renderDesc.MipLevels=renderDesc.ArraySize=1;
+        renderDesc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+        renderDesc.SampleDesc.Count=1;
+        renderDesc.BindFlags=D3D11_BIND_RENDER_TARGET;
+        ComPtr<ID3D11Texture2D> renderTexture;
+        Check(m_d3dDevice->CreateTexture2D(&renderDesc,nullptr,&renderTexture));
         WikiTextureResult::Tile tile{};
-        Check(m_d3dDevice->CreateTexture2D(&desc,nullptr,&tile.texture));
-        ComPtr<IDXGISurface> surface; Check(tile.texture.As(&surface));
+        ComPtr<IDXGISurface> surface; Check(renderTexture.As(&surface));
         auto props=D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET|D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-            D2D1::PixelFormat(desc.Format,D2D1_ALPHA_MODE_PREMULTIPLIED),96,96);
+            D2D1::PixelFormat(renderDesc.Format,D2D1_ALPHA_MODE_PREMULTIPLIED),96,96);
         ComPtr<ID2D1Bitmap1> bitmap;
         Check(m_d2dContext->CreateBitmapFromDxgiSurface(surface.Get(),&props,&bitmap));
         m_d2dContext->SetTarget(bitmap.Get());
@@ -238,7 +241,23 @@ bool WikiTextureGenerator::GenerateHtmlTile(WikiTextureGenerationState& state) {
         Check(m_d2dContext->EndDraw());
         m_d2dContext->SetTarget(nullptr);
         m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
-        Check(m_d3dDevice->CreateShaderResourceView(tile.texture.Get(),nullptr,&tile.srv));
+        D3D11_TEXTURE2D_DESC textureDesc=renderDesc;
+        textureDesc.MipLevels=0;
+        textureDesc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+        textureDesc.MiscFlags=D3D11_RESOURCE_MISC_GENERATE_MIPS;
+        Check(m_d3dDevice->CreateTexture2D(&textureDesc,nullptr,&tile.texture));
+        ComPtr<ID3D11DeviceContext> d3dContext;
+        m_d3dDevice->GetImmediateContext(&d3dContext);
+        d3dContext->CopySubresourceRegion(
+            tile.texture.Get(),0,0,0,0,renderTexture.Get(),0,nullptr);
+        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+        srvDesc.Format=textureDesc.Format;
+        srvDesc.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MostDetailedMip=0;
+        srvDesc.Texture2D.MipLevels=UINT(-1);
+        Check(m_d3dDevice->CreateShaderResourceView(
+            tile.texture.Get(),&srvDesc,&tile.srv));
+        d3dContext->GenerateMips(tile.srv.Get());
         tile.width=state.actualWidth; tile.height=height; tile.offsetY=static_cast<float>(state.currentOffsetY);
         state.result.tiles.push_back(std::move(tile));
         state.currentOffsetY+=height; state.remainingHeight-=height;

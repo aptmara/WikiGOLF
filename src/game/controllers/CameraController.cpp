@@ -345,6 +345,10 @@ bool CameraController::CheckCameraCollision(core::GameContext &ctx,
         if (e == m_cfg.ballEntity || e == m_cfg.cameraEntity ||
             e == m_cfg.floorEntity)
           return;
+        // ステージ外周壁はプレイエリアを囲うだけの透明な境界であり、
+        // カメラの視線を遮ってはいけないため衝突判定から除外する
+        if (ctx.world.Get<Wall>(e))
+          return;
 
         XMVECTOR boxPos  = XMLoadFloat3(&t.position);
         XMVECTOR boxSize = XMLoadFloat3(&c.size);

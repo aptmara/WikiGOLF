@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WikiGOLF - 総合アーキテクチャ・設計・実装詳細仕様書</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      themeVariables: {
+        primaryColor: '#e0e7ff',
+        edgeColor: '#475569',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }
+    });
+  </script>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --primary-light: #3b82f6;
+      --accent: #10b981;
+      --accent-gold: #d97706;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --code-bg: #1e293b;
+      --code-text: #f1f5f9;
+      --sidebar-width: 290px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      display: flex;
+    }
+
+    /* サイドバー目次 */
+    #sidebar {
+      width: var(--sidebar-width);
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      background-color: #0f172a;
+      color: #cbd5e1;
+      padding: 24px 16px;
+      overflow-y: auto;
+      border-right: 1px solid #334155;
+      font-size: 0.88rem;
+      flex-shrink: 0;
+    }
+
+    #sidebar h2 {
+      font-size: 1.15rem;
+      color: #f8fafc;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #sidebar .version-tag {
+      font-size: 0.7rem;
+      background: #2563eb;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 16px;
+    }
+
+    #sidebar ul {
+      list-style: none;
+    }
+
+    #sidebar li {
+      margin: 6px 0;
+    }
+
+    #sidebar a {
+      color: #94a3b8;
+      text-decoration: none;
+      display: block;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+
+    #sidebar a:hover {
+      background: #1e293b;
+      color: #38bdf8;
+    }
+
+    #sidebar .sub-menu {
+      padding-left: 14px;
+      margin-top: 4px;
+      border-left: 1px solid #334155;
+    }
+
+    /* メインコンテンツ */
+    #content {
+      flex: 1;
+      max-width: 1200px;
+      padding: 48px 56px;
+      background-color: var(--bg);
+      overflow-x: hidden;
+    }
+
+    header.doc-header {
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    header.doc-header h1 {
+      font-size: 2.6rem;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+
+    header.doc-header p.subtitle {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .badge-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: #e2e8f0;
+      color: #334155;
+    }
+
+    .badge-primary { background: #dbeafe; color: #1e40af; }
+    .badge-success { background: #d1fae5; color: #065f46; }
+    .badge-gold { background: #fef3c7; color: #92400e; }
+
+    /* セクションスタイリング */
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 36px 40px;
+      margin-bottom: 40px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+
+    h2 {
+      font-size: 1.75rem;
+      color: #1e293b;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    h3 {
+      font-size: 1.3rem;
+      color: #334155;
+      margin: 28px 0 14px 0;
+    }
+
+    h4 {
+      font-size: 1.05rem;
+      color: #475569;
+      margin: 20px 0 10px 0;
+    }
+
+    p {
+      margin-bottom: 16px;
+      color: #334155;
+    }
+
+    ul, ol {
+      margin-bottom: 20px;
+      padding-left: 24px;
+      color: #334155;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    /* コードブロック */
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    p code, li code, td code {
+      background: #f1f5f9;
+      color: #e11d48;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 18px 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      margin: 16px 0 24px 0;
+    }
+
+    /* テーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0 28px 0;
+      font-size: 0.92rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    tr:nth-child(even) {
+      background: #fbfcfe;
+    }
+
+    /* コールアウト / メモ */
+    .callout {
+      border-left: 4px solid var(--primary-light);
+      background: #eff6ff;
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+      font-size: 0.95rem;
+    }
+
+    .callout.warning {
+      border-left-color: #f59e0b;
+      background: #fffbeb;
+    }
+
+    .callout.success {
+      border-left-color: #10b981;
+      background: #ecfdf5;
+    }
+
+    .callout-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #1e3a8a;
+    }
+
+    .callout.warning .callout-title { color: #b45309; }
+    .callout.success .callout-title { color: #065f46; }
+
+    /* Mermaid コンテナ */
+    .mermaid-container {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 24px 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+
+    footer {
+      text-align: center;
+      padding: 32px 0 16px 0;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- サイドバー目次 -->
+  <nav id="sidebar">
+    <h2>⛳ WikiGOLF</h2>
+    <div class="version-tag">System Architecture v2.0</div>
+    <ul>
+      <li><a href="#section-overview">1. プロジェクト概要と思想</a></li>
+      <li><a href="#section-arch">2. システムアーキテクチャ全体像</a></li>
+      <li><a href="#section-ecs">3. カスタムECS設計 & クラス構造</a></li>
+      <li><a href="#section-gameplay">4. ゲームプレイ・シーン・操作設計</a></li>
+      <li><a href="#section-wiki-pipeline">5. Wikipedia API & SDOW最短経路探索</a></li>
+      <li><a href="#section-terrain-html">6. 地形生成 & HTML/CSSコースレンダリング</a></li>
+      <li><a href="#section-physics-juice">7. 物理シミュレーション & Game Juice演出</a></li>
+      <li><a href="#section-graphics">8. グラフィックスパイプライン & シェーダー</a></li>
+      <li><a href="#section-qa-tests">9. パフォーマンス計測 & テスト検証網</a></li>
+      <li><a href="#section-status-roadmap">10. プロジェクトの現状・既知課題・展望</a></li>
+    </ul>
+  </nav>
+
+  <!-- メインコンテンツ -->
+  <main id="content">
+    <header class="doc-header">
+      <h1>WikiGOLF 総合アーキテクチャ・設計仕様書</h1>
+      <p class="subtitle">Wikipediaの記事本文から3Dゴルフコースを動的生成し、六次の隔たり（SDOW）を攻略するネイティブDirectX 11ゴルフゲーム</p>
+      <div class="badge-group">
+        <span class="badge badge-primary">C++20</span>
+        <span class="badge badge-primary">DirectX 11 / Direct2D</span>
+        <span class="badge badge-success">Custom ECS Engine</span>
+        <span class="badge badge-success">litehtml + Gumbo DOM</span>
+        <span class="badge badge-gold">SQLite3 (SDOW Graph DB)</span>
+        <span class="badge">XAudio2</span>
+        <span class="badge">WinHTTP</span>
+      </div>
+    </header>
+
+    <!-- 第1章 -->
+    <section id="section-overview">
+      <h2>1. プロジェクト概要と思想（Philosophy & Background）</h2>
+
+      <h3>1.1 ゲームコンセプト：「Wikipedia × ゴルフ × 最短経路探索」</h3>
+      <p>
+        <strong>WikiGOLF</strong> は、インターネット百科事典「Wikipedia」の日本語記事データを動的に解析し、その記事の文字・構造・画像から3Dゴルフコースをプロシージャル生成してプレイする、まったく新しいアプローチのスポーツ＆パズルアクションゲームです。
+      </p>
+      <p>
+        プレイヤーは開始記事（スタートホール）からスタートし、記事本文中に存在する無数のハイパーリンク（青文字リンク）を目指してゴルフボールを打ち込みます。カップインしたリンク先の記事へとコースがシームレスに遷移（ロード・生成）され、最終的な目的記事（ターゲット）へと最短打数・最短遷移数で到達することを目指します。
+      </p>
+
+      <div class="callout success">
+        <div class="callout-title">コアゲームループ</div>
+        <ol>
+          <li><strong>記事のロード & 地形生成</strong>: Wikipedia API経由で記事を取得。HTML/CSSまたはテキストから高低差・マテリアル・テクスチャ・ホールを生成。</li>
+          <li><strong>ショット & コース攻略</strong>: クラブ（1W〜パター）を選択し、風向き・起伏・ライ（フェアウェイ/ラフ/バンカー等）を考慮してショット。</li>
+          <li><strong>リンクへのカップイン</strong>: 狙った記事リンクのカップ（旗）にボールが入ると、その記事へ遷移！</li>
+          <li><strong>ゴール到達（ゲームクリア）</strong>: 最短経路（Six Degrees of Wikipedia）の知識とゴルフテクニックを駆使し、ターゲット記事へカップイン！</li>
+        </ol>
+      </div>
+
+      <h3>1.2 開発経緯と思想の昇華（WikiPinballからWikiGOLFへ）</h3>
+      <p>
+        コードベース内（<code>WikiPinballScene.h</code> や <code>WikiComponents.h</code>）には、初期プロトタイプであった <code>WikiPinball</code> の痕跡が見られます。初期構想では「Wikipediaの記事の壁面を見出しやリンクの障害物に仕立て、フリッパーでボールを弾き当てるピンボールゲーム」として試作されました。
+      </p>
+      <p>
+        しかし、ピンボール特有のランダム性や反射制御の難しさに比べ、「狙ったリンクへ意図を持ってボールを運ぶ」「風や芝の抵抗を計算してクラブを選び抜く」という<strong>ゴルフのゲームデザイン</strong>の方が、Wikipediaのリンクを辿る探索（いわゆる「Wikipediaゲーム」や「六次の隔たり」）の知的な面白さと極めて親和性が高いことが判明しました。これにより、本格的な弾道シミュレーション・ライ判定・3タップゲージを備えた「WikiGOLF」へと大幅な昇華を遂げました。
+      </p>
+
+      <h3>1.3 技術スタック選定思想：ネイティブ志向・高レスポンス設計</h3>
+      <p>
+        UnityやUnreal Engineなどの汎用ゲームエンジンを採用せず、Win32 / DirectX 11 / C++20 によるスクラッチ開発を採用しています。この設計判断には以下の強い思想があります：
+      </p>
+      <ul>
+        <li><strong>メモリとバイナリサイズの極小化</strong>: 数十MiBクラスの軽量フットプリントで軽快に起動・終了。</li>
+        <li><strong>Webコンテンツ（HTML/DOM）の直接レンダリング制御</strong>: <code>litehtml</code> + <code>Gumbo</code> + <code>DirectWrite</code> + <code>Direct2D</code> を用いて、GPUテクスチャ上に直接CSSレイアウトを焼き込む特殊なグラフィックスパイプラインを完全制御。</li>
+        <li><strong>超高速なローカルグラフ探索</strong>: 約数GB規模の日本語Wikipediaリンクデータベース（SQLite）をプロセス内で直接扱い、双方向BFS（幅優先探索）をミリ秒単位で高速実行。</li>
+      </ul>
+    </section>
+
+    <!-- 第2章 -->
+    <section id="section-arch">
+      <h2>2. システムアーキテクチャ全体像（System Architecture Overview）</h2>
+
+      <p>
+        WikiGOLFのシステムは、明確な責務分離が行われたレイヤードアーキテクチャを採用しています。ハードウェア・OS依存レイヤからコア基盤、カスタムECS、グラフィックス、ゲームプレイコントローラーまでが疎結合に接続されています。
+      </p>
+
+      <div class="mermaid-container">
+        <pre class="mermaid">
+graph TB
+  subgraph ApplicationLayer ["アプリケーション層 (WinMain / DX_GAME.cpp)"]
+    AppMain["WinMain / WndProc"]
+    GameLoop["メインゲームループ (LogicUpdate / RenderTotal / Profiling)"]
+  end
+
+  subgraph SceneManagement ["シーン管理 (core::SceneManager)"]
+    TitleScene["TitleScene (タイトル・コース選択・3D演出)"]
+    LoadingScene["LoadingScene (非同期通信・物理ボール演出)"]
+    WikiGolfScene["WikiGolfScene (メインゲームプレイ)"]
+    PauseScene["PauseScene (ポーズメニュー)"]
+    SettingsScene["SettingsScene (グラフィック・解像度設定)"]
+    ResultScene["ResultScene (クリア評価・花火・スコア集計)"]
+  end
+
+  subgraph ECSCore ["カスタムECS基盤 (namespace ecs)"]
+    World["World (エンティティ生成・破棄 / グローバルデータ)"]
+    ComponentPool["ComponentPool&lt;T&gt; (連続メモリプール)"]
+    View["View&lt;Ts...&gt; (マルチコンポーネント高速クエリ)"]
+    Entity["Entity (32bit ID: 18bit Index + 14bit Gen)"]
+  end
+
+  subgraph ControllersLayer ["コントローラー・ドメインロジック (game::controllers)"]
+    ShotCtrl["ShotController (インパクトゲージ・入力)"]
+    ClubCtrl["ClubController (クラブ切替・飛距離テーブル)"]
+    CamCtrl["CameraController (3人称追従 / エイム / トップビュー)"]
+    MinimapCtrl["MinimapController (オフスクリーン2D/3Dマップ)"]
+    HUDCtrl["WikiGolfHUD (ブラウザ風ヘッダー / 風 / ライ表示)"]
+    PageLoader["WikiPageLoader (非同期データ取得 / 地形・ホール構築)"]
+  end
+
+  subgraph SubsystemsLayer ["主要サブシステム (game::systems)"]
+    PhysicsSys["PhysicsSystem (空中弾道 / 芝転がり摩擦 / バンカー沈み込み)"]
+    TerrainSys["WikiTerrainSystem / TerrainGenerator (ハイトマップ・メッシュ)"]
+    WikiClient["WikiClient (WinHTTP / MediaWiki API通信)"]
+    ShortestPath["WikiShortestPath (SQLite / 双方向BFS最短経路)"]
+    GameJuice["GameJuiceSystem (カメラシェイク / トレイル / 発光)"]
+    AudioSys["AudioSystem (XAudio2 / BGM / 3D-SE)"]
+  end
+
+  subgraph GraphicsEngine ["グラフィックスエンジン (graphics)"]
+    GfxDevice["GraphicsDevice (D3D11 / RenderScale / MSAA / FXAA / PostProcess)"]
+    TxtRenderer["TextRenderer (Direct2D / DirectWrite / フォントキャッシュ)"]
+    CourseHtml["CourseHtml / CourseHtmlContainer (litehtml + Gumbo)"]
+    WikiTexGen["WikiTextureGenerator (記事テクスチャ生成)"]
+  end
+
+  AppMain --> GameLoop
+  GameLoop --> SceneManagement
+  SceneManagement --> WikiGolfScene
+  WikiGolfScene --> ControllersLayer
+  ControllersLayer --> ECSCore
+  ControllersLayer --> SubsystemsLayer
+  SubsystemsLayer --> GraphicsEngine
+        </pre>
+      </div>
+
+      <h3>主要ディレクトリ構成</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>パス</th>
+            <th>責務・概要</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>src/core/</code></td>
+            <td>ゲームループ基盤、<code>GameContext</code>、入力管理（<code>Input</code>）、ロギング（<code>Logger</code>）、精密プロファイラ（<code>Profiler</code>）、表示設定（<code>DisplaySettings</code>）、シーンマネージャ（<code>Scene</code>）</td>
+          </tr>
+          <tr>
+            <td><code>src/ecs/</code></td>
+            <td>自前実装の高効率Entity Component System（<code>World</code>, <code>Entity</code>, <code>ComponentPool</code>, <code>View</code>, <code>Pipeline</code>）</td>
+          </tr>
+          <tr>
+            <td><code>src/graphics/</code></td>
+            <td>DirectX 11描画コア（<code>GraphicsDevice</code>）、メッシュ・シェーダー、Direct2Dテキスト描画（<code>TextRenderer</code>）、動画再生（<code>VideoPlayer</code>）、Wikipediaテクスチャ化</td>
+          </tr>
+          <tr>
+            <td><code>src/graphics/html/</code></td>
+            <td><code>litehtml</code> + <code>Gumbo</code> による記事HTMLのDOMパース・CSSレンダリング・リンク矩形抽出エンジン</td>
+          </tr>
+          <tr>
+            <td><code>src/game/controllers/</code></td>
+            <td>カメラ、クラブ、ショット、ミニマップ、HUD、チュートリアル、記事遷移コントローラー群</td>
+          </tr>
+          <tr>
+            <td><code>src/game/scenes/</code></td>
+            <td>ゲームの各状態（タイトル、ロード、ゴルフプレイ、ポーズ、設定、リザルト）</td>
+          </tr>
+          <tr>
+            <td><code>src/game/systems/</code></td>
+            <td>物理演算、地形生成、Wikipedia APIクライアント、SDOW最短経路探索、演出ジュース、パーティクル</td>
+          </tr>
+          <tr>
+            <td><code>src/audio/</code></td>
+            <td>XAudio2による低遅延BGM/効果音管理（<code>AudioSystem</code>）</td>
+          </tr>
+          <tr>
+            <td><code>src/resources/</code></td>
+            <td>メッシュ・テクスチャ・シェーダーのキャッシュとプール管理（<code>ResourceManager</code>）</td>
+          </tr>
+          <tr>
+            <td><code>Assets/data/</code></td>
+            <td>分割保存された日本語WikipediaのSDOWデータベース（<code>jawiki_sdow-001.sqlite</code>）</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 第3章 -->
+    <section id="section-ecs">
+      <h2>3. カスタムECS設計 & クラス構造（ECS Design & Class Diagram）</h2>
+
+      <p>
+        WikiGOLFでは、ゲーム内オブジェクトのライフサイクル管理とキャッシュ局所性（Cache Locality）を最大化するため、独自のECS（Entity Component System）を採用しています。
+      </p>
+
+      <div class="mermaid-container">
+        <pre class="mermaid">
+classDiagram
+  class Entity {
+    +uint32_t id
+    +uint32_t GetIndex()
+    +uint16_t GetGeneration()
+    +bool IsValid()
+  }
+
+  class IComponentPool {
+    <<interface>>
+    +Clear()*
+    +Remove(Entity)*
+    +Has(Entity)* bool
+    +Size()* size_t
+    +GetTypeName()* const char*
+  }
+
+  class ComponentPool~T~ {
+    -vector~T~ m_components
+    -vector~uint32_t~ m_entityToIndex
+    -vector~Entity~ m_indexToEntity
+    +Add(Entity, Args...) T&
+    +Get(Entity) T*
+    +Remove(Entity)
+    +Has(Entity) bool
+  }
+
+  class World {
+    -vector~uint16~ m_generations
+    -queue~uint32~ m_freeIndices
+    -vector~unique_ptr~IComponentPool~~ m_componentPools
+    -unordered_map~ComponentTypeId, any~ m_globals
+    +CreateEntity() Entity
+    +DestroyEntity(Entity)
+    +IsAlive(Entity) bool
+    +Add~T~(Entity, Args...) T&
+    +Get~T~(Entity) T*
+    +Remove~T~(Entity)
+    +Has~T~(Entity) bool
+    +Query~Ts...~() View~Ts...~
+    +SetGlobal~T~(T&&)
+    +GetGlobal~T~() T*
+  }
+
+  class View~Ts...~ {
+    -tuple~ComponentPool~Ts~*...~ m_pools
+    +Each(Callable)
+  }
+
+  IComponentPool <|-- ComponentPool
+  World o-- IComponentPool
+  World ..> View : creates
+  View ..> ComponentPool : queries
+        </pre>
+      </div>
+
+      <h3>3.1 Entityのビット構成（18bit Index + 14bit Generation）</h3>
+      <p>
+        Entityは単なる <code>uint32_t</code>（32ビット整数）として表現されます。下位18ビットがインデックス（最大約262,144エンティティ）、上位14ビットがジェネレーション（世代、最大16,383回再利用可能）としてエンコードされています。
+      </p>
+      <ul>
+        <li><strong>世代番号チェック</strong>: 削除済みエンティティに対して古いハンドルからアクセスしようとした場合、<code>IsAlive(entity)</code> が直ちに <code>false</code> を返し、ダングリング参照のバグを完全に排除します。</li>
+        <li><strong>軽量破棄管理 (<code>EntityOwner</code>)</strong>: コントローラーやシーン単位で生成したEntityをRAII方式で一括破棄できる <code>ecs::EntityOwner</code> を完備。</li>
+      </ul>
+
+      <h3>3.2 主要コンポーネント一覧</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>コンポーネント</th>
+            <th>定義場所</th>
+            <th>主なプロパティと役割</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Transform</code></td>
+            <td><code>Transform.h</code></td>
+            <td><code>XMFLOAT3 position, rotation, scale</code>。3D空間上の位置・姿勢を保持。</td>
+          </tr>
+          <tr>
+            <td><code>RigidBody</code></td>
+            <td><code>PhysicsComponents.h</code></td>
+            <td><code>velocity, mass, restitution, friction, useGravity, isKinematic</code>。剛体物理パラメータ。</td>
+          </tr>
+          <tr>
+            <td><code>Collider</code></td>
+            <td><code>PhysicsComponents.h</code></td>
+            <td>球体（Sphere）、直方体（Box）、カプセル、地形コライダーの形状定義。</td>
+          </tr>
+          <tr>
+            <td><code>MeshRenderer</code></td>
+            <td><code>MeshRenderer.h</code></td>
+            <td><code>MeshHandle, ShaderHandle, XMFLOAT4 color, isVisible</code>。3D描画システムへの登録情報。</td>
+          </tr>
+          <tr>
+            <td><code>GolfGameState</code></td>
+            <td><code>WikiComponents.h</code></td>
+            <td><strong>グローバルステート</strong>。打数（<code>shotCount</code>）、パー（<code>par</code>）、現在記事、ターゲット記事、風速/風向、現在のライ（<code>TerrainMaterial</code>）。</td>
+          </tr>
+          <tr>
+            <td><code>ShotState</code></td>
+            <td><code>WikiComponents.h</code></td>
+            <td><strong>グローバルステート</strong>。ゲージフェーズ（<code>Idle, PowerCharging, ImpactTiming, Executing, ShowResult</code>）、パワー値、インパクト値、判定結果。</td>
+          </tr>
+          <tr>
+            <td><code>GolfHole</code></td>
+            <td><code>WikiComponents.h</code></td>
+            <td>カップ（ホール）。遷移先記事タイトル（<code>linkTarget</code>）、判定半径、目的記事フラグ（<code>isTarget</code>）、ターゲットまでのホップ数（<code>hopsToTarget</code>）、旗・光柱Entity。</td>
+          </tr>
+          <tr>
+            <td><code>TerrainCollider</code></td>
+            <td><code>WikiComponents.h</code></td>
+            <td><code>std::shared_ptr&lt;TerrainData&gt;</code>。動的生成されたハイトマップとマテリアル情報への参照。</td>
+          </tr>
+          <tr>
+            <td><code>UIText / UIImage / UIButton / UIBarGauge</code></td>
+            <td><code>UI*.h</code></td>
+            <td>Direct2D/DirectWriteで描画される2D UIコンポーネント群。レイヤー順序・アンカー・スタイルを保持。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 第4章 -->
+    <section id="section-gameplay">
+      <h2>4. ゲームプレイ・シーン・操作設計（Gameplay, Scenes & Controllers）</h2>
+
+      <h3>4.1 シーン遷移ステートマシン</h3>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+stateDiagram-v2
+  [*] --> TitleScene : 起動
+
+  state TitleScene {
+    IntroVideo --> MainMenu : 再生終了 / キー入力スキップ
+    MainMenu --> CourseSelect : 「コース選択」押下
+    CourseSelect --> MainMenu : 閉じる
+  }
+
+  TitleScene --> SettingsScene : 「オプション」押下 (重ね合わせ)
+  SettingsScene --> TitleScene : 「閉じる」押下
+
+  TitleScene --> LoadingScene : 「はじめから」/「コース決定」
+  TitleScene --> WikiGolfScene : 「チュートリアル」押下 (直接遷移)
+
+  state LoadingScene {
+    AsyncFetch : Wikipedia API / SDOW 最短経路探索
+    PreloadAssets : テクスチャ / SE 先行ロード
+    PhysicsAnim : 350個のゴルフボール落下物理演出
+  }
+
+  LoadingScene --> WikiGolfScene : ロード完了 & ボール静止
+
+  state WikiGolfScene {
+    Aiming : 照準合わせ / クラブ選択 (Q/E) / 弾道予測
+    PowerGauge : パワー決定 (1回目クリック/スペース)
+    ImpactGauge : インパクト決定 (2回目クリック/スペース)
+    BallRolling : ボール飛翔 & 転がりシミュレーション
+    CheckResult : 静止判定 / ライ判定 / カップイン判定
+
+    Aiming --> PowerGauge : ショット開始
+    PowerGauge --> ImpactGauge : パワー確定
+    ImpactGauge --> BallRolling : インパクト確定 (判定算出)
+    BallRolling --> CheckResult : ボール停止
+    CheckResult --> Aiming : 通常静止 (打数+1)
+    CheckResult --> PageTransition : カップイン！
+  }
+
+  WikiGolfScene --> PauseScene : ESCキー (ポーズ画面)
+  PauseScene --> WikiGolfScene : 再開
+  PauseScene --> TitleScene : タイトルへ戻る
+
+  WikiGolfScene --> ResultScene : 目的記事にカップイン！ (クリア)
+  ResultScene --> TitleScene : タイトルへ戻る
+        </pre>
+      </div>
+
+      <h3>4.2 ショットシステム：本格3タップゲージ</h3>
+      <p>
+        多くの名作ゴルフゲーム（みんなのGOLF等）を踏襲した直感的な3タップ式ショットゲージを採用しています：
+      </p>
+      <ol>
+        <li><strong>1タップ目（ショット開始）</strong>: パワーゲージが往復を開始。</li>
+        <li><strong>2タップ目（パワー確定）</strong>: 狙いたい強さの位置でゲージを確定（0.0〜1.0）。</li>
+        <li><strong>3タップ目（インパクト確定）</strong>: 高速で移動するインパクトカーソルを中央のターゲットゾーンで止める。</li>
+      </ol>
+      <p>
+        インパクトの誤差に応じて、4段階のショット判定（<code>ShotJudgement</code>）が下されます：
+      </p>
+      <ul>
+        <li><strong>Special / Perfect (誤差 &lt; 2%)</strong>: 完璧なショット。狙い通りの方向・スピンで正確に飛翔。</li>
+        <li><strong>Great (誤差 &lt; 5%)</strong>: 優秀なショット。ごく僅かなブレのみ。</li>
+        <li><strong>Nice (誤差 &lt; 15%)</strong>: 良好なショット。実用的な許容範囲。</li>
+        <li><strong>Miss (誤差 15%以上)</strong>: ミスショット。弾道が左右に大きくスライス/フックし、飛距離も低下。</li>
+      </ul>
+
+      <h3>4.3 クラブ一覧と物理特性テーブル</h3>
+      <p>
+        プレイヤーは状況に応じて全9種類のクラブを切り替えることができます。各クラブの基準キャリー飛距離は、初期化時に <code>TrajectorySimulation</code> を解いて平坦・無風基準で動的に逆算テーブル（<code>CarryDistanceTable</code>）が生成されます。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>番号</th>
+            <th>クラブ名</th>
+            <th>略称</th>
+            <th>分類</th>
+            <th>最大初速 (m/s)</th>
+            <th>打出角 (deg)</th>
+            <th>転がり摩擦倍率</th>
+            <th>用途・特徴</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>ドライバー</td>
+            <td>1W</td>
+            <td>Wood</td>
+            <td>130.0</td>
+            <td>12.0°</td>
+            <td>3.0x</td>
+            <td>最長飛距離。長距離の移動や遠くの見出しへのアプローチ用。</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>3番ウッド</td>
+            <td>3W</td>
+            <td>Wood</td>
+            <td>115.0</td>
+            <td>14.0°</td>
+            <td>2.5x</td>
+            <td>フェアウェイからのロングショット。</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>5番ウッド</td>
+            <td>5W</td>
+            <td>Wood</td>
+            <td>100.0</td>
+            <td>16.0°</td>
+            <td>2.0x</td>
+            <td>扱いやすい中長距離用ウッド。</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>5番アイアン</td>
+            <td>5I</td>
+            <td>Iron</td>
+            <td>85.0</td>
+            <td>20.0°</td>
+            <td>1.5x</td>
+            <td>中距離アプローチ。</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>7番アイアン</td>
+            <td>7I</td>
+            <td>Iron</td>
+            <td>70.0</td>
+            <td>24.0°</td>
+            <td>1.2x</td>
+            <td>スタンダードなアイアン。適度な高さとコントロール性。</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>9番アイアン</td>
+            <td>9I</td>
+            <td>Iron</td>
+            <td>55.0</td>
+            <td>28.0°</td>
+            <td>1.0x</td>
+            <td>高弾道で障害物を越えやすい。</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>ピッチングウェッジ</td>
+            <td>PW</td>
+            <td>Wedge</td>
+            <td>40.0</td>
+            <td>32.0°</td>
+            <td>1.5x</td>
+            <td>近距離のグリーン乗せやバンカー脱出の準候補。</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>サンドウェッジ</td>
+            <td>SW</td>
+            <td>Wedge</td>
+            <td>25.0</td>
+            <td>38.0°</td>
+            <td>2.5x</td>
+            <td>極めて高いロフト角。深いバンカーや障害物近傍からの脱出に必須。</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>パター</td>
+            <td>PT</td>
+            <td>Putter</td>
+            <td>10.0</td>
+            <td>0.0°</td>
+            <td>1.0x</td>
+            <td>打ち出し角ゼロの転がし専用。グリーン上でのカップイン狙いに使用。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>4.4 Par（基準打数）の動的算出ルール</h3>
+      <p>
+        従来の固定Parではなく、Wikipediaのリンク関係（SDOW最短ホップ数）に基づいて各ホールのParがインテリジェントに算出されます（<code>ParRules.h</code>）：
+      </p>
+      <pre><code>// ターゲットまでの最小ホップ数が計算済みな場合
+Par = std::max(1, minHopsToTarget + 1);
+
+// 未計算・到達不能フォールバック時（有効リンク数から推定）
+Par = std::clamp(static_cast&lt;int&gt;(validLinkCount) / 2 + 2, 3, 12);</code></pre>
+      <p>
+        「目標記事まで最短あと2回の記事遷移が必要なら、このステージはPar 3」のように設定されるため、プレイヤーは「最短ルートを通ればパーやバーディが取れる」という明快な目標感を持ってプレイできます。
+      </p>
+    </section>
+
+    <!-- 第5章 -->
+    <section id="section-wiki-pipeline">
+      <h2>5. Wikipedia API & SDOW最短経路探索（Wikipedia Pipeline & SDOW）</h2>
+
+      <h3>5.1 WinHTTPによるMediaWiki API通信アーキテクチャ</h3>
+      <p>
+        <code>WikiClient</code> クラスは、Windows標準の <code>WinHTTP</code> API（<code>winhttp.h</code>）を用いて非同期にWikipedia API（<code>ja.wikipedia.org</code>）と通信します。サードパーティのHTTPライブラリを一切使わず、Windowsネイティブの高速なソケット接続を実現しています。
+      </p>
+      <ul>
+        <li><code>action=query&prop=extracts&explaintext=1</code>: 記事本文のプレーンテキスト取得</li>
+        <li><code>action=parse&prop=text</code>: 記事本文の完全なHTML/CSS取得（HTMLコース生成用）</li>
+        <li><code>rest.php/v1/page/{title}/media-list</code>: 記事内の埋め込み画像一覧とサムネイルURL取得</li>
+        <li><code>action=query&prop=sections</code>: 節構造（目次・見出しレベル）の取得</li>
+        <li><code>action=query&generator=random&prop=pageimages</code>: ランダムな目標記事およびサムネイルの同時取得</li>
+      </ul>
+
+      <h3>5.2 SDOW（Six Degrees of Wikipedia）データベース構造</h3>
+      <p>
+        プロジェクトの <code>Assets/data/jawiki_sdow-001.sqlite</code> には、日本語版Wikipedia全記事の相互リンク関係がグラフデータベースとして格納されています。Git LFSやファイルサイズ制限に対応するため、リポジトリ内では <code>part1</code>〜<code>part3</code> に3分割されており、CMakeビルド時に <code>copy /b</code> コマンドで自動結合されます。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>テーブル / カラム</th>
+            <th>型</th>
+            <th>説明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>pages.id</code></td>
+            <td>INTEGER (PK)</td>
+            <td>Wikipediaの記事ID</td>
+          </tr>
+          <tr>
+            <td><code>pages.title</code></td>
+            <td>TEXT (UNIQUE)</td>
+            <td>正規化された記事タイトル（空白はアンダースコア）</td>
+          </tr>
+          <tr>
+            <td><code>links.id</code></td>
+            <td>INTEGER (PK)</td>
+            <td>対象記事ID</td>
+          </tr>
+          <tr>
+            <td><code>links.outgoing_links</code></td>
+            <td>TEXT</td>
+            <td>その記事からリンクしている記事ID列（パイプ <code>|</code> 区切り）</td>
+          </tr>
+          <tr>
+            <td><code>links.incoming_links</code></td>
+            <td>TEXT</td>
+            <td>その記事へリンクしている記事ID列（パイプ <code>|</code> 区切り）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>5.3 双方向BFS（Bidirectional Breadth-First Search）</h3>
+      <p>
+        記事Aから記事Bへの最短距離を計算する際、片方向の探索だとノード数が指数関数的に爆発（特に人気記事からの出力リンクは数千件に達する）するため、<code>WikiShortestPath</code> では<strong>双方向幅優先探索</strong>を採用しています。
+      </p>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Caller as WikiPageLoader (Background Worker)
+  participant ShortestPath as WikiShortestPath
+  participant DB as SQLite3 (jawiki_sdow-001.sqlite)
+
+  Caller->>ShortestPath: ComputeDistancesToTarget(links, targetId, maxDepth=4)
+  ShortestPath->>ShortestPath: プロセス内キャッシュの確認 (同一targetIdの逆方向探索ツリー)
+  alt キャッシュが存在しない場合
+    ShortestPath->>DB: ターゲット側から逆方向BFSを実行 (Incoming links取得)
+    DB-->>ShortestPath: 1手先、2手先の到達可能ノード集合
+    ShortestPath->>ShortestPath: 逆方向ツリーをキャッシュ保存
+  end
+  ShortestPath->>DB: 候補リンク群のページIDを一括バッチ解決 (IN句チャンククエリ)
+  DB-->>ShortestPath: ページID一覧
+  ShortestPath->>ShortestPath: 順方向と逆方向ツリーの交差判定 (Intersection)
+  ShortestPath-->>Caller: 各リンクのホップ数 (1手, 2手, 3手... 未到達=-1)
+        </pre>
+      </div>
+
+      <div class="callout warning">
+        <div class="callout-title">キャンセル安全性（Cancel Safety）の徹底</div>
+        <p>
+          巨大なリンクを持つ記事の探索は数十秒かかる場合があります。プレイヤーが途中でウィンドウを閉じたり、別のシーンへ移動した際にメインスレッドがブロックされないよう、<code>WikiShortestPath::RequestCancelAll()</code> が実装されています。これはバックグラウンドから安全に <code>sqlite3_interrupt()</code> を発行し、実行中のクエリを即座に中断終了させます。
+        </p>
+      </div>
+    </section>
+
+    <!-- 第6章 -->
+    <section id="section-terrain-html">
+      <h2>6. 地形生成 & HTML/CSSコースレンダリング（Terrain & HTML Course Rendering）</h2>
+
+      <h3>6.1 2つのコース生成方式：テキスト方式 vs HTML/CSS方式</h3>
+      <p>
+        WikiGOLFには、歴史的経緯と動作保証のために2つのコース生成方式が備わっています（CMakeオプション <code>WIKIGOLF_HTML_COURSES</code> で切替可能、既定値=ON）：
+      </p>
+      <ul>
+        <li><strong>テキスト方式（従来）</strong>: 記事のプレーンテキストを均等に折り返してテクスチャ化。文字密度やキーワード（「山」「川」等）から簡易的なパーリンノイズハイトマップを生成。</li>
+        <li><strong>HTML/CSS方式（新方式）</strong>: <code>litehtml</code> + <code>Gumbo</code> + <code>DirectWrite</code> + <code>Direct2D</code> により、記事のDOM構造（見出し、段落、表、画像、リンク）をそのままCSSレイアウトし、3D地形と1対1で同期。</li>
+      </ul>
+
+      <h3>6.2 HTML/CSS方式のパイプライン</h3>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+flowchart LR
+  RawHTML[Raw HTML 取得] --> GumboClean[Gumbo HTMLパーサー<br/>不要タグ・外部スクリプト除外]
+  GumboClean --> ApplyCSS[固定CSS CourseCss 適用<br/>幅6144 CSS px]
+  ApplyCSS --> DWriteMeasure[DirectWrite<br/>文字計測ワーカー]
+  DWriteMeasure --> LiteHtmlLayout[litehtml レイアウト確定<br/>リンク・画像・見出しの領域抽出]
+  LiteHtmlLayout --> D2DRender[Direct2D タイル描画<br/>512px高ずつインクリメンタル生成]
+  LiteHtmlLayout --> TerrainBuild[地形ハイトマップ & ホール生成<br/>画像=台地 / 見出し=起伏 / リンク=平坦グリーン]
+        </pre>
+      </div>
+
+      <h3>6.3 地形マテリアルと物理パラメータ</h3>
+      <p>
+        地形ハイトマップの各格子点にはマテリアル属性（<code>TerrainMaterial</code>）が割り当てられ、ボールの転がり・反発に直接影響を与えます：
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>マテリアル種別</th>
+            <th>摩擦倍率</th>
+            <th>物理・ゲームプレイ挙動</th>
+            <th>コース上の出現箇所</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Fairway (フェアウェイ)</strong></td>
+            <td>1.0x</td>
+            <td>標準的な芝。適度な転がりと素直な反発。ショットしやすい。</td>
+            <td>記事本文の通常テキスト領域</td>
+          </tr>
+          <tr>
+            <td><strong>Green (グリーン)</strong></td>
+            <td>1.45x</td>
+            <td>平坦に整地されたグリーン。ボールがよく止まり、パターでの攻略に最適。</td>
+            <td>各リンク（カップ・旗）の周辺プラットフォーム</td>
+          </tr>
+          <tr>
+            <td><strong>Rough (ラフ)</strong></td>
+            <td>2.5x</td>
+            <td>深い芝。転がり摩擦が大きく、初速も奪われる。</td>
+            <td>コース外縁、段落の境界部</td>
+          </tr>
+          <tr>
+            <td><strong>Bunker (バンカー)</strong></td>
+            <td>7.5x</td>
+            <td>砂地。<strong>ボールが沈み込み（Sink Depth）、着地時の衝撃を大幅吸収</strong>。脱出にはSWが必須。</td>
+            <td>記事内の余白や大きな区切り</td>
+          </tr>
+          <tr>
+            <td><strong>Ice (氷原)</strong></td>
+            <td>0.08x</td>
+            <td>極めて滑りやすい。ボールが長距離滑走する。</td>
+            <td>寒冷地・極地テーマのバイオーム</td>
+          </tr>
+          <tr>
+            <td><strong>Water (水域)</strong></td>
+            <td>8.0x</td>
+            <td><strong>停止時にウォーターハザード（OB判定）</strong>。元の位置から打ち直し。</td>
+            <td>海洋・島嶼テーマのバイオーム</td>
+          </tr>
+          <tr>
+            <td><strong>Lava (溶岩)</strong></td>
+            <td>10.0x</td>
+            <td><strong>停止時に即座にOB扱い</strong>。</td>
+            <td>火山テーマのバイオーム</td>
+          </tr>
+          <tr>
+            <td><strong>Stone (岩場)</strong></td>
+            <td>0.6x</td>
+            <td>高反発・低摩擦。ボールが激しく跳ね返る。</td>
+            <td>見出し（Heading）や台地の崖面</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 第7章 -->
+    <section id="section-physics-juice">
+      <h2>7. 物理シミュレーション & Game Juice演出（Physics & Game Juice）</h2>
+
+      <h3>7.1 芝フリクションと静止摩擦判定（<code>PhysicsFriction.h</code>）</h3>
+      <p>
+        WikiGOLFの物理エンジンは、単純なクーロン摩擦ではなく、ゴルフボール特有の非線形な減速挙動を精密にシミュレートしています：
+      </p>
+      <ul>
+        <li><strong>低速域の粘り (<code>ComputeSlowRollMultiplier</code>)</strong>: ボール停止間際になると転がり抵抗が非線形に増加し、現実のグリーン上のようにピタッと静止する（低速での永久振動を防止）。</li>
+        <li><strong>高速時の空気抵抗ブースト (<code>ComputeHighSpeedBoost</code>)</strong>: 高速転がり時に芝抵抗が増加。</li>
+        <li><strong>斜面スケーリング (<code>ComputeSlopeScale</code>)</strong>: 法線Y成分に基づき、急斜面では摩擦が低減して滑り落ちる。</li>
+        <li><strong>静止摩擦保持判定 (<code>CanStaticFrictionHold</code>)</strong>: 傾斜による重力加速度と静止摩擦限界を比較し、緩斜面でボールが安定して止まるように判定。</li>
+      </ul>
+
+      <h3>7.2 バンカー特有の沈み込みシミュレーション</h3>
+      <p>
+        ボールがバンカーに着弾した際、鉛直衝突速度に応じて砂への沈み込み深さ（<code>ComputeSurfaceSinkDepth</code>）を計算します（最大でボール半径の約31%が砂に埋もれる）。さらに接線方向の運動量も <code>ComputeSurfaceImpactTangentialRetention</code> により半分以下に削られ、砂に「ズザッ」と突き刺さるようなリアルな感触を実現しています。
+      </p>
+
+      <h3>7.3 Game Juice（気持ちよさ・手応え）演出システム</h3>
+      <p>
+        「ゲームジュース（Game Juice）」とは、操作に対するフィードバックや快感を増幅する演出のことです。<code>GameJuiceSystem</code> が以下の演出を一括制御しています：
+      </p>
+      <ul>
+        <li><strong>インパクト演出</strong>: Perfect/Greatショット時に画面全体がわずかに発光（Bloom Pulse）し、打球音と同時にカメラがシェイク。</li>
+        <li><strong>ボールトレイル (<code>TrailVS.hlsl</code>)</strong>: 高速飛行時にボール後方に美しい帯状の軌跡ポリゴンを描画。</li>
+        <li><strong>カップイン発光 (CupIn Bloom)</strong>: カップインの瞬間、カップ・旗・光柱がまばゆい金色に発光し、天使のファンファーレとともに紙吹雪（パーティクル）が舞い散る。</li>
+        <li><strong>クリア時の花火（Hanabi Volley）</strong>: リザルト画面で打ち上げ花火が夜空に斉射され、炸裂光と火花パーティクルが自転する地球儀を照らし出す。</li>
+      </ul>
+    </section>
+
+    <!-- 第8章 -->
+    <section id="section-graphics">
+      <h2>8. グラフィックスパイプライン & シェーダー（Graphics & Shaders）</h2>
+
+      <h3>8.1 レンダリングパイプラインフロー</h3>
+      <div class="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant Main as メインループ
+  participant Gfx as GraphicsDevice
+  participant D3D as D3D11 Context
+  participant D2D as TextRenderer (D2D/DWrite)
+  participant Screen as スワップチェーン (Backbuffer)
+
+  Main->>Gfx: BeginFrame(profileFrame)
+  Note over Gfx,D3D: 内部RenderScale解像度の<br/>オフスクリーンRTVをクリア
+  Main->>D3D: RenderOffscreen (ミニマップ用FBO描画)
+  Main->>D3D: SkyboxRenderSystem (キューブマップ背景描画)
+  Main->>D3D: RenderSystem (地形・ボール・草・ホールメッシュ描画)
+  Main->>Gfx: SetPostProcessParams(Fog, Tint, Vignette, Bloom)
+  Main->>Gfx: ResolveSceneToBackbuffer()
+  Note over Gfx,D3D: 内部RTVからMSAA解決 → (FXAA) →<br/>ポストプロセスシェーダー → バックバッファ転送
+  Main->>D2D: BeginDraw()
+  Main->>D2D: uiRenderSystem / uiButtonRenderSystem / uiBarGauge
+  Main->>D2D: EndDraw()
+  Note over D2D,Screen: レターボックス補正を掛けつつ<br/>高品質ベクターUIを重ね描き
+  Main->>Gfx: EndFrame()
+  Gfx->>Screen: Present(VSync)
+        </pre>
+      </div>
+
+      <h3>8.2 HLSLシェーダー一覧表</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>シェーダーファイル</th>
+            <th>ステージ</th>
+            <th>機能・描画対象</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>BasicVS / BasicPS</code></td>
+            <td>VS / PS</td>
+            <td>標準的なディレクショナルライト＋フォン鏡面反射モデル。クラブやティー台等の一般オブジェクト。</td>
+          </tr>
+          <tr>
+            <td><code>TerrainVS / TerrainPS</code></td>
+            <td>VS / PS</td>
+            <td><strong>地形描画</strong>。記事テクスチャ、法線マップ、各マテリアル（芝・砂・岩）のマルチテクスチャブレンド。</td>
+          </tr>
+          <tr>
+            <td><code>GolfBallPS</code></td>
+            <td>PS</td>
+            <td>ゴルフボール専用。ディンプルの陰影表現、フレネル反射、微細なハイライト。</td>
+          </tr>
+          <tr>
+            <td><code>GrassVS / GrassPS</code></td>
+            <td>VS / PS</td>
+            <td>草のインスタンシング描画。風によるリアルタイムな揺れとカメラ距離フェード。</td>
+          </tr>
+          <tr>
+            <td><code>FlagVS / FlagPS</code></td>
+            <td>VS / PS</td>
+            <td><strong>プロシージャル旗布アニメーション</strong>。風速と位相に応じたサイン波頂点変形。</td>
+          </tr>
+          <tr>
+            <td><code>SkyboxVS / SkyboxPS</code></td>
+            <td>VS / PS</td>
+            <td>キューブマップテクスチャによる全天球背景描画。</td>
+          </tr>
+          <tr>
+            <td><code>PostProcessVS / PostProcessPS</code></td>
+            <td>VS / PS</td>
+            <td>距離フォグ（深度線形化）、色調補正（明度・彩度・コントラスト）、ビネット、ブルーム合成。</td>
+          </tr>
+          <tr>
+            <td><code>FXAAPS</code></td>
+            <td>PS</td>
+            <td>NVIDIA FXAA準拠の高速スクリーンスペースアンチエイリアシング。</td>
+          </tr>
+          <tr>
+            <td><code>UpscalePS</code></td>
+            <td>PS</td>
+            <td>低RenderScale時にバックバッファ解像度へ高品質バイリニア拡大。</td>
+          </tr>
+          <tr>
+            <td><code>MinimapVS / MinimapPS</code></td>
+            <td>VS / PS</td>
+            <td>ミニマップ用の円形・矩形ステンシルマスク付きテクスチャ描画。</td>
+          </tr>
+          <tr>
+            <td><code>ParticleVS / ParticlePS</code></td>
+            <td>VS / PS</td>
+            <td>ビルボードパーティクル（花火、カップイン光粒、風粒子）。</td>
+          </tr>
+          <tr>
+            <td><code>TrailVS</code></td>
+            <td>VS</td>
+            <td>ボール軌跡の帯状メッシュ（Triangle Strip）生成。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 第9章 -->
+    <section id="section-qa-tests">
+      <h2>9. パフォーマンス計測 & テスト検証網（Performance & Testing）</h2>
+
+      <h3>9.1 精密プロファイラ（<code>core::Profiler</code>）</h3>
+      <p>
+        ゲームループ全体に <code>PROFILE_SCOPE("ScopeName")</code> マクロおよびGPUタイムスタンプクエリ（<code>ScopedGpuTimer</code>）が張り巡らされています。
+      </p>
+      <ul>
+        <li><strong>CPU詳細計測</strong>: <code>LogicUpdate</code>, <code>UIButtonSystem</code>, <code>SceneUpdate</code>, <code>Render_Total</code>, <code>Render_3D</code>, <code>Render_UI</code> などの包括時間・排他時間・呼び出し回数をナノ秒単位で収集。</li>
+        <li><strong>GPUタイムスタンプ</strong>: <code>GPU.Minimap</code>, <code>GPU.Skybox</code>, <code>GPU.Meshes</code>, <code>GPU.ResolveScene</code>, <code>GPU.UI2D</code> をDirectXのクエリで計測。</li>
+        <li><strong>パイプライン統計</strong>: 入力頂点数、プリミティブ数、頂点/ピクセルシェーダー実行回数（D3D11 Pipeline Statistics）。</li>
+        <li><strong>プロセス健全性</strong>: CPU使用率（%）、ワーキングセットメモリ（MB）、プライベートメモリ（MB）をWindows API経由でサンプリングし、終了時に <code>profiling/</code> ディレクトリへCSVレポート出力。</li>
+      </ul>
+
+      <h3>9.2 CTest 自動テストスイート（全32テスト）</h3>
+      <p>
+        WikiGOLFには、DirectX 11のGPU環境を模倣したWARPテストから、数学的ルール、物理摩擦、文字列処理、JSONパースまで、<strong>計32本の大規模なテストスイート</strong>が整備されています。
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>テスト名</th>
+            <th>検証対象</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><code>course_html</code></td><td>HTMLパース・DOMノード走査・リンク抽出・画素制限（Linux/Win両対応）</td></tr>
+          <tr><td>2</td><td><code>course_html_d3d</code></td><td>Direct2D/WARPを用いたHTMLタイルの実際のGPUテクスチャ描画検証</td></tr>
+          <tr><td>3</td><td><code>cupin_utils</code></td><td>ボールとカップの距離・速度に基づくカップイン吸い込み判定ロジック</td></tr>
+          <tr><td>4</td><td><code>loading_scene_fade</code></td><td>ローディング画面のフェードアルファ算出・待機時間遷移</td></tr>
+          <tr><td>5</td><td><code>loading_scene_progress</code></td><td>非同期ロード進捗とUI表示進捗の合成スムーズ化</td></tr>
+          <tr><td>6</td><td><code>string_utils_trim</code></td><td>UTF-8/ワイド文字列の空白トリム・正規化・文字コード変換</td></tr>
+          <tr><td>7</td><td><code>map_view_utils</code></td><td>トップビューマップでの座標変換とアイコンクリッピング</td></tr>
+          <tr><td>8</td><td><code>ui_image_has_texture</code></td><td>UI画像エンティティのテクスチャ存在確認</td></tr>
+          <tr><td>9</td><td><code>post_process_readability</code></td><td>マップビュー時のフォグ自動無効化と文字可読性維持ルール</td></tr>
+          <tr><td>10</td><td><code>wiki_texture_links</code></td><td>テクスチャ生成時のリンク領域とクリック領域の整合性</td></tr>
+          <tr><td>11</td><td><code>physics_friction</code></td><td>芝フリクション・斜面補正・低速粘り・静止摩擦計算</td></tr>
+          <tr><td>12</td><td><code>trajectory_simulation</code></td><td>弾道予測シミュレータの初速・揚力・重力・着弾点計算</td></tr>
+          <tr><td>13</td><td><code>shot_gauge_rules</code></td><td>ゲージ往復タイミング、Perfect/Great/Nice/Missの誤差閾値</td></tr>
+          <tr><td>14</td><td><code>par_rules</code></td><td>SDOWホップ数からの動的Par計算と有効リンク数フォールバック</td></tr>
+          <tr><td>15</td><td><code>page_history_utils</code></td><td>訪問済み記事履歴のスタック管理と戻る操作判定</td></tr>
+          <tr><td>16</td><td><code>terrain_generation</code></td><td>ハイトマップ生成、ノイズ、プラットフォーム平坦化、スムージング</td></tr>
+          <tr><td>17</td><td><code>graphics_preset</code></td><td>Low / Medium / High / Ultra プリセットのパラメータ整合性</td></tr>
+          <tr><td>18</td><td><code>logger_warning_output</code></td><td>Loggerのログレベルフィルタリングと警告出力フォーマット</td></tr>
+          <tr><td>19</td><td><code>wiki_texture_generation</code></td><td>Wikipedia本文からの分割タイルテクスチャ生成パイプライン</td></tr>
+          <tr><td>20</td><td><code>text_renderer_lifecycle</code></td><td>TextRendererの初期化・フォント登録・リサイズ追従・破棄</td></tr>
+          <tr><td>21</td><td><code>resource_manager_rules</code></td><td>リソースマネージャの無効ハンドル・フォールバックリソース挙動</td></tr>
+          <tr><td>22</td><td><code>mesh_primitives_rules</code></td><td>基本メッシュ（キューブ、球、円柱、平面）の頂点・法線整合性</td></tr>
+          <tr><td>23</td><td><code>terrain_layout_rules</code></td><td>ホール配置時の最小間隔（4.25単位）と密集間引きルール</td></tr>
+          <tr><td>24</td><td><code>scene_entity_lifecycle</code></td><td>シーン切り替え時のエンティティ自動クリーンアップ・所有権</td></tr>
+          <tr><td>25</td><td><code>wiki_golf_hud_lifecycle</code></td><td>HUDパネル（風、クラブ、スコア、ライ）の生成・破棄・表示更新</td></tr>
+          <tr><td>26</td><td><code>wiki_page_layout</code></td><td>記事本文中の画像float回り込みとテキスト改行計算</td></tr>
+          <tr><td>27</td><td><code>wiki_client_json</code></td><td>MediaWiki APIのJSONレスポンスパース（C++自前パース）</td></tr>
+          <tr><td>28</td><td><code>game_juice_time</code></td><td>ヒットストップ・スロー演出の時間経過スケール計算</td></tr>
+          <tr><td>29</td><td><code>physics_system_rules</code></td><td>物理ワールドのオイラー積分と静的コライダー衝突解決</td></tr>
+          <tr><td>30</td><td><code>graphics_device_settings</code></td><td>MSAAサンプル数、RenderScale、VSyncの動的適用検証</td></tr>
+          <tr><td>31</td><td><code>display_settings_rules</code></td><td>settings.iniの読み書き永続化と解像度循環切り替え</td></tr>
+          <tr><td>32</td><td><code>wiki_terrain_height</code></td><td>地形ハイトマップの境界外クランプと補間高さ取得</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 第10章 -->
+    <section id="section-status-roadmap">
+      <h2>10. プロジェクトの現状・既知課題・展望（Current Status, Issues & Roadmap）</h2>
+
+      <h3>10.1 現在の実装完成度評価</h3>
+      <div class="callout success">
+        <div class="callout-title">総合評価：極めて高い完成度と洗練された設計</div>
+        <p>
+          WikiGOLFは、単なるアイデア倒れのプロトタイプにとどまらず、DirectX 11グラフィックスエンジン、カスタムECS、HTML/CSSパーサー、SQLite最短経路探索、物理・音響・UIまでが完全に統合された<strong>商用インディーゲーム級の極めて堅牢なアーキテクチャ</strong>を確立しています。
+        </p>
+      </div>
+
+      <h3>10.2 走査により判明した現状の課題と制約事項</h3>
+      <ol>
+        <li>
+          <strong><code>test_resource_manager_rules</code> のDebugアサーション</strong>:
+          <p>
+            調査中、Debugビルドにおいて <code>test_resource_manager_rules.exe</code> を実行した際、<code>ResourcePool.h</code> 128行目の <code>assert(false && "Index out of range")</code> が発火し、MSVCのGUIダイアログによってプロセスが停止する事象を確認しました。無効なハンドル（<code>Invalid</code>）を引数に取った際、Releaseビルドではフォールバックリソースを返す設計ですが、Debugビルドではアサーションで弾いているため、テストコード側の期待値との不一致が存在します（ReleaseビルドまたはCTest時の適切なフラグ調整が必要）。
+          </p>
+        </li>
+        <li>
+          <strong>TAA（Temporal Anti-Aliasing）の未実装</strong>:
+          <p>
+            <code>SettingsScene</code> および <code>DisplaySettings</code> に「TAA」のUIと設定保持が用意されていますが、内部コメントに記載されている通り「前フレーム情報・モーションベクトル等の基盤が必要なため、設定値として保持・永続化されるが描画には未反映」となっています。現在はMSAAおよびFXAAが主力です。
+          </p>
+        </li>
+        <li>
+          <strong>巨大記事におけるGPUメモリ消費</strong>:
+          <p>
+            <code>docs/html-course-rendering.md</code> に記載されている通り、出力テクスチャの上限は32 Mi pixels（BGRA8で最大128 MiB）、キャッシュは最大2記事で128 MiBに制限されていますが、長大で画像が多数埋め込まれたWikipedia記事（例: 「日本」「第二次世界大戦」等）では、GPU VRAMとテクスチャ生成タイルの描画負荷が高くなります。
+          </p>
+        </li>
+        <li>
+          <strong>日本語禁則処理の簡易性</strong>:
+          <p>
+            <code>CourseHtml</code> ではDirectWriteによる文字計測を行っていますが、完全なWebブラウザ水準の複雑な禁則処理（句読点の行頭配置禁止など）は一部簡易化されています。
+          </p>
+        </li>
+      </ol>
+
+      <h3>10.3 今後の発展・ロードマップ提案</h3>
+      <ul>
+        <li><strong>オンライン対戦・ゴースト機能</strong>: 同じスタート・ゴール記事で他プレイヤーの打球軌跡（ゴースト）と競い合うタイムアタック/ストロークプレイモード。</li>
+        <li><strong>多言語Wikipedia対応</strong>: 英語版（en.wikipedia.org）や多言語版のSDOWデータベース対応。世界中の記事を巡るインターナショナルツアー。</li>
+        <li><strong>風・天候のさらなる動的変化</strong>: 記事のカテゴリ（「気象」「雨」等）やリアルタイムの現実天候APIと連動したスカイボックス・降雨・突風演出。</li>
+        <li><strong>Steam Deck / コントローラー完全対応</strong>: XInput対応によるゲームパッド完全操作（現在もQ/Eやスペースで遊べるが、アナログスティックによる照準と振動フィードバックを強化）。</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p>Generated by Antigravity Agentic AI for WikiGOLF Project | Document Revision: 2026.09</p>
+    </footer>
+  </main>
+</body>
+</html>

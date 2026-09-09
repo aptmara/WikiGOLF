@@ -408,8 +408,8 @@ void WikiTerrainSystem::CreateWalls(core::GameContext &ctx, float width,
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh = ctx.resource.LoadMesh("builtin/cube");
-    mr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
-                                        L"Assets/shaders/BasicPS.hlsl");
+    mr.shader = ctx.resource.LoadShader("Wall", L"Assets/shaders/WallVS.hlsl",
+                                        L"Assets/shaders/WallPS.hlsl");
     mr.color = {0.0f, 0.8f, 1.0f, 0.2f};
     mr.isTransparent = true;
 

@@ -27,19 +27,15 @@ TerrainData TerrainGenerator::GenerateTerrain(
   data.heightMap.resize(totalVerts, 0.0f);
   data.materialMap.resize(totalVerts, 0); // 0: Fairway
 
-  if (config.htmlCourse) {
-    std::vector<HtmlTerrainPoint> holes;
-    for (const auto& p : holePositions) holes.push_back({p.x, p.y});
-    BuildHtmlTerrain(config.resolutionX, config.resolutionZ, config.worldWidth,
-        config.worldDepth, config.htmlRegions, holes, data.heightMap, data.materialMap);
-    GenerateVisualMaterialColors(data);
-    CalculateNormals(data);
-    GenerateMesh(data, holePositions);
-    return data;
-  }
-
   // 基本形状の生成
   GenerateBaseHeightMap(data, articleText);
+
+  if (config.htmlCourse) {
+    ApplyHtmlTerrainLayout(config.resolutionX, config.resolutionZ,
+                           config.worldWidth, config.worldDepth,
+                           config.heightScale, config.htmlRegions,
+                           data.heightMap, data.materialMap);
+  }
 
   // リンク位置に基づくプラットフォームの生成
   CreatePlatforms(data, holePositions);

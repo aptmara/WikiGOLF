@@ -95,6 +95,23 @@ float MaxAdjacentHeightDelta(const game::systems::TerrainData &data) {
   return maxDelta;
 }
 
+float HeightRange(const game::systems::TerrainData &data) {
+  const auto [minimum, maximum] =
+      std::minmax_element(data.heightMap.begin(), data.heightMap.end());
+  return *maximum - *minimum;
+}
+
+std::array<int, 8>
+CountTerrainMaterials(const game::systems::TerrainData &data) {
+  std::array<int, 8> counts{};
+  for (const uint8_t material : data.materialMap) {
+    if (material < counts.size()) {
+      ++counts[material];
+    }
+  }
+  return counts;
+}
+
 float VisualColorDistance(const DirectX::XMFLOAT3 &a,
                           const DirectX::XMFLOAT3 &b) {
   float dx = a.x - b.x;
@@ -251,6 +268,50 @@ int main() {
 
   CHECK(variedSeedsWithHazards >= 3,
         "Most biome variants include hazard or gimmick terrain");
+
+  game::systems::TerrainConfig htmlConfig = config;
+  htmlConfig.biome = 3;
+  htmlConfig.htmlCourse = true;
+  htmlConfig.htmlRegions = {
+      {0.12f, 0.18f, 0.32f, 0.10f,
+       game::systems::HtmlRegionKind::Heading},
+      {0.58f, 0.38f, 0.24f, 0.18f,
+       game::systems::HtmlRegionKind::Body},
+      {0.20f, 0.62f, 0.28f, 0.16f,
+       game::systems::HtmlRegionKind::Hazard}};
+
+  auto htmlData = game::systems::TerrainGenerator::GenerateTerrain(
+      "HTML course variety seed", holes, htmlConfig);
+  const auto htmlCounts = CountTerrainMaterials(htmlData);
+  int htmlMaterialTypes = 0;
+  for (const int count : htmlCounts) {
+    if (count > 0) {
+      ++htmlMaterialTypes;
+    }
+  }
+
+  CHECK(HeightRange(htmlData) > htmlConfig.heightScale,
+        "HTML course preserves substantial terrain elevation changes");
+  CHECK(htmlMaterialTypes >= 4,
+        "HTML course keeps at least four terrain types");
+  CHECK(htmlCounts[kLava] + htmlCounts[7] > 0,
+        "HTML course preserves biome-specific hazards");
+  CHECK(CountIsolatedHazardCells(htmlData) == 0,
+        "HTML course contains no one-cell hazard speckles");
+  CHECK(MaxAdjacentHeightDelta(htmlData) < htmlConfig.heightScale,
+        "HTML course contains no abrupt one-cell height steps");
+  for (const auto &hole : holes) {
+    CHECK(MaterialAt(htmlData, hole.x, hole.y) == kGreen,
+          "HTML link hole center is converted to green");
+  }
+
+  game::systems::TerrainConfig baseConfig = htmlConfig;
+  baseConfig.htmlCourse = false;
+  baseConfig.htmlRegions.clear();
+  auto baseData = game::systems::TerrainGenerator::GenerateTerrain(
+      "HTML course variety seed", holes, baseConfig);
+  CHECK(htmlData.heightMap != baseData.heightMap,
+        "HTML regions add article-specific relief to the terrain");
 
   game::systems::TerrainConfig tutorialConfig;
   tutorialConfig.resolutionX = 64;
