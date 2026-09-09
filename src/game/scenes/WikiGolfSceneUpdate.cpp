@@ -325,6 +325,11 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       m_cameraController->Update(ctx);
   }
 
+  if (m_terrainSystem && !isMapView) {
+      PROFILE_SCOPE("WikiGolf.SurfaceGrassStreaming");
+      m_terrainSystem->UpdateSurfaceGrass(ctx, m_cameraEntity);
+  }
+
   // カップイン判定を地形判定の前に行う（遷移時は以降の処理をスキップ）
   if (CheckCupIn(ctx)) return;
 

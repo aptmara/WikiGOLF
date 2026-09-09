@@ -9,10 +9,13 @@
 #include "../systems/TerrainGenerator.h"
 #include <d3d11.h>
 #include <wrl/client.h>
+#include <cstdint>
 #include <deque>
 #include <future>
+#include <limits>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace core {
@@ -87,6 +90,9 @@ public:
   void UpdateSurfaceResponse(core::GameContext &ctx, ecs::Entity ballEntity,
                              float dt);
 
+  /** @brief 視点移動に合わせて表示範囲の芝を更新する。*/
+  void UpdateSurfaceGrass(core::GameContext &ctx, ecs::Entity cameraEntity);
+
 private:
   struct GrassPatch {
     ecs::Entity entity = 0xFFFFFFFF;
@@ -99,10 +105,18 @@ private:
   };
 
   std::vector<ecs::Entity> m_entities;
+  std::vector<ecs::Entity> m_surfaceGrassEntities;
+  std::unordered_map<uint64_t, std::vector<ecs::Entity>>
+      m_surfaceGrassEntitiesByChunk;
+  std::deque<uint64_t> m_pendingSurfaceGrassChunks;
   std::vector<GrassPatch> m_grassPatches;
   ecs::Entity m_floorEntity = 0xFFFFFFFF;
   std::shared_ptr<TerrainData> m_terrainData;
   bool m_tutorialMode = false;
+  float m_grassFieldWidth = 0.0f;
+  float m_grassFieldDepth = 0.0f;
+  int m_grassViewChunkX = (std::numeric_limits<int>::max)();
+  int m_grassViewChunkZ = (std::numeric_limits<int>::max)();
 
   // ボールが通った軌跡（一定距離ぶんだけ保持し、草の倒れ込みに反映する）。
   // 先頭が最も古いサンプル、末尾が最新のボール位置。
@@ -156,6 +170,13 @@ private:
    */
   void CreateSurfaceGrass(core::GameContext &ctx, float fieldWidth,
                           float fieldDepth);
+  void UpdateSurfaceGrassChunks(core::GameContext &ctx, float centerX,
+                                float centerZ, size_t generationBudget);
+  void GenerateSurfaceGrassChunk(core::GameContext &ctx, int chunkX,
+                                 int chunkZ);
+  void RemoveSurfaceGrassChunks(core::GameContext &ctx,
+                                const std::vector<uint64_t> &chunkKeys);
+  void ClearSurfaceGrass(core::GameContext &ctx);
 
   int m_biome = 0; /**< 現在のバイオーム*/
 

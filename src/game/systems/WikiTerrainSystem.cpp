@@ -48,8 +48,11 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   m_buildTileIndex = 0;
   m_buildTiles.clear();
   m_buildLinks.clear();
-  m_grassPatches.clear();
-  ctx.world.SetGlobal(GrassRenderSpatialIndex{});
+  ClearSurfaceGrass(ctx);
+  m_grassFieldWidth = 0.0f;
+  m_grassFieldDepth = 0.0f;
+  m_grassViewChunkX = (std::numeric_limits<int>::max)();
+  m_grassViewChunkZ = (std::numeric_limits<int>::max)();
 
   for (auto e : m_entities) {
     if (ctx.world.IsAlive(e)) {

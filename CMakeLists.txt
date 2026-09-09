@@ -372,6 +372,16 @@ if(MSVC)
 endif()
 add_test(NAME terrain_generation COMMAND test_terrain_generation)
 
+add_executable(test_grass_streaming_rules test_grass_streaming_rules.cpp)
+target_precompile_headers(test_grass_streaming_rules PRIVATE src/pch.h)
+target_include_directories(test_grass_streaming_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_grass_streaming_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                               -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_grass_streaming_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME grass_streaming_rules COMMAND test_grass_streaming_rules)
+
 add_executable(test_graphics_preset test_graphics_preset.cpp)
 target_precompile_headers(test_graphics_preset PRIVATE src/pch.h)
 target_include_directories(test_graphics_preset PRIVATE src)
