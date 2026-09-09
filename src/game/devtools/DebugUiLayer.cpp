@@ -56,6 +56,10 @@ bool DebugUiLayer::IsPauseToggleRequested() const {
   return m_initialized && ImGui::IsKeyPressed(ImGuiKey_F5, false);
 }
 
+bool DebugUiLayer::IsFrameStepRequested() const {
+  return m_initialized && ImGui::IsKeyPressed(ImGuiKey_F6, false);
+}
+
 LRESULT DebugUiLayer::ProcessWindowMessage(HWND window, UINT message,
                                            WPARAM wParam, LPARAM lParam) {
   if (!ImGui::GetCurrentContext()) {

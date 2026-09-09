@@ -13,6 +13,7 @@ public:
   void BeginFrame();
   void Render();
   bool IsPauseToggleRequested() const;
+  bool IsFrameStepRequested() const;
 
   static LRESULT ProcessWindowMessage(HWND window, UINT message,
                                       WPARAM wParam, LPARAM lParam);

@@ -335,6 +335,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       if (debugUi.IsPauseToggleRequested()) {
         debugTime.TogglePaused();
       }
+      if (debugUi.IsFrameStepRequested()) {
+        debugTime.RequestStep();
+      }
       ctx.dt = debugTime.SimulationDelta(dt);
 #endif
 
