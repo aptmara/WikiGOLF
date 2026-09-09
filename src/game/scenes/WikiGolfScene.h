@@ -26,6 +26,7 @@
 #include "../controllers/TutorialOverlayController.h"
 
 #include "../systems/ParticleSystem.h"
+#include "../systems/SlopeVisualizationSystem.h"
 #include "../systems/TimeOfDaySystem.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
@@ -161,6 +162,9 @@ private:
 
   // === Wiki Terrain システム（地形生成） ===
   std::unique_ptr<game::systems::WikiTerrainSystem> m_terrainSystem;
+
+  // === 傾斜可視化システム（パター保持時のグリーン高低差オーバーレイ） ===
+  game::systems::SlopeVisualizationSystem m_slopeVisualization;
 
   // === Skybox システム（背景スカイボックス） ===
   std::unique_ptr<graphics::SkyboxTextureGenerator> m_skyboxGenerator;

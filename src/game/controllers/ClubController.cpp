@@ -188,20 +188,20 @@ const ClubController::Club &ClubController::GetCurrentClub() const {
 int ClubController::GetCurrentClubIndex() const { return m_currentClubIndex; }
 
 float ClubController::GetRecommendedCameraDistance(float fieldScale) const {
-  if (m_currentClub.name == "Putter") {
+  if (m_currentClub.categoryEN == "Putter") {
     return 4.0f * fieldScale;
   }
-  if (m_currentClub.name == "Wedge") {
+  if (m_currentClub.categoryEN == "Wedge") {
     return 10.0f * fieldScale;
   }
   return 15.0f * fieldScale;
 }
 
 float ClubController::GetRecommendedCameraHeight(float fieldScale) const {
-  if (m_currentClub.name == "Putter") {
+  if (m_currentClub.categoryEN == "Putter") {
     return 8.0f * fieldScale;
   }
-  if (m_currentClub.name == "Wedge") {
+  if (m_currentClub.categoryEN == "Wedge") {
     return 6.0f * fieldScale;
   }
   return 5.0f * fieldScale;

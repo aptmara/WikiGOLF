@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace game::controllers {
 
@@ -46,6 +47,10 @@ private:
     void RestoreMainCamera(core::GameContext& ctx);
     void UpdateAnimation(core::GameContext& ctx, float dt);
     void UpdateUI(core::GameContext& ctx, float dt);
+    void BeginCourseIntroduction(core::GameContext& ctx);
+    void UpdateCourseIntroduction(core::GameContext& ctx, float dt);
+    void ApplyCourseIntroductionShot(core::GameContext& ctx);
+    void FinishCourseIntroduction(core::GameContext& ctx);
     void ResetLoadState();
 
     bool m_isActive = false;
@@ -57,6 +62,7 @@ private:
         Loading,
         ErrorWait,
         Building,
+        CourseIntroduction,
         FadeOut
     };
     Phase m_phase = Phase::FadeIn;
@@ -90,6 +96,30 @@ private:
     // アニメーション用変数
     float m_globeRotation = 0.0f;
 
+    enum class IntroductionShotKind {
+        Overview,
+        Goal,
+        GoalGroup,
+        OneHop,
+        ReturnToTee
+    };
+
+    struct IntroductionShot {
+        IntroductionShotKind kind = IntroductionShotKind::Overview;
+        DirectX::XMFLOAT3 cameraPosition{};
+        DirectX::XMFLOAT3 focusPosition{};
+        std::wstring label;
+        std::wstring title;
+        std::wstring body;
+        std::wstring detail;
+        float duration = 1.0f;
+    };
+
+    std::vector<IntroductionShot> m_introductionShots;
+    size_t m_introductionShotIndex = 0;
+    float m_introductionShotTimer = 0.0f;
+    DirectX::XMFLOAT3 m_introductionCameraFrom{};
+
     // エンティティ
     ecs::Entity m_globeEntity = UINT32_MAX;
     ecs::Entity m_bgEntity = UINT32_MAX;
@@ -100,6 +130,9 @@ private:
     ecs::Entity m_textEntity = UINT32_MAX;
     ecs::Entity m_progressTextEntity = UINT32_MAX;
     ecs::Entity m_captionTextEntity = UINT32_MAX;
+    ecs::Entity m_introductionPanelEntity = UINT32_MAX;
+    ecs::Entity m_introductionDetailEntity = UINT32_MAX;
+    ecs::Entity m_introductionSkipEntity = UINT32_MAX;
     ecs::EntityOwner m_entityOwner;
 
     graphics::TextStyle m_primaryStyle{};

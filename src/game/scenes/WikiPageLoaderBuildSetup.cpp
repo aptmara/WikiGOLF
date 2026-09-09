@@ -39,6 +39,7 @@ void WikiPageLoader::BeginBuildPage(core::GameContext& ctx,
     m_buildMinimap = minimapController;
     m_buildProgress = 0.0f;
     m_buildResult = PageLoadResult();
+    m_courseIntroductionData = CourseIntroductionData();
     m_buildHoleCandidates.clear();
     m_buildPathCandidates.clear();
     m_buildMapHoleCandidates.clear();

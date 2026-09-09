@@ -96,6 +96,9 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   // 地形システムの初期化
   m_terrainSystem = std::make_unique<game::systems::WikiTerrainSystem>();
 
+  // 傾斜可視化システムの初期化（パター保持時のグリーン高低差オーバーレイ）
+  m_slopeVisualization.Initialize(ctx);
+
   // ページローダーの初期化
   m_pageLoader = std::make_unique<WikiPageLoader>();
 
