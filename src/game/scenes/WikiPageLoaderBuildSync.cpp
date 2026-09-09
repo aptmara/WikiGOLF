@@ -61,6 +61,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     controllers::MinimapController* minimapController)
 {
     const auto buildStartedAt = std::chrono::steady_clock::now();
+    m_courseIntroductionData = CourseIntroductionData();
     PageLoadResult result;
     const std::string& pageName = asyncData.pageName;
     m_buildMinimap = minimapController;
@@ -314,6 +315,8 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         state->par = par;
         result.calculatedPar = calculatedPar;
     }
+
+    CaptureCourseIntroductionData(pageName, articleText, *state);
 
     result.fieldWidth = fieldWidth;
     result.fieldDepth = fieldDepth;

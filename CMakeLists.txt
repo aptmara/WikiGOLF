@@ -236,6 +236,17 @@ if(MSVC)
 endif()
 add_test(NAME loading_scene_progress COMMAND test_loading_scene_progress)
 
+# コース紹介の概要整形・注目ホール選定テスト
+add_executable(test_course_introduction_rules test_course_introduction_rules.cpp)
+target_precompile_headers(test_course_introduction_rules PRIVATE src/pch.h)
+target_include_directories(test_course_introduction_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_course_introduction_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                       -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_course_introduction_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME course_introduction_rules COMMAND test_course_introduction_rules)
+
 # 文字列トリミングテスト
 add_executable(test_string_utils_trim test_string_utils_trim.cpp
                                         src/core/StringUtils.cpp)

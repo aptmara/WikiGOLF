@@ -15,14 +15,25 @@
 #include "../components/Transform.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "hud/HudStyles.h"
 #include "../systems/WikiClient.h"
+#include "../utils/UIConstants.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
 
 namespace game::controllers {
 
 namespace {
+
+constexpr float kIntroductionCameraMoveDuration = 1.5f;
+constexpr float kIntroductionSkipX = 990.0f;
+constexpr float kIntroductionSkipY = 646.0f;
+constexpr float kIntroductionSkipWidth = 240.0f;
+constexpr float kIntroductionSkipHeight = 48.0f;
 
 /**
  * @brief 開始時刻からの経過時間をミリ秒で返します。
@@ -197,6 +208,35 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     capText.style = m_captionStyle;
     capText.visible = true;
     capText.layer = 20;
+
+    m_introductionPanelEntity = m_entityOwner.Create(ctx.world);
+    auto& introPanel = ctx.world.Add<components::UIText>(m_introductionPanelEntity);
+    introPanel.x = 54.0f;
+    introPanel.y = 48.0f;
+    introPanel.width = 610.0f;
+    introPanel.height = 286.0f;
+    game::controllers::hud::ApplySurfaceStyle(introPanel.style);
+    introPanel.visible = false;
+    introPanel.layer = 30;
+
+    m_introductionDetailEntity = m_entityOwner.Create(ctx.world);
+    auto& introDetail = ctx.world.Add<components::UIText>(m_introductionDetailEntity);
+    introDetail.x = 82.0f;
+    introDetail.y = 285.0f;
+    introDetail.width = 554.0f;
+    introDetail.height = 28.0f;
+    introDetail.visible = false;
+    introDetail.layer = 32;
+
+    m_introductionSkipEntity = m_entityOwner.Create(ctx.world);
+    auto& introSkip = ctx.world.Add<components::UIText>(m_introductionSkipEntity);
+    introSkip.text = L"スキップしてスタート";
+    introSkip.x = kIntroductionSkipX;
+    introSkip.y = kIntroductionSkipY;
+    introSkip.width = kIntroductionSkipWidth;
+    introSkip.height = kIntroductionSkipHeight;
+    introSkip.visible = false;
+    introSkip.layer = 32;
 }
 
 void ArticleTransitionController::DestroyEntities(core::GameContext& ctx) {
@@ -206,6 +246,8 @@ void ArticleTransitionController::DestroyEntities(core::GameContext& ctx) {
 
     m_globeEntity = m_bgEntity = m_cameraEntity = UINT32_MAX;
     m_textEntity = m_progressTextEntity = m_captionTextEntity = UINT32_MAX;
+    m_introductionPanelEntity = m_introductionDetailEntity =
+        m_introductionSkipEntity = UINT32_MAX;
 }
 
 void ArticleTransitionController::CaptureMainCamera(core::GameContext& ctx) {
@@ -339,11 +381,15 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                              "total={}ms",
                              m_targetPage, ElapsedMs(m_buildStartedAt),
                              ElapsedMs(m_transitionStartedAt));
-                    m_phase = Phase::FadeOut;
+                    BeginCourseIntroduction(ctx);
                 }
             } else {
                 m_phase = Phase::FadeOut;
             }
+            break;
+
+        case Phase::CourseIntroduction:
+            UpdateCourseIntroduction(ctx, dt);
             break;
 
         case Phase::FadeOut:
@@ -363,6 +409,9 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
 }
 
 void ArticleTransitionController::UpdateAnimation(core::GameContext& ctx, float dt) {
+    if (m_phase == Phase::CourseIntroduction) {
+        return;
+    }
     // 地球儀の自転
     m_globeRotation += dt * 0.5f;
     if (auto* tr = ctx.world.Get<components::Transform>(m_globeEntity)) {
@@ -372,6 +421,9 @@ void ArticleTransitionController::UpdateAnimation(core::GameContext& ctx, float 
 }
 
 void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
+    if (m_phase == Phase::CourseIntroduction) {
+        return;
+    }
     if (m_hasError) {
         if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
             text->text = m_errorMsg;
@@ -492,6 +544,306 @@ void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
         style.color.w = m_fadeAlpha;
         text->style = style;
     }
+}
+
+void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx) {
+    if (!m_pageLoader) {
+        m_phase = Phase::FadeOut;
+        return;
+    }
+
+    const scenes::CourseIntroductionData& data =
+        m_pageLoader->GetCourseIntroductionData();
+    const float teeZ = -data.fieldDepth * 0.4f;
+    const auto featured = game::utils::SelectFeaturedCourseHoles(
+        data.holes, 0.0f, teeZ, 5);
+    LOG_INFO("Transition",
+             "Course introduction page='{}' abstractChars={} holes={} goals={} "
+             "oneHopFeatured={}",
+             data.pageName, data.abstractText.size(), data.holes.size(),
+             featured.goals.size(), featured.oneHop.size());
+
+    m_introductionShots.clear();
+    IntroductionShot overview;
+    overview.kind = IntroductionShotKind::Overview;
+    const float overviewHeight =
+        std::clamp(std::max(data.fieldWidth, data.fieldDepth) * 0.45f,
+                   55.0f, 900.0f);
+    overview.cameraPosition = {0.0f, overviewHeight,
+                               -data.fieldDepth * 0.15f};
+    overview.focusPosition = {0.0f, 0.0f, 0.0f};
+    overview.label = L"ABOUT THIS COURSE";
+    overview.title = core::ToWString(data.pageName);
+    overview.body = data.abstractText;
+    std::wostringstream courseStats;
+    courseStats << L"PAR " << data.par << L"   HOLES " << data.holes.size()
+                << L"   SIZE " << static_cast<int>(std::round(data.fieldWidth))
+                << L" × " << static_cast<int>(std::round(data.fieldDepth))
+                << L"   WIND " << std::fixed << std::setprecision(1)
+                << data.windSpeed << L" m/s";
+    overview.detail = courseStats.str();
+    overview.duration = 7.0f;
+    m_introductionShots.push_back(std::move(overview));
+
+    if (featured.goals.size() <= 3) {
+        for (std::size_t index = 0; index < featured.goals.size(); ++index) {
+            const auto& hole = featured.goals[index];
+            IntroductionShot goal;
+            goal.kind = IntroductionShotKind::Goal;
+            goal.cameraPosition = {hole.x + 12.0f, hole.y + 15.0f,
+                                   hole.z - 18.0f};
+            goal.focusPosition = {hole.x, hole.y + 1.5f, hole.z};
+            goal.label = L"DIRECT GOAL";
+            goal.title = core::ToWString(hole.linkTarget);
+            goal.body = L"このホールから目的記事へ直接到達できます。";
+            goal.detail = L"GOAL HOLE " + std::to_wstring(index + 1) + L" / " +
+                          std::to_wstring(featured.goals.size());
+            goal.duration = 3.0f;
+            m_introductionShots.push_back(std::move(goal));
+        }
+    } else {
+        float centerX = 0.0f;
+        float centerY = 0.0f;
+        float centerZ = 0.0f;
+        for (const auto& hole : featured.goals) {
+            centerX += hole.x;
+            centerY += hole.y;
+            centerZ += hole.z;
+        }
+        centerX /= static_cast<float>(featured.goals.size());
+        centerY /= static_cast<float>(featured.goals.size());
+        centerZ /= static_cast<float>(featured.goals.size());
+        float radius = 0.0f;
+        for (const auto& hole : featured.goals) {
+            const float dx = hole.x - centerX;
+            const float dz = hole.z - centerZ;
+            radius = std::max(radius, std::sqrt(dx * dx + dz * dz));
+        }
+
+        IntroductionShot goals;
+        goals.kind = IntroductionShotKind::GoalGroup;
+        const float distance = std::max(24.0f, radius * 0.55f);
+        goals.cameraPosition = {centerX,
+                                centerY + std::max(35.0f, radius * 1.25f),
+                                centerZ - distance};
+        goals.focusPosition = {centerX, centerY + 1.5f, centerZ};
+        goals.label = L"DIRECT GOALS";
+        goals.title = L"ゴールホール " +
+                      std::to_wstring(featured.goals.size()) + L"カ所";
+        goals.body = L"赤い旗は、どれも目的記事へ直接つながっています。";
+        goals.detail = L"ALL GOAL HOLES";
+        goals.duration = 4.5f;
+        m_introductionShots.push_back(std::move(goals));
+    }
+
+    for (std::size_t index = 0; index < featured.oneHop.size(); ++index) {
+        const auto& hole = featured.oneHop[index];
+        IntroductionShot oneHop;
+        oneHop.kind = IntroductionShotKind::OneHop;
+        oneHop.cameraPosition = {hole.x + 11.0f, hole.y + 14.0f,
+                                 hole.z - 17.0f};
+        oneHop.focusPosition = {hole.x, hole.y + 1.5f, hole.z};
+        oneHop.label = L"PRIORITY HOLE · 1 HOP";
+        oneHop.title = core::ToWString(hole.linkTarget);
+        oneHop.body = L"このリンク先から、あと1回の移動で目的記事へ到達できます。";
+        oneHop.detail = L"RECOMMENDED " + std::to_wstring(index + 1) + L" / " +
+                        std::to_wstring(featured.oneHop.size());
+        oneHop.duration = 2.8f;
+        m_introductionShots.push_back(std::move(oneHop));
+    }
+
+    IntroductionShot ready;
+    ready.kind = IntroductionShotKind::ReturnToTee;
+    ready.cameraPosition = {0.0f, 18.0f, teeZ - 22.0f};
+    ready.focusPosition = {0.0f, 1.0f, teeZ + 12.0f};
+    ready.label = L"READY";
+    ready.title = L"TEE OFF";
+    ready.body = L"価値の高いホールを狙って、目的記事を目指しましょう。";
+    ready.detail = L"PLAY";
+    ready.duration = 2.5f;
+    m_introductionShots.push_back(std::move(ready));
+
+    if (auto* globe = ctx.world.Get<components::MeshRenderer>(m_globeEntity)) {
+        globe->isVisible = false;
+    }
+    if (auto* background = ctx.world.Get<components::MeshRenderer>(m_bgEntity)) {
+        background->isVisible = false;
+    }
+    if (auto* transitionCamera = ctx.world.Get<components::Camera>(m_cameraEntity)) {
+        transitionCamera->isMainCamera = false;
+    }
+    if (auto* courseCamera = ctx.world.Get<components::Camera>(m_targetCam)) {
+        courseCamera->isMainCamera = true;
+    }
+
+    ctx.input.SetMouseCursorVisible(true);
+    ctx.input.SetMouseCursorLocked(false);
+
+    m_phase = Phase::CourseIntroduction;
+    m_introductionShotIndex = 0;
+    m_introductionShotTimer = 0.0f;
+    if (auto* transform = ctx.world.Get<components::Transform>(m_targetCam)) {
+        m_introductionCameraFrom = transform->position;
+    }
+    ApplyCourseIntroductionShot(ctx);
+}
+
+void ArticleTransitionController::UpdateCourseIntroduction(
+    core::GameContext& ctx, float dt) {
+    if (m_introductionShots.empty() ||
+        m_introductionShotIndex >= m_introductionShots.size()) {
+        FinishCourseIntroduction(ctx);
+        return;
+    }
+
+    const auto mousePosition = ctx.input.GetMousePosition();
+    const bool skipHovered =
+        mousePosition.x >= kIntroductionSkipX &&
+        mousePosition.x <= kIntroductionSkipX + kIntroductionSkipWidth &&
+        mousePosition.y >= kIntroductionSkipY &&
+        mousePosition.y <= kIntroductionSkipY + kIntroductionSkipHeight;
+    if (auto* skip = ctx.world.Get<components::UIText>(m_introductionSkipEntity)) {
+        skip->style.bgColor = skipHovered
+            ? game::ui::kColorSurfaceRaised
+            : game::ui::kColorShotBtn;
+        skip->style.borderColor = skipHovered
+            ? game::ui::kColorAccent
+            : game::ui::kColorShotBtnBorder;
+    }
+    if (skipHovered && ctx.input.GetMouseButtonDown(0)) {
+        FinishCourseIntroduction(ctx);
+        return;
+    }
+
+    m_introductionShotTimer += dt;
+    const IntroductionShot& shot = m_introductionShots[m_introductionShotIndex];
+    const float rawT = std::clamp(
+        m_introductionShotTimer / kIntroductionCameraMoveDuration, 0.0f, 1.0f);
+    const float easedT = rawT * rawT * (3.0f - 2.0f * rawT);
+    if (auto* transform = ctx.world.Get<components::Transform>(m_targetCam)) {
+        transform->position.x = m_introductionCameraFrom.x +
+            (shot.cameraPosition.x - m_introductionCameraFrom.x) * easedT;
+        transform->position.y = m_introductionCameraFrom.y +
+            (shot.cameraPosition.y - m_introductionCameraFrom.y) * easedT;
+        transform->position.z = m_introductionCameraFrom.z +
+            (shot.cameraPosition.z - m_introductionCameraFrom.z) * easedT;
+
+        const DirectX::XMVECTOR eye = DirectX::XMLoadFloat3(&transform->position);
+        const DirectX::XMVECTOR focus =
+            DirectX::XMLoadFloat3(&shot.focusPosition);
+        const DirectX::XMVECTOR direction = DirectX::XMVectorSubtract(focus, eye);
+        if (DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(direction)) > 0.001f) {
+            const DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
+                eye, focus, DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+            DirectX::XMStoreFloat4(
+                &transform->rotation,
+                DirectX::XMQuaternionRotationMatrix(
+                    DirectX::XMMatrixInverse(nullptr, view)));
+        }
+    }
+
+    if (m_introductionShotTimer < shot.duration) {
+        return;
+    }
+
+    ++m_introductionShotIndex;
+    if (m_introductionShotIndex >= m_introductionShots.size()) {
+        FinishCourseIntroduction(ctx);
+        return;
+    }
+    m_introductionShotTimer = 0.0f;
+    if (auto* transform = ctx.world.Get<components::Transform>(m_targetCam)) {
+        m_introductionCameraFrom = transform->position;
+    }
+    ApplyCourseIntroductionShot(ctx);
+}
+
+void ArticleTransitionController::ApplyCourseIntroductionShot(
+    core::GameContext& ctx) {
+    const IntroductionShot& shot = m_introductionShots[m_introductionShotIndex];
+
+    if (auto* panel = ctx.world.Get<components::UIText>(m_introductionPanelEntity)) {
+        panel->visible = true;
+    }
+    if (auto* label = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
+        label->text = L"WIKI  ·  " + shot.label;
+        label->x = 82.0f;
+        label->y = 72.0f;
+        label->width = 554.0f;
+        label->height = 24.0f;
+        label->style = graphics::TextStyle::CardLabel();
+        label->style.fontSize = 14.0f;
+        label->style.color = game::ui::kColorAccent;
+        label->visible = true;
+        label->layer = 32;
+    }
+    if (auto* title = ctx.world.Get<components::UIText>(m_textEntity)) {
+        title->text = shot.title;
+        title->x = 82.0f;
+        title->y = 101.0f;
+        title->width = 554.0f;
+        title->height = 58.0f;
+        if (shot.kind == IntroductionShotKind::Goal ||
+            shot.kind == IntroductionShotKind::GoalGroup) {
+            title->style = graphics::TextStyle::GoalHighlight();
+        } else {
+            title->style = graphics::TextStyle::BrowserURL();
+        }
+        title->style.fontSize = 32.0f;
+        title->style.align = graphics::TextAlign::Left;
+        title->visible = true;
+        title->layer = 32;
+    }
+    if (auto* body = ctx.world.Get<components::UIText>(m_captionTextEntity)) {
+        body->text = shot.body;
+        body->x = 82.0f;
+        body->y = 166.0f;
+        body->width = 554.0f;
+        body->height = 104.0f;
+        body->style = graphics::TextStyle::BrowserURL();
+        body->style.fontSize = 16.0f;
+        body->style.color = game::ui::kColorTextPrimary;
+        body->style.align = graphics::TextAlign::Left;
+        body->visible = true;
+        body->layer = 32;
+    }
+    if (auto* detail = ctx.world.Get<components::UIText>(m_introductionDetailEntity)) {
+        detail->text = shot.detail;
+        detail->style = graphics::TextStyle::BrowserSub();
+        detail->style.fontFamily = "Share Tech Mono";
+        detail->style.fontSize = 14.0f;
+        detail->style.color = game::ui::kColorTextSub;
+        detail->style.align = graphics::TextAlign::Left;
+        detail->visible = true;
+    }
+    if (auto* skip = ctx.world.Get<components::UIText>(m_introductionSkipEntity)) {
+        skip->style = graphics::TextStyle::BrowserURL();
+        skip->style.fontSize = 17.0f;
+        skip->style.align = graphics::TextAlign::Center;
+        skip->style.valign = graphics::TextVAlign::Middle;
+        skip->style.color = game::ui::kColorTextPrimary;
+        skip->style.bgColor = game::ui::kColorShotBtn;
+        skip->style.cornerRadius = game::ui::kRadiusChip;
+        skip->style.borderWidth = game::ui::kBorderWidthThin;
+        skip->style.borderColor = game::ui::kColorShotBtnBorder;
+        skip->style.hasShadow = false;
+        skip->visible = true;
+    }
+}
+
+void ArticleTransitionController::FinishCourseIntroduction(
+    core::GameContext& ctx) {
+    const std::array<ecs::Entity, 6> introductionUi = {
+        m_textEntity, m_progressTextEntity, m_captionTextEntity,
+        m_introductionPanelEntity, m_introductionDetailEntity,
+        m_introductionSkipEntity};
+    for (ecs::Entity entity : introductionUi) {
+        if (auto* text = ctx.world.Get<components::UIText>(entity)) {
+            text->visible = false;
+        }
+    }
+    m_fadeAlpha = 0.0f;
+    m_phase = Phase::FadeOut;
 }
 
 } // namespace game::controllers

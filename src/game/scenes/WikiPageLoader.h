@@ -14,6 +14,7 @@
 #include "TutorialCourseLayout.h"
 #include "WikiPageDataFetcher.h"
 #include "PageLinkSelector.h"
+#include "../utils/CourseIntroductionRules.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
@@ -61,6 +62,17 @@ struct PageLoadResult {
     float fieldDepth  = 120.0f;
     int   calculatedPar = -1;
     bool  success     = false;
+};
+
+/** @brief 構築済みコースの紹介演出に使用する読み取り専用データです。*/
+struct CourseIntroductionData {
+    std::string pageName;
+    std::wstring abstractText;
+    float fieldWidth = 80.0f;
+    float fieldDepth = 120.0f;
+    float windSpeed = 0.0f;
+    int par = 5;
+    std::vector<game::utils::CourseIntroductionHole> holes;
 };
 
 /**
@@ -229,6 +241,11 @@ public:
 */
     float GetFieldDepth() const { return m_fieldDepth; }
 
+    /** @brief 最後に構築を完了したコースの紹介用データを取得します。*/
+    const CourseIntroductionData& GetCourseIntroductionData() const {
+        return m_courseIntroductionData;
+    }
+
 private:
     /**
      * @brief 生成済みのページ関連エンティティを破棄します。
@@ -366,6 +383,11 @@ private:
 */
     bool IsPlayableCandidate(const HolePlacementCandidate& candidate) const;
 
+    /** @brief 現在の構築結果をコース紹介用のスナップショットへ保存します。*/
+    void CaptureCourseIntroductionData(
+        const std::string& pageName, const std::string& articleText,
+        const game::components::GolfGameState& state);
+
     BuildStep m_buildStep = BuildStep::None;
     BuildStep m_loggedBuildStep = BuildStep::None;
     PageDataAsyncResult m_buildData;
@@ -397,6 +419,7 @@ private:
     std::vector<HolePlacementCandidate> m_buildPathCandidates;
     std::vector<HolePlacementCandidate> m_buildMapHoleCandidates;
     std::vector<graphics::LinkRegion> m_buildGameplayLinks;
+    CourseIntroductionData m_courseIntroductionData;
     std::unordered_map<std::string, int> m_pathHopCache;
     size_t m_nextHoleIndex = 0;
     size_t m_nextMapIconIndex = 0;
