@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <d3d11.h>
+#include "DebugOverlay.h"
 
 namespace game::debug {
 
@@ -11,7 +12,7 @@ public:
                   ID3D11DeviceContext *context);
   void Shutdown();
   void BeginFrame();
-  void Render();
+  void Render(core::GameContext &ctx, DebugTimeController &time);
   bool IsPauseToggleRequested() const;
   bool IsFrameStepRequested() const;
   bool IsTimeScaleCycleRequested() const;
@@ -21,6 +22,7 @@ public:
 
 private:
   bool m_initialized = false;
+  DebugOverlay m_overlay;
 };
 
 } // namespace game::debug

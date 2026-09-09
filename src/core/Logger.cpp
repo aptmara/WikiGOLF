@@ -71,6 +71,18 @@ void Logger::Shutdown() {
     m_initialized = false;
 }
 
+#ifdef WIKIGOLF_DEBUG_TOOLS
+std::vector<LogEntry> Logger::GetRecentEntries() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return {m_recentEntries.begin(), m_recentEntries.end()};
+}
+
+void Logger::ClearRecentEntries() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_recentEntries.clear();
+}
+#endif
+
 void Logger::Log(LogLevel level, const char* category, const char* file, int line, const std::string& message) {
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
@@ -110,6 +122,13 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
     // 埋もれてしまう（詳細な内訳は Profiler が別途CSVへも出力済みで冗長）。
     // 専用ファイルへ分離する。
     const bool isPerf = std::strcmp(category, "Perf") == 0;
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+    m_recentEntries.push_back({level, category, fullMessage});
+    if (m_recentEntries.size() > kRecentEntryLimit) {
+        m_recentEntries.pop_front();
+    }
+#endif
 
     // ファイル出力処理
     if (m_initialized && m_fileStream.is_open() && !isPerf) {

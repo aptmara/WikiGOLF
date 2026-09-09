@@ -721,3 +721,15 @@ if(MSVC)
     target_compile_options(test_debug_time_scale PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME debug_time_scale COMMAND test_debug_time_scale)
+
+add_executable(test_debug_logger_buffer test_debug_logger_buffer.cpp
+                                        src/core/Logger.cpp)
+target_precompile_headers(test_debug_logger_buffer PRIVATE src/pch.h)
+target_include_directories(test_debug_logger_buffer PRIVATE src)
+target_compile_definitions(test_debug_logger_buffer PRIVATE WIKIGOLF_DEBUG_TOOLS=1)
+if(MSVC)
+    target_compile_definitions(test_debug_logger_buffer PRIVATE -DUNICODE -D_UNICODE
+                                                                  -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_debug_logger_buffer PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME debug_logger_buffer COMMAND test_debug_logger_buffer)

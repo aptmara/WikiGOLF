@@ -9,6 +9,10 @@
 #include <mutex>
 #include <sstream>
 #include <format> // C++20
+#ifdef WIKIGOLF_DEBUG_TOOLS
+#include <deque>
+#include <vector>
+#endif
 
 namespace core {
 
@@ -18,6 +22,14 @@ enum class LogLevel {
     Warning,
     Error
 };
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+struct LogEntry {
+    LogLevel level = LogLevel::Info;
+    std::string category;
+    std::string text;
+};
+#endif
 
 class Logger {
 public:
@@ -37,6 +49,11 @@ public:
 
     /** @brief ログ出力（内部実装）*/
     void Log(LogLevel level, const char* category, const char* file, int line, const std::string& message);
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+    std::vector<LogEntry> GetRecentEntries();
+    void ClearRecentEntries();
+#endif
 
     /** @brief フォーマット付きログ出力ヘルパー*/
     template<typename... Args>
@@ -58,6 +75,10 @@ private:
     std::ofstream m_perfFileStream; // "Perf" カテゴリ専用（毎秒出力され本編ログを埋めるため分離）
     std::mutex m_mutex;
     bool m_initialized = false;
+#ifdef WIKIGOLF_DEBUG_TOOLS
+    static constexpr std::size_t kRecentEntryLimit = 1000;
+    std::deque<LogEntry> m_recentEntries;
+#endif
 };
 
 } // namespace core

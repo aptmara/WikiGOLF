@@ -504,7 +504,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   sceneManager.Render(ctx);
               }
 #ifdef WIKIGOLF_DEBUG_TOOLS
-              debugUi.Render();
+              debugUi.Render(ctx, debugTime);
 #endif
           }
 

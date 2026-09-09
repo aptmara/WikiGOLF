@@ -42,12 +42,17 @@ void DebugUiLayer::BeginFrame() {
   ImGui_ImplDX11_NewFrame();
   ImGui_ImplWin32_NewFrame();
   ImGui::NewFrame();
+  if (ImGui::IsKeyPressed(ImGuiKey_F1, false)) {
+    m_overlay.Toggle();
+  }
 }
 
-void DebugUiLayer::Render() {
+void DebugUiLayer::Render(core::GameContext &ctx,
+                          DebugTimeController &time) {
   if (!m_initialized) {
     return;
   }
+  m_overlay.Draw(ctx, time);
   ImGui::Render();
   ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
