@@ -52,6 +52,10 @@ void DebugUiLayer::Render() {
   ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
+bool DebugUiLayer::IsPauseToggleRequested() const {
+  return m_initialized && ImGui::IsKeyPressed(ImGuiKey_F5, false);
+}
+
 LRESULT DebugUiLayer::ProcessWindowMessage(HWND window, UINT message,
                                            WPARAM wParam, LPARAM lParam) {
   if (!ImGui::GetCurrentContext()) {

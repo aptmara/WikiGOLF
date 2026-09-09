@@ -12,6 +12,7 @@ public:
   void Shutdown();
   void BeginFrame();
   void Render();
+  bool IsPauseToggleRequested() const;
 
   static LRESULT ProcessWindowMessage(HWND window, UINT message,
                                       WPARAM wParam, LPARAM lParam);

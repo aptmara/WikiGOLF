@@ -23,6 +23,7 @@
 #include "src/resources/ResourceManager.h"
 #ifdef WIKIGOLF_DEBUG_TOOLS
 #include "src/game/devtools/DebugBuildConfig.h"
+#include "src/game/devtools/DebugTimeController.h"
 #include "src/game/devtools/DebugUiLayer.h"
 #endif
 #include <Windows.h>
@@ -228,6 +229,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 #ifdef WIKIGOLF_DEBUG_TOOLS
   game::debug::DebugUiLayer debugUi;
+  game::debug::DebugTimeController debugTime;
   if (!debugUi.Initialize(hWnd, graphics.GetDevice(), graphics.GetContext())) {
     LOG_ERROR("DebugUI", "Dear ImGui initialization failed.");
     return -1;
@@ -330,6 +332,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 #ifdef WIKIGOLF_DEBUG_TOOLS
       debugUi.BeginFrame();
+      if (debugUi.IsPauseToggleRequested()) {
+        debugTime.TogglePaused();
+      }
+      ctx.dt = debugTime.SimulationDelta(dt);
 #endif
 
       // 表示用FPSを指数移動平均で平滑化（瞬間値のちらつきを抑える）
