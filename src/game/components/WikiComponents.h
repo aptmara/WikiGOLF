@@ -263,7 +263,7 @@ struct ShotState {
   // インパクトゲージ（0.0〜1.0、0.5が中央）
   float impactGaugePos = 0.0f;
   float impactGaugeDir = 1.0f;
-  float impactGaugeSpeed = 2.0f; ///< インパクトは速い
+  float impactGaugeSpeed = 2.0f * (2.0f / 3.0f); ///< インパクトは速い（従来比2/3）
 
   // 確定値
   float confirmedPower = 0.0f;  ///< 確定パワー（0.0〜1.0）

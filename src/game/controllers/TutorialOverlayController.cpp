@@ -120,7 +120,7 @@ void TutorialOverlayController::Shutdown(core::GameContext& ctx) {
     auto* shotState = ctx.world.GetGlobal<components::ShotState>();
     if (shotState) {
         shotState->powerGaugeSpeed  = 1.5f;
-        shotState->impactGaugeSpeed = 2.0f;
+        shotState->impactGaugeSpeed = 2.0f * (2.0f / 3.0f);
     }
 
     m_entityOwner.DestroyAll(ctx.world);

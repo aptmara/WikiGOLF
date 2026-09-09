@@ -125,6 +125,8 @@ int main() {
   hud.Initialize(context);
 
   const std::size_t initialEntityCount = world.GetEntityCount();
+  const std::size_t initialImageCount =
+      CountComponents<game::components::UIImage>(world);
   std::cout << "[INFO] HUD entity count: " << initialEntityCount << "\n";
   CHECK_TRUE(initialEntityCount > 0,
              "HUD初期化時に表示用Entityを生成する");
@@ -158,7 +160,8 @@ int main() {
   const std::vector<game::controllers::ClubUIData> clubs;
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
-             0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubs, -1, 0.0f, 0.0f);
+             0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubs, -1, 0.0f, 0.0f,
+             nullptr);
 
   CHECK_TRUE(ContainsText(world, L"現在の記事"),
              "更新時に現在記事名を反映する");
@@ -180,7 +183,8 @@ int main() {
   state.currentMaterial = game::components::TerrainMaterial::Water;
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
-             0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubs, -1, 0.0f, 0.0f);
+             0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubs, -1, 0.0f, 0.0f,
+             nullptr);
   auto *waterLie = FindText(world, L"ウォーター");
   CHECK_TRUE(waterLie && ContainsText(world, L"OUT OF BOUNDS"),
              "ウォーターのOB情報を表示する");
@@ -195,9 +199,10 @@ int main() {
       {"Club 4", "textures/ui/club4.png", "C4", "TYPE", 1.0f, 140.0f}};
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
-             0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
-             0.0f);
-  CHECK_TRUE(CountComponents<game::components::UIImage>(world) == 5,
+             0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
+             0.0f, nullptr);
+  CHECK_TRUE(CountComponents<game::components::UIImage>(world) ==
+                 initialImageCount + 5,
              "クラブごとに画像Componentを1個生成する");
   CHECK_TRUE(FindText(world, L"Club 0") && !FindText(world, L"Club 0")->visible,
              "選択範囲外の前方クラブを隠す");
@@ -247,8 +252,8 @@ int main() {
   hud.SetShotPhaseUIVisible(context, true);
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::PowerCharging, 0.5f, 0.5f,
-             0.0f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
-             0.0f);
+             0.0f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, nullptr);
   auto *gauge = FindGauge(world);
   CHECK_TRUE(gauge && gauge->isVisible &&
                  gauge->mode == game::components::UIBarGaugeMode::Power,
@@ -264,8 +269,8 @@ int main() {
 
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::ImpactTiming, 0.4f, 0.5f,
-             0.5f, 0.4f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
-             0.0f);
+             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, nullptr);
   hud.UpdatePowerGauge(context, 50.0f, 40.0f, 0.0f, 100.0f);
   CHECK_TRUE(gauge->mode == game::components::UIBarGaugeMode::Impact &&
                  gauge->showImpactZones && gauge->markerValue == 0.4f,
@@ -278,16 +283,16 @@ int main() {
 
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::Executing, 0.4f, 0.5f,
-             0.5f, 0.4f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
-             0.0f);
+             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, nullptr);
   CHECK_TRUE(gauge->isVisible && gauge->showConfirmedMarker,
              "インパクト確定直後は確定マーカーを保持表示する");
   hud.Update(context,
              game::ui::kGaugeHoldDuration + game::ui::kGaugeFadeDuration +
                  0.1f,
              state, game::components::ShotState::Phase::Executing, 0.4f,
-             0.5f, 0.5f, 0.4f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
-             0.0f, 0.0f);
+             0.5f, 0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, nullptr);
   CHECK_TRUE(!gauge->isVisible && gauge->opacity == 1.0f,
              "保持時間とフェード時間の経過後にゲージを隠す");
 
