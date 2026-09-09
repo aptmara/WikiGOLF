@@ -14,6 +14,8 @@ struct DebugColliderSettings {
   bool terrain = true;
   bool holes = true;
   bool entityIds = false;
+  bool contactPoints = true;
+  bool collisionNormals = true;
 };
 
 class DebugColliderRenderer {

@@ -23,7 +23,7 @@ public:
 private:
   void DrawSimulation(DebugTimeController &time);
   void DrawLog();
-  void DrawColliders();
+  void DrawColliders(core::GameContext &ctx);
 
   bool m_visible = false;
   std::array<bool, 4> m_logLevels = {true, true, true, true};

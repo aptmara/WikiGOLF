@@ -58,7 +58,8 @@ function(wikigolf_add_debug_tests)
     endif()
     wikigolf_configure_debug_test(test_debug_build_config)
 
-    foreach(test_name IN ITEMS debug_pause debug_frame_step debug_time_scale)
+    foreach(test_name IN ITEMS debug_pause debug_frame_step debug_time_scale
+                               debug_collision_info)
         add_executable(test_${test_name} test_${test_name}.cpp)
         wikigolf_configure_debug_test(test_${test_name})
     endforeach()

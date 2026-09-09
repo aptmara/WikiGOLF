@@ -80,6 +80,43 @@ void DrawLines(ImDrawList &drawList, const std::vector<DebugLine3D> &lines,
   }
 }
 
+void DrawContact(ImDrawList &drawList, const CollisionEvent &event,
+                 const ProjectionContext &projection,
+                 const DebugColliderSettings &settings) {
+  ImVec2 contact;
+  if (!Project(event.contactPoint, projection, contact)) {
+    return;
+  }
+  if (settings.contactPoints) {
+    drawList.AddCircleFilled(contact, 4.0f, IM_COL32(255, 80, 230, 255));
+  }
+  if (!settings.collisionNormals) {
+    return;
+  }
+  const float arrowLength = (std::max)(0.5f, event.penetrationDepth * 4.0f);
+  const XMFLOAT3 tip3D = {
+      event.contactPoint.x + event.normal.x * arrowLength,
+      event.contactPoint.y + event.normal.y * arrowLength,
+      event.contactPoint.z + event.normal.z * arrowLength};
+  ImVec2 tip;
+  if (Project(tip3D, projection, tip)) {
+    drawList.AddLine(contact, tip, IM_COL32(255, 180, 30, 255), 2.0f);
+    const ImVec2 direction = {tip.x - contact.x, tip.y - contact.y};
+    const float length = std::sqrt(direction.x * direction.x +
+                                   direction.y * direction.y);
+    if (length > 0.01f) {
+      const ImVec2 unit = {direction.x / length, direction.y / length};
+      const ImVec2 side = {-unit.y, unit.x};
+      drawList.AddTriangleFilled(
+          tip, {tip.x - unit.x * 8.0f + side.x * 4.0f,
+                tip.y - unit.y * 8.0f + side.y * 4.0f},
+          {tip.x - unit.x * 8.0f - side.x * 4.0f,
+           tip.y - unit.y * 8.0f - side.y * 4.0f},
+          IM_COL32(255, 180, 30, 255));
+    }
+  }
+}
+
 } // namespace
 
 void DebugColliderRenderer::Draw(core::GameContext &ctx,
@@ -168,6 +205,12 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
           AppendBoxLines(lines, transform.position, size, transform.rotation);
           DrawLines(drawList, lines, projection, IM_COL32(60, 150, 255, 220));
         });
+  }
+
+  if (const auto *events = ctx.world.GetGlobal<CollisionEvents>()) {
+    for (const auto &event : events->events) {
+      DrawContact(drawList, event, projection, settings);
+    }
   }
 }
 

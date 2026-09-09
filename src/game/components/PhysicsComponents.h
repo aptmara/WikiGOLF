@@ -53,8 +53,11 @@ struct Collider {
  * @brief 衝突イベント
 */
 struct CollisionEvent {
-  uint32_t entityA;
-  uint32_t entityB;
+  uint32_t entityA = 0;
+  uint32_t entityB = 0;
+  DirectX::XMFLOAT3 contactPoint = {0.0f, 0.0f, 0.0f};
+  DirectX::XMFLOAT3 normal = {0.0f, 1.0f, 0.0f};
+  float penetrationDepth = 0.0f;
 };
 
 /**

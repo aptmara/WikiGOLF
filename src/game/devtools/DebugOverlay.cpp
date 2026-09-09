@@ -4,6 +4,7 @@
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/SceneManager.h"
+#include "../components/PhysicsComponents.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cctype>
@@ -68,7 +69,7 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Collision")) {
-      DrawColliders();
+      DrawColliders(ctx);
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
@@ -76,7 +77,7 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
   ImGui::End();
 }
 
-void DebugOverlay::DrawColliders() {
+void DebugOverlay::DrawColliders(core::GameContext &ctx) {
   ImGui::Checkbox("Show collider debug", &m_colliderSettings.enabled);
   ImGui::Checkbox("Sphere", &m_colliderSettings.spheres);
   ImGui::SameLine();
@@ -87,11 +88,43 @@ void DebugOverlay::DrawColliders() {
   ImGui::SameLine();
   ImGui::Checkbox("Goal holes", &m_colliderSettings.holes);
   ImGui::Checkbox("Entity ID", &m_colliderSettings.entityIds);
+  ImGui::Checkbox("Contact point", &m_colliderSettings.contactPoints);
+  ImGui::SameLine();
+  ImGui::Checkbox("Collision normal", &m_colliderSettings.collisionNormals);
   ImGui::TextColored({0.3f, 0.9f, 0.4f, 1.0f}, "Green: collider");
   ImGui::SameLine();
   ImGui::TextColored({1.0f, 0.25f, 0.25f, 1.0f}, "Red: colliding");
   ImGui::SameLine();
   ImGui::TextColored({1.0f, 0.85f, 0.2f, 1.0f}, "Yellow: hole");
+
+  const auto *events =
+      ctx.world.GetGlobal<game::components::CollisionEvents>();
+  if (!events) {
+    return;
+  }
+  ImGui::SeparatorText("Current frame collision events");
+  ImGui::Text("Contacts: %zu", events->events.size());
+  if (ImGui::BeginTable("CollisionEvents", 4,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+    ImGui::TableSetupColumn("Entity A");
+    ImGui::TableSetupColumn("Entity B");
+    ImGui::TableSetupColumn("Point");
+    ImGui::TableSetupColumn("Depth");
+    ImGui::TableHeadersRow();
+    for (const auto &event : events->events) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("%u", event.entityA);
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("%u", event.entityB);
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("%.2f, %.2f, %.2f", event.contactPoint.x,
+                  event.contactPoint.y, event.contactPoint.z);
+      ImGui::TableSetColumnIndex(3);
+      ImGui::Text("%.4f", event.penetrationDepth);
+    }
+    ImGui::EndTable();
+  }
 }
 
 void DebugOverlay::DrawSimulation(DebugTimeController &time) {
