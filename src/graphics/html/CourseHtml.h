@@ -7,7 +7,9 @@ namespace graphics::html {
 inline constexpr std::size_t kMaxHtmlBytes = 2 * 1024 * 1024;
 inline constexpr std::size_t kMaxImages = 12;
 inline constexpr std::uint64_t kMaxTexturePixels = 32ull * 1024 * 1024;
-inline constexpr int kLayoutWidth = 2048;
+// 長大な記事でレイアウト高さ（＝コース奥行き）が肥大化しすぎないよう、
+// 横幅を広げて1行あたりの文字数を増やし、縦方向の伸びを抑える。
+inline constexpr int kLayoutWidth = 2048 * 3;
 
 struct PreparedArticle {
     std::string html;

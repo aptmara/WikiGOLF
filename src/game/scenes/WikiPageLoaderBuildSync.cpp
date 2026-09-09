@@ -6,6 +6,7 @@
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
 #include "HtmlHoleSpacing.h"
+#include "HtmlFieldSizing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
@@ -160,9 +161,14 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     }
 
     if (texResult.layoutWidth > 0) {
-        fieldWidth = std::clamp(kMinFieldWidth*std::pow(articleLengthFactor,0.45f),kMinFieldWidth,kMinFieldWidth*4.0f);
-        fieldDepth = std::clamp(fieldWidth * texResult.layoutHeight / texResult.layoutWidth,
-                               kMinFieldDepth, kMaxSafeDepth);
+        const float desiredWidth = std::clamp(kMinFieldWidth*std::pow(articleLengthFactor,0.45f),
+                                              kMinFieldWidth,kMinFieldWidth*4.0f);
+        // 幅と奥行きを個別にクランプすると記事本文（テクスチャ）が縦横に
+        // 引き伸ばされて見えるため、アスペクト比を保ったまま範囲へ収める。
+        ResolveHtmlFieldSize(desiredWidth,
+            static_cast<float>(texResult.layoutWidth), static_cast<float>(texResult.layoutHeight),
+            kMinFieldWidth, kMinFieldDepth, kMaxSafeWidth, kMaxSafeDepth,
+            fieldWidth, fieldDepth);
     }
     m_wikiTexture =
         std::make_unique<graphics::WikiTextureResult>(std::move(texResult));

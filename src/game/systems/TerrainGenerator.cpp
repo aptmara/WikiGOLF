@@ -31,8 +31,14 @@ TerrainData TerrainGenerator::GenerateTerrain(
     std::vector<HtmlTerrainPoint> holes;
     for (const auto& p : holePositions) holes.push_back({p.x, p.y});
     BuildHtmlTerrain(config.resolutionX, config.resolutionZ, config.worldWidth,
-        config.worldDepth, config.htmlRegions, holes, data.heightMap, data.materialMap);
+        config.worldDepth, config.htmlRegions, holes, data.heightMap, data.materialMap,
+        config.heightScale);
+    // 非HTML経路と同様に、孤立したマテリアルの整理と起伏の平滑化を行う。
+    // HTMLコースはフェザリング幅がグリッド解像度に依存するため、これを
+    // 省くと解像度によっては段差やマテリアルのノイズが目立ちやすい。
+    ApplyMaterialCleanup(data);
     GenerateVisualMaterialColors(data);
+    ApplySmoothing(data, 2);
     CalculateNormals(data);
     GenerateMesh(data, holePositions);
     return data;

@@ -7,12 +7,13 @@ namespace game::systems {
 inline std::vector<HtmlTerrainRegion> HtmlRegions(const graphics::WikiTextureResult& texture) {
     std::vector<HtmlTerrainRegion> out;
     if(!texture.width || !texture.height || !texture.layoutWidth) return out;
-    auto add=[&](const auto& r,bool heading) {
-        out.push_back({r.x/texture.width,r.y/texture.height,r.width/texture.width,r.height/texture.height,heading});
+    auto add=[&](const auto& r,HtmlRegionKind kind) {
+        out.push_back({r.x/texture.width,r.y/texture.height,r.width/texture.width,r.height/texture.height,kind});
     };
-    for(const auto& r:texture.headings) add(r,true);
-    for(const auto& r:texture.images) add(r,false);
-    for(const auto& r:texture.tables) add(r,false);
+    for(const auto& r:texture.headings) add(r,HtmlRegionKind::Heading);
+    for(const auto& r:texture.images) add(r,HtmlRegionKind::Body);
+    // 表は縦長になりやすいため、他の要素と見分けが付くようバンカー（ハザード）として扱う。
+    for(const auto& r:texture.tables) add(r,HtmlRegionKind::Hazard);
     return out;
 }
 }

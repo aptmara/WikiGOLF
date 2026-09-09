@@ -54,7 +54,7 @@ int main() {
         Require(c.Links()[0].target=="Target" && c.Links()[1].target=="Table","table link preserved");
         Require(c.Regions().size()>=4,"heading image table regions");
         std::string longLabel;
-        for(int i=0;i<160;++i) longLabel+="あ";
+        for(int i=0;i<400;++i) longLabel+="あ";
         auto wrap=PrepareArticle("Wrapped", "<p><a href=\"/wiki/Long\">"+longLabel+"</a></p><p><a href=\"/wiki/Long\">Long</a></p>");
         Require(c.Layout(wrap.html,"Long"),"wrapped layout");
         Require(c.Links().size()==2,"same target separate elements");
@@ -80,7 +80,8 @@ int main() {
         Require(spaced.size()==2 && spaced.front().isTarget,"goal priority and spacing");
         std::vector<float> heights;
         std::vector<std::uint8_t> materials;
-        game::systems::BuildHtmlTerrain(101,101,100,100,{{.2f,.2f,.6f,.6f,false}},
+        game::systems::BuildHtmlTerrain(101,101,100,100,
+            {{.2f,.2f,.6f,.6f,game::systems::HtmlRegionKind::Body}},
             {{0,0}},heights,materials);
         Require(heights.size()==10201,"terrain dimensions");
         Require(heights[50*101+50]==0 && materials[50*101+50]==3,"flat link green");
