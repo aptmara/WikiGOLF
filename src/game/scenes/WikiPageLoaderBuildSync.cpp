@@ -5,6 +5,7 @@
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
+#include "HtmlCourseSizing.h"
 #include "HtmlHoleSpacing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
@@ -160,9 +161,10 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     }
 
     if (texResult.layoutWidth > 0) {
-        fieldWidth = std::clamp(kMinFieldWidth*std::pow(articleLengthFactor,0.45f),kMinFieldWidth,kMinFieldWidth*4.0f);
-        fieldDepth = std::clamp(fieldWidth * texResult.layoutHeight / texResult.layoutWidth,
-                               kMinFieldDepth, kMaxSafeDepth);
+        const auto htmlField = CalculateHtmlCourseFieldSize(
+            texResult.layoutWidth, texResult.layoutHeight);
+        fieldWidth = htmlField.width;
+        fieldDepth = htmlField.depth;
     }
     m_wikiTexture =
         std::make_unique<graphics::WikiTextureResult>(std::move(texResult));

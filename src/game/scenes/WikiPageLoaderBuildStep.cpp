@@ -5,6 +5,7 @@
 
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
+#include "HtmlCourseSizing.h"
 #include "HtmlHoleSpacing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
@@ -195,12 +196,11 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                 }
 
                 if (m_textureState.result.layoutWidth > 0) {
-                    m_buildFieldWidth = std::clamp(kMinFieldWidth * std::pow(
-                        std::max(1.0f, static_cast<float>(m_buildData.articleText.size()) / 1500.0f),0.45f),
-                        kMinFieldWidth,kMinFieldWidth*4.0f);
-                    m_buildFieldDepth = std::clamp(m_buildFieldWidth *
-                        m_textureState.result.layoutHeight / m_textureState.result.layoutWidth,
-                        kMinFieldDepth, kMaxSafeDepth);
+                    const auto htmlField = CalculateHtmlCourseFieldSize(
+                        m_textureState.result.layoutWidth,
+                        m_textureState.result.layoutHeight);
+                    m_buildFieldWidth = htmlField.width;
+                    m_buildFieldDepth = htmlField.depth;
                 }
                 m_buildData.pendingImages.clear();
                 m_wikiTexture = std::make_unique<graphics::WikiTextureResult>(std::move(m_textureState.result));

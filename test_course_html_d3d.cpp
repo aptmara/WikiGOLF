@@ -26,7 +26,15 @@ int main() {
                 Require(tile.offsetY==offset,"continuous tile coordinates");
                 offset+=tile.height; pixels+=std::uint64_t(tile.width)*tile.height;
                 D3D11_TEXTURE2D_DESC desc{}; tile.texture->GetDesc(&desc);
+                Require(desc.MipLevels>1 &&
+                    (desc.MiscFlags&D3D11_RESOURCE_MISC_GENERATE_MIPS)!=0,
+                    "HTML tile mip chain");
+                D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+                tile.srv->GetDesc(&srvDesc);
+                Require(srvDesc.Texture2D.MipLevels==desc.MipLevels,
+                    "HTML tile exposes all mip levels");
                 desc.Usage=D3D11_USAGE_STAGING; desc.BindFlags=0; desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+                desc.MiscFlags=0;
                 Microsoft::WRL::ComPtr<ID3D11Texture2D> copy;
                 Require(SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&copy)),"readback texture");
                 context->CopyResource(copy.Get(),tile.texture.Get());

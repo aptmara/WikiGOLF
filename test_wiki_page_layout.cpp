@@ -1,5 +1,6 @@
 #include "src/game/scenes/HolePlacementPlanner.h"
 #include "src/game/scenes/HoleVisualRules.h"
+#include "src/game/scenes/HtmlCourseSizing.h"
 #include "src/game/scenes/AsyncPathEvaluator.h"
 #include "src/game/scenes/TutorialCourseLayout.h"
 #include "src/game/scenes/PageLinkSelector.h"
@@ -20,6 +21,16 @@
   } while (0)
 
 int main() {
+  const auto shortHtmlField =
+      game::scenes::CalculateHtmlCourseFieldSize(2048.0f, 1024.0f);
+  CHECK_TRUE(shortHtmlField.width == 80.0f && shortHtmlField.depth == 120.0f,
+             "短いHTML記事の幅を固定して最小奥行きを保つ");
+
+  const auto longHtmlField =
+      game::scenes::CalculateHtmlCourseFieldSize(2048.0f, 8192.0f);
+  CHECK_TRUE(longHtmlField.width == 80.0f && longHtmlField.depth == 320.0f,
+             "長いHTML記事を横へ拡大せず奥行きへ反映する");
+
   const auto targetColor =
       game::scenes::HoleVisualRules::GetColor(true, 0);
   CHECK_TRUE(targetColor.x == 1.0f && targetColor.y == 0.2f &&

@@ -43,6 +43,8 @@ int main() {
         for (const char* s : {"#note","https://other.test/wiki/A","/wiki/File%3ATest.png","/wiki/A%00B","/wiki/%QQ","/wiki/A?action=edit"})
             Require(ArticleTarget(s).empty(),"excluded URL");
         auto p=PrepareArticle("Title <test>",R"HTML(<style>body{font-size:9000px}</style><script>evil()</script><p onclick="evil()">plain Target <a href="/wiki/Target">Target</a><a href="#note">note</a></p><div class="mw-editsection"><a href="/wiki/Edit">Edit</a></div><table><tr><td><a href="/wiki/Table">Table</a></td></tr></table><img src="//upload.wikimedia.org/wikipedia/commons/test.png"><img src="https://other.test/tracker">)HTML");
+        Require(CourseCss().find("font-size:18px")!=std::string::npos,"course body font size");
+        Require(CourseCss().find("h1 { font-size:36px")!=std::string::npos,"course heading font size");
         Require(p.error.empty(),"prepare");
         Require(p.html.find("evil")==std::string::npos,"script stripped");
         Require(p.html.find("9000")==std::string::npos,"style stripped");
@@ -78,14 +80,16 @@ int main() {
         std::vector<Hole> dense={{20,20,10,10,false},{22,20,10,10,true},{200,200,10,10,false}};
         auto spaced=game::scenes::SelectSpacedHtmlLinks(dense,1000,1000,100,100);
         Require(spaced.size()==2 && spaced.front().isTarget,"goal priority and spacing");
-        std::vector<float> heights;
-        std::vector<std::uint8_t> materials;
-        game::systems::BuildHtmlTerrain(101,101,100,100,{{.2f,.2f,.6f,.6f,false}},
-            {{0,0}},heights,materials);
+        std::vector<float> heights(10201,1.0f);
+        std::vector<std::uint8_t> materials(10201,0);
+        materials[30*101+30]=6;
+        game::systems::ApplyHtmlTerrainLayout(
+            101,101,100,100,2.0f,{{.2f,.2f,.6f,.6f,false}},heights,materials);
         Require(heights.size()==10201,"terrain dimensions");
-        Require(heights[50*101+50]==0 && materials[50*101+50]==3,"flat link green");
-        Require(heights[30*101+30]>0,"image plateau");
-        for(float h:heights) Require(std::isfinite(h) && h>=0 && h<=.45f,"bounded terrain");
+        Require(heights[50*101+50]>1 && materials[50*101+50]==1,"image relief");
+        Require(heights[5*101+5]==1 && materials[5*101+5]==0,"base terrain preserved");
+        Require(materials[30*101+30]==6,"biome hazard preserved");
+        for(float h:heights) Require(std::isfinite(h) && h>=1 && h<=1.48f,"bounded terrain overlay");
         for(int z=0;z<101;++z) for(int x=1;x<101;++x)
             Require(std::abs(heights[z*101+x]-heights[z*101+x-1])<.2f,"traversable slope");
         std::cout << "course_html: all checks passed\n";
