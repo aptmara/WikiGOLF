@@ -66,6 +66,15 @@ public:
 
   const Club &GetCurrentClub() const;
   int GetCurrentClubIndex() const;
+
+  /**
+   * @brief 指定した目標飛距離に最も近い基準飛距離のクラブへ切り替えます。
+   * @details エイムピン設置時に、狙った距離へ最も飛ばしやすいクラブを
+   *          「いい感じに」自動選択するために使う。
+   * @param targetDistance 目標飛距離(ヤード相当)
+   * @return クラブが1本以上あり切り替えを行った場合true
+*/
+  bool SelectClubForDistance(core::GameContext &ctx, float targetDistance);
   float GetRecommendedCameraDistance(float fieldScale) const;
   float GetRecommendedCameraHeight(float fieldScale) const;
 

@@ -14,6 +14,10 @@
 #include <vector>
 #include <string>
 
+namespace game::systems {
+class WikiTerrainSystem;
+}
+
 namespace game::controllers {
 
 /**
@@ -25,6 +29,8 @@ public:
     ecs::Entity cameraEntity;
     ecs::Entity ballEntity;
     float fieldScale = 4.0f;
+    /** @brief マップビュー中の座標/距離表示のレイキャストに使う地形システム*/
+    game::systems::WikiTerrainSystem *terrain = nullptr;
   };
 
   void Initialize(Config cfg, core::GameContext &ctx);
@@ -170,6 +176,7 @@ private:
   ecs::Entity m_minimapBallIconEntity = UINT32_MAX;    ///< 自ボール用画像アイコンです。
   ecs::Entity m_minimapPulseMarkerEntity = UINT32_MAX; ///< 自ボール用外側パルスサークル（○）
   ecs::Entity m_minimapFlagMarkerEntity = UINT32_MAX;  ///< ターゲットピン用パルスマーカー（）
+  ecs::Entity m_aimPinMarkerEntity = UINT32_MAX;       ///< エイムピン(中クリック設置)用マーカー
   std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）
   ecs::Entity m_minimapHelpEntity = UINT32_MAX;
 

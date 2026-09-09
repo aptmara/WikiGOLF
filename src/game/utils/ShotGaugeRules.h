@@ -18,16 +18,22 @@ inline float ClampGaugeValue(float value) {
 }
 
 /**
- * @brief インパクト中心からの絶対誤差を返します。*/
-inline float GetImpactDiff(float impactValue) {
-  return std::abs(ClampGaugeValue(impactValue) - 0.5f);
+ * @brief インパクト中心からの絶対誤差を返します。
+ * @param center パーフェクトとみなす中心位置 (0.0〜1.0)。既定は0.5（バー中央）だが、
+ *        エイムピン設置時はパワー確定位置(confirmedPower)がここに渡され、
+ *        「狙った位置」がそのままパーフェクト位置になる。
+*/
+inline float GetImpactDiff(float impactValue, float center = 0.5f) {
+  return std::abs(ClampGaugeValue(impactValue) - ClampGaugeValue(center));
 }
 
 /**
- * @brief インパクト値からショット判定を決定します。*/
+ * @brief インパクト値からショット判定を決定します。
+ * @param center パーフェクトとみなす中心位置 (0.0〜1.0)。GetImpactDiff参照。
+*/
 inline game::components::ShotJudgement EvaluateImpactJudgement(
-    float impactValue) {
-  const float diff = GetImpactDiff(impactValue);
+    float impactValue, float center = 0.5f) {
+  const float diff = GetImpactDiff(impactValue, center);
   if (diff < game::ui::kThresholdSpecial) {
     return game::components::ShotJudgement::Special;
   }

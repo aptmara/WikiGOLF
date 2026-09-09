@@ -45,6 +45,7 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
     m_gameplayControlsPanel.Initialize(ctx);
     m_shotGaugePanel.Initialize(ctx);
     m_minimapDecorationPanel.Initialize(ctx);
+    m_aimDistancePanel.Initialize(ctx);
 }
 
 void WikiGolfHUD::Shutdown(core::GameContext& ctx) {
@@ -55,6 +56,7 @@ void WikiGolfHUD::Shutdown(core::GameContext& ctx) {
     m_minimapDecorationPanel.Shutdown(ctx);
     m_shotGaugePanel.Shutdown(ctx);
     m_windPanel.Shutdown(ctx);
+    m_aimDistancePanel.Shutdown(ctx);
     m_elapsedTime = 0.0f;
 }
 
@@ -67,11 +69,12 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
                          game::components::ShotState::Phase shotPhase,
                          float currentImpact,
                          float currentPower, float confirmedPower,
-                         float confirmedImpact,
+                         float confirmedImpact, float impactCenter,
                          float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
                          const std::vector<ClubUIData>& clubs,
                          int currentClubIndex,
-                         float distanceToTarget, float heightDiff)
+                         float distanceToTarget, float heightDiff,
+                         const game::components::AimPinState* aimPin)
 {
     m_elapsedTime += dt;
 
@@ -85,7 +88,10 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
     }
     m_liePanel.Update(ctx, state.currentMaterial);
     m_shotGaugePanel.Update(ctx, dt, shotPhase, currentPower, confirmedPower,
-                            currentImpact, confirmedImpact, currentClubData);
+                            currentImpact, confirmedImpact, impactCenter,
+                            currentClubData);
+    m_aimDistancePanel.Update(ctx, shotPhase, currentPower, confirmedPower,
+                              aimPin, currentClubData);
 }
 
 void WikiGolfHUD::UpdateLandingPreviewButton(core::GameContext& ctx,
@@ -149,6 +155,7 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
     m_minimapDecorationPanel.SetVisible(ctx, visible);
     m_shotGaugePanel.SetVisible(ctx, visible);
     m_windPanel.SetVisible(ctx, visible);
+    m_aimDistancePanel.SetVisible(ctx, visible);
 
 }
 

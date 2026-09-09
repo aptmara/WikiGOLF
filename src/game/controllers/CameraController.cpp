@@ -115,6 +115,16 @@ void CameraController::SetTargetDistanceAndHeight(float recommendedDistance,
   m_targetCameraHeight   = recommendedHeight;
 }
 
+void CameraController::AimYawTowards(const DirectX::XMFLOAT3 &fromPos,
+                                     const DirectX::XMFLOAT3 &toPos) {
+  const float dx = toPos.x - fromPos.x;
+  const float dz = toPos.z - fromPos.z;
+  if (dx * dx + dz * dz < 0.0001f) {
+    return; // 距離ゼロに近い場合は向きを変えない
+  }
+  m_cameraYaw = std::atan2(dx, dz);
+}
+
 void CameraController::ResetForTransition(float fieldScale) {
   m_cameraYaw      = 0.0f;
   m_cameraPitch    = 0.5f;
@@ -136,10 +146,15 @@ void CameraController::OnShotStart(core::GameContext &ctx, float power) {
 
 void CameraController::ProcessInput(core::GameContext &ctx,
                                      int mouseX, int mouseY) {
-  // 中ボタンドラッグ、またはアイドル中の右ボタンドラッグで視点回転
+  // 視点回転はアイドル中の左ボタンドラッグに統一（マップビューのパン操作と
+  // 揃える）。右ボタンドラッグも従来どおり併用可能。中ボタンはエイムピン
+  // 設置専用のため、視点回転には使わない。
+  // なお左ボタンは「動かさずに押して離す」とショットチャージ開始のクリックに
+  // なるため（ShotController::ProcessShot参照）、実際の回転はマウスが動いた
+  // フレームのみ発生し、静止クリックではここでの回転は起きない。
   auto *shotState = ctx.world.GetGlobal<components::ShotState>();
   bool isIdle = (!shotState || shotState->phase == components::ShotState::Phase::Idle);
-  bool canRotate = ctx.input.GetMouseButton(2) || (ctx.input.GetMouseButton(1) && isIdle);
+  bool canRotate = isIdle && (ctx.input.GetMouseButton(0) || ctx.input.GetMouseButton(1));
 
   if (canRotate) {
     int deltaX = mouseX - m_prevMouseX;

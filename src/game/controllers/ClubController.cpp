@@ -358,6 +358,26 @@ void ClubController::CollapseClubUI(core::GameContext &ctx) {
   }
 }
 
+bool ClubController::SelectClubForDistance(core::GameContext &ctx,
+                                           float targetDistance) {
+  if (m_availableClubs.empty()) {
+    return false;
+  }
+
+  size_t bestIndex = 0;
+  float bestDiff = std::abs(m_availableClubs[0].baseCarryDistance - targetDistance);
+  for (size_t i = 1; i < m_availableClubs.size(); ++i) {
+    const float diff =
+        std::abs(m_availableClubs[i].baseCarryDistance - targetDistance);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIndex = i;
+    }
+  }
+
+  return SelectClubByIndex(ctx, bestIndex);
+}
+
 bool ClubController::SelectClubByIndex(core::GameContext &ctx, size_t index) {
   if (index >= m_availableClubs.size()) {
     return false;

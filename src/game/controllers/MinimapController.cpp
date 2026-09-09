@@ -58,6 +58,7 @@ void MinimapController::Shutdown(core::GameContext &ctx) {
   m_minimapBallIconEntity = UINT32_MAX;
   m_minimapPulseMarkerEntity = UINT32_MAX;
   m_minimapFlagMarkerEntity = UINT32_MAX;
+  m_aimPinMarkerEntity = UINT32_MAX;
   m_minimapHelpEntity = UINT32_MAX;
   m_landingPreviewRangeEntity = UINT32_MAX;
   m_landingPreviewCenterEntity = UINT32_MAX;
@@ -101,6 +102,7 @@ void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
     setUIImg(m_minimapBallIconEntity,    visible);
     setUITxt(m_minimapPulseMarkerEntity, visible);
     setUITxt(m_minimapFlagMarkerEntity,  false);
+    setUITxt(m_aimPinMarkerEntity,       false);
     for (auto dotEntity : m_minimapGuideDotEntities) {
       setUITxt(dotEntity, false);
     }

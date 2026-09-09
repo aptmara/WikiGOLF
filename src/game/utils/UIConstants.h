@@ -178,6 +178,20 @@ constexpr float kMapHelpPanelH       = 220.0f; ///< 操作ヘルプパネルの�
 
 
 // =========================================================
+// エイムピン距離グラフ (画面中央右・縦バー) - 1280x720固定
+// 中クリックで設置したエイムピンまでの距離を、現在クラブの最大飛距離を
+// 満尺とした縦グラフとして表示する。ショットパネル背景(kShotPanelBgY以降)
+// と重ならないよう、画面中段の高さに収める。
+// =========================================================
+constexpr float kAimGraphX          = 760.0f;
+constexpr float kAimGraphY          = 160.0f;
+constexpr float kAimGraphWidth      = 40.0f;
+constexpr float kAimGraphHeight     = 300.0f;
+constexpr float kAimGraphMarkerSize = 26.0f; // ピン位置を指すマーカー画像の一辺
+constexpr float kAimGraphLabelFont  = 13.0f;
+constexpr float kAimGraphValueFont  = 15.0f;
+
+// =========================================================
 // 判定テキスト & ロジック
 // =========================================================
 constexpr float kJudgeTextX         = 540.0f;

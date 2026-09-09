@@ -22,6 +22,7 @@ void ShotGaugePanel::Update(core::GameContext &ctx, float deltaTime,
                             game::components::ShotState::Phase phase,
                             float currentPower, float confirmedPower,
                             float currentImpact, float confirmedImpact,
+                            float impactCenter,
                             const ClubUIData &currentClub) {
   m_dismissRemaining =
       std::max(0.0f, m_dismissRemaining - deltaTime);
@@ -38,13 +39,14 @@ void ShotGaugePanel::Update(core::GameContext &ctx, float deltaTime,
   m_phaseTransition =
       std::min(1.0f, m_phaseTransition + deltaTime * 7.5f);
   UpdatePanelContent(ctx, phase, currentPower, confirmedPower, currentImpact,
-                     confirmedImpact, currentClub);
+                     confirmedImpact, impactCenter, currentClub);
 }
 
 void ShotGaugePanel::UpdatePanelContent(
     core::GameContext &ctx, game::components::ShotState::Phase phase,
     float currentPower, float confirmedPower, float currentImpact,
-    float confirmedImpact, const ClubUIData &currentClub) {
+    float confirmedImpact, float impactCenter,
+    const ClubUIData &currentClub) {
   const bool powerPhase =
       phase == game::components::ShotState::Phase::PowerCharging;
   const bool impactPhase =
@@ -87,7 +89,7 @@ void ShotGaugePanel::UpdatePanelContent(
     if (impactPhase) {
       shownImpact = currentImpact;
     }
-    const float difference = shownImpact - 0.5f;
+    const float difference = shownImpact - impactCenter;
     const float absoluteDifference = std::abs(difference);
     std::wstring impactText = L"芯";
     DirectX::XMFLOAT4 impactColor = game::ui::kColorSpecial;
@@ -166,10 +168,12 @@ void ShotGaugePanel::UpdatePanelContent(
     gauge->showConfirmedMarker = dismissing;
     gauge->confirmPulse = pulse;
     gauge->opacity = 1.0f;
+    // インパクトゾーンの表示中心も判定と同じ基準(impactCenter)に合わせる。
+    gauge->impactCenter = impactCenter;
     if (dismissing) {
       gauge->opacity = fadeAlpha;
       const auto judgement =
-          game::utils::EvaluateImpactJudgement(confirmedImpact);
+          game::utils::EvaluateImpactJudgement(confirmedImpact, impactCenter);
       const auto color = shot_gauge_detail::GetJudgementColor(judgement);
       gauge->confirmedValue = confirmedImpact;
       gauge->confirmedMarkerColor = color;

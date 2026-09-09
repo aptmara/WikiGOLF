@@ -12,6 +12,7 @@
 #include "../systems/GameJuiceSystem.h"
 #include "../systems/MapSys.h"
 #include "../systems/ParticleRenderSystem.h"
+#include "../controllers/AimPinController.h"
 #include "../controllers/TrajectoryPredictor.h"
 #include "../controllers/BallFastForwardIndicator.h"
 #include "../controllers/BallFastForwardTimer.h"
@@ -135,6 +136,7 @@ private:
   std::unique_ptr<WikiPageLoader>                          m_pageLoader;
   std::unique_ptr<game::controllers::ArticleTransitionController> m_transitionController;
   std::unique_ptr<game::controllers::TutorialOverlayController>   m_tutorialOverlay;
+  std::unique_ptr<game::controllers::AimPinController>            m_aimPinController;
 
   bool m_isTutorial = false;
 

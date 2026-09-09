@@ -377,6 +377,10 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
     m_minimapController->Shutdown(ctx);
   }
 
+  if (m_aimPinController) {
+    m_aimPinController->Shutdown(ctx);
+  }
+
   if (m_trajectoryPredictor) {
     m_trajectoryPredictor->Shutdown(ctx);
   }

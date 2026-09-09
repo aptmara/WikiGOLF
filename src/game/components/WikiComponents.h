@@ -269,6 +269,14 @@ struct ShotState {
   float confirmedPower = 0.0f;  ///< 確定パワー（0.0〜1.0）
   float confirmedImpact = 0.5f; ///< 確定インパクト（0.5が完璧）
 
+  /**
+   * @brief インパクトゲージの「パーフェクト」中心位置 (0.0〜1.0)。
+   * @details パワー確定時の位置(confirmedPower)をそのまま採用する。エイムピン
+   *          設置時は、パワーゲージを狙い通りの高さで止められるほど、この中心が
+   *          インパクトゲージの扱いやすい位置に来る＝精度と飛距離操作が連動する。
+*/
+  float impactPerfectCenter = 0.5f;
+
   // 判定結果
   ShotJudgement judgement = ShotJudgement::None;
   float resultDisplayTime = 0.0f; ///< 結果表示残り時間
@@ -279,6 +287,16 @@ struct ShotState {
   // スピン入力（将来用）
   DirectX::XMFLOAT2 spinInput = {0.0f, 0.0f};
 
+  /**
+   * @brief Idleフェーズでの左クリック判定用（視点回転ドラッグとの区別）。
+   * @details 左ボタンは押した瞬間ではなく、動かさずに離した時だけ
+   *          「クリック」としてパワーチャージを開始する。押下中にしきい値
+   *          以上動いた場合は視点回転ドラッグとみなしチャージを開始しない。
+*/
+  bool aimClickTracking = false;
+  int aimClickPressX = 0;
+  int aimClickPressY = 0;
+
   /** @brief 状態のリセット*/
   void Reset() {
     phase = Phase::Idle;
@@ -288,9 +306,23 @@ struct ShotState {
     impactGaugeDir = 1.0f;
     confirmedPower = 0.0f;
     confirmedImpact = 0.5f;
+    impactPerfectCenter = 0.5f;
     judgement = ShotJudgement::None;
     resultDisplayTime = 0.0f;
+    aimClickTracking = false;
   }
+};
+
+/**
+ * @brief プレイヤーが中クリックで指定した狙い所（エイムピン）
+ * @details マップビューまたは三人称視点での中クリックで設置される。設置される
+ *          たびにClubControllerが飛距離の近いクラブへ自動的に切り替える。
+ *          ショットが実行されると無効化され、次のショットでは再設置が必要になる。
+*/
+struct AimPinState {
+  bool active = false;                        ///< ピンが設置済みか
+  DirectX::XMFLOAT3 worldPosition{0, 0, 0};   ///< ピンのワールド座標
+  float distanceFromBall = 0.0f;              ///< 設置時点のボールからの水平距離
 };
 
 /**

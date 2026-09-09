@@ -16,6 +16,7 @@
 #include "../utils/ShotGaugeRules.h"
 #include "../utils/UIConstants.h"
 #include "WikiGolfHUD.h"
+#include <algorithm>
 #include <cmath>
 
 namespace game::controllers {
@@ -33,6 +34,11 @@ void AdvanceGauge(float& value, float& direction, float speed, float dt) {
     }
 }
 
+// 左ボタンは視点回転ドラッグとしても使うため、押下からこの距離(px)以上
+// マウスが動いた場合はドラッグ扱いとし、パワーチャージ開始のクリックとは
+// みなさない（CameraController::ProcessInputの回転条件と対になる）。
+constexpr int kAimClickMoveThreshold = 6;
+
 } // namespace
 
 ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bool canAim, WikiGolfHUD* hud, ClubController* clubCtrl) {
@@ -45,14 +51,35 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
 
     switch (shot->phase) {
     case game::components::ShotState::Phase::Idle: {
-        if (canAim && ctx.input.GetMouseButtonDown(0)) {
-            // パワーチャージ開始
-            shot->phase = game::components::ShotState::Phase::PowerCharging;
-            shot->powerGaugePos = 0.0f;
-            shot->powerGaugeDir = 1.0f;
+        if (!canAim) {
+            shot->aimClickTracking = false;
+            break;
+        }
 
-            if (ctx.audio) {
-                ctx.audio->PlaySE(ctx, "se_shot_charge.mp3", 0.7f);
+        if (ctx.input.GetMouseButtonDown(0)) {
+            const auto pos = ctx.input.GetMousePosition();
+            shot->aimClickTracking = true;
+            shot->aimClickPressX = pos.x;
+            shot->aimClickPressY = pos.y;
+        }
+
+        // 押下から動かさずに離した場合だけ「クリック」として扱う。
+        // しきい値以上動いた場合はCameraController側の視点回転ドラッグ
+        // として消費されており、ここではチャージを開始しない。
+        if (shot->aimClickTracking && ctx.input.GetMouseButtonUp(0)) {
+            shot->aimClickTracking = false;
+            const auto pos = ctx.input.GetMousePosition();
+            const int dx = pos.x - shot->aimClickPressX;
+            const int dy = pos.y - shot->aimClickPressY;
+            if (dx * dx + dy * dy <= kAimClickMoveThreshold * kAimClickMoveThreshold) {
+                // パワーチャージ開始
+                shot->phase = game::components::ShotState::Phase::PowerCharging;
+                shot->powerGaugePos = 0.0f;
+                shot->powerGaugeDir = 1.0f;
+
+                if (ctx.audio) {
+                    ctx.audio->PlaySE(ctx, "se_shot_charge.mp3", 0.7f);
+                }
             }
         }
         break;
@@ -65,6 +92,11 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->phase = game::components::ShotState::Phase::ImpactTiming;
             shot->impactGaugePos = 0.0f;
             shot->impactGaugeDir = 1.0f;
+            // インパクトの「パーフェクト」位置を確定パワーの位置に合わせる。
+            // 端に寄りすぎると判定帯が画面外にはみ出して事実上パーフェクトが
+            // 出せなくなるため、わずかに余白を残してクランプする。
+            shot->impactPerfectCenter =
+                std::clamp(shot->confirmedPower, 0.05f, 0.95f);
 
             if (hud) {
                 hud->SetImpactZonesVisible(ctx, true);
@@ -95,9 +127,9 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
         if (ctx.input.GetMouseButtonDown(0)) {
             shot->confirmedImpact = shot->impactGaugePos;
 
-            // 判定ロジック
-            shot->judgement =
-                game::utils::EvaluateImpactJudgement(shot->confirmedImpact);
+            // 判定ロジック（パーフェクト中心はパワー確定位置に連動する）
+            shot->judgement = game::utils::EvaluateImpactJudgement(
+                shot->confirmedImpact, shot->impactPerfectCenter);
             if (shot->judgement == game::components::ShotJudgement::Special) {
                 if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorSpecial);
             } else if (shot->judgement == game::components::ShotJudgement::Great) {

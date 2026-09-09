@@ -15,6 +15,7 @@
 #include "../../core/Logger.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../ecs/World.h"
+#include "../utils/ScreenRaycast.h"
 #include "../utils/UIConstants.h"
 #include <algorithm>
 #include <cmath>
@@ -28,6 +29,14 @@ namespace game::controllers {
 
 using namespace DirectX;
 using namespace game::components;
+
+namespace {
+// ○/📍/⛳等の単一グリフをGuide()スタイル(TextAlign::Center)で描画すると、
+// TextVAlignが未実装で常に上詰めのため、行送り(ディセンダー余白)の分だけ
+// 光学的な中心が矩形の幾何中心よりわずかに下にずれて見える。x,yを中心に
+// 見せたいマーカー類はここで経験的に少し上へ補正する。
+constexpr float kGlyphOpticalCenterCorrection = 0.12f; // グリフサイズに対する比率
+} // namespace
 
 /**
  * @brief ミニマップおよびインジケーターの表示を更新します。
@@ -118,18 +127,27 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   const bool markerSurfaceVisible = m_isMapView || (ui && ui->visible);
 
   if (ui && marker && ballT) {
-    float u = 0.5f;
-    float v = 0.5f;
-    const bool ballInView =
-        minimap_detail::ProjectToMinimap(ballT->position.x, ballT->position.z, params, u, v);
-    if (!m_isMapView) {
+    // 全体マップビューは実カメラ(傾いた透視投影)で描画されるため、
+    // HUD常時ミニマップ(正射影)とは別の投影式を使う（ズレ防止）。
+    float screenX = 0.0f;
+    float screenY = 0.0f;
+    bool ballInView;
+    if (m_isMapView) {
+      ballInView = minimap_detail::ProjectWorldToMapViewScreen(
+          ctx, m_cfg.cameraEntity, ballT->position, screenX, screenY);
+    } else {
+      float u = 0.5f;
+      float v = 0.5f;
+      ballInView = minimap_detail::ProjectToMinimap(ballT->position.x, ballT->position.z, params, u, v);
       u = std::clamp(u, 0.02f, 0.98f);
       v = std::clamp(v, 0.02f, 0.98f);
+      screenX = mapBounds.x + u * mapBounds.width;
+      screenY = mapBounds.y + v * mapBounds.height;
     }
 
     // 内側実心●の位置設定
-    marker->x = mapBounds.x + u * mapBounds.width - 10.0f;
-    marker->y = mapBounds.y + v * mapBounds.height - 10.0f;
+    marker->x = screenX - 10.0f;
+    marker->y = screenY - 10.0f;
     marker->visible = false;
 
     if (ballIcon) {
@@ -139,8 +157,8 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
       }
       ballIcon->width = ballIconSize;
       ballIcon->height = ballIconSize;
-      ballIcon->x = mapBounds.x + u * mapBounds.width - ballIcon->width * 0.5f;
-      ballIcon->y = mapBounds.y + v * mapBounds.height - ballIcon->height * 0.5f;
+      ballIcon->x = screenX - ballIcon->width * 0.5f;
+      ballIcon->y = screenY - ballIcon->height * 0.5f;
       ballIcon->visible = markerSurfaceVisible && (!m_isMapView || ballInView);
     }
 
@@ -152,8 +170,12 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
         constexpr float kPulseCycle = 1.6f;
         const float phase = std::fmod(m_markerPulseTimer, kPulseCycle) / kPulseCycle; // 0..1
         const float ringSize = game::ui::kMinimapMarkerSize * (0.9f + phase * 1.4f);
-        pulseMarker->x = mapBounds.x + u * mapBounds.width - ringSize * 0.5f;
-        pulseMarker->y = mapBounds.y + v * mapBounds.height - ringSize * 0.5f;
+        pulseMarker->x = screenX - ringSize * 0.5f;
+        pulseMarker->y = screenY - ringSize * 0.5f - ringSize * kGlyphOpticalCenterCorrection;
+        // width/heightをfontSizeに追従させないと、Center揃え時にx,yを中心に
+        // 描画されず画面右端方向へズレる（MinimapControllerUI.cppの注記参照）。
+        pulseMarker->width = ringSize;
+        pulseMarker->height = ringSize;
         pulseMarker->style.fontSize = ringSize;
         pulseMarker->style.color = {0.18f, 0.85f, 1.0f, (1.0f - phase) * 0.5f};
       }
@@ -216,7 +238,10 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
               flagTxt->visible = !m_isMapView && markerSurfaceVisible;
 
               float flagPulse = 1.0f + 0.16f * std::sin(m_markerPulseTimer * 2.8f);
-              flagTxt->style.fontSize = game::ui::kMinimapMarkerSize * flagPulse;
+              const float flagSize = game::ui::kMinimapMarkerSize * flagPulse;
+              flagTxt->width = flagSize;
+              flagTxt->height = flagSize;
+              flagTxt->style.fontSize = flagSize;
               flagTxt->style.color = {1.0f, 0.2f, 0.2f, 1.0f};
             }
           }
@@ -265,27 +290,43 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
   }
 
   // 着弾点プレビュー(トップビュー専用): 着弾中心マーカー + ばらつき範囲円
+  // 全体マップビューは実カメラの透視投影のため、ProjectWorldToMapViewScreenで
+  // 投影する（傾いたカメラの遠近感を無視するとズレるため）。
   {
     auto *rangeTxt  = ctx.world.Get<UIText>(m_landingPreviewRangeEntity);
     auto *centerTxt = ctx.world.Get<UIText>(m_landingPreviewCenterEntity);
-    float u = 0.5f, v = 0.5f;
+    float screenX = 0.0f, screenY = 0.0f;
     const bool inView = m_isMapView && m_landingPreviewVisible &&
-        minimap_detail::ProjectToMinimap(m_landingPreviewCenter.x, m_landingPreviewCenter.z, params, u, v);
+        minimap_detail::ProjectWorldToMapViewScreen(
+            ctx, m_cfg.cameraEntity, m_landingPreviewCenter, screenX, screenY);
 
     if (inView) {
       if (centerTxt) {
         const float cs = centerTxt->style.fontSize;
-        centerTxt->x = mapBounds.x + u * mapBounds.width - cs * 0.5f;
-        centerTxt->y = mapBounds.y + v * mapBounds.height - cs * 0.5f;
+        centerTxt->x = screenX - cs * 0.5f;
+        centerTxt->y = screenY - cs * 0.5f - cs * kGlyphOpticalCenterCorrection;
         centerTxt->visible = true;
       }
-      if (rangeTxt && clipWidth > 0.0f) {
-        // ○グリフの見た目上の直径にほぼ相当するフォントサイズを、
-        // ワールド半径をマップ画面スケールへ換算して求める。
-        const float pixelRadius = (m_landingPreviewRadius / clipWidth) * mapBounds.width;
+      if (rangeTxt) {
+        // ○グリフの見た目上の直径を、ばらつき半径ぶんワールドでオフセットした
+        // 点を同じ透視投影で再投影し、実画面上のピクセル半径として求める
+        // （正射影の一定倍率換算では傾いたカメラ下で不正確になるため）。
+        float edgeX = screenX;
+        float edgeY = screenY;
+        DirectX::XMFLOAT3 edgeWorld = m_landingPreviewCenter;
+        edgeWorld.x += m_landingPreviewRadius;
+        float pixelRadius = 20.0f;
+        if (minimap_detail::ProjectWorldToMapViewScreen(
+                ctx, m_cfg.cameraEntity, edgeWorld, edgeX, edgeY)) {
+          const float rdx = edgeX - screenX;
+          const float rdy = edgeY - screenY;
+          pixelRadius = std::sqrt(rdx * rdx + rdy * rdy);
+        }
         const float ringSize = std::clamp(pixelRadius * 2.0f, 16.0f, 480.0f);
-        rangeTxt->x = mapBounds.x + u * mapBounds.width - ringSize * 0.5f;
-        rangeTxt->y = mapBounds.y + v * mapBounds.height - ringSize * 0.5f;
+        rangeTxt->x = screenX - ringSize * 0.5f;
+        rangeTxt->y = screenY - ringSize * 0.5f - ringSize * kGlyphOpticalCenterCorrection;
+        rangeTxt->width = ringSize;
+        rangeTxt->height = ringSize;
         rangeTxt->style.fontSize = ringSize;
         rangeTxt->visible = true;
       }
@@ -295,7 +336,43 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     }
   }
 
+  // エイムピン(中クリックで設置した狙い所): HUDミニマップ・全体マップの両方に表示する。
+  // 全体マップビューは実カメラの透視投影のため、HUDミニマップ(正射影)とは
+  // 投影式を分ける（ボールマーカーと同じ理由）。
+  {
+    auto *pinTxt = ctx.world.Get<UIText>(m_aimPinMarkerEntity);
+    const auto *aimPin = ctx.world.GetGlobal<AimPinState>();
+    bool pinInView = false;
+    float screenX = 0.0f;
+    float screenY = 0.0f;
+    if (aimPin && aimPin->active) {
+      if (m_isMapView) {
+        pinInView = minimap_detail::ProjectWorldToMapViewScreen(
+            ctx, m_cfg.cameraEntity, aimPin->worldPosition, screenX, screenY);
+      } else {
+        float u = 0.5f, v = 0.5f;
+        pinInView = minimap_detail::ProjectToMinimap(
+            aimPin->worldPosition.x, aimPin->worldPosition.z, params, u, v);
+        screenX = mapBounds.x + u * mapBounds.width;
+        screenY = mapBounds.y + v * mapBounds.height;
+      }
+    }
+    if (pinTxt) {
+      if (pinInView) {
+        const float ps = pinTxt->style.fontSize;
+        pinTxt->x = screenX - ps * 0.5f;
+        pinTxt->y = screenY - ps * 0.5f - ps * kGlyphOpticalCenterCorrection;
+        pinTxt->visible = true;
+      } else {
+        pinTxt->visible = false;
+      }
+    }
+  }
+
   // 座標および距離表示
+  // 全体マップビューは実カメラの透視投影のため、UVの線形逆変換ではなく
+  // エイムピンと同じ地形レイキャストでマウス位置のワールド座標を求める
+  // （ボールマーカー等と同じ理由でズレを避けるため）。
   if (m_isMapView && ballT) {
     int mouseX = ctx.input.GetMousePosition().x;
     int mouseY = ctx.input.GetMousePosition().y;
@@ -309,25 +386,21 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     auto *coordTxt = ctx.world.Get<UIText>(m_mapCoordText);
     auto *distTxt = ctx.world.Get<UIText>(m_mapDistanceText);
 
-    if (inMap && coordTxt && distTxt) {
-      float u = (mouseX - mapBounds.x) / mapBounds.width;
-      float v = (mouseY - mapBounds.y) / mapBounds.height;
+    DirectX::XMFLOAT3 hoverWorld{0.0f, 0.0f, 0.0f};
+    const bool hasHit = inMap && game::utils::RaycastScreenToTerrain(
+        ctx, m_cfg.cameraEntity, static_cast<float>(mouseX),
+        static_cast<float>(mouseY), m_cfg.terrain, 400.0f, hoverWorld);
 
-      // UV→ワールド座標
-      float clipWidth = minimap_detail::ComputeMinimapWorldSpan(params);
-
-      float worldX = params.center.x + (u - 0.5f) * clipWidth;
-      float worldZ = params.center.z - (v - 0.5f) * clipWidth;
-
+    if (hasHit && coordTxt && distTxt) {
       // 座標表示（ミニマップ内固定位置）
       coordTxt->x = mapBounds.x + 10.0f;
       coordTxt->y = mapBounds.y + mapBounds.height - 35.0f;
-      coordTxt->text = std::format(L"座標: ({:.1f}, {:.1f})", worldX, worldZ);
+      coordTxt->text = std::format(L"座標: ({:.1f}, {:.1f})", hoverWorld.x, hoverWorld.z);
       coordTxt->visible = true;
 
       // ボールからの距離
-      float dx = worldX - ballT->position.x;
-      float dz = worldZ - ballT->position.z;
+      float dx = hoverWorld.x - ballT->position.x;
+      float dz = hoverWorld.z - ballT->position.z;
       float distance = std::sqrt(dx * dx + dz * dz);
 
       distTxt->x = mapBounds.x + 10.0f;

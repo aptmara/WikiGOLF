@@ -76,6 +76,15 @@ public:
   void SetTargetDistanceAndHeight(float recommendedDistance,
                                   float recommendedHeight);
 
+  /**
+   * @brief 視線(ショット)の水平方向を、fromPosからtoPosへの向きに合わせます。
+   * @details エイムピン設置時など、狙った方向へ自動で向き直したい場合に呼ぶ。
+   *          Yawを即座に切り替えるが、実際のカメラ位置は毎フレームのオービット
+   *          追従補間により滑らかに旋回する。
+*/
+  void AimYawTowards(const DirectX::XMFLOAT3 &fromPos,
+                     const DirectX::XMFLOAT3 &toPos);
+
   // ------------------------------------------------------------------
   // アクセサ（他コントローラ・WikiGolfScene から参照）
   // ------------------------------------------------------------------

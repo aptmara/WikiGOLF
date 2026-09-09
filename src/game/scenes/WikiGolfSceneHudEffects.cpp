@@ -81,14 +81,17 @@ void WikiGolfScene::UpdateHudAndEffects(
           if (m_cameraController) {
               cameraYaw = m_cameraController->GetYaw();
           }
+          const auto* aimPin =
+              ctx.world.GetGlobal<game::components::AimPinState>();
           m_hud->Update(ctx, hudDt, state,
                           shot.phase, currentImpact,
                           currentPower, shot.confirmedPower,
-                          shot.confirmedImpact,
+                          shot.confirmedImpact, shot.impactPerfectCenter,
                           state.windSpeed, state.windDirection,
                           cameraYaw,
                           clubDataList, clubIdx,
-                          distanceToTarget, heightDiff);
+                          distanceToTarget, heightDiff,
+                          aimPin);
         }
 
         // HUDへのパワーゲージ更新

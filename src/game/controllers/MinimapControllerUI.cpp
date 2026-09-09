@@ -46,11 +46,17 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   ui.layer = game::ui::kLayerMinimap;
 
   // 自ボール内側ドットマーカー (●)
+  // 注意: UIText は width=0 のとき描画矩形が画面右端まで自動拡張され、
+  // TextAlign::Center はその巨大な矩形の中央に文字を置いてしまう
+  // （x,y を中心に置きたい単発グリフでは致命的にズレる）。width/height を
+  // フォントサイズに明示することで、x,y を中心とした正しい配置にする。
   m_minimapMarkerEntity = m_entityOwner.Create(ctx.world);
   auto &marker = ctx.world.Add<UIText>(m_minimapMarkerEntity);
   marker.text = L"●";
   marker.x = ui.x + ui.width * 0.5f - 10.0f;
   marker.y = ui.y + ui.height * 0.5f - 10.0f;
+  marker.width = game::ui::kMinimapMarkerSize;
+  marker.height = game::ui::kMinimapMarkerSize;
   marker.style = graphics::TextStyle::Guide();
   marker.style.fontSize = game::ui::kMinimapMarkerSize;
   marker.style.color = {0.18f, 0.85f, 1.0f, 1.0f}; // 蛍光シアン
@@ -66,28 +72,49 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   ballIcon.visible = true;
 
   // 自ボール外側パルスサークル (○)
+  // fontSizeが毎フレーム変化するため、width/heightもMinimapControllerMap.cpp側で
+  // 同じ値に追従させる（幅0のまま任せると上のコメントの不具合が再発する）。
   m_minimapPulseMarkerEntity = m_entityOwner.Create(ctx.world);
   auto &pulseMarker = ctx.world.Add<UIText>(m_minimapPulseMarkerEntity);
   pulseMarker.text = L"○";
   pulseMarker.x = marker.x;
   pulseMarker.y = marker.y;
+  pulseMarker.width = game::ui::kMinimapMarkerSize;
+  pulseMarker.height = game::ui::kMinimapMarkerSize;
   pulseMarker.style = graphics::TextStyle::Guide();
   pulseMarker.style.fontSize = game::ui::kMinimapMarkerSize;
   pulseMarker.style.color = {0.18f, 0.85f, 1.0f, 0.8f}; // 半透明シアン
   pulseMarker.layer = game::ui::kLayerMarker;
   pulseMarker.visible = false;
 
-  // ターゲットピン用フォールバックマーカー
+  // ターゲットピン用フォールバックマーカー（fontSizeが変化するのでこちらも追従させる）
   m_minimapFlagMarkerEntity = m_entityOwner.Create(ctx.world);
   auto &flagMarker = ctx.world.Add<UIText>(m_minimapFlagMarkerEntity);
   flagMarker.text = L"P";
   flagMarker.x = 0.0f;
   flagMarker.y = 0.0f;
+  flagMarker.width = game::ui::kMinimapMarkerSize;
+  flagMarker.height = game::ui::kMinimapMarkerSize;
   flagMarker.style = graphics::TextStyle::Guide();
   flagMarker.style.fontSize = game::ui::kMinimapMarkerSize;
   flagMarker.style.color = {1.0f, 0.2f, 0.2f, 1.0f}; // 鮮烈なレッド
   flagMarker.layer = game::ui::kLayerMarker + 2; // ボールより前面に描画
   flagMarker.visible = false;
+
+  // エイムピン(中クリックで設置した狙い所)用マーカー。
+  // ターゲットホールの赤"P"と混同しないよう、色とグリフを変えている。
+  m_aimPinMarkerEntity = m_entityOwner.Create(ctx.world);
+  auto &aimPinMarker = ctx.world.Add<UIText>(m_aimPinMarkerEntity);
+  aimPinMarker.text = L"📍";
+  aimPinMarker.x = 0.0f;
+  aimPinMarker.y = 0.0f;
+  aimPinMarker.width = game::ui::kMinimapMarkerSize;
+  aimPinMarker.height = game::ui::kMinimapMarkerSize;
+  aimPinMarker.style = graphics::TextStyle::Guide();
+  aimPinMarker.style.fontSize = game::ui::kMinimapMarkerSize;
+  aimPinMarker.style.color = {1.0f, 0.2f, 0.9f, 1.0f}; // マゼンタ
+  aimPinMarker.layer = game::ui::kLayerMarker + 3;
+  aimPinMarker.visible = false;
 
   // ショット方向案内用のガイドドット配列 (·)
   m_minimapGuideDotEntities.clear();
@@ -106,9 +133,13 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   }
 
   // 着弾点プレビュー: ばらつき範囲円(大きな薄い○) + 中心マーカー
+  // (width/height未設定だとCenter揃えが画面右端方向にズレるため明示する。
+  //  ばらつき円はfontSizeが毎フレーム変わるのでMinimapControllerMap.cpp側で追従させる)
   m_landingPreviewRangeEntity = m_entityOwner.Create(ctx.world);
   auto &landingRange = ctx.world.Add<UIText>(m_landingPreviewRangeEntity);
   landingRange.text = L"○";
+  landingRange.width = 40.0f;
+  landingRange.height = 40.0f;
   landingRange.style = graphics::TextStyle::Guide();
   landingRange.style.color = {1.0f, 0.75f, 0.15f, 0.55f}; // 半透明アンバー
   landingRange.layer = game::ui::kLayerMarker;
@@ -117,6 +148,8 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   m_landingPreviewCenterEntity = m_entityOwner.Create(ctx.world);
   auto &landingCenter = ctx.world.Add<UIText>(m_landingPreviewCenterEntity);
   landingCenter.text = L"⛳";
+  landingCenter.width = 22.0f;
+  landingCenter.height = 22.0f;
   landingCenter.style = graphics::TextStyle::Guide();
   landingCenter.style.fontSize = 22.0f;
   landingCenter.style.color = {1.0f, 1.0f, 1.0f, 1.0f};

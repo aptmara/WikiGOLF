@@ -20,6 +20,7 @@
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../controllers/AimPinController.h"
 #include "../controllers/ClubController.h"
 #include "../controllers/MinimapController.h"
 #include "../controllers/TutorialOverlayController.h"
@@ -146,17 +147,21 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           shotDir = m_cameraController->GetShotDirection();
       }
       const bool mapViewNow = m_minimapController->IsMapView();
-      float minimapInterval = 1.0f / 30.0f;
       if (mapViewNow) {
-          minimapInterval = 1.0f / 60.0f;
-      }
-      m_minimapUpdateTimer += dt;
-      if (m_minimapUpdateTimer >= minimapInterval) {
-          m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, shotDir);
-          m_minimapUpdateTimer = 0.0f;
-      }
-      if (m_minimapController->IsMapView()) {
+          // 全体マップビューは実カメラの透視投影でマーカーを再計算するため、
+          // カメラ位置を確定させてから(=UpdateMapCameraを先に)投影しないと、
+          // カメラのLERP移動中(パン/ズーム操作中)に1フレーム分古い位置で
+          // 投影してしまい、動かすほどズレが目立つ。間引きも行わず毎フレーム
+          // 追従させる。
           m_minimapController->UpdateMapCamera(ctx, fieldW, fieldD);
+          m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, shotDir);
+      } else {
+          constexpr float kMinimapInterval = 1.0f / 30.0f;
+          m_minimapUpdateTimer += dt;
+          if (m_minimapUpdateTimer >= kMinimapInterval) {
+              m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, shotDir);
+              m_minimapUpdateTimer = 0.0f;
+          }
       }
       isMapView = m_minimapController->IsMapView();
   }
@@ -203,6 +208,41 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
   m_prevTutorialInputLocked = tutorialInputLocked;
 
+  // エイムピン設置（マップ中クリック／三人称視点中クリック）
+  // 全体マップビューも実カメラ(傾いた透視投影)による俯瞰のため、レイキャストは
+  // 両モード共通で扱える。設置されたら、ボールからの距離に最も飛距離が
+  // 近いクラブへ自動的に切り替える。
+  if (m_aimPinController && m_clubController && !tutorialInputLocked &&
+      shot->phase == game::components::ShotState::Phase::Idle) {
+      PROFILE_SCOPE("WikiGolf.AimPin");
+      game::controllers::AimPinController::UpdateParams pinParams;
+      pinParams.mouseX = mouseX;
+      pinParams.mouseY = mouseY;
+      pinParams.allowInput = state->canShoot;
+      pinParams.ballEntity = m_ballEntity;
+      pinParams.cameraEntity = m_cameraEntity;
+      pinParams.terrainSystem = m_terrainSystem.get();
+      auto pinResult = m_aimPinController->Update(ctx, pinParams);
+      if (pinResult.pinPlaced) {
+          m_clubController->SelectClubForDistance(ctx, pinResult.distance);
+          if (m_cameraController) {
+              m_cameraController->SetTargetDistanceAndHeight(
+                  m_clubController->GetRecommendedCameraDistance(4.0f),
+                  m_clubController->GetRecommendedCameraHeight(4.0f));
+
+              // ピンを狙った方向へ視線(ショット方向)も合わせる。
+              const auto *aimPin =
+                  ctx.world.GetGlobal<game::components::AimPinState>();
+              auto *ballTransform =
+                  ctx.world.Get<game::components::Transform>(m_ballEntity);
+              if (aimPin && ballTransform) {
+                  m_cameraController->AimYawTowards(ballTransform->position,
+                                                    aimPin->worldPosition);
+              }
+          }
+      }
+  }
+
   // クラブ更新
   if (m_clubController && !tutorialInputLocked && !isMapView &&
       shot->phase == game::components::ShotState::Phase::Idle) {
@@ -229,6 +269,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       auto event = m_shotController->ProcessShot(ctx, state->canShoot, m_hud.get(), m_clubController.get());
       if (event.shotFired) {
           state->canShoot = false;
+          if (m_aimPinController) m_aimPinController->ClearPin(ctx);
           if (m_cameraController) m_cameraController->OnShotStart(ctx, shot->confirmedPower);
           if (m_clubController) {
               DirectX::XMFLOAT3 shotDir{0, 0, 1};

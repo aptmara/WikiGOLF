@@ -14,6 +14,7 @@
 #include "hud/LiePanel.h"
 #include "hud/ShotGaugePanel.h"
 #include "hud/GameplayControlsPanel.h"
+#include "hud/AimDistancePanel.h"
 #include <DirectXMath.h>
 #include <vector>
 #include <string>
@@ -37,17 +38,20 @@ public:
      * @brief 毎フレーム更新
      * @param clubs クラブ表示情報のリスト（表示順）
      * @param currentClubIndex 現在選択中のインデックス
+     * @param impactCenter インパクトゲージの「パーフェクト」中心位置 (0.0〜1.0)
+     * @param aimPin 設置中のエイムピン状態（nullptrまたはactive=falseなら非表示）
 */
     void Update(core::GameContext& ctx, float dt,
                 const game::components::GolfGameState& state,
                 game::components::ShotState::Phase shotPhase,
                 float currentImpact,
                 float currentPower, float confirmedPower,
-                float confirmedImpact,
+                float confirmedImpact, float impactCenter,
                 float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
                 const std::vector<ClubUIData>& clubs,
                 int currentClubIndex,
-                float distanceToTarget, float heightDiff);
+                float distanceToTarget, float heightDiff,
+                const game::components::AimPinState* aimPin);
 
     /**
      * @brief パワーゲージの値を更新します。
@@ -100,6 +104,7 @@ private:
     hud::MinimapDecorationPanel m_minimapDecorationPanel;
     hud::ShotGaugePanel m_shotGaugePanel;
     hud::WindPanel m_windPanel;
+    hud::AimDistancePanel m_aimDistancePanel;
 
     float m_elapsedTime = 0.0f;
 };

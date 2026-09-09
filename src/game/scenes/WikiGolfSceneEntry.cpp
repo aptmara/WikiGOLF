@@ -434,6 +434,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   ShotState shotState;
   ctx.world.SetGlobal(shotState);
+  ctx.world.SetGlobal(AimPinState{});
 
   LOG_DEBUG("WikiGolf", "Before LoadPage: Cam Alive={}",
             EntityAliveLabel(ctx.world, m_cameraEntity));
@@ -458,6 +459,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   miniCfg.cameraEntity = m_cameraEntity;
   miniCfg.ballEntity = m_ballEntity;
   miniCfg.fieldScale = scene_detail::kFieldScale;
+  miniCfg.terrain = m_terrainSystem.get();
   m_minimapController->Initialize(miniCfg, ctx);
   m_minimapController->InitializeUI(ctx);
 
@@ -475,6 +477,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_trajectoryPredictor->Initialize(ctx, 30);
 
   m_shotController = std::make_unique<game::controllers::ShotController>();
+  m_aimPinController = std::make_unique<game::controllers::AimPinController>();
 
   m_transitionController = std::make_unique<game::controllers::ArticleTransitionController>();
   m_transitionController->Initialize(ctx);
