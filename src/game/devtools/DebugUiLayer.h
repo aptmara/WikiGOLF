@@ -14,6 +14,7 @@ public:
   void Render();
   bool IsPauseToggleRequested() const;
   bool IsFrameStepRequested() const;
+  bool IsTimeScaleCycleRequested() const;
 
   static LRESULT ProcessWindowMessage(HWND window, UINT message,
                                       WPARAM wParam, LPARAM lParam);

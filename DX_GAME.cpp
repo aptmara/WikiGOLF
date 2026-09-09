@@ -338,6 +338,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       if (debugUi.IsFrameStepRequested()) {
         debugTime.RequestStep();
       }
+      if (debugUi.IsTimeScaleCycleRequested()) {
+        debugTime.CycleTimeScale();
+      }
       ctx.dt = debugTime.SimulationDelta(dt);
 #endif
 

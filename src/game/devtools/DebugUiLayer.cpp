@@ -60,6 +60,10 @@ bool DebugUiLayer::IsFrameStepRequested() const {
   return m_initialized && ImGui::IsKeyPressed(ImGuiKey_F6, false);
 }
 
+bool DebugUiLayer::IsTimeScaleCycleRequested() const {
+  return m_initialized && ImGui::IsKeyPressed(ImGuiKey_F7, false);
+}
+
 LRESULT DebugUiLayer::ProcessWindowMessage(HWND window, UINT message,
                                            WPARAM wParam, LPARAM lParam) {
   if (!ImGui::GetCurrentContext()) {
