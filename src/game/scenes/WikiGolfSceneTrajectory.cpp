@@ -146,6 +146,21 @@ void WikiGolfScene::UpdateTrajectoryAndGuide(
         }
       }
     }
+
+    // 傾斜可視化（パター保持中、待機中のみグリーンの高低差オーバーレイを表示）
+    {
+      const bool isPutter = m_clubController &&
+          m_clubController->GetCurrentClub().categoryEN == "Putter";
+      const bool showSlope = isPutter && state.canShoot && !tutorialInputLocked &&
+                             !isMapView &&
+                             shot.phase == game::components::ShotState::Phase::Idle;
+
+      DirectX::XMFLOAT3 ballPos{0.0f, 0.0f, 0.0f};
+      if (auto* ballT3 = ctx.world.Get<game::components::Transform>(m_ballEntity)) {
+        ballPos = ballT3->position;
+      }
+      m_slopeVisualization.Update(ctx, showSlope, ballPos, m_terrainSystem.get());
+    }
 }
 
 } // namespace game::scenes

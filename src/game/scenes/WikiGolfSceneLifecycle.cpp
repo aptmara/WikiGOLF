@@ -368,6 +368,8 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
     m_terrainSystem->Clear(ctx);
   }
 
+  m_slopeVisualization.Shutdown(ctx);
+
   // HUDは生成元でEntityを破棄し、再入場時に状態を持ち越さない。
   if (m_hud) {
     m_hud->Shutdown(ctx);
