@@ -24,6 +24,7 @@ private:
   void DrawSimulation(DebugTimeController &time);
   void DrawLog();
   void DrawColliders(core::GameContext &ctx);
+  void DrawSceneSelector(core::GameContext &ctx);
 
   bool m_visible = false;
   std::array<bool, 4> m_logLevels = {true, true, true, true};

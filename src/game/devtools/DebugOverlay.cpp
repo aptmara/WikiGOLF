@@ -1,6 +1,7 @@
 #include "DebugOverlay.h"
 
 #include "DebugTimeController.h"
+#include "DebugSceneNavigator.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/SceneManager.h"
@@ -72,9 +73,50 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       DrawColliders(ctx);
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("Scene")) {
+      DrawSceneSelector(ctx);
+      ImGui::EndTabItem();
+    }
     ImGui::EndTabBar();
   }
   ImGui::End();
+}
+
+void DebugOverlay::DrawSceneSelector(core::GameContext &ctx) {
+  using Target = DebugSceneTarget;
+  if (ImGui::Button("Title")) {
+    DebugSceneNavigator::Navigate(ctx, Target::Title);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Loading")) {
+    DebugSceneNavigator::Navigate(ctx, Target::Loading);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Golf")) {
+    DebugSceneNavigator::Navigate(ctx, Target::Golf);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Result")) {
+    DebugSceneNavigator::Navigate(ctx, Target::Result);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Settings")) {
+    DebugSceneNavigator::Navigate(ctx, Target::Settings);
+  }
+
+  const char *currentName =
+      ctx.sceneManager && ctx.sceneManager->Current()
+          ? ctx.sceneManager->Current()->GetName()
+          : "";
+  const auto currentTarget = SceneTargetFromName(currentName);
+  ImGui::BeginDisabled(!currentTarget.has_value());
+  if (ImGui::Button("Reload current") && currentTarget) {
+    DebugSceneNavigator::Navigate(ctx, *currentTarget, true);
+  }
+  ImGui::EndDisabled();
+  if (!currentTarget) {
+    ImGui::TextDisabled("The current scene does not support reload.");
+  }
 }
 
 void DebugOverlay::DrawColliders(core::GameContext &ctx) {
