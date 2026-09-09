@@ -21,6 +21,10 @@
 #include "src/core/Profiler.h"
 #include "src/graphics/TextRenderer.h"
 #include "src/resources/ResourceManager.h"
+#ifdef WIKIGOLF_DEBUG_TOOLS
+#include "src/game/devtools/DebugBuildConfig.h"
+#include "src/game/devtools/DebugUiLayer.h"
+#endif
 #include <Windows.h>
 #include <chrono>
 #include <filesystem>
@@ -39,6 +43,10 @@ graphics::TextRenderer *g_TextRenderer = nullptr;
 // ウィンドウプロシージャ
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
                          LPARAM lParam) {
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  game::debug::DebugUiLayer::ProcessWindowMessage(hWnd, message, wParam,
+                                                   lParam);
+#endif
   if (g_Input) {
     g_Input->ProcessMessage(message, wParam, lParam);
   }
@@ -218,6 +226,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   g_Graphics = &graphics;
   g_TextRenderer = &textRenderer;
 
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  game::debug::DebugUiLayer debugUi;
+  if (!debugUi.Initialize(hWnd, graphics.GetDevice(), graphics.GetContext())) {
+    LOG_ERROR("DebugUI", "Dear ImGui initialization failed.");
+    return -1;
+  }
+#endif
+
   // ウィンドウハンドル/GraphicsDeviceを登録し、読み込み済みのRender Scale/MSAA/FXAA/
   // VSyncをgraphicsへ反映する。保存済みモードがボーダーレス/フルスクリーンなら
   // 今ここで切り替える。ここまでにgraphics/textRenderer/inputが揃っているため、
@@ -311,6 +327,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       lastTime = currentTime;
       ctx.dt = dt;
       ctx.time += dt;
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+      debugUi.BeginFrame();
+#endif
 
       // 表示用FPSを指数移動平均で平滑化（瞬間値のちらつきを抑える）
       if (dt > 0.0f) {
@@ -471,6 +491,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.SceneOverlay");
                   sceneManager.Render(ctx);
               }
+#ifdef WIKIGOLF_DEBUG_TOOLS
+              debugUi.Render();
+#endif
           }
 
           {
@@ -518,6 +541,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   audioSystem.Shutdown();
 
   core::Profiler::Instance().Shutdown();
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  debugUi.Shutdown();
+#endif
   textRenderer.Shutdown();
   graphics.Shutdown();
   core::Logger::Instance().Shutdown();
