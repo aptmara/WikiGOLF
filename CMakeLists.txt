@@ -51,6 +51,7 @@ enable_testing()
 option(WIKIGOLF_HTML_COURSES "Render course articles with litehtml" ON)
 option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
 option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
+include(cmake/WikiDebugTools.cmake)
 if(WIKIGOLF_HTML_COURSES OR WIKIGOLF_HTML_TESTS_ONLY)
     include(cmake/WikiHtml.cmake)
 endif()
@@ -60,45 +61,12 @@ endif()
 
 # ソースファイルの収集
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.h")
-if(NOT WIKIGOLF_DEBUG_TOOLS)
-    list(FILTER SOURCES EXCLUDE REGEX "/game/devtools/.*")
-endif()
+wikigolf_filter_debug_sources(SOURCES)
 
 # 実行可能なターゲットの作成
 list(FILTER SOURCES EXCLUDE REGEX "/graphics/html/.*")
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
-if(WIKIGOLF_DEBUG_TOOLS)
-    include(FetchContent)
-    FetchContent_Declare(
-        imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG v1.92.9
-        GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(imgui)
-
-    add_library(wikigolf_imgui STATIC
-        "${imgui_SOURCE_DIR}/imgui.cpp"
-        "${imgui_SOURCE_DIR}/imgui_draw.cpp"
-        "${imgui_SOURCE_DIR}/imgui_tables.cpp"
-        "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
-        "${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp"
-        "${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp"
-    )
-    target_include_directories(wikigolf_imgui PUBLIC
-        "${imgui_SOURCE_DIR}"
-        "${imgui_SOURCE_DIR}/backends"
-    )
-    target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_DEBUG_TOOLS=1)
-    target_link_libraries(DX_GAME wikigolf_imgui)
-    add_custom_command(TARGET DX_GAME POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:DX_GAME>/licenses"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${imgui_SOURCE_DIR}/LICENSE.txt"
-                "$<TARGET_FILE_DIR:DX_GAME>/licenses/Dear-ImGui-LICENSE.txt"
-        VERBATIM
-    )
-endif()
+wikigolf_enable_debug_target(DX_GAME)
 if(WIKIGOLF_HTML_COURSES)
     target_link_libraries(DX_GAME wiki_html)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_HTML_COURSES=1)
@@ -691,45 +659,4 @@ if(MSVC)
 endif()
 add_test(NAME wiki_terrain_height COMMAND test_wiki_terrain_height)
 
-add_executable(test_debug_build_config test_debug_build_config.cpp)
-target_include_directories(test_debug_build_config PRIVATE src)
-if(WIKIGOLF_DEBUG_TOOLS)
-    target_compile_definitions(test_debug_build_config PRIVATE WIKIGOLF_DEBUG_TOOLS=1)
-endif()
-if(MSVC)
-    target_compile_options(test_debug_build_config PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
-add_test(NAME debug_build_config COMMAND test_debug_build_config)
-
-add_executable(test_debug_pause test_debug_pause.cpp)
-target_include_directories(test_debug_pause PRIVATE src)
-if(MSVC)
-    target_compile_options(test_debug_pause PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
-add_test(NAME debug_pause COMMAND test_debug_pause)
-
-add_executable(test_debug_frame_step test_debug_frame_step.cpp)
-target_include_directories(test_debug_frame_step PRIVATE src)
-if(MSVC)
-    target_compile_options(test_debug_frame_step PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
-add_test(NAME debug_frame_step COMMAND test_debug_frame_step)
-
-add_executable(test_debug_time_scale test_debug_time_scale.cpp)
-target_include_directories(test_debug_time_scale PRIVATE src)
-if(MSVC)
-    target_compile_options(test_debug_time_scale PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
-add_test(NAME debug_time_scale COMMAND test_debug_time_scale)
-
-add_executable(test_debug_logger_buffer test_debug_logger_buffer.cpp
-                                        src/core/Logger.cpp)
-target_precompile_headers(test_debug_logger_buffer PRIVATE src/pch.h)
-target_include_directories(test_debug_logger_buffer PRIVATE src)
-target_compile_definitions(test_debug_logger_buffer PRIVATE WIKIGOLF_DEBUG_TOOLS=1)
-if(MSVC)
-    target_compile_definitions(test_debug_logger_buffer PRIVATE -DUNICODE -D_UNICODE
-                                                                  -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
-    target_compile_options(test_debug_logger_buffer PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
-add_test(NAME debug_logger_buffer COMMAND test_debug_logger_buffer)
+wikigolf_add_debug_tests()
