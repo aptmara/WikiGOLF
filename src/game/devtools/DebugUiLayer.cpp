@@ -1,4 +1,5 @@
 #include "DebugUiLayer.h"
+#include "DebugInputCaptureRules.h"
 
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
@@ -8,6 +9,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
     HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
 namespace game::debug {
+
+DebugUiLayer *DebugUiLayer::s_activeLayer = nullptr;
 
 bool DebugUiLayer::Initialize(HWND window, ID3D11Device *device,
                               ID3D11DeviceContext *context) {
@@ -20,6 +23,7 @@ bool DebugUiLayer::Initialize(HWND window, ID3D11Device *device,
     return false;
   }
   m_initialized = true;
+  s_activeLayer = this;
   return true;
 }
 
@@ -33,6 +37,9 @@ void DebugUiLayer::Shutdown() {
   }
   ImGui::DestroyContext();
   m_initialized = false;
+  if (s_activeLayer == this) {
+    s_activeLayer = nullptr;
+  }
 }
 
 void DebugUiLayer::BeginFrame() {
@@ -75,7 +82,13 @@ LRESULT DebugUiLayer::ProcessWindowMessage(HWND window, UINT message,
   if (!ImGui::GetCurrentContext()) {
     return 0;
   }
-  return ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam);
+  const LRESULT result =
+      ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam);
+  if (s_activeLayer && s_activeLayer->m_overlay.IsVisible() &&
+      IsGameInputMessage(message)) {
+    return 1;
+  }
+  return result;
 }
 
 } // namespace game::debug

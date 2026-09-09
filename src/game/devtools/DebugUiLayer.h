@@ -21,6 +21,7 @@ public:
                                       WPARAM wParam, LPARAM lParam);
 
 private:
+  static DebugUiLayer *s_activeLayer;
   bool m_initialized = false;
   DebugOverlay m_overlay;
   DebugColliderRenderer m_colliderRenderer;

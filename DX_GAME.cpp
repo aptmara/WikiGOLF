@@ -45,8 +45,10 @@ graphics::TextRenderer *g_TextRenderer = nullptr;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
                          LPARAM lParam) {
 #ifdef WIKIGOLF_DEBUG_TOOLS
-  game::debug::DebugUiLayer::ProcessWindowMessage(hWnd, message, wParam,
-                                                   lParam);
+  if (game::debug::DebugUiLayer::ProcessWindowMessage(
+          hWnd, message, wParam, lParam) != 0) {
+    return 1;
+  }
 #endif
   if (g_Input) {
     g_Input->ProcessMessage(message, wParam, lParam);

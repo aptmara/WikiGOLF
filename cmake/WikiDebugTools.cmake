@@ -64,6 +64,11 @@ function(wikigolf_add_debug_tests)
         wikigolf_configure_debug_test(test_${test_name})
     endforeach()
 
+    add_executable(test_debug_input_capture test_debug_input_capture.cpp)
+    target_compile_definitions(test_debug_input_capture PRIVATE
+        -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    wikigolf_configure_debug_test(test_debug_input_capture)
+
     add_executable(test_debug_scene_rules test_debug_scene_rules.cpp)
     wikigolf_configure_debug_test(test_debug_scene_rules)
 
