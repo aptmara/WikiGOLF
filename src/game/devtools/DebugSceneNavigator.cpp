@@ -1,19 +1,23 @@
 #include "DebugSceneNavigator.h"
 
 #include "../../core/GameContext.h"
+#include "../../core/Scene.h"
 #include "../../core/SceneManager.h"
+#include "../../ecs/World.h"
 #include "../scenes/LoadingScene.h"
 #include "../scenes/ResultScene.h"
 #include "../scenes/SettingsScene.h"
 #include "../scenes/TitleScene.h"
 #include "../scenes/TitleSceneSupport.h"
 #include "../scenes/WikiGolfScene.h"
+#include "../systems/PostProcessSystem.h"
 #include <memory>
 
 namespace game::debug {
 namespace {
 
 std::unique_ptr<core::Scene> CreateScene(DebugSceneTarget target) {
+  target = EntryTarget(target);
   using namespace game::scenes;
   switch (target) {
   case DebugSceneTarget::Title:
@@ -38,6 +42,35 @@ std::unique_ptr<core::Scene> CreateScene(DebugSceneTarget target) {
   return nullptr;
 }
 
+class CleanSceneTransition final : public core::Scene {
+public:
+  explicit CleanSceneTransition(DebugSceneTarget target) : m_target(target) {}
+
+  const char *GetName() const override { return "DebugSceneTransition"; }
+
+  void OnEnter(core::GameContext &ctx) override {
+    ctx.world.Reset();
+    if (ctx.postProcess) {
+      ctx.postProcess->ResetToDefaults();
+    }
+    if (EntryTarget(m_target) == DebugSceneTarget::Loading) {
+      game::scenes::title_scene_detail::ResetStandardStartData(ctx);
+    }
+  }
+
+  void OnUpdate(core::GameContext &ctx) override {
+    if (m_requested || !ctx.sceneManager) {
+      return;
+    }
+    m_requested = true;
+    ctx.sceneManager->ChangeScene(CreateScene(m_target));
+  }
+
+private:
+  DebugSceneTarget m_target;
+  bool m_requested = false;
+};
+
 } // namespace
 
 void DebugSceneNavigator::Navigate(core::GameContext &ctx,
@@ -46,18 +79,13 @@ void DebugSceneNavigator::Navigate(core::GameContext &ctx,
   if (!ctx.sceneManager) {
     return;
   }
-  if (target == DebugSceneTarget::Loading ||
-      target == DebugSceneTarget::Golf) {
-    game::scenes::title_scene_detail::ResetStandardStartData(ctx);
-  }
-
-  auto scene = CreateScene(target);
-  if (target == DebugSceneTarget::Settings && !replaceCurrent) {
-    ctx.sceneManager->PushScene(std::move(scene));
-  } else if (replaceCurrent) {
-    ctx.sceneManager->ChangeScene(std::move(scene));
+  if (RequiresCleanReset(target, replaceCurrent)) {
+    ctx.sceneManager->ResetToScene(
+        std::make_unique<CleanSceneTransition>(target));
+  } else if (!replaceCurrent) {
+    ctx.sceneManager->PushScene(CreateScene(target));
   } else {
-    ctx.sceneManager->ResetToScene(std::move(scene));
+    ctx.sceneManager->ChangeScene(CreateScene(target));
   }
 }
 

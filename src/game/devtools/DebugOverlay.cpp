@@ -74,7 +74,7 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Scene")) {
-      DrawSceneSelector(ctx);
+      DrawSceneSelector(ctx, time);
       ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
@@ -82,26 +82,31 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
   ImGui::End();
 }
 
-void DebugOverlay::DrawSceneSelector(core::GameContext &ctx) {
+void DebugOverlay::DrawSceneSelector(core::GameContext &ctx,
+                                     DebugTimeController &time) {
   using Target = DebugSceneTarget;
+  const auto navigate = [&](Target target, bool reload = false) {
+    time.Reset();
+    DebugSceneNavigator::Navigate(ctx, target, reload);
+  };
   if (ImGui::Button("Title")) {
-    DebugSceneNavigator::Navigate(ctx, Target::Title);
+    navigate(Target::Title);
   }
   ImGui::SameLine();
   if (ImGui::Button("Loading")) {
-    DebugSceneNavigator::Navigate(ctx, Target::Loading);
+    navigate(Target::Loading);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Golf")) {
-    DebugSceneNavigator::Navigate(ctx, Target::Golf);
+  if (ImGui::Button("Golf (via Loading)")) {
+    navigate(Target::Golf);
   }
   ImGui::SameLine();
   if (ImGui::Button("Result")) {
-    DebugSceneNavigator::Navigate(ctx, Target::Result);
+    navigate(Target::Result);
   }
   ImGui::SameLine();
   if (ImGui::Button("Settings")) {
-    DebugSceneNavigator::Navigate(ctx, Target::Settings);
+    navigate(Target::Settings);
   }
 
   const char *currentName =
@@ -111,7 +116,7 @@ void DebugOverlay::DrawSceneSelector(core::GameContext &ctx) {
   const auto currentTarget = SceneTargetFromName(currentName);
   ImGui::BeginDisabled(!currentTarget.has_value());
   if (ImGui::Button("Reload current") && currentTarget) {
-    DebugSceneNavigator::Navigate(ctx, *currentTarget, true);
+    navigate(*currentTarget, true);
   }
   ImGui::EndDisabled();
   if (!currentTarget) {

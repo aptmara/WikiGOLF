@@ -7,6 +7,7 @@ namespace game::debug {
 class DebugTimeController {
 public:
   static constexpr float kStepDelta = 1.0f / 60.0f;
+  static constexpr std::size_t kDefaultTimeScaleIndex = 3;
   static constexpr std::array<float, 5> kTimeScales = {0.1f, 0.25f, 0.5f,
                                                        1.0f, 2.0f};
 
@@ -32,6 +33,11 @@ public:
   void CycleTimeScale() {
     m_timeScaleIndex = (m_timeScaleIndex + 1) % kTimeScales.size();
   }
+  void Reset() {
+    m_paused = false;
+    m_stepRequested = false;
+    m_timeScaleIndex = kDefaultTimeScaleIndex;
+  }
 
   float SimulationDelta(float realDelta) {
     if (!m_paused) {
@@ -47,7 +53,7 @@ public:
 private:
   bool m_paused = false;
   bool m_stepRequested = false;
-  std::size_t m_timeScaleIndex = 3;
+  std::size_t m_timeScaleIndex = kDefaultTimeScaleIndex;
 };
 
 } // namespace game::debug

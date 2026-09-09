@@ -7,6 +7,17 @@ namespace game::debug {
 
 enum class DebugSceneTarget { Title, Loading, Golf, Result, Settings };
 
+inline DebugSceneTarget EntryTarget(DebugSceneTarget target) {
+  if (target == DebugSceneTarget::Golf) {
+    return DebugSceneTarget::Loading;
+  }
+  return target;
+}
+
+inline bool RequiresCleanReset(DebugSceneTarget target, bool) {
+  return target != DebugSceneTarget::Settings;
+}
+
 inline std::optional<DebugSceneTarget>
 SceneTargetFromName(std::string_view sceneName) {
   if (sceneName == "TitleScene") {
