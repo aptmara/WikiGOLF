@@ -54,10 +54,12 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
 
   // 地形データ取得
   TerrainData *terrainData = nullptr;
+  ecs::Entity terrainEntity = ecs::NULL_ENTITY;
   ctx.world.Query<TerrainCollider>().Each(
-      [&](ecs::Entity, TerrainCollider &tc) {
+      [&](ecs::Entity entity, TerrainCollider &tc) {
         if (tc.data) {
           terrainData = tc.data.get();
+          terrainEntity = entity;
         }
       });
 
@@ -234,7 +236,11 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         XMStoreFloat4(&t.rotation, q);
       });
 
-  PhysicsUpdateContext frame{ctx, subDt, subSteps, gravity, terrainData, golfState, ballEntity, *holeGrid, *staticBodyGrid, maxHoleQueryRange, dynamicBodies, *events, perfStats, jitterCursor, rollingAudioTimer, holeSlowMotionCooldown};
+  PhysicsUpdateContext frame{ctx, subDt, subSteps, gravity, terrainData,
+                             terrainEntity, golfState, ballEntity, *holeGrid,
+                             *staticBodyGrid, maxHoleQueryRange, dynamicBodies,
+                             *events, perfStats, jitterCursor,
+                             rollingAudioTimer, holeSlowMotionCooldown};
   SimulatePhysicsSubsteps(frame);
 
   auto &profiler = core::Profiler::Instance();

@@ -195,7 +195,8 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
 
   if (settings.terrain) {
     ctx.world.Query<TerrainCollider, Transform>().Each(
-        [&](ecs::Entity, TerrainCollider &terrain, Transform &transform) {
+        [&](ecs::Entity entity, TerrainCollider &terrain,
+            Transform &transform) {
           if (!terrain.data) {
             return;
           }
@@ -203,7 +204,10 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
                                  terrain.data->config.worldDepth};
           std::vector<DebugLine3D> lines;
           AppendBoxLines(lines, transform.position, size, transform.rotation);
-          DrawLines(drawList, lines, projection, IM_COL32(60, 150, 255, 220));
+          const ImU32 color = collidingEntities.contains(entity)
+                                  ? IM_COL32(255, 55, 55, 255)
+                                  : IM_COL32(60, 150, 255, 220);
+          DrawLines(drawList, lines, projection, color);
         });
   }
 

@@ -4,6 +4,7 @@
 */
 
 #include "PhysicsSystemInternals.h"
+#include "CollisionDebugInfo.h"
 #include "GameJuiceSystem.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/Logger.h"
@@ -25,6 +26,7 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
   const int subSteps = frame.subSteps;
   const XMVECTOR gravity = frame.gravity;
   TerrainData *terrainData = frame.terrainData;
+  const ecs::Entity terrainEntity = frame.terrainEntity;
   GolfGameState *golfState = frame.golfState;
   const ecs::Entity ballEntity = frame.ballEntity;
   const HoleSpatialGrid &holeGrid = frame.holeGrid;
@@ -153,6 +155,16 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
           if (penetration > 0.0f) {
             if (insideHole) {
               penetration = std::min(penetration, 0.01f);
+            }
+            if (step == subSteps - 1 &&
+                terrainEntity != ecs::NULL_ENTITY) {
+              XMFLOAT3 centerValue;
+              XMFLOAT3 normalValue;
+              XMStoreFloat3(&centerValue, pos);
+              XMStoreFloat3(&normalValue, terrainN);
+              frame.events.events.push_back(MakeSphereCollisionEvent(
+                  body.entity, terrainEntity, centerValue, col.radius,
+                  normalValue, penetration));
             }
             // めり込み解消（法線方向に押し出し）
             float ny = std::max(XMVectorGetY(terrainN), 0.1f);
