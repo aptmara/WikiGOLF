@@ -507,7 +507,8 @@ add_executable(test_wiki_golf_hud_lifecycle
     src/game/controllers/hud/ShotGaugePanelVisibility.cpp
     src/game/controllers/hud/WindPanel.cpp
     src/core/StringUtils.cpp
-    src/ecs/EntityOwner.cpp)
+    src/ecs/EntityOwner.cpp
+    src/core/Logger.cpp)
 target_precompile_headers(test_wiki_golf_hud_lifecycle PRIVATE src/pch.h)
 target_include_directories(test_wiki_golf_hud_lifecycle PRIVATE src)
 if(MSVC)
