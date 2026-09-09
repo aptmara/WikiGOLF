@@ -54,9 +54,8 @@ void WikiGolfScene::UpdateTrajectoryAndGuide(
         if (shot.phase == game::components::ShotState::Phase::PowerCharging) {
             powerRatio = shot.powerGaugePos;
         } else if (shot.phase == game::components::ShotState::Phase::ImpactTiming) {
-            // パワー決定後はゲージ値に関わらずクラブの基準飛距離(フルスイング相当)を
-            // 固定表示する。実際の飛距離への反映はExecuteShot時の判定倍率で行う。
-            powerRatio = 1.0f;
+            // パワー決定後は、確定したパワーを軌道プレビューへ反映する。
+            powerRatio = shot.confirmedPower;
         } else if (shot.confirmedPower > 0.0f) {
             powerRatio = shot.confirmedPower;
         }
