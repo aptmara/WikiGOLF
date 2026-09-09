@@ -196,6 +196,16 @@ constexpr float kThresholdGreat     = 0.040f;
 constexpr float kThresholdNice      = 0.120f;
 
 // =========================================================
+// 倍速インジケーター（着地後の待機時間短縮演出）- 画面上部中央
+// =========================================================
+constexpr float kFastForwardIndicatorX = 1280.0f * 0.5f; // 中心X座標
+constexpr float kFastForwardIndicatorY = 60.0f;
+constexpr float kFastForwardIndicatorW = 88.0f; // 画像素材が正円のため正方形サイズにする
+constexpr float kFastForwardIndicatorH = 88.0f;
+constexpr float kFastForwardFadeSpeed  = 4.0f; // フェードイン/アウト速度（alpha/秒）
+constexpr int   kLayerFastForward      = 135;  // 判定スタンプ(kLayerJudge)よりわずかに手前
+
+// =========================================================
 // アニメーション速度
 // =========================================================
 constexpr float kFadeSpeed              = 7.0f;

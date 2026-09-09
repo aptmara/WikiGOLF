@@ -13,6 +13,8 @@
 #include "../systems/MapSys.h"
 #include "../systems/ParticleRenderSystem.h"
 #include "../controllers/TrajectoryPredictor.h"
+#include "../controllers/BallFastForwardIndicator.h"
+#include "../controllers/BallFastForwardTimer.h"
 #include "../controllers/CameraController.h"
 #include "../controllers/ClubController.h"
 #include "../controllers/MinimapController.h"
@@ -195,6 +197,15 @@ private:
   float m_judgeDisplayTargetH = 80.0f;
   game::components::ShotJudgement m_judgeDisplayJudgement =
       game::components::ShotJudgement::None;
+
+  // === 着地後の待機時間短縮（倍速）演出 ===
+  // 着地からkFastForwardStage1Seconds秒で1.5倍速、
+  // kFastForwardStage2Seconds秒で2.0倍速に切り替わる。
+  // タイマー（速度倍率の判定）とインジケーターUI（見た目）は責務を分離し、
+  // それぞれ BallFastForwardTimer / BallFastForwardIndicator に実装する。
+  ecs::Entity m_fastForwardIndicatorEntity = UINT32_MAX;
+  game::controllers::BallFastForwardTimer m_fastForwardTimer;
+  game::controllers::BallFastForwardIndicator m_fastForwardIndicator;
   float m_hudUpdateTimer = 0.0f;     /**< HUD静的表示の更新間引きタイマーです。*/
   float m_minimapUpdateTimer = 0.0f; /**< ミニマップ描画の更新間引きタイマーです。*/
   float m_flagEffectTimer = 0.0f;    /**< 旗なびき・粒子演出の時間です。*/

@@ -272,7 +272,11 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // 物理更新
-  game::systems::PhysicsSystem(ctx, dt);
+  // ショット実行中、ボール着地後に規定秒数が経過すると待機時間短縮のため
+  // 物理シミュレーションを倍速で進める（詳細: BallFastForwardTimer）。
+  const float fastForwardMultiplier = m_fastForwardTimer.Update(ctx, dt);
+  game::systems::PhysicsSystem(ctx, dt * fastForwardMultiplier);
+  m_fastForwardIndicator.Update(ctx, dt, m_fastForwardTimer.GetCurrentTier());
 
   // 物理後のボール位置を使い、追従カメラの1フレーム遅延を防ぐ。
   if (m_cameraController && !tutorialInputLocked && !isMapView) {

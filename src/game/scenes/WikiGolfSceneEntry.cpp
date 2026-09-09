@@ -231,6 +231,14 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
       ui.alpha = 0.0f;
   }
 
+  // 着地後の待機時間短縮（倍速）インジケーターUIの初期化
+  if (m_fastForwardIndicatorEntity == UINT32_MAX) {
+      m_fastForwardIndicatorEntity = CreateEntity(ctx.world);
+      ctx.world.Add<game::components::UIImage>(m_fastForwardIndicatorEntity);
+  }
+  m_fastForwardIndicator.Initialize(ctx, m_fastForwardIndicatorEntity);
+  m_fastForwardTimer.Reset();
+
   std::string targetPage;
   int targetId = -1;
   bool isUserOverride = false;

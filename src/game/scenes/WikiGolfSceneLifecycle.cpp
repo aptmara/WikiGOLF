@@ -389,6 +389,9 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
     m_gameJuice->Shutdown(ctx);
   }
 
+  m_fastForwardIndicator.Shutdown();
+  m_fastForwardTimer.Reset();
+
   ClearTutorialFlagSamples(ctx);
 
   m_screenFade.Shutdown(ctx);
