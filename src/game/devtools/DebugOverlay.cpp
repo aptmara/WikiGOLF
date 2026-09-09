@@ -67,9 +67,31 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       DrawLog();
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("Collision")) {
+      DrawColliders();
+      ImGui::EndTabItem();
+    }
     ImGui::EndTabBar();
   }
   ImGui::End();
+}
+
+void DebugOverlay::DrawColliders() {
+  ImGui::Checkbox("Show collider debug", &m_colliderSettings.enabled);
+  ImGui::Checkbox("Sphere", &m_colliderSettings.spheres);
+  ImGui::SameLine();
+  ImGui::Checkbox("Box", &m_colliderSettings.boxes);
+  ImGui::SameLine();
+  ImGui::Checkbox("Cylinder", &m_colliderSettings.cylinders);
+  ImGui::Checkbox("Terrain bounds", &m_colliderSettings.terrain);
+  ImGui::SameLine();
+  ImGui::Checkbox("Goal holes", &m_colliderSettings.holes);
+  ImGui::Checkbox("Entity ID", &m_colliderSettings.entityIds);
+  ImGui::TextColored({0.3f, 0.9f, 0.4f, 1.0f}, "Green: collider");
+  ImGui::SameLine();
+  ImGui::TextColored({1.0f, 0.25f, 0.25f, 1.0f}, "Red: colliding");
+  ImGui::SameLine();
+  ImGui::TextColored({1.0f, 0.85f, 0.2f, 1.0f}, "Yellow: hole");
 }
 
 void DebugOverlay::DrawSimulation(DebugTimeController &time) {

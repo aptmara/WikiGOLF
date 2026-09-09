@@ -52,6 +52,7 @@ void DebugUiLayer::Render(core::GameContext &ctx,
   if (!m_initialized) {
     return;
   }
+  m_colliderRenderer.Draw(ctx, m_overlay.GetColliderSettings());
   m_overlay.Draw(ctx, time);
   ImGui::Render();
   ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

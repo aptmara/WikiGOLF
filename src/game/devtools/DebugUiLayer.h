@@ -23,6 +23,7 @@ public:
 private:
   bool m_initialized = false;
   DebugOverlay m_overlay;
+  DebugColliderRenderer m_colliderRenderer;
 };
 
 } // namespace game::debug
