@@ -63,6 +63,11 @@ void SlopeVisualizationSystem::Update(core::GameContext &ctx, float dt,
   ApplyFade(ctx);
 }
 
+void SlopeVisualizationSystem::ForceHide(core::GameContext &ctx) {
+  m_fadeAlpha = 0.0f;
+  ApplyFade(ctx);
+}
+
 void SlopeVisualizationSystem::ApplyFade(core::GameContext &ctx) {
   if (m_overlayEntity == UINT32_MAX) return;
   auto *mr = ctx.world.Get<MeshRenderer>(m_overlayEntity);

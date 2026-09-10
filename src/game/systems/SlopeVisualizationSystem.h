@@ -46,6 +46,14 @@ public:
              const DirectX::XMFLOAT3 &center,
              const WikiTerrainSystem *terrain);
 
+  /**
+   * @brief フェードを待たずに即座に非表示にします。
+   * @details シーン遷移（記事ページ切り替え）開始時など、Update自体が
+   *          呼ばれなくなる区間に入る直前に呼び、直前の表示状態が
+   *          そのまま固定表示され続けてしまうのを防ぐために使う。
+  */
+  void ForceHide(core::GameContext &ctx);
+
 private:
   /** @brief 現在のフェード係数(m_fadeAlpha)をEntityへ反映します。*/
   void ApplyFade(core::GameContext &ctx);

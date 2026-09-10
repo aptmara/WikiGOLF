@@ -75,6 +75,14 @@ public:
    * @return クラブが1本以上あり切り替えを行った場合true
 */
   bool SelectClubForDistance(core::GameContext &ctx, float targetDistance);
+
+  /**
+   * @brief 先頭のクラブ（ドライバー）へ選択を戻します。
+   * @details 次のステージ（記事ページ）へ遷移した際に、前のホールで使っていた
+   *          クラブ（パター等）を持ち越さないようにするために使う。
+   * @return クラブが1本以上あり切り替えを行った場合true
+  */
+  bool ResetToFirstClub(core::GameContext &ctx);
   float GetRecommendedCameraDistance(float fieldScale) const;
   float GetRecommendedCameraHeight(float fieldScale) const;
 

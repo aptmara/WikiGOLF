@@ -276,6 +276,9 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
     for (auto segE : m_guideSegments) {
       if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
     }
+    // 遷移中はUpdateTrajectoryAndGuideが呼ばれなくなるため、傾斜可視化オーバーレイも
+    // ここで明示的に消しておく（消さないと遷移演出中も直前の表示状態のまま固定される）
+    m_slopeVisualization.ForceHide(ctx);
     m_transitionController->StartTransition(ctx, pageName, m_pageLoader.get(),
                                             m_ballEntity, m_cameraEntity,
                                             m_skyboxEntity,

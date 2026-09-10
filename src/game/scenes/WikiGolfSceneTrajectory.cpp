@@ -151,10 +151,12 @@ void WikiGolfScene::UpdateTrajectoryAndGuide(
       using Phase = game::components::ShotState::Phase;
       const bool isPutter = m_clubController &&
           m_clubController->GetCurrentClub().categoryEN == "Putter";
-      // Idle: ショット前の待機中（canShootで通常のスキップ条件も反映）
+      // Idle/PowerCharging/ImpactTiming: ショット前の待機〜パワー・インパクトゲージ操作中
       // Executing: ショット後、ボールが転がって停止するまでの間
       const bool showSlope = isPutter && !tutorialInputLocked && !isMapView &&
-                             ((shot.phase == Phase::Idle && state.canShoot) ||
+                             (shot.phase == Phase::Idle ||
+                              shot.phase == Phase::PowerCharging ||
+                              shot.phase == Phase::ImpactTiming ||
                               shot.phase == Phase::Executing);
 
       DirectX::XMFLOAT3 ballPos{0.0f, 0.0f, 0.0f};
