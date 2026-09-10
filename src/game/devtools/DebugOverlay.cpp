@@ -180,6 +180,7 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx,
   ImGui::Checkbox("ボール速度ベクトル", &m_colliderSettings.velocityVector);
   ImGui::Checkbox("ボール軌跡", &m_colliderSettings.ballTrail);
   ImGui::Checkbox("ホールイン判定範囲", &m_colliderSettings.cupInGuide);
+  ImGui::Checkbox("中クリックのレイキャストを表示", &m_colliderSettings.raycast);
   if (m_colliderSettings.ballTrail) {
     ImGui::SetNextItemWidth(180.0f);
     ImGui::SliderInt("軌跡点数", &m_colliderSettings.trailMaximumPoints, 30,
@@ -200,6 +201,10 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx,
   ImGui::TextColored({1.0f, 0.88f, 0.15f, 1.0f}, "黄線: 速度");
   ImGui::SameLine();
   ImGui::TextColored({0.15f, 0.85f, 1.0f, 1.0f}, "水色: 軌跡");
+  ImGui::SameLine();
+  ImGui::TextColored({0.27f, 0.9f, 0.35f, 1.0f}, "緑線: レイキャスト命中");
+  ImGui::SameLine();
+  ImGui::TextColored({1.0f, 0.24f, 0.24f, 1.0f}, "赤線: レイキャスト外れ");
   if (m_colliderSettings.terrainMaterials) {
     ImGui::Text("地形色: 緑=Fairway / 黄緑=Rough / 黄=Bunker / 明緑=Green");
     ImGui::Text("水色=Ice / 青=Water / 赤=Lava / 灰=Stone");

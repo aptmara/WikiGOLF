@@ -2,6 +2,7 @@
 
 #include "DebugColliderGeometry.h"
 #include "DebugCupInStatus.h"
+#include "DebugRaycastState.h"
 #include "DebugTerrainMaterialGeometry.h"
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"
@@ -333,6 +334,39 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
                               ? IM_COL32(50, 240, 90, 255)
                               : IM_COL32(255, 80, 190, 255);
       DrawLines(drawList, guideLines, projection, color);
+    }
+  }
+
+  if (settings.raycast) {
+    if (const auto *ray = ctx.world.GetGlobal<DebugRaycastState>()) {
+      if (ray->hasRay) {
+        // ヒットしなかった場合、maxDistance(最大3000)をそのまま使うと
+        // 見づらいほど線が伸びてしまうため、可視化用に上限を設ける。
+        constexpr float kMissRayVisualLength = 500.0f;
+        const XMVECTOR originVec = XMLoadFloat3(&ray->origin);
+        const XMVECTOR dirVec = XMLoadFloat3(&ray->direction);
+        if (XMVectorGetX(XMVector3LengthSq(dirVec)) > 0.0001f) {
+          XMFLOAT3 endPoint = ray->hitPosition;
+          if (!ray->hit) {
+            const float visualLength =
+                (std::min)(ray->maxDistance, kMissRayVisualLength);
+            XMStoreFloat3(&endPoint, XMVectorAdd(originVec,
+                                                 XMVectorScale(dirVec,
+                                                               visualLength)));
+          }
+          const ImU32 color = ray->hit ? IM_COL32(70, 230, 90, 255)
+                                       : IM_COL32(255, 60, 60, 255);
+          ImVec2 from;
+          ImVec2 to;
+          if (Project(ray->origin, projection, from) &&
+              Project(endPoint, projection, to)) {
+            drawList.AddLine(from, to, color, 2.5f);
+            if (ray->hit) {
+              drawList.AddCircleFilled(to, 5.0f, color);
+            }
+          }
+        }
+      }
     }
   }
 }

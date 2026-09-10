@@ -22,6 +22,7 @@ struct DebugColliderSettings {
   bool velocityVector = true;
   bool ballTrail = false;
   bool cupInGuide = false;
+  bool raycast = false; ///< 中クリックのレイキャスト(エイムピン設置)を可視化するか
   int trailMaximumPoints = 300;
   int trailSampleInterval = 2;
   int trailClearGeneration = 0;
