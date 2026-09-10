@@ -18,6 +18,8 @@
 !docs/**
 !.Agents/
 !.Agents/**
+!licenses/
+!licenses/**
 
 # --- Whitelist: Root Files ---
 !.gitignore
@@ -41,6 +43,7 @@ dumps/
 tools/
 .gemini/
 .claude/
+libs/assimp-6.0.2/static/
 
 # File extensions to ignore
 *.txt

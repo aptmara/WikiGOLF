@@ -161,6 +161,15 @@ private:
   /** @brief 指定ホストへの接続を取得する（未接続なら新規に確立してキャッシュする）*/
   HINTERNET GetOrCreateConnection(const std::wstring &server);
 
+  /**
+   * @brief 画像一覧をCommonsのライセンス情報で絞り込みます
+   * @details CC0・パブリックドメイン以外（CC BY-SA等の帰属表示必須ライセンスや
+   *          フェアユース画像、ライセンス情報が取得できなかった画像）は
+   *          ゲーム内表示から除外する。
+   * @param images 絞り込み対象の画像一覧（該当しないものはこの場で削除される）
+*/
+  void FilterImagesByAllowedLicense(std::vector<WikiImageInfo> &images);
+
   HINTERNET m_hSession = nullptr;
   HINTERNET m_hConnect = nullptr; /**< ja.wikipedia.org への既定接続*/
   std::unordered_map<std::wstring, HINTERNET> m_hostConnections; /**< 他ホスト用の接続キャッシュ*/
