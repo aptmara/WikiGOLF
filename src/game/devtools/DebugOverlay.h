@@ -2,6 +2,7 @@
 
 #include <array>
 #include "DebugColliderRenderer.h"
+#include "DebugBallInspector.h"
 #include "DebugCollisionHistory.h"
 #include "DebugProfilerInspector.h"
 
@@ -32,6 +33,7 @@ private:
   std::array<bool, 4> m_logLevels = {true, true, true, true};
   char m_logFilter[128] = {};
   DebugColliderSettings m_colliderSettings;
+  DebugBallInspector m_ballInspector;
   DebugCollisionHistory m_collisionHistory;
   DebugProfilerInspector m_profilerInspector;
   bool m_pauseOnCollision = false;

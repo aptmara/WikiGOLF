@@ -83,6 +83,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       DrawCupInInspector(ctx, m_colliderSettings);
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("ボール操作")) {
+      m_ballInspector.Draw(ctx);
+      ImGui::EndTabItem();
+    }
     if (ImGui::BeginTabItem("ログ")) {
       DrawLog();
       ImGui::EndTabItem();
