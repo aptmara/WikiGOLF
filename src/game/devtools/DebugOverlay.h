@@ -8,6 +8,7 @@
 #include "DebugFreeCamera.h"
 #include "DebugEntityInspector.h"
 #include "DebugCheckpointInspector.h"
+#include "DebugBallTelemetryInspector.h"
 #include "DebugProfilerInspector.h"
 
 namespace core {
@@ -45,6 +46,7 @@ private:
   DebugFreeCamera m_freeCamera;
   DebugEntityInspector m_entityInspector;
   DebugCheckpointInspector m_checkpointInspector;
+  DebugBallTelemetryInspector m_ballTelemetryInspector;
   DebugProfilerInspector m_profilerInspector;
   DebugCollisionBreakSettings m_collisionBreak;
   bool m_hideTerrainMeshes = false;

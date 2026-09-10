@@ -148,6 +148,17 @@ function(wikigolf_add_debug_tests)
         src/game/devtools/DebugBallTrailHistory.cpp)
     wikigolf_configure_debug_test(test_debug_ball_trail)
 
+    add_executable(test_debug_ball_telemetry
+        test_debug_ball_telemetry.cpp
+        src/game/devtools/DebugBallTelemetryHistory.cpp
+        src/core/Logger.cpp)
+    target_precompile_headers(test_debug_ball_telemetry PRIVATE src/pch.h)
+    if(MSVC)
+        target_compile_definitions(test_debug_ball_telemetry PRIVATE
+            -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    endif()
+    wikigolf_configure_debug_test(test_debug_ball_telemetry)
+
     add_executable(test_debug_ball_teleport
         test_debug_ball_teleport.cpp
         src/game/devtools/DebugBallTeleport.cpp

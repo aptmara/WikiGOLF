@@ -67,6 +67,7 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       ctx.world.GetGlobal<game::components::CollisionEvents>();
   const bool collisionCaptured =
       m_collisionHistory.Update(collisionEvents, ctx.dt > 0.0f);
+  m_ballTelemetryInspector.Update(ctx, ctx.dt > 0.0f);
   if (collisionCaptured && collisionEvents) {
     for (const auto &event : collisionEvents->events) {
       const ecs::Entity entityA = static_cast<ecs::Entity>(event.entityA);
@@ -98,6 +99,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
     }
     if (ImGui::BeginTabItem("ボール操作")) {
       m_ballInspector.Draw(ctx);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("ボールグラフ")) {
+      m_ballTelemetryInspector.Draw();
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("カメラ")) {
