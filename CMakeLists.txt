@@ -526,6 +526,7 @@ add_test(NAME scene_entity_lifecycle COMMAND test_scene_entity_lifecycle)
 add_executable(test_wiki_golf_hud_lifecycle
     test_wiki_golf_hud_lifecycle.cpp
     src/game/controllers/WikiGolfHUD.cpp
+    src/game/controllers/hud/AimDistancePanel.cpp
     src/game/controllers/hud/ClubSelectionPanel.cpp
     src/game/controllers/hud/CourseInfoPanel.cpp
     src/game/controllers/hud/GameplayControlsPanel.cpp
