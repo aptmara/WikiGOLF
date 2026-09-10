@@ -147,6 +147,11 @@ function(wikigolf_add_debug_tests)
         src/game/devtools/DebugCollisionHistory.cpp)
     wikigolf_configure_debug_test(test_debug_collision_history)
 
+    add_executable(test_debug_free_camera_motion
+        test_debug_free_camera_motion.cpp
+        src/game/devtools/DebugFreeCameraMotion.cpp)
+    wikigolf_configure_debug_test(test_debug_free_camera_motion)
+
     if(WIKIGOLF_DEBUG_TOOLS)
         add_executable(test_debug_profiler_history
             test_debug_profiler_history.cpp

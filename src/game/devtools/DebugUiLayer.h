@@ -12,6 +12,7 @@ public:
                   ID3D11DeviceContext *context);
   void Shutdown();
   void BeginFrame();
+  void ApplyPreRender(core::GameContext &ctx, float realDeltaSeconds);
   void Render(core::GameContext &ctx, DebugTimeController &time);
   bool IsPauseToggleRequested() const;
   bool IsFrameStepRequested() const;

@@ -4,6 +4,7 @@
 #include "DebugColliderRenderer.h"
 #include "DebugBallInspector.h"
 #include "DebugCollisionHistory.h"
+#include "DebugFreeCamera.h"
 #include "DebugProfilerInspector.h"
 
 namespace core {
@@ -19,6 +20,9 @@ public:
   void Toggle() { m_visible = !m_visible; }
   bool IsVisible() const { return m_visible; }
   void Draw(core::GameContext &ctx, DebugTimeController &time);
+  void ApplyFreeCamera(core::GameContext &ctx, float realDeltaSeconds) {
+    m_freeCamera.Apply(ctx, realDeltaSeconds);
+  }
   const DebugColliderSettings &GetColliderSettings() const {
     return m_colliderSettings;
   }
@@ -35,6 +39,7 @@ private:
   DebugColliderSettings m_colliderSettings;
   DebugBallInspector m_ballInspector;
   DebugCollisionHistory m_collisionHistory;
+  DebugFreeCamera m_freeCamera;
   DebugProfilerInspector m_profilerInspector;
   bool m_pauseOnCollision = false;
   bool m_hideTerrainMeshes = false;

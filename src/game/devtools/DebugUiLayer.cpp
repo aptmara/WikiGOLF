@@ -63,6 +63,13 @@ void DebugUiLayer::BeginFrame() {
   }
 }
 
+void DebugUiLayer::ApplyPreRender(core::GameContext &ctx,
+                                  float realDeltaSeconds) {
+  if (m_initialized) {
+    m_overlay.ApplyFreeCamera(ctx, realDeltaSeconds);
+  }
+}
+
 void DebugUiLayer::Render(core::GameContext &ctx,
                           DebugTimeController &time) {
   if (!m_initialized) {

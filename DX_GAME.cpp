@@ -390,6 +390,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
               sceneManager.Update(ctx);
           }
 
+#ifdef WIKIGOLF_DEBUG_TOOLS
+          debugUi.ApplyPreRender(ctx, dt);
+#endif
+
           // オーディオ更新
           {
               PROFILE_SCOPE("Logic.AudioSystem");

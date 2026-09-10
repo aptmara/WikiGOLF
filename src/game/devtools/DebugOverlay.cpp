@@ -87,6 +87,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       m_ballInspector.Draw(ctx);
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("カメラ")) {
+      m_freeCamera.DrawControls();
+      ImGui::EndTabItem();
+    }
     if (ImGui::BeginTabItem("ログ")) {
       DrawLog();
       ImGui::EndTabItem();
