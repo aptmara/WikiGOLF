@@ -90,6 +90,17 @@ function(wikigolf_add_debug_tests)
     endif()
     wikigolf_configure_debug_test(test_debug_gameplay_snapshot)
 
+    add_executable(test_debug_gameplay_checkpoint
+        test_debug_gameplay_checkpoint.cpp
+        src/game/devtools/DebugGameplayCheckpoint.cpp
+        src/core/Logger.cpp)
+    target_precompile_headers(test_debug_gameplay_checkpoint PRIVATE src/pch.h)
+    if(MSVC)
+        target_compile_definitions(test_debug_gameplay_checkpoint PRIVATE
+            -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    endif()
+    wikigolf_configure_debug_test(test_debug_gameplay_checkpoint)
+
     add_executable(test_debug_entity_snapshot
         test_debug_entity_snapshot.cpp
         src/game/devtools/DebugEntitySnapshot.cpp

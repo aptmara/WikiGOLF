@@ -108,6 +108,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       m_entityInspector.Draw(ctx, m_colliderSettings);
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("スナップショット")) {
+      m_checkpointInspector.Draw(ctx);
+      ImGui::EndTabItem();
+    }
     if (ImGui::BeginTabItem("ログ")) {
       DrawLog();
       ImGui::EndTabItem();
