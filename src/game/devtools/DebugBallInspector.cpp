@@ -1,6 +1,7 @@
 #include "DebugBallInspector.h"
 
 #include "DebugBallTeleport.h"
+#include "DebugBallImpulse.h"
 #include "../../core/GameContext.h"
 #include "imgui.h"
 
@@ -65,6 +66,20 @@ void DebugBallInspector::Draw(core::GameContext &ctx) {
   }
   ImGui::EndDisabled();
   ImGui::TextDisabled("入力値はデバッグ検証用にクランプしません。");
+
+  ImGui::SeparatorText("Impulse");
+  ImGui::DragFloat3("力積 XYZ", &m_impulse.x, 0.1f);
+  if (ImGui::Button("Impulseを適用")) {
+    const auto impulseResult = ApplyDebugBallImpulse(ctx.world, m_impulse);
+    if (impulseResult == DebugBallImpulseResult::Success) {
+      m_result = "Impulseを適用しました。";
+    } else if (impulseResult == DebugBallImpulseResult::ZeroMass) {
+      m_result = "質量が0のためImpulseを適用できません。";
+    } else {
+      m_result = "有効なボールへImpulseを適用できません。";
+    }
+  }
+  ImGui::TextDisabled("速度変化 = Impulse / 質量");
   if (!m_result.empty()) {
     ImGui::TextUnformatted(m_result.c_str());
   }

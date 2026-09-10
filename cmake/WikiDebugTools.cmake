@@ -170,6 +170,17 @@ function(wikigolf_add_debug_tests)
     endif()
     wikigolf_configure_debug_test(test_debug_ball_teleport)
 
+    add_executable(test_debug_ball_impulse
+        test_debug_ball_impulse.cpp
+        src/game/devtools/DebugBallImpulse.cpp
+        src/core/Logger.cpp)
+    target_precompile_headers(test_debug_ball_impulse PRIVATE src/pch.h)
+    if(MSVC)
+        target_compile_definitions(test_debug_ball_impulse PRIVATE
+            -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    endif()
+    wikigolf_configure_debug_test(test_debug_ball_impulse)
+
     add_executable(test_debug_ball_physics_tuning
         test_debug_ball_physics_tuning.cpp
         src/game/devtools/DebugBallPhysicsTuning.cpp
