@@ -138,9 +138,9 @@ int main() {
              "現在記事ラベルを生成する");
   CHECK_TRUE(ContainsText(world, L"TARGET"),
              "目的記事ラベルを生成する");
-  CHECK_TRUE(ContainsText(world, L"SHOT   SPACE / CLICK"),
+  CHECK_TRUE(ContainsText(world, L"SHOT   CLICK"),
              "ショット操作ボタンを生成する");
-  CHECK_TRUE(ContainsText(world, L"Q / E  CLUB     RMB  CAMERA     M  MAP"),
+  CHECK_TRUE(ContainsText(world, L"Q/E クラブ切替   LMB/RMBドラッグ カメラ回転(Shiftで微調整)   ホイール ズーム   中クリック 照準ピン設置   M マップ表示   ESC ポーズ"),
              "通常操作のヒントを生成する");
   CHECK_TRUE(ContainsText(world, L"N\n▲"),
              "ミニマップの北方向表示を生成する");
@@ -233,9 +233,9 @@ int main() {
              "ショット中はクラブ一覧を隠す");
   CHECK_TRUE(!landingPreviewText->visible,
              "ショット中は着弾予測ボタンを隠す");
-  CHECK_TRUE(!FindText(world, L"SHOT   SPACE / CLICK")->visible &&
+  CHECK_TRUE(!FindText(world, L"SHOT   CLICK")->visible &&
                  !FindText(world,
-                           L"Q / E  CLUB     RMB  CAMERA     M  MAP")
+                           L"Q/E クラブ切替   LMB/RMBドラッグ カメラ回転(Shiftで微調整)   ホイール ズーム   中クリック 照準ピン設置   M マップ表示   ESC ポーズ")
                       ->visible,
              "ショット中は開始ボタンと通常操作ヒントを隠す");
   hud.SetShotPhaseUIVisible(context, false);
@@ -243,9 +243,9 @@ int main() {
                  FindText(world, L"Club 2")->visible &&
                  FindText(world, L"Club 3")->visible,
              "ショット終了時に3行のクラブ選択範囲を復元する");
-  CHECK_TRUE(FindText(world, L"SHOT   SPACE / CLICK")->visible &&
+  CHECK_TRUE(FindText(world, L"SHOT   CLICK")->visible &&
                  FindText(world,
-                          L"Q / E  CLUB     RMB  CAMERA     M  MAP")
+                          L"Q/E クラブ切替   LMB/RMBドラッグ カメラ回転(Shiftで微調整)   ホイール ズーム   中クリック 照準ピン設置   M マップ表示   ESC ポーズ")
                      ->visible,
              "ショット終了時に開始ボタンと通常操作ヒントを復元する");
 
@@ -304,6 +304,14 @@ int main() {
                  gauge->mode == game::components::UIBarGaugeMode::Power &&
                  !gauge->showImpactZones && !gauge->showConfirmedMarker,
              "ショットUIのリセットでゲージを初期状態へ戻す");
+
+  hud.SetTutorialMode(context, true);
+  hud.SetShotPhaseUIVisible(context, false);
+  CHECK_TRUE(!FindText(world, L"SHOT   CLICK")->visible &&
+                 !FindText(world,
+                           L"Q/E クラブ切替   LMB/RMBドラッグ カメラ回転(Shiftで微調整)   ホイール ズーム   中クリック 照準ピン設置   M マップ表示   ESC ポーズ")
+                      ->visible,
+             "チュートリアル中は競合する通常操作ヒントを再表示しない");
 
   hud.SetVisible(context, false);
   CHECK_TRUE(AreAllHudElementsHidden(world),

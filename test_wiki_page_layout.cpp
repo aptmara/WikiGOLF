@@ -66,7 +66,9 @@ int main() {
 
   game::scenes::TutorialCourseLayout tutorialLayout;
   CHECK_TRUE(tutorialLayout.IsPresetPage("チュートリアル"),
-             "チュートリアル記事だけを固定教材コースとして判定する");
+             "チュートリアル開始記事を固定教材コースとして判定する");
+  CHECK_TRUE(tutorialLayout.IsPresetPage("フェアウェイ"),
+             "教材内で遷移する2ページ目も固定教材コースとして判定する");
   CHECK_TRUE(!tutorialLayout.IsPresetPage("ゴルフ"),
              "通常記事を固定教材コースとして扱わない");
 

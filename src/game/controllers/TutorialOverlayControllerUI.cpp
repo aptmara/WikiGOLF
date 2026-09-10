@@ -1,215 +1,191 @@
 /**
- * @file TutorialOverlayController.cpp
- * @brief WikiGolf チュートリアル進行管理実装
- *
- * 入力: GameContext・各コントローラーへのポインタ
- * 変更: チュートリアルステップ進行・UI 更新・STEP 5 イベントカメラ制御
- * 出力: IsDone()/IsInputLocked() の状態変化・カメラ Transform の強制更新
-*/
+ * @file TutorialOverlayControllerUI.cpp
+ * @brief Wikipedia風チュートリアルUIを更新します。
+ */
 
 #include "TutorialOverlayController.h"
-#include "../utils/GameplayPhysicsConstants.h"
-#include "CameraController.h"
-#include "ClubController.h"
-#include "ShotController.h"
-#include "MinimapController.h"
-#include "../components/Transform.h"
-#include "../components/UIText.h"
 #include "../components/UIImage.h"
+#include "../components/UIText.h"
 #include "../components/WikiComponents.h"
-#include "../components/PhysicsComponents.h"
-#include "../components/Camera.h"
-#include "../../core/Input.h"
-#include "../../core/Logger.h"
-#include "../../audio/AudioSystem.h"
+#include "../utils/UIConstants.h"
 #include "../../ecs/World.h"
-#include <DirectXMath.h>
 #include <algorithm>
-#include <cmath>
-
 
 namespace game::controllers {
 
-using namespace DirectX;
-
-// -------------------------------------------------------
-// UpdateUI
-// -------------------------------------------------------
 void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
-    if (m_step == TutorialStep::Done) {
-        if (ctx.world.IsAlive(m_overlayBgEntity))
-            ctx.world.Get<components::UIText>(m_overlayBgEntity)->visible = false;
-        if (ctx.world.IsAlive(m_overlayTextEntity))
-            ctx.world.Get<components::UIText>(m_overlayTextEntity)->visible = false;
-        if (ctx.world.IsAlive(m_skipTextEntity))
-            ctx.world.Get<components::UIText>(m_skipTextEntity)->visible = false;
-        return;
-    }
+    const bool visible = m_visible && m_step != TutorialStep::Done;
+    if (auto* bg = ctx.world.Get<components::UIText>(m_overlayBgEntity))
+        bg->visible = visible;
+    if (auto* txt = ctx.world.Get<components::UIText>(m_overlayTextEntity))
+        txt->visible = visible;
+    if (auto* action = ctx.world.Get<components::UIText>(m_actionTextEntity))
+        action->visible = visible;
+    if (auto* skip = ctx.world.Get<components::UIText>(m_skipTextEntity))
+        skip->visible = visible;
+    if (!visible) return;
 
     std::wstring text;
+    std::wstring action;
+    std::wstring hint;
     switch (m_step) {
-        case TutorialStep::Camera:
-            text = L"【STEP 1】マウスの左ボタンか右ボタンをドラッグして、\nカメラを回して周りを見てみましょう。";
-            break;
-        case TutorialStep::Club:
-            text = L"【STEP 2】QキーとEキーを押して、\n使用するクラブを変更してみましょう。";
-            break;
-        case TutorialStep::Power:
-            text = L"【STEP 3】左クリックでパワーゲージのチャージを開始します。\nもう一度左クリックでパワーを決定します。";
-            break;
-        case TutorialStep::Impact:
-            text = L"【STEP 4】ゲージが戻ってきます。中央の白いゾーン（Special）を\n狙って左クリックし、ショットを打ちます！";
-            break;
-        case TutorialStep::TerrainEvent:
-            if (!m_eventCamTargets.empty()) {
-                // イベントカメラモード
-                if (m_terrainEventStarted && m_terrainCardIndex < m_eventCamTargets.size()) {
-                    auto& t = m_eventCamTargets[m_terrainCardIndex];
-                    text = L"【STEP 5】" + t.name + L"\n" + t.desc;
-                } else {
-                    text = L"【STEP 5】地形とOBについて";
-                }
-            } else {
-                // 旧動作
-                if (m_terrainEventStarted && m_terrainCardIndex < m_terrainCards.size()) {
-                    text = L"【STEP 5】地形について学ぼう\n" +
-                           m_terrainCards[m_terrainCardIndex].name + L"\n" +
-                           m_terrainCards[m_terrainCardIndex].desc;
-                } else {
-                    text = L"【STEP 5】地形とOBについて\n(ボールが停止するまでお待ちください)";
-                }
-            }
-            break;
-        case TutorialStep::FlagEvent:
-            if (!m_flagEventCamTargets.empty()) {
-                if (m_terrainEventStarted &&
-                    m_terrainCardIndex < m_flagEventCamTargets.size()) {
-                    auto& t = m_flagEventCamTargets[m_terrainCardIndex];
-                    text = L"【STEP 6】" + t.name + L"\n" + t.desc;
-                } else {
-                    text = L"【STEP 6】旗の色と意味について";
-                }
-            } else {
-                text = L"【STEP 6】旗の色と意味について";
-            }
-            break;
-        case TutorialStep::CupIn: {
-            auto* golfState = ctx.world.GetGlobal<components::GolfGameState>();
-            if (golfState && golfState->gameCleared) {
-                text = L"【TUTORIAL CLEAR!!】\nチュートリアル完了です！\n(まもなくタイトルへ戻ります)";
-            } else {
-                text = L"【STEP 7】旗の位置を確認し、\nカップインを目指しましょう！";
-            }
-            break;
+    case TutorialStep::Intro:
+        text = L"WIKIGOLF ガイド  1 / 9\n記事から記事へ、カップインでリンクを渡り歩くゴルフです。";
+        action = L"[ ENTER ] はじめる";
+        break;
+    case TutorialStep::Camera:
+        text = L"カメラ  2 / 9\n左または右ドラッグで回転。ホイールでズーム。Shift中は精密操作。";
+        action = L"[ ドラッグ ] 回転  ＋  [ ホイール ] ズーム";
+        hint = L"[ ENTER ] スキップ";
+        break;
+    case TutorialStep::Aim:
+        text = L"狙う  3 / 9\n中クリックで狙いを置くと、向きと距離に合うクラブが自動で選ばれます。";
+        action = L"[ 中クリック ] コース上に照準ピンを置く";
+        hint = L"[ ENTER ] スキップ";
+        break;
+    case TutorialStep::Club:
+        text = L"クラブ  4 / 9\nQ / Eでクラブを変更。飛距離と弾道が変わり、パターはグリーン向きです。";
+        action = L"[ Q / E ] クラブを切り替える";
+        hint = L"[ ENTER ] スキップ";
+        break;
+    case TutorialStep::Power:
+        text = L"ショット  5 / 9 — パワー\n左クリックでゲージ開始、もう一度左クリックで飛距離を決定。右クリックで取消。";
+        action = L"[ 左クリック ] 開始  →  [ 左クリック ] パワー決定";
+        hint = L"[ ENTER ] ショット説明をスキップ";
+        break;
+    case TutorialStep::Impact:
+        text = L"ショット  5 / 9 — インパクト\n戻るマーカーを左クリック。決めたパワー位置がPerfect、周囲ほど精度が落ちます。";
+        action = L"[ 左クリック ] インパクトを決めて打つ";
+        hint = L"[ 右クリック ] やり直す  ｜  [ ENTER ] スキップ";
+        break;
+    case TutorialStep::TerrainInfo: {
+        const auto& targets = GetActiveEventCameraTargets();
+        if (m_terrainCardIndex < targets.size()) {
+            const auto& target = targets[m_terrainCardIndex];
+            text = L"地形  6 / 9  —  " + target.name + L"\n" + target.desc;
+        } else {
+            text = L"地形  6 / 9\n地形ごとに転がりやすさが変わります。";
         }
-        default:
-            break;
+        action = L"[ ENTER ] 次の地形を見る";
+        break;
+    }
+    case TutorialStep::FlagInfo: {
+        const auto& targets = GetActiveEventCameraTargets();
+        if (m_terrainCardIndex < targets.size()) {
+            const auto& target = targets[m_terrainCardIndex];
+            text = L"リンクの旗  7 / 9  —  " + target.name + L"\n" + target.desc;
+        } else {
+            text = L"リンクの旗  7 / 9\n旗色はゴール記事までのリンク距離を示します。";
+        }
+        action = L"[ ENTER ] 次の旗を見る";
+        break;
+    }
+    case TutorialStep::MapOpen:
+        text = L"マップ  8 / 9 — 開く\nコース全体と旗の位置を確認できます。";
+        action = L"[ M ] マップを開く";
+        hint = L"[ ENTER ] マップ説明をスキップ";
+        break;
+    case TutorialStep::MapPan:
+        text = L"マップ  8 / 9 — 移動\n見たい場所へ地図を動かします。";
+        action = L"[ 左ドラッグ ] マップをパンする";
+        hint = L"[ ENTER ] マップ説明をスキップ";
+        break;
+    case TutorialStep::MapZoom:
+        text = L"マップ  8 / 9 — 拡大縮小\n旗が密集した場所も細かく確認できます。";
+        action = L"[ ホイール ] マップをズームする";
+        hint = L"[ ENTER ] マップ説明をスキップ";
+        break;
+    case TutorialStep::MapAim:
+        text = L"マップ  8 / 9 — 狙いを置く\n中クリックした地点へ照準ピンを置き、距離に合うクラブを自動選択します。";
+        action = L"[ 中クリック ] マップ上に照準ピンを置く";
+        hint = L"[ ENTER ] マップ説明をスキップ";
+        break;
+    case TutorialStep::MapHelpOpen:
+        text = L"マップ  8 / 9 — ヘルプ\nマップ専用の操作一覧をその場で確認できます。";
+        action = L"[ ? ] ヘルプを開く";
+        hint = L"[ ENTER ] マップ説明をスキップ";
+        break;
+    case TutorialStep::MapHelpClose:
+        text = L"マップ  8 / 9 — ヘルプを閉じる\n同じキーで表示を切り替えます。";
+        action = L"[ ? ] ヘルプを閉じる";
+        hint = L"[ ENTER ] マップ説明をスキップ";
+        break;
+    case TutorialStep::MapClose:
+        text = L"マップ  8 / 9 — 戻る\n俯瞰を終えてショット画面へ戻ります。";
+        action = L"[ Esc ] マップを閉じる";
+        hint = L"[ ENTER ] マップ説明をスキップ";
+        break;
+    case TutorialStep::LinkCup:
+        text = L"リンクを渡る  9 / 9\nスタート地点のすぐ前（約4m）、「フェアウェイ」の照準ピンへ入れましょう。";
+        action = L"[ 照準ピン ] フェアウェイへカップイン";
+        hint = L"[ ENTER ] 記事移動をスキップ";
+        break;
+    case TutorialStep::GoalCup:
+        if (const auto* state = ctx.world.GetGlobal<components::GolfGameState>();
+            state && state->gameCleared) {
+            text = L"TUTORIAL COMPLETE\nリンクを読み、狙い、打ってゴールへ到達しました。";
+            action = L"ゴール到達！";
+            hint = L"タイトルへ戻ります…";
+        } else {
+            text = L"最後のチャレンジ\n赤い「ゴール」の旗へ。好きなクラブと狙い方でカップインしてください。";
+            action = L"[ 赤い旗 ] ゴールへカップイン";
+            hint = L"ゴール以外はティーへ復帰  ｜  [ ENTER ] 終了";
+        }
+        break;
+    case TutorialStep::Done:
+        break;
     }
 
-    if (ctx.world.IsAlive(m_overlayTextEntity)) {
-        ctx.world.Get<components::UIText>(m_overlayTextEntity)->text = text;
-    }
+    if (auto* txt = ctx.world.Get<components::UIText>(m_overlayTextEntity))
+        txt->text = text;
+    if (auto* actionText = ctx.world.Get<components::UIText>(m_actionTextEntity))
+        actionText->text = action;
+    if (auto* skip = ctx.world.Get<components::UIText>(m_skipTextEntity))
+        skip->text = hint;
 }
 
-// -------------------------------------------------------
-// GetActiveEventCameraTargets
-// -------------------------------------------------------
-/**
- * @brief 現在ステップのイベントカメラターゲット一覧を返します。
- * @return 地形説明中は地形ターゲット、旗説明中は旗ターゲット、それ以外は空配列です。*/
 const std::vector<TutorialOverlayController::EventCameraTarget>&
 TutorialOverlayController::GetActiveEventCameraTargets() const {
-    static const std::vector<EventCameraTarget> kEmptyTargets;
-    if (m_step == TutorialStep::TerrainEvent) {
-        return m_eventCamTargets;
-    }
-    if (m_step == TutorialStep::FlagEvent) {
-        return m_flagEventCamTargets;
-    }
-    return kEmptyTargets;
+    static const std::vector<EventCameraTarget> empty;
+    if (m_step == TutorialStep::TerrainInfo) return m_eventCamTargets;
+    if (m_step == TutorialStep::FlagInfo) return m_flagEventCamTargets;
+    return empty;
 }
 
-// -------------------------------------------------------
-// TriggerStepClear（ステップ完了チェックマーク開始）
-// -------------------------------------------------------
-/**
- * @brief ステップ完了時にチェックマーク演出を開始する。
- * @details チェックマーク UIImage を生成し m_stepClearPending = true にする。
- *          呼び出し元は NextStep を直接呼ばずこの関数を使う。
-*/
 void TutorialOverlayController::TriggerStepClear(core::GameContext& ctx) {
-    // 既存のチェックマークがあれば破棄
-    if (ctx.world.IsAlive(m_checkMarkEntity)) {
-        ctx.world.DestroyEntity(m_checkMarkEntity);
-    }
-
-    m_checkMarkEntity  = m_entityOwner.Create(ctx.world);
-    m_checkMarkTimer   = 0.0f;
+    if (m_stepClearPending) return;
+    if (ctx.world.IsAlive(m_checkMarkEntity)) ctx.world.DestroyEntity(m_checkMarkEntity);
+    m_checkMarkEntity = m_entityOwner.Create(ctx.world);
+    m_checkMarkTimer = 0.0f;
     m_stepClearPending = true;
-
-    auto& img       = ctx.world.Add<components::UIImage>(m_checkMarkEntity);
-    img.texturePath = "mark_check.png";
-    // チュートリアルオーバーレイBG 中央（x=640, y=150）に配置
-    // BG は x=240, y=80, w=800, h=140 → 中心 (640, 150)
-    img.x       = 640.0f;
-    img.y       = 80.0f;  // sz=0 の初期値; UpdateStepClearAnim で sz を足して補正
-    img.width   = 0.0f;
-    img.height  = 0.0f;
-    img.alpha   = 1.0f;
+    auto& img = ctx.world.Add<components::UIImage>(m_checkMarkEntity);
+    img.texturePath = "Assets/textures/mark_check.png";
+    img.x = 640.0f;
+    img.y = 74.0f;
+    img.width = 0.0f;
+    img.height = 0.0f;
+    img.alpha = 1.0f;
     img.visible = true;
-    img.layer   = 210;
+    img.layer = game::ui::kLayerOverlay + 10;
 }
 
-// -------------------------------------------------------
-// UpdateStepClearAnim（チェックマークアニメーション更新）
-// -------------------------------------------------------
-/**
- * @brief チェックマーク UIImage のサイズ・位置・透明度を毎フレーム更新する。
- * @details タイマー m_checkMarkTimer を参照する（更新は呼び出し元が行う）。
- *          CupIn 用に 4 秒表示・フェードアウトにも対応。
- *          通常ステップ用（0.9 秒）はフェードなし（破棄で消す）。
-*/
 void TutorialOverlayController::UpdateStepClearAnim(core::GameContext& ctx) {
-    if (!ctx.world.IsAlive(m_checkMarkEntity)) return;
     auto* img = ctx.world.Get<components::UIImage>(m_checkMarkEntity);
     if (!img) return;
-
-    // アニメーションパラメータ
-    constexpr float kExpandEnd = 0.30f;  // 0 → 0.30s: ease-out 拡大
-    constexpr float kShrinkEnd = 0.50f;  // 0.30 → 0.50s: ease-in 縮小
-    constexpr float kMaxSize   = 200.0f;
-    constexpr float kFinalSize = 150.0f;
-    // CupIn 専用フェードアウト開始タイミング（4s 待機の最後 0.5s）
-    constexpr float kFadeStart = 3.5f;
-    constexpr float kFadeTotal = 4.0f;
-
-    float sz    = kFinalSize;
-    float alpha = 1.0f;
-
-    if (m_checkMarkTimer < kExpandEnd) {
-        // ease-out 拡大（0 → kMaxSize）
-        float t = m_checkMarkTimer / kExpandEnd;
-        t  = 1.0f - (1.0f - t) * (1.0f - t);
-        sz = kMaxSize * t;
-    } else if (m_checkMarkTimer < kShrinkEnd) {
-        // ease-in 縮小（kMaxSize → kFinalSize）
-        float t = (m_checkMarkTimer - kExpandEnd) / (kShrinkEnd - kExpandEnd);
-        sz = kMaxSize - (kMaxSize - kFinalSize) * t;
-    } else if (m_step == TutorialStep::CupIn && m_checkMarkTimer >= kFadeStart) {
-        // CupIn のみ: フェードアウト
-        float remain = kFadeTotal - m_checkMarkTimer;
-        alpha = std::max(0.0f, remain / 0.5f);
+    constexpr float maxSize = 84.0f;
+    constexpr float finalSize = 62.0f;
+    float size = finalSize;
+    if (m_checkMarkTimer < 0.22f) {
+        const float t = m_checkMarkTimer / 0.22f;
+        size = maxSize * (1.0f - (1.0f - t) * (1.0f - t));
+    } else if (m_checkMarkTimer < 0.38f) {
+        const float t = (m_checkMarkTimer - 0.22f) / 0.16f;
+        size = maxSize - (maxSize - finalSize) * t;
     }
-
-    // オーバーレイBG 中央（640, 150）を基準にセンタリング
-    img->width  = sz;
-    img->height = sz;
-    img->alpha  = alpha;
-    img->x      = 640.0f - sz * 0.5f;
-    img->y      = 150.0f - sz * 0.5f;  // 150 = BG(y=80) + BG_h(140)/2
-
-    if (alpha <= 0.0f) img->visible = false;
+    img->width = size;
+    img->height = size;
+    img->x = 640.0f - size * 0.5f;
+    img->y = 92.0f - size * 0.5f;
 }
 
 } // namespace game::controllers
-

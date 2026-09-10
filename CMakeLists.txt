@@ -727,4 +727,26 @@ if(MSVC)
 endif()
 add_test(NAME wiki_terrain_height COMMAND test_wiki_terrain_height)
 
+add_executable(test_daily_challenge_rules test_daily_challenge_rules.cpp)
+target_precompile_headers(test_daily_challenge_rules PRIVATE src/pch.h)
+target_include_directories(test_daily_challenge_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_daily_challenge_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_daily_challenge_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME daily_challenge_rules COMMAND test_daily_challenge_rules)
+
+add_executable(test_playfab_rules
+    test_playfab_rules.cpp
+    src/game/systems/PlayFabClientJson.cpp
+    src/game/systems/WikiClientJson.cpp
+    src/game/systems/WikiClientJsonHtml.cpp)
+target_precompile_headers(test_playfab_rules PRIVATE src/pch.h)
+target_include_directories(test_playfab_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_playfab_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_playfab_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME playfab_rules COMMAND test_playfab_rules)
+
 wikigolf_add_debug_tests()

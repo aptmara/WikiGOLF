@@ -6,6 +6,7 @@
 
 #include "../../core/GameContext.h"
 #include "../components/WikiComponents.h"
+#include "../systems/DailyChallengeRules.h"
 #include <string>
 
 namespace game::scenes::title_scene_detail {
@@ -21,6 +22,13 @@ inline void ResetStandardStartData(core::GameContext &ctx) {
   game::components::WikiGlobalData data;
   ctx.world.SetGlobal(std::move(data));
   LOG_INFO("TitleScene", "Reset WikiGlobalData for standard random start");
+}
+
+inline void ResetDailyChallengeStartData(core::GameContext &ctx) {
+  game::components::WikiGlobalData data;
+  data.isDailyChallenge = true;
+  ctx.world.SetGlobal(std::move(data));
+  LOG_INFO("TitleScene", "Reset WikiGlobalData for daily challenge");
 }
 
 /**

@@ -7,6 +7,8 @@
 #include "../../core/Scene.h"
 #include "../../graphics/WikiTextureGenerator.h"
 #include <DirectXMath.h>
+#include <atomic>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,10 +21,12 @@ using namespace DirectX;
 */
 struct ResultData {
   std::string targetPage;
-  int shotCount;
-  int par;
+  int shotCount = 0;
+  int clearTimeMs = 0;
+  int par = 0;
   std::vector<std::string> pathHistory;
-  bool isNewRecord;
+  bool isNewRecord = false;
+  bool isDailyChallenge = false;
 };
 
 /**
@@ -53,6 +57,14 @@ private:
   ecs::Entity m_hintEntity = UINT32_MAX;
   ecs::Entity m_retryBtnEntity = UINT32_MAX;
   ecs::Entity m_titleBtnEntity = UINT32_MAX;
+  ecs::Entity m_rankingStatusEntity = UINT32_MAX;
+
+  struct RankingUploadState {
+    std::atomic_bool completed = false;
+    bool success = false;
+    std::string errorMessage;
+  };
+  std::shared_ptr<RankingUploadState> m_rankingUploadState;
 
   /**
    * @brief 結果画面のUI要素を構築します。

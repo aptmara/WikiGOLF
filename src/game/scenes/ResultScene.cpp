@@ -23,12 +23,16 @@
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../systems/SkyboxRenderSystem.h"
+#include "../systems/PlayFabClient.h"
 #include "TitleScene.h"
+#include "TitleSceneSupport.h"
+#include "LoadingScene.h"
 #include "WikiGolfScene.h"
 #include <algorithm>
 #include <cmath>
 #include <format>
 #include <random>
+#include <thread>
 
 namespace game::scenes {
 
@@ -73,6 +77,19 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
   // 豪華なUIを生成します。
   LOG_INFO("ResultScene", "Creating Luxury UI...");
   CreateLuxuryUI(ctx);
+  if (m_data.isDailyChallenge) {
+    m_rankingUploadState = std::make_shared<RankingUploadState>();
+    const auto uploadState = m_rankingUploadState;
+    const int strokes = m_data.shotCount;
+    const int clearTimeMs = m_data.clearTimeMs;
+    std::thread([uploadState, strokes, clearTimeMs]() {
+      game::systems::PlayFabClient client;
+      const auto result = client.SubmitDailyResult(strokes, clearTimeMs);
+      uploadState->success = result.success;
+      uploadState->errorMessage = result.errorMessage;
+      uploadState->completed.store(true, std::memory_order_release);
+    }).detach();
+  }
   LOG_INFO("ResultScene", "OnEnter complete.");
 }
 
@@ -81,6 +98,18 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
 */
 void ResultScene::OnUpdate(core::GameContext &ctx) {
   m_time += ctx.dt;
+
+  if (m_rankingUploadState &&
+      m_rankingUploadState->completed.load(std::memory_order_acquire)) {
+    if (auto *status =
+            ctx.world.Get<components::UIText>(m_rankingStatusEntity)) {
+      status->text = m_rankingUploadState->success
+                         ? L"オンラインランキングへ記録を送信しました"
+                         : L"ランキング送信失敗: " + core::ToWString(
+                               m_rankingUploadState->errorMessage);
+    }
+    m_rankingUploadState.reset();
+  }
 
   // カメラを地球儀の周囲で回転させます。
   // Update Camera shake
@@ -201,7 +230,14 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
           ctx.world.DestroyEntity(e);
         }
 
-        ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
+        if (m_data.isDailyChallenge) {
+          title_scene_detail::ResetDailyChallengeStartData(ctx);
+          auto loadingScene = std::make_unique<LoadingScene>(
+              []() { return std::make_unique<WikiGolfScene>(false); });
+          ctx.sceneManager->ChangeScene(std::move(loadingScene));
+        } else {
+          ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
+        }
         return;
       }
       // タイトルへ戻るボタンの処理を行います。
@@ -214,7 +250,14 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
 
   // ショートカットキー入力を処理します。
   if (ctx.input.GetKeyDown('R')) {
-    ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
+    if (m_data.isDailyChallenge) {
+      title_scene_detail::ResetDailyChallengeStartData(ctx);
+      auto loadingScene = std::make_unique<LoadingScene>(
+          []() { return std::make_unique<WikiGolfScene>(false); });
+      ctx.sceneManager->ChangeScene(std::move(loadingScene));
+    } else {
+      ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
+    }
     return;
   }
   LOG_DEBUG("ResultScene", "OnUpdate: Finished successfully");

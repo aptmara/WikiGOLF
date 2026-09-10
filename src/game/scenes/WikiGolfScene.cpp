@@ -106,6 +106,33 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         t->position, holeT->position, hole->radius, speedSq);
 
     if (readyForCupIn) {
+      if (m_isTutorial && m_tutorialOverlay &&
+          !m_tutorialOverlay->CanAcceptCupIn(hole->linkTarget,
+                                             hole->isTarget)) {
+        LOG_INFO("WikiGolf", "[Tutorial] Locked cup ignored: {}",
+                 hole->linkTarget);
+        float terrainHeight = 0.0f;
+        if (m_terrainSystem) {
+          terrainHeight = m_terrainSystem->GetHeight(0.0f, -32.0f);
+        }
+        t->position = {
+            0.0f,
+            game::physics::ToVisualSurfaceHeight(terrainHeight) +
+                game::physics::kBallRadius,
+            -32.0f};
+        rb->velocity = {0.0f, 0.0f, 0.0f};
+        rb->angularVelocity = {0.0f, 0.0f, 0.0f};
+        state->isBallGrounded = true;
+        state->canShoot = true;
+        if (auto* shot = ctx.world.GetGlobal<ShotState>()) shot->Reset();
+        if (m_hud) m_hud->ResetShotUI(ctx);
+        if (m_aimPinController) m_aimPinController->ClearPin(ctx);
+        if (m_cameraController) {
+          m_cameraController->ResetForTransition(scene_detail::kFieldScale);
+        }
+        return true;
+      }
+
       // カップイン！
       LOG_INFO("WikiGolf", "Cup In! Target: {}", hole->linkTarget);
 
@@ -207,6 +234,9 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         ResultData data;
         data.targetPage = state->targetPage;
         data.shotCount = state->shotCount;
+        data.clearTimeMs =
+            static_cast<int>(state->elapsedTimeSeconds * 1000.0f + 0.5f);
+        data.isDailyChallenge = state->isDailyChallenge;
         data.par = state->par;
         data.pathHistory = state->pathHistory;
         data.isNewRecord = false;
@@ -217,25 +247,26 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         return true;
       }
 
-      // チュートリアル中は非ターゲットホールへのカップインで次ページへ遷移しない
-      // ボールをティー位置にリセットして続行させる。
       if (m_isTutorial) {
-        LOG_INFO("WikiGolf", "[Tutorial] Non-target hole cupin. Resetting ball.");
-        if (auto *ballT = ctx.world.Get<Transform>(m_ballEntity)) {
-          float terrainHeight = 0.0f;
-          if (m_terrainSystem) {
-            terrainHeight = m_terrainSystem->GetHeight(0.0f, -32.0f);
-          }
-          ballT->position = {
-              0.0f,
-              game::physics::ToVisualSurfaceHeight(terrainHeight) +
-                  game::physics::kBallRadius,
-              -32.0f};
+        m_tutorialOverlay->NotifyLinkCupIn(ctx);
+        ClearTutorialFlagSamples(ctx);
+        if (m_pageLoader) {
+          std::vector<game::WikiLink> links = {
+              {"フェアウェイ", "フェアウェイ"},
+              {"ラフ", "ラフ"},
+              {"バンカー", "バンカー"},
+              {"グリーン", "グリーン"},
+              {"ウォーターハザード", "ウォーターハザード"},
+              {"ゴール", "ゴール"},
+          };
+          m_pageLoader->SetPreloadedData(
+              std::move(links),
+              "フェアウェイの記事へ移動しました。記事中のリンクが旗になり、"
+              "カップインするたびに別の記事コースへ進みます。"
+              "赤いゴールの旗を目指しましょう。",
+              true);
         }
-        if (auto *ballRb = ctx.world.Get<RigidBody>(m_ballEntity)) {
-          ballRb->velocity = {0.0f, 0.0f, 0.0f};
-          ballRb->angularVelocity = {0.0f, 0.0f, 0.0f};
-        }
+        TransitionToPage(ctx, hole->linkTarget);
         return true;
       }
 

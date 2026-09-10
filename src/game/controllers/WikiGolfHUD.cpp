@@ -159,5 +159,9 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
 
 }
 
+void WikiGolfHUD::SetTutorialMode(core::GameContext& ctx, bool enabled) {
+    m_gameplayControlsPanel.SetTutorialMode(ctx, enabled);
+}
+
 } // namespace controllers
 } // namespace game

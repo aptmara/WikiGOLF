@@ -503,9 +503,10 @@ void RenderSystem(core::GameContext &ctx) {
               continue;
             }
             if (batch.maxThreeDOverheadRatio <= 1.0f) {
-              const float distance = std::sqrt(std::max(distanceSq, 0.0001f));
-              const float overheadRatio = std::abs(dy) / distance;
-              if (overheadRatio >= batch.maxThreeDOverheadRatio) {
+              const float overheadThreshold =
+                  batch.maxThreeDOverheadRatio * batch.maxThreeDOverheadRatio;
+              if (dy * dy >= overheadThreshold *
+                                 std::max(distanceSq, 0.0001f)) {
                 ++stats.grassInstancesOverheadSkipped;
                 continue;
               }

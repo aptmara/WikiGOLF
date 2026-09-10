@@ -59,6 +59,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   auto *shot = ctx.world.GetGlobal<game::components::ShotState>();
   if (!state || !shot) return;
 
+  if (state->isDailyChallenge && !state->gameCleared) {
+    state->elapsedTimeSeconds += dt;
+  }
+
   if (m_pageLoader) {
       PROFILE_SCOPE("WikiGolf.PageLoaderAsync");
       m_pageLoader->UpdateAsyncPathEvaluation(ctx);
@@ -82,12 +86,17 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           // ロード完了: HUD/ミニマップを再表示する
           if (m_hud) m_hud->SetVisible(ctx, true);
           if (m_minimapController) m_minimapController->SetVisible(ctx, true);
+          if (m_tutorialOverlay) m_tutorialOverlay->SetVisible(ctx, true);
           if (m_cameraController) m_cameraController->Update(ctx);
           // チュートリアルオーバーレイはロード演出完了後に初期化する
           // （ロード中にUIが重なって表示されるのを防ぐ）
           if (m_isTutorial && !m_tutorialOverlay) {
               m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
               m_tutorialOverlay->Initialize(ctx);
+              if (m_hud) m_hud->SetTutorialMode(ctx, true);
+              if (m_minimapController) {
+                  m_minimapController->SetTutorialHelpMode(ctx, true);
+              }
               CreateTutorialFlagSamples(ctx);
 
               std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> targets = {
@@ -115,9 +124,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   int mouseY = mousePos.y;
 
   bool tutorialInputLocked = false;
+  game::controllers::TutorialInputPolicy tutorialPolicy;
   if (m_isTutorial && m_tutorialOverlay) {
     PROFILE_SCOPE("WikiGolf.TutorialOverlay");
-    m_tutorialOverlay->Update(ctx, m_cameraController.get(), m_clubController.get(), m_shotController.get(), m_minimapController.get());
+    m_tutorialOverlay->Update(ctx, m_cameraController.get(), m_clubController.get(),
+                              m_shotController.get(), m_minimapController.get(),
+                              m_skyboxEntity);
     if (m_tutorialOverlay->IsDone()) {
       // チュートリアル終了後、タイトルへ戻る処理など
       // （フラグの保存はTitleScene側か、ここで行う）
@@ -130,13 +142,59 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       ctx.sceneManager->ChangeScene(std::move(loadingScene));
       return;
     }
+
+    const auto guideTowardsHole = [&](const std::string& linkTarget,
+                                      bool placeAimPin) {
+      auto* ball = ctx.world.Get<game::components::Transform>(m_ballEntity);
+      if (!ball) return false;
+      for (const auto holeEntity : state->holes) {
+        const auto* hole = ctx.world.Get<game::components::GolfHole>(holeEntity);
+        const auto* holeTransform =
+            ctx.world.Get<game::components::Transform>(holeEntity);
+        if (!hole || !holeTransform || hole->linkTarget != linkTarget) continue;
+
+        if (m_cameraController) {
+          m_cameraController->AimYawTowards(ball->position,
+                                            holeTransform->position);
+        }
+        if (placeAimPin && m_aimPinController) {
+          const float distance = m_aimPinController->PlacePin(
+              ctx, m_ballEntity, holeTransform->position);
+          if (distance >= 0.0f && m_clubController) {
+            m_clubController->SelectClubForDistance(ctx, distance);
+            if (m_cameraController) {
+              m_cameraController->SetTargetDistanceAndHeight(
+                  m_clubController->GetRecommendedCameraDistance(4.0f),
+                  m_clubController->GetRecommendedCameraHeight(4.0f));
+            }
+          }
+        }
+        return true;
+      }
+      return false;
+    };
+
+    if (m_tutorialOverlay->GetStep() ==
+            game::controllers::TutorialStep::LinkCup &&
+        !m_tutorialFairwayGuidanceApplied) {
+      m_tutorialFairwayGuidanceApplied =
+          guideTowardsHole("フェアウェイ", true);
+    }
+    if (m_tutorialOverlay->GetStep() ==
+            game::controllers::TutorialStep::GoalCup &&
+        !m_tutorialGoalGuidanceApplied) {
+      if (m_aimPinController) m_aimPinController->ClearPin(ctx);
+      m_tutorialGoalGuidanceApplied = guideTowardsHole("ゴール", false);
+    }
+
     tutorialInputLocked = m_tutorialOverlay->IsInputLocked();
+    tutorialPolicy = m_tutorialOverlay->GetInputPolicy();
   }
 
   // マップビュー更新
   bool isMapView = false;
   bool wasMapView = m_minimapController && m_minimapController->IsMapView();
-  if (m_minimapController && !tutorialInputLocked) {
+  if (m_minimapController && (!m_isTutorial || tutorialPolicy.map)) {
       PROFILE_SCOPE("WikiGolf.Minimap");
       float fieldW = 80.0f;
       float fieldD = 120.0f;
@@ -144,7 +202,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           fieldW = m_pageLoader->GetFieldWidth();
           fieldD = m_pageLoader->GetFieldDepth();
       }
-      m_minimapController->ProcessInput(ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
+      if (m_isTutorial && m_tutorialOverlay) {
+          m_minimapController->ProcessInput(
+              ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity,
+              m_tutorialOverlay->GetMapInputPermissions());
+      } else {
+          m_minimapController->ProcessInput(
+              ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
+      }
       DirectX::XMFLOAT3 shotDir{0, 0, 1};
       if (m_cameraController) {
           shotDir = m_cameraController->GetShotDirection();
@@ -170,7 +235,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // クラブ選択パネル横: 着弾点プレビュー(トップビュー)トグルボタン
-  if (m_hud && m_minimapController && !tutorialInputLocked) {
+  if (m_hud && m_minimapController && !m_isTutorial) {
       PROFILE_SCOPE("WikiGolf.LandingPreviewButton");
       const bool btnEnabled = !isMapView && state->canShoot &&
           shot->phase == game::components::ShotState::Phase::Idle;
@@ -195,13 +260,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   const bool escapeHandledByMapView =
       wasMapView && ctx.input.GetKeyDown(VK_ESCAPE);
-  if (!tutorialInputLocked && !escapeHandledByMapView &&
+  if (!m_isTutorial && !tutorialInputLocked && !escapeHandledByMapView &&
       ctx.input.GetKeyDown(VK_ESCAPE)) {
     OpenPauseScene(ctx);
     return;
   }
 
-  if (!tutorialInputLocked && !isMapView && ctx.input.GetKeyDown(VK_BACK) &&
+  if (!m_isTutorial && !tutorialInputLocked && !isMapView && ctx.input.GetKeyDown(VK_BACK) &&
       ReturnToPreviousPage(ctx)) {
     return;
   }
@@ -215,7 +280,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // 全体マップビューも実カメラ(傾いた透視投影)による俯瞰のため、レイキャストは
   // 両モード共通で扱える。設置されたら、ボールからの距離に最も飛距離が
   // 近いクラブへ自動的に切り替える。
-  if (m_aimPinController && m_clubController && !tutorialInputLocked &&
+  if (m_aimPinController && m_clubController &&
+      (!m_isTutorial || tutorialPolicy.aimPin) &&
       shot->phase == game::components::ShotState::Phase::Idle) {
       PROFILE_SCOPE("WikiGolf.AimPin");
       game::controllers::AimPinController::UpdateParams pinParams;
@@ -248,7 +314,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // クラブ更新 (Q/Eはマップビュー中も操作できる。マップの他の操作キーとは
   // 重複しないため、ここでは isMapView による制限をかけない)
-  if (m_clubController && !tutorialInputLocked &&
+  if (m_clubController && (!m_isTutorial || tutorialPolicy.club) &&
       shot->phase == game::components::ShotState::Phase::Idle) {
       PROFILE_SCOPE("WikiGolf.ClubInput");
       game::controllers::ClubController::InputParams cParams;
@@ -262,13 +328,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // カメラ更新
-  if (m_cameraController && !tutorialInputLocked && !isMapView) {
+  if (m_cameraController && (!m_isTutorial || tutorialPolicy.camera) && !isMapView) {
       PROFILE_SCOPE("WikiGolf.Camera");
       m_cameraController->ProcessInput(ctx, mouseX, mouseY);
   }
 
   // ショット処理
-  if (m_shotController && !tutorialInputLocked && !isMapView) {
+  if (m_shotController && (!m_isTutorial || tutorialPolicy.shot) && !isMapView) {
       PROFILE_SCOPE("WikiGolf.Shot");
       auto event = m_shotController->ProcessShot(ctx, state->canShoot, m_hud.get(), m_clubController.get());
       if (event.shotFired) {
@@ -307,7 +373,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // クラブアニメーション更新
-  if (m_clubController && !tutorialInputLocked) {
+  if (m_clubController) {
       PROFILE_SCOPE("WikiGolf.ClubAnimation");
       DirectX::XMFLOAT3 shotDir{0, 0, 1};
       if (m_cameraController) {
@@ -324,7 +390,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   m_fastForwardIndicator.Update(ctx, dt, m_fastForwardTimer.GetCurrentTier());
 
   // 物理後のボール位置を使い、追従カメラの1フレーム遅延を防ぐ。
-  if (m_cameraController && !tutorialInputLocked && !isMapView) {
+  if (m_cameraController &&
+      (!m_isTutorial || tutorialPolicy.camera || tutorialPolicy.shot) &&
+      !isMapView) {
       PROFILE_SCOPE("WikiGolf.CameraFollow");
       m_cameraController->Update(ctx);
   }

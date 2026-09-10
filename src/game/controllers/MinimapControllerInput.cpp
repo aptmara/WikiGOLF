@@ -32,9 +32,13 @@ using namespace game::components;
 /**
  * @brief ユーザー入力を処理しマップビュー操作に反映します。
 */
-void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mouseY, float fieldWidth, float fieldDepth, ecs::Entity skyboxEntity) {
-  if (ctx.input.GetKeyDown('M')) {
+void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mouseY,
+                                     float fieldWidth, float fieldDepth,
+                                     ecs::Entity skyboxEntity,
+                                     const InputPermissions& permissions) {
+  if (permissions.openWithM && !m_isMapView && ctx.input.GetKeyDown('M')) {
     ToggleMapView(ctx, skyboxEntity);
+    ++m_inputActivity.opened;
     const char *mapViewState = "OFF";
     if (m_isMapView) {
       mapViewState = "ON";
@@ -49,7 +53,7 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
   m_maxMapZoom = game::utils::CalculateMaxMapZoom(extent, minimap_detail::kMinMapViewSpan, m_baseMaxMapZoom);
 
   // マップビューの操作処理
-  if (ctx.input.GetKeyDown(VK_ESCAPE)) {
+  if (permissions.closeWithEscape && ctx.input.GetKeyDown(VK_ESCAPE)) {
     m_isMapView = false;
     if (auto *golfState = ctx.world.GetGlobal<GolfGameState>()) {
       golfState->isMapView = false;
@@ -65,38 +69,44 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
       }
     }
     LOG_INFO("MinimapController", "Map view closed (ESC)");
+    ++m_inputActivity.closed;
   }
 
-  if (ctx.input.GetKeyDown(VK_SPACE) || ctx.input.GetKeyDown('C')) {
+  if (permissions.recenter &&
+      (ctx.input.GetKeyDown(VK_SPACE) || ctx.input.GetKeyDown('C'))) {
     SyncMapCenterToBall(ctx, 0.0f, fieldWidth, fieldDepth, true);
     m_targetMapZoom = std::clamp(fieldWidth / std::max(10.0f, fieldWidth * 0.25f), game::ui::kMapMinZoom, m_maxMapZoom);
   }
 
-  if (ctx.input.GetKeyDown('F')) {
+  if (permissions.fitCourse && ctx.input.GetKeyDown('F')) {
     SyncMapCenterToBall(ctx, 0.0f, fieldWidth, fieldDepth, true);
     float extentVal = (std::max)(fieldWidth, fieldDepth);
     m_targetMapZoom = extentVal / 220.0f * 0.9f;
     m_targetMapZoom = std::clamp(m_targetMapZoom, game::ui::kMapMinZoom, m_maxMapZoom);
   }
 
-  if (ctx.input.GetKeyDown('0')) {
+  if (permissions.resetZoom && ctx.input.GetKeyDown('0')) {
     m_targetMapZoom = 1.0f;
   }
 
-  if (ctx.input.GetKeyDown(VK_OEM_2)) { // '/' or '?'
+  if (permissions.toggleHelp && ctx.input.GetKeyDown(VK_OEM_2)) { // '/' or '?'
     m_mapHelpVisible = !m_mapHelpVisible;
+    ++m_inputActivity.helpToggled;
   }
 
   float wheel = ctx.input.GetMouseScrollDelta();
-  if (wheel != 0.0f) {
+  if (permissions.zoomWithWheel && wheel != 0.0f) {
     m_targetMapZoom *= std::pow(1.12f, wheel);
     m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, game::ui::kMapMinZoom, m_maxMapZoom);
+    ++m_inputActivity.wheelZoomed;
   }
-  if (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD)) {
+  if (permissions.zoomWithKeys &&
+      (ctx.input.GetKeyDown(VK_OEM_PLUS) || ctx.input.GetKeyDown(VK_ADD))) {
     m_targetMapZoom *= 1.12f;
     m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, game::ui::kMapMinZoom, m_maxMapZoom);
   }
-  if (ctx.input.GetKeyDown(VK_OEM_MINUS) || ctx.input.GetKeyDown(VK_SUBTRACT)) {
+  if (permissions.zoomWithKeys &&
+      (ctx.input.GetKeyDown(VK_OEM_MINUS) || ctx.input.GetKeyDown(VK_SUBTRACT))) {
     m_targetMapZoom /= 1.12f;
     m_targetMapZoom = game::utils::ClampMapZoom(m_targetMapZoom, game::ui::kMapMinZoom, m_maxMapZoom);
   }
@@ -104,8 +114,10 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
   float zoomLerp = 1.0f - std::exp(-10.0f * ctx.dt);
   m_mapZoom += (m_targetMapZoom - m_mapZoom) * zoomLerp;
 
-  // パン操作 (左ドラッグ/右ドラッグどちらも可)。中クリックはエイムピン専用のため、ここでは使わない。
-  if (ctx.input.GetMouseButton(0) || ctx.input.GetMouseButton(1)) {
+  const bool panHeld =
+      (permissions.panWithLeftDrag && ctx.input.GetMouseButton(0)) ||
+      (permissions.panWithRightDrag && ctx.input.GetMouseButton(1));
+  if (panHeld) {
     int deltaX = mouseX - m_prevMouseX;
     int deltaY = mouseY - m_prevMouseY;
     if (deltaX != 0 || deltaY != 0) {
@@ -116,6 +128,7 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
       m_mapCenter.x -= deltaX * panSpeed;
       m_mapCenter.y += deltaY * panSpeed;
       m_mapPanVelocity = {0.0f, 0.0f};
+      ++m_inputActivity.panned;
     }
   }
 

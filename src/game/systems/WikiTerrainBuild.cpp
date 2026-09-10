@@ -115,7 +115,8 @@ void WikiTerrainSystem::BeginBuildField(
     }
   }
 
-  const bool useTutorialPreset = m_tutorialMode && pageTitle == "チュートリアル";
+  const bool useTutorialPreset = m_tutorialMode &&
+      (pageTitle == "チュートリアル" || pageTitle == "フェアウェイ");
 
   // ラムダにコピーして非同期実行（thisへの参照を持たない）
   m_terrainFuture = std::async(
@@ -143,6 +144,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 
   // 非同期待ち
   case BuildPhase::TerrainGenAsync: {
+    PROFILE_SCOPE("StepBuildField.TerrainGenAsync");
     auto status = m_terrainFuture.wait_for(std::chrono::milliseconds(0));
     if (status != std::future_status::ready) {
       return false; // まだ完成していない
@@ -156,6 +158,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 
   // 物理エンティティの作成
   case BuildPhase::CreatePhysics: {
+    PROFILE_SCOPE("StepBuildField.CreatePhysics");
     using namespace game::components;
 
     auto e = ctx.world.CreateEntity();
@@ -174,7 +177,14 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
 
-    // シェーダー・テクスチャをキャッシュ（後のステップでも使う）
+    m_buildPhase = BuildPhase::LoadTerrainAlbedo;
+    m_buildProgress = 0.11f;
+    LOG_INFO("WikiTerrain", "StepBuildField: physics entity created");
+    return false;
+  }
+
+  case BuildPhase::LoadTerrainAlbedo: {
+    PROFILE_SCOPE("StepBuildField.LoadTerrainAlbedo");
     const std::vector<std::string> albedoPaths = {
         "Assets/textures/terrain_materials/terrain_00_fairway_albedo.png",
         "Assets/textures/terrain_materials/terrain_01_rough_albedo.png",
@@ -184,6 +194,15 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
         "Assets/textures/terrain_materials/terrain_05_water_albedo.png",
         "Assets/textures/terrain_materials/terrain_06_lava_albedo.png",
         "Assets/textures/terrain_materials/terrain_07_stone_albedo.png"};
+    m_buildAlbedoSRV =
+        ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray", albedoPaths);
+    m_buildPhase = BuildPhase::LoadTerrainNormal;
+    m_buildProgress = 0.12f;
+    return false;
+  }
+
+  case BuildPhase::LoadTerrainNormal: {
+    PROFILE_SCOPE("StepBuildField.LoadTerrainNormal");
     const std::vector<std::string> normalPaths = {
         "Assets/textures/terrain_materials/terrain_00_fairway_normal_dx.png",
         "Assets/textures/terrain_materials/terrain_01_rough_normal_dx.png",
@@ -194,23 +213,37 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
         "Assets/textures/terrain_materials/terrain_06_lava_normal_dx.png",
         "Assets/textures/terrain_materials/terrain_07_stone_normal_dx.png"};
 
-    m_buildAlbedoSRV   = ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray", albedoPaths);
-    m_buildNormalSRV   = ctx.resource.LoadTextureArraySRV("TerrainNormalArray",  normalPaths);
+    m_buildNormalSRV =
+        ctx.resource.LoadTextureArraySRV("TerrainNormalArray", normalPaths);
+    m_buildPhase = BuildPhase::LoadTerrainShader;
+    m_buildProgress = 0.13f;
+    return false;
+  }
+
+  case BuildPhase::LoadTerrainShader: {
+    PROFILE_SCOPE("StepBuildField.LoadTerrainShader");
     m_buildTerrainShader = ctx.resource.LoadShader(
         "Terrain", L"Assets/shaders/TerrainVS.hlsl", L"Assets/shaders/TerrainPS.hlsl");
-    m_buildBasicShader   = ctx.resource.LoadShader(
+    m_buildPhase = BuildPhase::LoadBasicShader;
+    m_buildProgress = 0.14f;
+    return false;
+  }
+
+  case BuildPhase::LoadBasicShader: {
+    PROFILE_SCOPE("StepBuildField.LoadBasicShader");
+    m_buildBasicShader = ctx.resource.LoadShader(
         "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
 
     m_buildTileIndex = 0;
     m_tileMeshCaches.clear();
     m_buildPhase   = BuildPhase::CreateTileMesh;
     m_buildProgress = 0.15f;
-    LOG_INFO("WikiTerrain", "StepBuildField: physics entity created");
     return false;
   }
 
   // ビジュアルメッシュの生成
   case BuildPhase::CreateTileMesh: {
+    PROFILE_SCOPE("StepBuildField.CreateTileMesh");
     if (m_buildTileIndex >= m_buildTiles.size()) {
       // 全タイル処理完了 → オーバーレイへ
       m_buildTileIndex = 0;
@@ -347,6 +380,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 
   // オーバーレイの生成
   case BuildPhase::CreateTileOverlay: {
+    PROFILE_SCOPE("StepBuildField.CreateTileOverlay");
     if (m_buildTileIndex >= m_buildTiles.size()) {
       m_buildPhase   = BuildPhase::CreateWalls;
       m_buildProgress = 0.90f;
@@ -421,6 +455,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 
   // 壁の生成
   case BuildPhase::CreateWalls: {
+    PROFILE_SCOPE("StepBuildField.CreateWalls");
     CreateWalls(ctx, m_buildFieldWidth, m_buildFieldDepth);
     m_buildPhase   = BuildPhase::CreateDecorations;
     m_buildProgress = 0.94f;
@@ -429,8 +464,19 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 
   // 装飾の生成
   case BuildPhase::CreateDecorations: {
+    PROFILE_SCOPE("StepBuildField.CreateDecorations");
     CreateDecorations(ctx, m_buildFieldWidth, m_buildFieldDepth, m_biome);
-    CreateSurfaceGrass(ctx, m_buildFieldWidth, m_buildFieldDepth);
+    BeginSurfaceGrassBuild(ctx, m_buildFieldWidth, m_buildFieldDepth);
+    m_buildPhase   = BuildPhase::CreateSurfaceGrass;
+    m_buildProgress = 0.96f;
+    return false;
+  }
+
+  case BuildPhase::CreateSurfaceGrass: {
+    PROFILE_SCOPE("StepBuildField.CreateSurfaceGrass");
+    if (!StepSurfaceGrassBuild(ctx)) {
+      return false;
+    }
     m_buildPhase   = BuildPhase::Done;
     m_buildProgress = 1.0f;
     m_tileMeshCaches.clear(); // メモリ解放

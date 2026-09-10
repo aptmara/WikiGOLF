@@ -50,6 +50,10 @@ public:
   /** @brief 中クリック入力を処理し、必要ならAimPinStateを更新します。*/
   UpdateResult Update(core::GameContext &ctx, const UpdateParams &params);
 
+  /** @brief チュートリアル誘導などで指定ワールド位置へ照準ピンを設置します。*/
+  float PlacePin(core::GameContext& ctx, ecs::Entity ballEntity,
+                 const DirectX::XMFLOAT3& worldPos);
+
   /** @brief エイムピンを無効化し、3D旗マーカーも破棄します（ショット実行時などに呼ぶ）。*/
   void ClearPin(core::GameContext &ctx);
 

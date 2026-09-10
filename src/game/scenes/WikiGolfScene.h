@@ -237,6 +237,8 @@ private:
    *          このフラグで1回だけ処理させる。
 */
   bool m_tutorialCupInFired = false;
+  bool m_tutorialFairwayGuidanceApplied = false;
+  bool m_tutorialGoalGuidanceApplied = false;
 
   /** @brief ページ読み込み（WikiPageLoader へ委譲）*/
 

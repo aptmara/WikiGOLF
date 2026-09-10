@@ -63,6 +63,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("WikiGolf", "OnEnter");
 
   m_tutorialCupInFired = false;
+  m_tutorialFairwayGuidanceApplied = false;
+  m_tutorialGoalGuidanceApplied = false;
   m_tutorialFlagSampleEntities.clear();
 
   m_screenFade.Initialize(ctx);
@@ -245,6 +247,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   std::string targetPage;
   int targetId = -1;
   bool isUserOverride = false;
+  bool isDailyChallenge = false;
   constexpr int kTargetMinIncomingLinks = 10000;
   constexpr int kFallbackTargetMinIncomingLinks = 5000;
 
@@ -266,11 +269,14 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     targetPage = preloadedData->targetPage;
     targetId = preloadedData->targetPageId;
     isUserOverride = preloadedData->isUserOverride;
+    isDailyChallenge = preloadedData->isDailyChallenge;
 
     if (preloadedData->hasCachedData) {
       LOG_INFO("WikiGolf",
                "Found cached page data. Skipping initial network request.");
-      m_pageLoader->SetPreloadedData(preloadedData->cachedLinks, preloadedData->cachedExtract);
+      m_pageLoader->SetPreloadedData(preloadedData->cachedLinks,
+                                     preloadedData->cachedExtract,
+                                     m_isTutorial);
     }
 
     if (!preloadedData->targetThumbnailPixelsBGRA.empty()) {
@@ -426,6 +432,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   state.moveCount = 0;
   state.shotCount = 0;
+  state.elapsedTimeSeconds = 0.0f;
+  state.isDailyChallenge = isDailyChallenge;
   state.gameCleared = false;
   state.canShoot = true;
   state.ballEntity = m_ballEntity;

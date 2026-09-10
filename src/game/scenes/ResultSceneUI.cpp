@@ -23,6 +23,7 @@
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../systems/SkyboxRenderSystem.h"
+#include "../systems/PlayFabRules.h"
 #include "TitleScene.h"
 #include "WikiGolfScene.h"
 #include <algorithm>
@@ -175,8 +176,29 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
 
   // スコア統計値テキストを追加します。
   statStyle.align = graphics::TextAlign::Center;
-  std::wstring stats = L"Shots: " + std::to_wstring(m_data.shotCount) + L"  |  Hops: " + std::to_wstring(hops);
+  std::wstring stats = L"Shots: " + std::to_wstring(m_data.shotCount) +
+                       L"  |  Hops: " + std::to_wstring(hops);
+  if (m_data.isDailyChallenge) {
+    stats += L"  |  Time: " +
+             game::systems::FormatClearTime(m_data.clearTimeMs);
+  }
   addUI(stats, 340.0f, statStyle);
+
+  if (m_data.isDailyChallenge) {
+    m_rankingStatusEntity = CreateEntity(ctx.world);
+    auto &rankingStatus =
+        ctx.world.Add<components::UIText>(m_rankingStatusEntity);
+    rankingStatus.text = L"オンラインランキングへ送信中...";
+    rankingStatus.x = 0.0f;
+    rankingStatus.y = 445.0f;
+    rankingStatus.width = 1280.0f;
+    rankingStatus.height = 30.0f;
+    rankingStatus.style = statStyle;
+    rankingStatus.style.fontSize = 18.0f;
+    rankingStatus.style.align = graphics::TextAlign::Center;
+    rankingStatus.visible = true;
+    rankingStatus.layer = 10;
+  }
 
   // 遷移経路文字列のテキストを追加します。日本語の記事名を含むため丸ゴシックにする。
   auto routeStyle = statStyle;

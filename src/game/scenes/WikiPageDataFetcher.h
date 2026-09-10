@@ -33,7 +33,8 @@ class WikiPageDataFetcher {
 public:
     /** @brief 次回取得で使う事前取得データを設定します。*/
     void SetPreloadedData(std::vector<game::WikiLink> links,
-                          std::string extract);
+                          std::string extract,
+                          bool skipSupplementalFetch = false);
 
     /** @brief 記事本文、リンク、カテゴリ、画像を取得します。*/
     PageDataAsyncResult Fetch(const std::string& pageName);
@@ -45,6 +46,7 @@ private:
         const std::string& pageName) const;
 
     bool m_hasPreloadedData = false;
+    bool m_skipSupplementalFetch = false;
     std::vector<game::WikiLink> m_preloadedLinks;
     std::string m_preloadedExtract;
 };

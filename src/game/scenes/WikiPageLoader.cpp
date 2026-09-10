@@ -151,9 +151,11 @@ void WikiPageLoader::SetTutorialMode(bool enabled)
 }
 
 void WikiPageLoader::SetPreloadedData(std::vector<game::WikiLink> links,
-                                      std::string                 extract)
+                                      std::string                 extract,
+                                      bool skipSupplementalFetch)
 {
-    m_pageDataFetcher.SetPreloadedData(std::move(links), std::move(extract));
+    m_pageDataFetcher.SetPreloadedData(std::move(links), std::move(extract),
+                                      skipSupplementalFetch);
 }
 
 const char* WikiPageLoader::BuildStepName(BuildStep step)

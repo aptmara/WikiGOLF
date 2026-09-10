@@ -272,6 +272,7 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
     // ロード中は地球儀のみ表示するためHUD/ミニマップを非表示
     if (m_hud) m_hud->SetVisible(ctx, false);
     if (m_minimapController) m_minimapController->SetVisible(ctx, false);
+    if (m_tutorialOverlay) m_tutorialOverlay->SetVisible(ctx, false);
     // 方向ガイドセグメントを非表示
     for (auto segE : m_guideSegments) {
       if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;

@@ -7,6 +7,7 @@
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
+#include "MinimapController.h"
 #include <DirectXMath.h>
 #include <string>
 #include <vector>
@@ -16,17 +17,34 @@ namespace game::controllers {
 class CameraController;
 class ClubController;
 class ShotController;
-class MinimapController;
 
 enum class TutorialStep {
+    Intro,
     Camera,
+    Aim,
     Club,
     Power,
     Impact,
-    TerrainEvent,
-    FlagEvent,
-    CupIn,
+    TerrainInfo,
+    FlagInfo,
+    MapOpen,
+    MapPan,
+    MapZoom,
+    MapAim,
+    MapHelpOpen,
+    MapHelpClose,
+    MapClose,
+    LinkCup,
+    GoalCup,
     Done
+};
+
+struct TutorialInputPolicy {
+    bool camera = false;
+    bool aimPin = false;
+    bool club = false;
+    bool shot = false;
+    bool map = false;
 };
 
 struct TerrainCard {
@@ -57,10 +75,17 @@ public:
                 CameraController* cameraCtrl,
                 ClubController* clubCtrl,
                 ShotController* shotCtrl,
-                MinimapController* minimapCtrl);
+                MinimapController* minimapCtrl,
+                ecs::Entity skyboxEntity);
     void Shutdown(core::GameContext& ctx);
 
     bool IsDone() const { return m_step == TutorialStep::Done; }
+    void SetVisible(core::GameContext& ctx, bool visible);
+    TutorialStep GetStep() const { return m_step; }
+    TutorialInputPolicy GetInputPolicy() const;
+    game::controllers::MinimapController::InputPermissions GetMapInputPermissions() const;
+    bool CanAcceptCupIn(const std::string& linkTarget, bool isTarget) const;
+    void NotifyLinkCupIn(core::GameContext& ctx);
 
     // -------------------------------------------------------
     // イベントカメラ設定
@@ -94,15 +119,17 @@ private:
     /** @brief チェックマークアニメーションを毎フレーム更新する*/
     void UpdateStepClearAnim(core::GameContext& ctx);
 
-    TutorialStep m_step = TutorialStep::Camera;
+    TutorialStep m_step = TutorialStep::Intro;
 
     // UI Entities
     ecs::Entity m_overlayBgEntity   = UINT32_MAX;
     ecs::Entity m_overlayTextEntity = UINT32_MAX;
+    ecs::Entity m_actionTextEntity  = UINT32_MAX;
     ecs::Entity m_skipTextEntity    = UINT32_MAX;
 
     // State Tracking
     float m_initialCameraYaw  = 0.0f;
+    float m_initialCameraDistance = 0.0f;
     int   m_initialClubIndex  = 0;
     bool  m_terrainEventStarted = false;
     size_t m_terrainCardIndex = 0;
@@ -118,6 +145,8 @@ private:
     float m_eventCamDisplayTimer     = 0.0f;         ///< 表示残り秒数
     float m_cupInWaitTimer           = 0.0f;         ///< カップイン後の待機時間
     bool  m_inputLocked              = false;        ///< STEP 5 中のみ true
+    bool  m_visible                  = true;
+    MinimapController::InputActivity m_mapActivityAtStep{};
 
     // --- ステップクリア演出 ---
     ecs::Entity m_checkMarkEntity  = UINT32_MAX; ///< mark_check.png 表示用エンティティ

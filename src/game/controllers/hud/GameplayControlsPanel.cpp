@@ -82,9 +82,16 @@ void GameplayControlsPanel::SetShotPhaseVisible(core::GameContext &ctx,
 }
 
 void GameplayControlsPanel::SetVisible(core::GameContext &ctx, bool visible) {
+  visible = visible && !m_tutorialMode;
   SetTextVisible(ctx.world, m_shotButtonBackground, visible);
   SetTextVisible(ctx.world, m_shotButtonText, visible);
   SetTextVisible(ctx.world, m_controlHint, visible);
+}
+
+void GameplayControlsPanel::SetTutorialMode(core::GameContext &ctx,
+                                            bool enabled) {
+  m_tutorialMode = enabled;
+  SetVisible(ctx, !enabled);
 }
 
 void GameplayControlsPanel::Shutdown(core::GameContext &ctx) {
