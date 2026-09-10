@@ -9,6 +9,7 @@
 #include "../../core/Logger.h"
 #include "../../core/SceneManager.h"
 #include "../components/PhysicsComponents.h"
+#include "../components/WikiComponents.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cctype>
@@ -66,8 +67,20 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       ctx.world.GetGlobal<game::components::CollisionEvents>();
   const bool collisionCaptured =
       m_collisionHistory.Update(collisionEvents, ctx.dt > 0.0f);
-  if (m_pauseOnCollision && collisionCaptured) {
-    time.SetPaused(true);
+  if (collisionCaptured && collisionEvents) {
+    for (const auto &event : collisionEvents->events) {
+      const ecs::Entity entityA = static_cast<ecs::Entity>(event.entityA);
+      const ecs::Entity entityB = static_cast<ecs::Entity>(event.entityB);
+      if (MatchesCollisionBreakRule(
+              event, m_collisionBreak,
+              ctx.world.Has<game::components::GolfHole>(entityA),
+              ctx.world.Has<game::components::GolfHole>(entityB),
+              ctx.world.Has<game::components::TerrainCollider>(entityA),
+              ctx.world.Has<game::components::TerrainCollider>(entityB))) {
+        time.SetPaused(true);
+        break;
+      }
+    }
   }
 
   if (ImGui::BeginTabBar("DebugTabs")) {
@@ -204,9 +217,25 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx,
     ImGui::Text("地形色: 緑=Fairway / 黄緑=Rough / 黄=Bunker / 明緑=Green");
     ImGui::Text("水色=Ice / 青=Water / 赤=Lava / 灰=Stone");
   }
-  ImGui::Checkbox("衝突時に一時停止", &m_pauseOnCollision);
+  ImGui::Checkbox("条件一致時に一時停止", &m_collisionBreak.enabled);
   ImGui::SameLine();
   ImGui::TextDisabled("現在: %s", time.IsPaused() ? "停止中" : "実行中");
+  if (m_collisionBreak.enabled) {
+    ImGui::Checkbox("任意の衝突", &m_collisionBreak.anyCollision);
+    ImGui::SameLine();
+    ImGui::Checkbox("ホール", &m_collisionBreak.hole);
+    ImGui::SameLine();
+    ImGui::Checkbox("地形", &m_collisionBreak.terrain);
+    ImGui::Checkbox("指定Entity", &m_collisionBreak.entity);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(140.0f);
+    ImGui::InputScalar("##BreakEntity", ImGuiDataType_U32,
+                       &m_collisionBreak.entityId);
+    if (!m_collisionBreak.anyCollision && !m_collisionBreak.hole &&
+        !m_collisionBreak.terrain && !m_collisionBreak.entity) {
+      ImGui::TextDisabled("停止条件が1つも選択されていません。");
+    }
+  }
 
   const auto *events =
       ctx.world.GetGlobal<game::components::CollisionEvents>();
