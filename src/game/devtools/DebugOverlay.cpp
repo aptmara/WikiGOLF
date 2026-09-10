@@ -2,6 +2,7 @@
 
 #include "DebugTimeController.h"
 #include "DebugSceneNavigator.h"
+#include "DebugGameplayInspector.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/SceneManager.h"
@@ -63,6 +64,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
   if (ImGui::BeginTabBar("DebugTabs")) {
     if (ImGui::BeginTabItem("シミュレーション")) {
       DrawSimulation(time);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("ゲーム状態")) {
+      DrawGameplayInspector(ctx);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("ログ")) {

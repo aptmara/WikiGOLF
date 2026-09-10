@@ -72,6 +72,17 @@ function(wikigolf_add_debug_tests)
     add_executable(test_debug_scene_rules test_debug_scene_rules.cpp)
     wikigolf_configure_debug_test(test_debug_scene_rules)
 
+    add_executable(test_debug_gameplay_snapshot
+        test_debug_gameplay_snapshot.cpp
+        src/game/devtools/DebugGameplaySnapshot.cpp
+        src/core/Logger.cpp)
+    target_precompile_headers(test_debug_gameplay_snapshot PRIVATE src/pch.h)
+    if(MSVC)
+        target_compile_definitions(test_debug_gameplay_snapshot PRIVATE
+            -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    endif()
+    wikigolf_configure_debug_test(test_debug_gameplay_snapshot)
+
     if(WIKIGOLF_DEBUG_TOOLS)
         add_executable(test_debug_japanese_font
             test_debug_japanese_font.cpp
