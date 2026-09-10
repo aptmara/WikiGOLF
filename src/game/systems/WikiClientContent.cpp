@@ -13,6 +13,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <unordered_map>
 #include <unordered_set>
 
 #pragma comment(lib, "winhttp.lib")
@@ -228,7 +229,102 @@ std::vector<WikiImageInfo> WikiClient::FetchPageImages(const std::string &title,
   }
 
   LOG_INFO("WikiClient", "Fetched {} images for {}", result.size(), title);
+
+  FilterImagesByAllowedLicense(result);
+  LOG_INFO("WikiClient", "{} images remain after license filtering", result.size());
+
   return result;
+}
+
+namespace {
+/** @brief タイトル比較用にMediaWikiの空白/アンダースコア表記ゆれを吸収します。*/
+std::string NormalizeWikiTitle(std::string title) {
+  std::replace(title.begin(), title.end(), '_', ' ');
+  return title;
+}
+
+/** @brief LicenseShortNameがCC0/パブリックドメイン相当かどうかを判定します。*/
+bool IsAllowedImageLicense(std::string licenseShortName) {
+  std::transform(licenseShortName.begin(), licenseShortName.end(),
+                 licenseShortName.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  return licenseShortName.find("cc0") != std::string::npos ||
+         licenseShortName.find("public domain") != std::string::npos;
+}
+}  // namespace
+
+void WikiClient::FilterImagesByAllowedLicense(std::vector<WikiImageInfo> &images) {
+  if (images.empty()) {
+    return;
+  }
+
+  std::string titlesParam;
+  for (size_t i = 0; i < images.size(); ++i) {
+    if (i > 0) {
+      titlesParam += "%7C";  // "|" のURLエンコード形
+    }
+    titlesParam += UrlEncode(images[i].fileTitle);
+  }
+
+  std::wstring path = L"/w/api.php?action=query&titles=" +
+                       core::ToWString(titlesParam) +
+                       L"&prop=imageinfo&iiprop=extmetadata&format=json&formatversion=2";
+  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+
+  // タイトル毎の許可判定。imageinfoが取得できなかった画像は不許可のまま扱う
+  // （ライセンス不明な画像を安全側に倒して非表示にするため）。
+  std::unordered_map<std::string, bool> allowedByTitle;
+
+  size_t pagesPos = response.find("\"pages\":[");
+  if (pagesPos != std::string::npos) {
+    size_t arrStart = response.find('[', pagesPos);
+    size_t arrEnd = wiki_json::SkipValue(response, arrStart);
+
+    size_t pos = arrStart + 1;
+    while (pos < arrEnd) {
+      size_t objStart = response.find('{', pos);
+      if (objStart == std::string::npos || objStart >= arrEnd) {
+        break;
+      }
+      size_t objEnd = std::min(wiki_json::SkipValue(response, objStart), arrEnd);
+
+      std::string pageTitle;
+      size_t nextPos = 0;
+      wiki_json::ExtractStringField(response, "\"title\":\"", objStart, objEnd,
+                                    pageTitle, nextPos);
+
+      std::string license;
+      size_t extPos = response.find("\"extmetadata\":", objStart);
+      if (extPos != std::string::npos && extPos < objEnd) {
+        size_t extObjStart = response.find('{', extPos);
+        if (extObjStart != std::string::npos && extObjStart < objEnd) {
+          size_t extObjEnd =
+              std::min(wiki_json::SkipValue(response, extObjStart), objEnd);
+          size_t licKeyPos = response.find("\"LicenseShortName\":", extPos);
+          if (licKeyPos != std::string::npos && licKeyPos < extObjEnd) {
+            wiki_json::ExtractStringField(response, "\"value\":\"", licKeyPos,
+                                          extObjEnd, license, nextPos);
+          }
+        }
+      }
+
+      if (!pageTitle.empty()) {
+        allowedByTitle[NormalizeWikiTitle(pageTitle)] =
+            IsAllowedImageLicense(license);
+      }
+
+      pos = objEnd;
+    }
+  }
+
+  images.erase(
+      std::remove_if(images.begin(), images.end(),
+                     [&](const WikiImageInfo &info) {
+                       auto it = allowedByTitle.find(
+                           NormalizeWikiTitle(info.fileTitle));
+                       return it == allowedByTitle.end() || !it->second;
+                     }),
+      images.end());
 }
 
 std::vector<WikiSectionInfo> WikiClient::FetchPageSections(const std::string &title) {

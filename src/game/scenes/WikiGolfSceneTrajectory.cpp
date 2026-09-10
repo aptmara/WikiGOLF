@@ -146,19 +146,24 @@ void WikiGolfScene::UpdateTrajectoryAndGuide(
       }
     }
 
-    // 傾斜可視化（パター保持中、待機中のみグリーンの高低差オーバーレイを表示）
+    // 傾斜可視化（パター保持中、待機中〜ボールが止まるまでグリーンの高低差オーバーレイを表示）
     {
+      using Phase = game::components::ShotState::Phase;
       const bool isPutter = m_clubController &&
           m_clubController->GetCurrentClub().categoryEN == "Putter";
-      const bool showSlope = isPutter && state.canShoot && !tutorialInputLocked &&
-                             !isMapView &&
-                             shot.phase == game::components::ShotState::Phase::Idle;
+      // Idle/PowerCharging/ImpactTiming: ショット前の待機〜パワー・インパクトゲージ操作中
+      // Executing: ショット後、ボールが転がって停止するまでの間
+      const bool showSlope = isPutter && !tutorialInputLocked && !isMapView &&
+                             (shot.phase == Phase::Idle ||
+                              shot.phase == Phase::PowerCharging ||
+                              shot.phase == Phase::ImpactTiming ||
+                              shot.phase == Phase::Executing);
 
       DirectX::XMFLOAT3 ballPos{0.0f, 0.0f, 0.0f};
       if (auto* ballT3 = ctx.world.Get<game::components::Transform>(m_ballEntity)) {
         ballPos = ballT3->position;
       }
-      m_slopeVisualization.Update(ctx, showSlope, ballPos, m_terrainSystem.get());
+      m_slopeVisualization.Update(ctx, dt, showSlope, ballPos, m_terrainSystem.get());
     }
 }
 

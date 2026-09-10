@@ -378,6 +378,10 @@ bool ClubController::SelectClubForDistance(core::GameContext &ctx,
   return SelectClubByIndex(ctx, bestIndex);
 }
 
+bool ClubController::ResetToFirstClub(core::GameContext &ctx) {
+  return SelectClubByIndex(ctx, 0);
+}
+
 bool ClubController::SelectClubByIndex(core::GameContext &ctx, size_t index) {
   if (index >= m_availableClubs.size()) {
     return false;

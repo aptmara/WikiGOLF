@@ -80,13 +80,17 @@ SlopeVisualizationMeshBuilder::BuildResult SlopeVisualizationMeshBuilder::Build(
     }
   }
 
+  // 頂点は「Z添字が増えるとworldZも増える」向きで並べているため、
+  // 地形本体メッシュ(WikiTerrainBuild.cpp、Z添字が増えるとworldZが減る向き)と
+  // 巻き順を一致させるには三角形の頂点順序を反転させる必要がある。
+  // これをしないと裏面カリングで完全に非表示になる。
   for (int gz = 0; gz < res - 1; ++gz) {
     for (int gx = 0; gx < res - 1; ++gx) {
       const uint32_t i0 = static_cast<uint32_t>(gz * res + gx);
       const uint32_t i1 = static_cast<uint32_t>(gz * res + gx + 1);
       const uint32_t i2 = static_cast<uint32_t>((gz + 1) * res + gx);
       const uint32_t i3 = static_cast<uint32_t>((gz + 1) * res + gx + 1);
-      result.indices.insert(result.indices.end(), {i0, i1, i2, i2, i1, i3});
+      result.indices.insert(result.indices.end(), {i0, i2, i1, i1, i2, i3});
     }
   }
 

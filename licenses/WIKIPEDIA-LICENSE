@@ -1,0 +1,78 @@
+WikiGOLF uses content from Japanese Wikipedia (https://ja.wikipedia.org/)
+in two ways:
+
+  1. Bundled data: Assets/data/jawiki_sdow-*.sqlite (article titles/links
+     used for course generation).
+  2. Live data fetched at runtime from the Wikimedia API while the game
+     is running (article text, tables of contents and inter-article
+     links via https://ja.wikipedia.org/w/api.php and
+     https://ja.wikipedia.org/api/rest_v1/, plus article images served
+     from https://upload.wikimedia.org/).
+
+Wikipedia's text content (both the bundled data and anything fetched
+live via the API) is dual-licensed under:
+
+  * Creative Commons Attribution-ShareAlike 4.0 International License
+    (CC BY-SA 4.0) - https://creativecommons.org/licenses/by-sa/4.0/
+  * GNU Free Documentation License (GFDL)
+    - https://www.gnu.org/licenses/fdl-1.3.html
+
+You may reuse this content under either license, at your choice.
+
+Images loaded from upload.wikimedia.org (Wikimedia Commons) are NOT
+covered by the above: each file carries its own license set by its
+uploader (commonly CC BY-SA, CC0/public domain, or other free licenses,
+and occasionally non-free "fair use" licenses restricted to Wikipedia
+itself). Consult the individual file's page on commons.wikimedia.org
+for its specific license and required attribution before reusing an
+image outside of this game.
+
+Access to the Wikimedia API is subject to the Wikimedia Foundation's
+Terms of Use (https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use)
+and User-Agent policy
+(https://meta.wikimedia.org/wiki/User-Agent_policy); this game identifies
+itself as "WikiGOLF/1.0 (https://github.com/aptmara/WikiGOLF)".
+
+Attribution:
+  This product includes data derived from Wikipedia
+  (https://ja.wikipedia.org/), used under the Creative Commons
+  Attribution-ShareAlike 4.0 International License. Wikipedia and the
+  Wikipedia logo are trademarks of the Wikimedia Foundation, Inc.
+  Wikipedia contributors retain copyright in their contributions; a full
+  list of authors and edit history for any given article can be found via
+  that article's "View history" page on ja.wikipedia.org.
+
+  --------------------------------------------------------------------
+  このプロダクトは、ウィキペディア日本語版 (https://ja.wikipedia.org/)
+  のコンテンツを次の2通りの方法で利用しています。
+
+    1. 同梱データ: Assets/data/jawiki_sdow-*.sqlite
+       （コース生成に使う記事タイトル・リンク情報）
+    2. 実行時にウィキメディアAPIから取得するライブデータ:
+       記事本文・目次・記事間リンク
+       （https://ja.wikipedia.org/w/api.php および
+        https://ja.wikipedia.org/api/rest_v1/ 経由）、
+       ならびに記事内の画像
+       （https://upload.wikimedia.org/ から配信）。
+
+  ウィキペディアの本文（同梱データ・API経由の取得データのいずれも）は
+  Creative Commons 表示-継承 4.0 国際ライセンス (CC BY-SA 4.0) および
+  GNU 自由文書ライセンス (GFDL) のデュアルライセンスの下で提供されて
+  おり、いずれか一方のライセンス条件に従うことで再利用できます。
+  各記事の執筆者一覧および編集履歴は、ウィキペディア日本語版の該当
+  記事の「履歴表示」ページで確認できます。
+
+  upload.wikimedia.org（ウィキメディア・コモンズ）から読み込む画像は
+  上記の対象外です。各ファイルはアップロード者が設定した個別のライセ
+  ンス（CC BY-SA、CC0/パブリックドメインなど自由なライセンスが多い
+  一方、ウィキペディア上での利用のみに限定された「フェアユース」画像
+  も一部存在します）の下にあります。ゲーム外で画像を再利用する場合は、
+  commons.wikimedia.org の該当ファイルページでライセンスと必要な
+  帰属表示を必ず確認してください。
+
+  ウィキメディアAPIの利用は、ウィキメディア財団の利用規約
+  (https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use) および
+  User-Agentポリシー
+  (https://meta.wikimedia.org/wiki/User-Agent_policy) に従います。
+  本ゲームは "WikiGOLF/1.0 (https://github.com/aptmara/WikiGOLF)" として
+  自身を識別しています。

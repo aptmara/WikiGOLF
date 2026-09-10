@@ -494,6 +494,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
       for (auto segE : m_guideSegments) {
         if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
       }
+      m_slopeVisualization.ForceHide(ctx);
       m_transitionController->StartTransition(ctx, startPage, m_pageLoader.get(), m_ballEntity, m_cameraEntity, m_skyboxEntity, m_minimapController.get());
   }
   LOG_DEBUG("WikiGolf", "After LoadPage: Cam Alive={}",

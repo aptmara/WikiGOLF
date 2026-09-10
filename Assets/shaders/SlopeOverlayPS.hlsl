@@ -10,8 +10,8 @@ cbuffer ConstantBuffer : register(b0) {
     matrix View_unused;
     matrix Projection_unused;
     float4 MaterialColor_unused;
-    float4 MaterialFlags_unused;
-    float4 LightDir; /**< w成分にゲーム経過時間(ctx.time)が格納される */
+    float4 MaterialFlags; /**< z成分にフェード係数[0,1](customFlags.x経由)が格納される */
+    float4 LightDir;      /**< w成分にゲーム経過時間(ctx.time)が格納される */
 };
 
 /**
@@ -33,6 +33,7 @@ struct PS_INPUT {
 float4 main(PS_INPUT input) : SV_TARGET {
     float slope = saturate(input.color.a);
     float time = LightDir.w;
+    float fade = saturate(MaterialFlags.z);
 
     // 傾斜が下る方向の単位ベクトルと、それに直交するベクトル
     float2 dir = input.flowDir.xz;
@@ -56,7 +57,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
     // 傾斜が緩やかな場所は縞を目立たせず、急な場所ほど強く流す
     float baseAlpha = lerp(0.08f, 0.50f, slope);
     float flowAlpha = arrow * lerp(0.0f, 0.85f, slope);
-    float alpha = saturate(baseAlpha + flowAlpha);
+    float alpha = saturate(baseAlpha + flowAlpha) * fade;
 
     return float4(input.color.rgb, alpha);
 }

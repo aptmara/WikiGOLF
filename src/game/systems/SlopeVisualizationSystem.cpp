@@ -9,6 +9,7 @@
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
 #include "WikiTerrainSystem.h"
+#include <algorithm>
 #include <cmath>
 
 namespace game::systems {
@@ -29,46 +30,50 @@ void SlopeVisualizationSystem::Initialize(core::GameContext &ctx) {
 void SlopeVisualizationSystem::Shutdown(core::GameContext &ctx) {
   m_entityOwner.DestroyAll(ctx.world);
   m_overlayEntity = UINT32_MAX;
-  m_visible = false;
+  m_fadeAlpha = 0.0f;
   m_hasMesh = false;
   m_lastBuildCenter = {1.0e9f, 0.0f, 1.0e9f};
 }
 
-void SlopeVisualizationSystem::Update(core::GameContext &ctx, bool visible,
+void SlopeVisualizationSystem::Update(core::GameContext &ctx, float dt,
+                                      bool visible,
                                       const DirectX::XMFLOAT3 &center,
                                       const WikiTerrainSystem *terrain) {
-  if (!visible || !terrain) {
-    Hide(ctx);
-    return;
+  // フェード係数を目標値(表示=1、非表示=0)へdt分だけ近づける
+  const float target = (visible && terrain) ? 1.0f : 0.0f;
+  const float step = (kFadeDuration > 0.0f) ? (dt / kFadeDuration) : 1.0f;
+  if (m_fadeAlpha < target) {
+    m_fadeAlpha = (std::min)(target, m_fadeAlpha + step);
+  } else if (m_fadeAlpha > target) {
+    m_fadeAlpha = (std::max)(target, m_fadeAlpha - step);
   }
 
-  const float dx = center.x - m_lastBuildCenter.x;
-  const float dz = center.z - m_lastBuildCenter.z;
-  const bool needsRebuild =
-      !m_hasMesh || std::sqrt(dx * dx + dz * dz) > kRebuildDistance;
+  if (visible && terrain) {
+    const float dx = center.x - m_lastBuildCenter.x;
+    const float dz = center.z - m_lastBuildCenter.z;
+    const bool needsRebuild =
+        !m_hasMesh || std::sqrt(dx * dx + dz * dz) > kRebuildDistance;
 
-  if (needsRebuild) {
-    RebuildMesh(ctx, center, *terrain);
-    m_lastBuildCenter = center;
+    if (needsRebuild) {
+      RebuildMesh(ctx, center, *terrain);
+      m_lastBuildCenter = center;
+    }
   }
 
-  Show(ctx);
+  ApplyFade(ctx);
 }
 
-void SlopeVisualizationSystem::Show(core::GameContext &ctx) {
-  if (m_visible || m_overlayEntity == UINT32_MAX) return;
-  if (auto *mr = ctx.world.Get<MeshRenderer>(m_overlayEntity)) {
-    mr->isVisible = true;
-  }
-  m_visible = true;
+void SlopeVisualizationSystem::ForceHide(core::GameContext &ctx) {
+  m_fadeAlpha = 0.0f;
+  ApplyFade(ctx);
 }
 
-void SlopeVisualizationSystem::Hide(core::GameContext &ctx) {
-  if (!m_visible || m_overlayEntity == UINT32_MAX) return;
-  if (auto *mr = ctx.world.Get<MeshRenderer>(m_overlayEntity)) {
-    mr->isVisible = false;
-  }
-  m_visible = false;
+void SlopeVisualizationSystem::ApplyFade(core::GameContext &ctx) {
+  if (m_overlayEntity == UINT32_MAX) return;
+  auto *mr = ctx.world.Get<MeshRenderer>(m_overlayEntity);
+  if (!mr) return;
+  mr->isVisible = m_fadeAlpha > 0.001f;
+  mr->customFlags.x = m_fadeAlpha;
 }
 
 void SlopeVisualizationSystem::RebuildMesh(core::GameContext &ctx,
@@ -95,7 +100,7 @@ void SlopeVisualizationSystem::RebuildMesh(core::GameContext &ctx,
     mr.hasNormalMap = false;
     mr.isTransparent = true;
     mr.blendMode = BlendMode::Alpha;
-    mr.isVisible = false; // Show()が呼ばれるまで非表示
+    mr.isVisible = false; // 直後のApplyFade()でフェード係数に応じて反映される
   } else if (auto *mr = ctx.world.Get<MeshRenderer>(m_overlayEntity)) {
     mr->mesh = meshHandle;
   }

@@ -76,6 +76,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (finished) {
           m_phase = ScenePhase::Playing;
           m_prevTutorialInputLocked = false;
+          // 次のステージ開始時は前のホールで使っていたクラブ（パター等）を
+          // 持ち越さず、ドライバーに戻す
+          if (m_clubController) m_clubController->ResetToFirstClub(ctx);
           // ロード完了: HUD/ミニマップを再表示する
           if (m_hud) m_hud->SetVisible(ctx, true);
           if (m_minimapController) m_minimapController->SetVisible(ctx, true);
