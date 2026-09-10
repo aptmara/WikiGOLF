@@ -31,6 +31,10 @@ namespace game::utils {
  * @param terrain 高さ参照用の地形システム（nullptrなら失敗）
  * @param maxDistance レイの最大探索距離（ワールド単位）
  * @param outWorldPos 交点のワールド座標（成功時のみ書き込む）
+ * @param outRayOrigin レイの始点（デバッグ可視化用、nullptrなら書き込まない。
+ *                      レイが計算できた場合のみ書き込まれる）
+ * @param outRayDirection レイの正規化方向（デバッグ可視化用、nullptrなら書き込まない。
+ *                         レイが計算できた場合のみ書き込まれる）
  * @return 交点が見つかった場合はtrue
 */
 inline bool RaycastScreenToTerrain(core::GameContext &ctx,
@@ -38,7 +42,9 @@ inline bool RaycastScreenToTerrain(core::GameContext &ctx,
                                    float screenY,
                                    game::systems::WikiTerrainSystem *terrain,
                                    float maxDistance,
-                                   DirectX::XMFLOAT3 &outWorldPos) {
+                                   DirectX::XMFLOAT3 &outWorldPos,
+                                   DirectX::XMFLOAT3 *outRayOrigin = nullptr,
+                                   DirectX::XMFLOAT3 *outRayDirection = nullptr) {
   using namespace DirectX;
 
   if (!terrain) {
@@ -69,6 +75,15 @@ inline bool RaycastScreenToTerrain(core::GameContext &ctx,
   XMStoreFloat3(&origin, nearPoint);
   XMVECTOR dirVec = XMVector3Normalize(XMVectorSubtract(farPoint, nearPoint));
   XMStoreFloat3(&direction, dirVec);
+
+  // 以降の失敗パス（地形と交わらない等）でもデバッグ可視化ができるよう、
+  // レイ自体が計算できた時点で出力しておく。
+  if (outRayOrigin) {
+    *outRayOrigin = origin;
+  }
+  if (outRayDirection) {
+    *outRayDirection = direction;
+  }
 
   // 真上/水平方向を狙っている場合、地形と交わらないため早期に諦める。
   if (direction.y > -0.01f) {

@@ -56,6 +56,11 @@ public:
   /** @brief 生成した3D旗マーカーのEntityを破棄します（シーン終了時に呼ぶ）。*/
   void Shutdown(core::GameContext &ctx);
 
+#ifdef _DEBUG
+  /** @brief デバッグビルド専用: 中クリックのレイキャスト可視化が有効かどうか（F9で切替）。*/
+  bool IsDebugRaycastVisualizationEnabled() const { return m_debugRaycastVizEnabled; }
+#endif
+
 private:
   /** @brief 3D旗マーカーを指定位置に建て直します（既存があれば先に破棄）。*/
   void RebuildWorldMarker(core::GameContext &ctx, const DirectX::XMFLOAT3 &worldPos);
@@ -64,6 +69,32 @@ private:
   int m_pressX = 0;
   int m_pressY = 0;
   ecs::EntityOwner m_markerOwner; ///< 三人称視点用の3D旗マーカーEntity群
+
+#ifdef _DEBUG
+  /**
+   * @brief 中クリックで発射したレイキャストを線分＋着弾点マーカーとして
+   *        ワールドに描画します（デバッグビルドのみ、F9でトグル）。
+   * @details レイが計算できたがヒットしなかった場合は赤、ヒットした場合は
+   *          緑の線分で表示する。TrajectoryPredictorと同様、細長く潰した
+   *          cubeを進行方向へ回転させることで線分を表現する。
+  */
+  void UpdateDebugRayVisualization(core::GameContext &ctx,
+                                   const DirectX::XMFLOAT3 &rayOrigin,
+                                   const DirectX::XMFLOAT3 &rayDirection,
+                                   bool hit, const DirectX::XMFLOAT3 &hitPos,
+                                   float maxDistance);
+
+  /** @brief 可視化用Entity（線分・着弾点マーカー）を未生成なら生成します。*/
+  void EnsureDebugRayEntities(core::GameContext &ctx);
+
+  /** @brief 可視化用Entityの表示/非表示を切り替えます。*/
+  void SetDebugRayVisible(core::GameContext &ctx, bool visible);
+
+  bool m_debugRaycastVizEnabled = false;
+  ecs::Entity m_debugRayLineEntity = UINT32_MAX;
+  ecs::Entity m_debugRayHitMarkerEntity = UINT32_MAX;
+  ecs::EntityOwner m_debugRayOwner;
+#endif
 };
 
 } // namespace game::controllers
