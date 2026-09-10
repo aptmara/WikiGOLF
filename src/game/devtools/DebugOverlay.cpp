@@ -143,11 +143,14 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx) {
   ImGui::Checkbox("接触点", &m_colliderSettings.contactPoints);
   ImGui::SameLine();
   ImGui::Checkbox("衝突法線", &m_colliderSettings.collisionNormals);
+  ImGui::Checkbox("ボール速度ベクトル", &m_colliderSettings.velocityVector);
   ImGui::TextColored({0.3f, 0.9f, 0.4f, 1.0f}, "緑: コライダー");
   ImGui::SameLine();
   ImGui::TextColored({1.0f, 0.25f, 0.25f, 1.0f}, "赤: 衝突中");
   ImGui::SameLine();
   ImGui::TextColored({1.0f, 0.85f, 0.2f, 1.0f}, "黄: ホール");
+  ImGui::SameLine();
+  ImGui::TextColored({1.0f, 0.88f, 0.15f, 1.0f}, "黄線: 速度");
 
   const auto *events =
       ctx.world.GetGlobal<game::components::CollisionEvents>();

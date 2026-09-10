@@ -21,5 +21,8 @@ void AppendCylinderLines(std::vector<DebugLine3D> &lines,
                          const DirectX::XMFLOAT3 &center, float radius,
                          float height, const DirectX::XMFLOAT4 &rotation,
                          int segments = 24);
+void AppendVectorArrow(std::vector<DebugLine3D> &lines,
+                       const DirectX::XMFLOAT3 &origin,
+                       const DirectX::XMFLOAT3 &vector, float scale);
 
 } // namespace game::debug

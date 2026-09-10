@@ -216,6 +216,22 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
       DrawContact(drawList, event, projection, settings);
     }
   }
+
+  if (settings.velocityVector) {
+    const auto *state = ctx.world.GetGlobal<GolfGameState>();
+    if (state) {
+      const ecs::Entity ball = static_cast<ecs::Entity>(state->ballEntity);
+      const auto *transform = ctx.world.Get<Transform>(ball);
+      const auto *body = ctx.world.Get<RigidBody>(ball);
+      if (transform && body) {
+        std::vector<DebugLine3D> velocityLines;
+        AppendVectorArrow(velocityLines, transform->position, body->velocity,
+                          0.2f);
+        DrawLines(drawList, velocityLines, projection,
+                  IM_COL32(255, 225, 40, 255));
+      }
+    }
+  }
 }
 
 } // namespace game::debug

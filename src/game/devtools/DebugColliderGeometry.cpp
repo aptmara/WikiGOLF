@@ -100,4 +100,39 @@ void AppendCylinderLines(std::vector<DebugLine3D> &lines,
   }
 }
 
+void AppendVectorArrow(std::vector<DebugLine3D> &lines,
+                       const DirectX::XMFLOAT3 &origin,
+                       const DirectX::XMFLOAT3 &vector, float scale) {
+  using namespace DirectX;
+  const XMVECTOR direction = XMLoadFloat3(&vector);
+  const float length = XMVectorGetX(XMVector3Length(direction));
+  if (length < 0.0001f || scale <= 0.0f) {
+    return;
+  }
+  const XMVECTOR start = XMLoadFloat3(&origin);
+  const XMVECTOR unit = XMVectorScale(direction, 1.0f / length);
+  const XMVECTOR end = XMVectorAdd(start, XMVectorScale(direction, scale));
+  XMVECTOR side = XMVector3Cross(unit, XMVectorSet(0, 1, 0, 0));
+  if (XMVectorGetX(XMVector3LengthSq(side)) < 0.0001f) {
+    side = XMVector3Cross(unit, XMVectorSet(1, 0, 0, 0));
+  }
+  side = XMVector3Normalize(side);
+  const float headLength = (std::min)(length * scale * 0.3f, 1.0f);
+  const XMVECTOR headBase = XMVectorSubtract(end, XMVectorScale(unit, headLength));
+  const XMVECTOR headSide = XMVectorScale(side, headLength * 0.5f);
+
+  DebugLine3D shaft;
+  DebugLine3D left;
+  DebugLine3D right;
+  XMStoreFloat3(&shaft.from, start);
+  XMStoreFloat3(&shaft.to, end);
+  XMStoreFloat3(&left.from, end);
+  XMStoreFloat3(&left.to, XMVectorAdd(headBase, headSide));
+  XMStoreFloat3(&right.from, end);
+  XMStoreFloat3(&right.to, XMVectorSubtract(headBase, headSide));
+  lines.push_back(shaft);
+  lines.push_back(left);
+  lines.push_back(right);
+}
+
 } // namespace game::debug

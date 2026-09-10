@@ -16,6 +16,7 @@ struct DebugColliderSettings {
   bool entityIds = false;
   bool contactPoints = true;
   bool collisionNormals = true;
+  bool velocityVector = true;
 };
 
 class DebugColliderRenderer {

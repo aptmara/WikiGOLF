@@ -36,5 +36,16 @@ int main() {
                                    {0.0f, 0.0f, 0.0f, 1.0f}, 8);
   CHECK(lines.size() == 24,
         "cylinder creates two rings and vertical supports");
+
+  lines.clear();
+  game::debug::AppendVectorArrow(lines, {1.0f, 2.0f, 3.0f},
+                                 {5.0f, 0.0f, 0.0f}, 0.2f);
+  CHECK(lines.size() == 3, "velocity vector creates a shaft and arrow head");
+  CHECK(std::fabs(lines.front().to.x - 2.0f) < 0.00001f &&
+            std::fabs(lines.front().to.y - 2.0f) < 0.00001f,
+        "velocity vector applies display scale");
+  lines.clear();
+  game::debug::AppendVectorArrow(lines, {}, {}, 0.2f);
+  CHECK(lines.empty(), "zero velocity does not create an arrow");
   return 0;
 }
