@@ -2,6 +2,7 @@
 
 #include "DebugTimeController.h"
 #include "DebugSceneNavigator.h"
+#include "DebugCupInInspector.h"
 #include "DebugGameplayInspector.h"
 #include "DebugRenderState.h"
 #include "../../core/GameContext.h"
@@ -69,6 +70,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
     }
     if (ImGui::BeginTabItem("ゲーム状態")) {
       DrawGameplayInspector(ctx);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("ホール判定")) {
+      DrawCupInInspector(ctx, m_colliderSettings);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("ログ")) {
@@ -152,6 +157,7 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx) {
   ImGui::Checkbox("衝突法線", &m_colliderSettings.collisionNormals);
   ImGui::Checkbox("ボール速度ベクトル", &m_colliderSettings.velocityVector);
   ImGui::Checkbox("ボール軌跡", &m_colliderSettings.ballTrail);
+  ImGui::Checkbox("ホールイン判定範囲", &m_colliderSettings.cupInGuide);
   if (m_colliderSettings.ballTrail) {
     ImGui::SetNextItemWidth(180.0f);
     ImGui::SliderInt("軌跡点数", &m_colliderSettings.trailMaximumPoints, 30,

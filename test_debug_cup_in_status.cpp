@@ -7,7 +7,8 @@ int main() {
       {0.1f, 0.5f, 0.1f}, hole, 0.5f, {0.05f, 0.0f, 0.0f}, true, 1);
   if (!ready.readyForCupIn || !ready.holeInOne ||
       !ready.withinHorizontalRange || !ready.withinVerticalRange ||
-      !ready.slowEnough) {
+      !ready.slowEnough || ready.ballPosition.x != 0.1f ||
+      ready.holePosition.y != 1.0f) {
     std::cerr << "Valid cup-in conditions were rejected\n";
     return 1;
   }

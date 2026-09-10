@@ -20,6 +20,7 @@ struct DebugColliderSettings {
   bool collisionNormals = true;
   bool velocityVector = true;
   bool ballTrail = false;
+  bool cupInGuide = false;
   int trailMaximumPoints = 300;
   int trailSampleInterval = 2;
   int trailClearGeneration = 0;

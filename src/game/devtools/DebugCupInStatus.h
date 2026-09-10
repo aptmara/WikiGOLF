@@ -24,6 +24,8 @@ struct DebugCupInStatus {
   float captureRadius = 0.0f;
   float verticalOffset = 0.0f;
   float speed = 0.0f;
+  DirectX::XMFLOAT3 ballPosition{};
+  DirectX::XMFLOAT3 holePosition{};
 };
 
 DebugCupInStatus EvaluateCupInStatus(const DirectX::XMFLOAT3 &ballPosition,

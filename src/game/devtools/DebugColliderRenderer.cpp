@@ -1,6 +1,7 @@
 #include "DebugColliderRenderer.h"
 
 #include "DebugColliderGeometry.h"
+#include "DebugCupInStatus.h"
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"
 #include "../components/Camera.h"
@@ -272,6 +273,23 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
                        IM_COL32(40, 220, 255,
                                 static_cast<int>(60.0f + ratio * 195.0f)),
                        2.0f);
+    }
+  }
+
+  if (settings.cupInGuide) {
+    const DebugCupInStatus status = CaptureCupInStatus(ctx.world);
+    if (status.available) {
+      std::vector<DebugLine3D> guideLines;
+      const XMFLOAT3 center = {status.holePosition.x,
+                               status.holePosition.y - 0.5f,
+                               status.holePosition.z};
+      AppendCylinderLines(guideLines, center, status.captureRadius, 1.0f,
+                          {0.0f, 0.0f, 0.0f, 1.0f});
+      guideLines.push_back({status.ballPosition, status.holePosition});
+      const ImU32 color = status.readyForCupIn
+                              ? IM_COL32(50, 240, 90, 255)
+                              : IM_COL32(255, 80, 190, 255);
+      DrawLines(drawList, guideLines, projection, color);
     }
   }
 }

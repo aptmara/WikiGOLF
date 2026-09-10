@@ -23,6 +23,8 @@ DebugCupInStatus EvaluateCupInStatus(const DirectX::XMFLOAT3 &ballPosition,
                              velocity.z * velocity.z;
   DebugCupInStatus result;
   result.available = true;
+  result.ballPosition = ballPosition;
+  result.holePosition = holePosition;
   result.targetHole = targetHole;
   result.horizontalDistance = std::sqrt(distanceSquared);
   result.captureRadius = holeRadius * 0.9f;
