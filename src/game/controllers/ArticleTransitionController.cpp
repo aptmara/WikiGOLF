@@ -636,20 +636,22 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
         m_introductionShots.push_back(std::move(goals));
     }
 
-    for (std::size_t index = 0; index < featured.oneHop.size(); ++index) {
-        const auto& hole = featured.oneHop[index];
-        IntroductionShot oneHop;
-        oneHop.kind = IntroductionShotKind::OneHop;
-        oneHop.cameraPosition = {hole.x + 11.0f, hole.y + 14.0f,
-                                 hole.z - 17.0f};
-        oneHop.focusPosition = {hole.x, hole.y + 1.5f, hole.z};
-        oneHop.label = L"PRIORITY HOLE · 1 HOP";
-        oneHop.title = core::ToWString(hole.linkTarget);
-        oneHop.body = L"このリンク先から、あと1回の移動で目的記事へ到達できます。";
-        oneHop.detail = L"RECOMMENDED " + std::to_wstring(index + 1) + L" / " +
-                        std::to_wstring(featured.oneHop.size());
-        oneHop.duration = 2.8f;
-        m_introductionShots.push_back(std::move(oneHop));
+    if (featured.goals.empty()) {
+        for (std::size_t index = 0; index < featured.oneHop.size(); ++index) {
+            const auto& hole = featured.oneHop[index];
+            IntroductionShot oneHop;
+            oneHop.kind = IntroductionShotKind::OneHop;
+            oneHop.cameraPosition = {hole.x + 11.0f, hole.y + 14.0f,
+                                     hole.z - 17.0f};
+            oneHop.focusPosition = {hole.x, hole.y + 1.5f, hole.z};
+            oneHop.label = L"PRIORITY HOLE · 1 HOP";
+            oneHop.title = core::ToWString(hole.linkTarget);
+            oneHop.body = L"このリンク先から、あと1回の移動で目的記事へ到達できます。";
+            oneHop.detail = L"RECOMMENDED " + std::to_wstring(index + 1) + L" / " +
+                            std::to_wstring(featured.oneHop.size());
+            oneHop.duration = 2.8f;
+            m_introductionShots.push_back(std::move(oneHop));
+        }
     }
 
     IntroductionShot ready;
