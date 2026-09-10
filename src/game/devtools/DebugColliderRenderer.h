@@ -14,6 +14,7 @@ struct DebugColliderSettings {
   bool boxes = true;
   bool cylinders = true;
   bool terrain = true;
+  bool terrainMaterials = false;
   bool holes = true;
   bool entityIds = false;
   bool contactPoints = true;

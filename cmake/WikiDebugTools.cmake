@@ -104,6 +104,12 @@ function(wikigolf_add_debug_tests)
     endif()
     wikigolf_configure_debug_test(test_debug_terrain_visibility)
 
+    add_executable(test_debug_terrain_material_geometry
+        test_debug_terrain_material_geometry.cpp
+        src/game/devtools/DebugTerrainMaterialGeometry.cpp
+        src/game/devtools/DebugColliderGeometry.cpp)
+    wikigolf_configure_debug_test(test_debug_terrain_material_geometry)
+
     add_executable(test_debug_cup_in_status
         test_debug_cup_in_status.cpp
         src/game/devtools/DebugCupInStatus.cpp

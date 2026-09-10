@@ -170,6 +170,8 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx,
   ImGui::Checkbox("円柱", &m_colliderSettings.cylinders);
   ImGui::Checkbox("地形境界", &m_colliderSettings.terrain);
   ImGui::SameLine();
+  ImGui::Checkbox("地形マテリアル", &m_colliderSettings.terrainMaterials);
+  ImGui::SameLine();
   ImGui::Checkbox("ゴールホール", &m_colliderSettings.holes);
   ImGui::Checkbox("Entity ID", &m_colliderSettings.entityIds);
   ImGui::Checkbox("接触点", &m_colliderSettings.contactPoints);
@@ -198,6 +200,10 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx,
   ImGui::TextColored({1.0f, 0.88f, 0.15f, 1.0f}, "黄線: 速度");
   ImGui::SameLine();
   ImGui::TextColored({0.15f, 0.85f, 1.0f, 1.0f}, "水色: 軌跡");
+  if (m_colliderSettings.terrainMaterials) {
+    ImGui::Text("地形色: 緑=Fairway / 黄緑=Rough / 黄=Bunker / 明緑=Green");
+    ImGui::Text("水色=Ice / 青=Water / 赤=Lava / 灰=Stone");
+  }
   ImGui::Checkbox("衝突時に一時停止", &m_pauseOnCollision);
   ImGui::SameLine();
   ImGui::TextDisabled("現在: %s", time.IsPaused() ? "停止中" : "実行中");

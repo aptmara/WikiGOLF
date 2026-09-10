@@ -2,6 +2,7 @@
 
 #include "DebugColliderGeometry.h"
 #include "DebugCupInStatus.h"
+#include "DebugTerrainMaterialGeometry.h"
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"
 #include "../components/Camera.h"
@@ -119,6 +120,21 @@ void DrawContact(ImDrawList &drawList, const CollisionEvent &event,
   }
 }
 
+ImU32 TerrainMaterialColor(uint8_t material) {
+  switch (static_cast<TerrainMaterial>(material)) {
+  case TerrainMaterial::Fairway: return IM_COL32(60, 230, 80, 230);
+  case TerrainMaterial::Rough: return IM_COL32(150, 210, 45, 230);
+  case TerrainMaterial::Bunker: return IM_COL32(245, 205, 70, 230);
+  case TerrainMaterial::Green: return IM_COL32(40, 255, 135, 230);
+  case TerrainMaterial::Ice: return IM_COL32(80, 220, 255, 230);
+  case TerrainMaterial::Water: return IM_COL32(40, 100, 255, 230);
+  case TerrainMaterial::Lava: return IM_COL32(255, 55, 25, 230);
+  case TerrainMaterial::Stone: return IM_COL32(155, 155, 165, 230);
+  case TerrainMaterial::None: return IM_COL32(255, 255, 255, 160);
+  }
+  return IM_COL32(255, 255, 255, 160);
+}
+
 } // namespace
 
 void DebugColliderRenderer::Draw(core::GameContext &ctx,
@@ -222,6 +238,33 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
                                   ? IM_COL32(255, 55, 55, 255)
                                   : IM_COL32(60, 150, 255, 220);
           DrawLines(drawList, lines, projection, color);
+        });
+  }
+
+  if (settings.terrainMaterials) {
+    ctx.world.Query<TerrainCollider, Transform>().Each(
+        [&](ecs::Entity, TerrainCollider &terrain, Transform &transform) {
+          if (!terrain.data) {
+            return;
+          }
+          const int maximumResolution = (std::max)(
+              terrain.data->config.resolutionX,
+              terrain.data->config.resolutionZ);
+          std::vector<DebugTerrainMaterialLine> materialLines;
+          AppendTerrainMaterialLines(
+              materialLines, *terrain.data, transform.position,
+              game::physics::kTerrainVisualSurfaceOffset + 0.02f,
+              (std::max)(1, maximumResolution / 32));
+          for (const auto &materialLine : materialLines) {
+            ImVec2 from;
+            ImVec2 to;
+            if (Project(materialLine.line.from, projection, from) &&
+                Project(materialLine.line.to, projection, to)) {
+              drawList.AddLine(from, to,
+                               TerrainMaterialColor(materialLine.material),
+                               2.0f);
+            }
+          }
         });
   }
 
