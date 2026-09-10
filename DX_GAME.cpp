@@ -219,7 +219,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
            graphics.GetAdapterName(),
            static_cast<double>(graphics.GetDedicatedVideoMemoryBytes()) /
                (1024.0 * 1024.0));
+#ifdef WIKIGOLF_PROFILING
   core::Profiler::Instance().Initialize("profiling");
+#endif
 
   graphics::TextRenderer textRenderer;
   if (!textRenderer.Initialize(graphics.GetSwapChain())) {
@@ -360,9 +362,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       const char *sceneName = sceneManager.Current()
                                   ? sceneManager.Current()->GetName()
                                   : "NoScene";
+      uint64_t profileFrame = 0;
+#ifdef WIKIGOLF_PROFILING
       auto &profiler = core::Profiler::Instance();
-      const uint64_t profileFrame =
-          profiler.BeginFrame(sceneName, world.GetEntityCount());
+      profileFrame = profiler.BeginFrame(sceneName, world.GetEntityCount());
       profiler.SetCounter("Frame.DeltaSeconds", dt);
       profiler.SetCounter("GPU.DriverIsWarp",
                           graphics.GetDriverType() == D3D_DRIVER_TYPE_WARP ? 1.0
@@ -371,6 +374,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           "GPU.DedicatedVideoMemoryMB",
           static_cast<double>(graphics.GetDedicatedVideoMemoryBytes()) /
               (1024.0 * 1024.0));
+#endif
 
       {
           PROFILE_SCOPE("LogicUpdate");
@@ -531,10 +535,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           input.Update();
       }
 
+#ifdef WIKIGOLF_PROFILING
       profiler.EndFrame();
       for (auto &sample : graphics.ConsumeGpuProfileSamples()) {
         profiler.SubmitGpuFrame(std::move(sample));
       }
+#endif
 
       // FPS上限（0 = 無制限）。VSync ONの場合はPresentの垂直同期待ちで既に
       // 概ねフレームレートが制御されるが、無制限/高リフレッシュレート環境でも
@@ -562,7 +568,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ShowWindow(hWnd, SW_HIDE);
   audioSystem.Shutdown();
 
+#ifdef WIKIGOLF_PROFILING
   core::Profiler::Instance().Shutdown();
+#endif
 #ifdef WIKIGOLF_DEBUG_TOOLS
   debugUi.Shutdown();
 #endif

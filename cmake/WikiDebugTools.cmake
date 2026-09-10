@@ -32,7 +32,9 @@ function(wikigolf_enable_debug_target target_name)
         "${imgui_SOURCE_DIR}"
         "${imgui_SOURCE_DIR}/backends"
     )
-    target_compile_definitions(${target_name} PRIVATE WIKIGOLF_DEBUG_TOOLS=1)
+    target_compile_definitions(${target_name} PRIVATE
+        WIKIGOLF_DEBUG_TOOLS=1
+        WIKIGOLF_PROFILING=1)
     target_link_libraries(${target_name} wikigolf_imgui)
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target_name}>/licenses"
@@ -54,7 +56,12 @@ endfunction()
 function(wikigolf_add_debug_tests)
     add_executable(test_debug_build_config test_debug_build_config.cpp)
     if(WIKIGOLF_DEBUG_TOOLS)
-        target_compile_definitions(test_debug_build_config PRIVATE WIKIGOLF_DEBUG_TOOLS=1)
+        target_compile_definitions(test_debug_build_config PRIVATE
+            WIKIGOLF_DEBUG_TOOLS=1
+            WIKIGOLF_PROFILING=1)
+    elseif(WIKIGOLF_PROFILING)
+        target_compile_definitions(test_debug_build_config PRIVATE
+            WIKIGOLF_PROFILING=1)
     endif()
     wikigolf_configure_debug_test(test_debug_build_config)
 
@@ -112,6 +119,16 @@ function(wikigolf_add_debug_tests)
         test_debug_ball_trail.cpp
         src/game/devtools/DebugBallTrailHistory.cpp)
     wikigolf_configure_debug_test(test_debug_ball_trail)
+
+    if(WIKIGOLF_DEBUG_TOOLS)
+        add_executable(test_debug_profiler_history
+            test_debug_profiler_history.cpp
+            src/game/devtools/DebugProfilerHistory.cpp)
+        target_compile_definitions(test_debug_profiler_history PRIVATE
+            WIKIGOLF_DEBUG_TOOLS=1
+            WIKIGOLF_PROFILING=1)
+        wikigolf_configure_debug_test(test_debug_profiler_history)
+    endif()
 
     if(WIKIGOLF_DEBUG_TOOLS)
         add_executable(test_debug_japanese_font

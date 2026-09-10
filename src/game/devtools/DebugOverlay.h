@@ -2,6 +2,7 @@
 
 #include <array>
 #include "DebugColliderRenderer.h"
+#include "DebugProfilerInspector.h"
 
 namespace core {
 struct GameContext;
@@ -30,6 +31,7 @@ private:
   std::array<bool, 4> m_logLevels = {true, true, true, true};
   char m_logFilter[128] = {};
   DebugColliderSettings m_colliderSettings;
+  DebugProfilerInspector m_profilerInspector;
   bool m_hideTerrainMeshes = false;
 };
 

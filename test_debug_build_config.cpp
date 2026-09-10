@@ -4,6 +4,9 @@
 int main() {
 #ifdef WIKIGOLF_DEBUG_TOOLS
   static_assert(game::debug::kDebugToolsEnabled);
+#ifndef WIKIGOLF_PROFILING
+#error "Debug tools build must enable profiling"
+#endif
 #else
   static_assert(!game::debug::kDebugToolsEnabled);
 #endif

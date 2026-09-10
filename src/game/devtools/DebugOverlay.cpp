@@ -80,6 +80,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       DrawLog();
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("プロファイラー")) {
+      m_profilerInspector.Draw();
+      ImGui::EndTabItem();
+    }
     if (ImGui::BeginTabItem("衝突")) {
       DrawColliders(ctx);
       ImGui::EndTabItem();
