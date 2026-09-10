@@ -105,6 +105,8 @@ void FillImpactZones(graphics::TextRenderer &renderer,
     return;
   }
 
+  const float barLeft = gauge.x;
+  const float barRight = gauge.x + gauge.width;
   const float centerX = gauge.x + gauge.width * gauge.impactCenter;
   const float niceW = gauge.width * gauge.impactWidthNice;
   const float greatW = gauge.width * gauge.impactWidthGreat;
@@ -116,19 +118,26 @@ void FillImpactZones(graphics::TextRenderer &renderer,
     return DirectX::XMFLOAT4{c.x, c.y, c.z, alpha * opacity};
   };
 
-  renderer.FillRoundedRect(
-      D2D1::RectF(centerX - niceW * 0.5f, top, centerX + niceW * 0.5f, bottom),
-      game::ui::kRadiusBar,
-      zoneColor(game::ui::kColorAccent, game::ui::kGaugeZoneAlphaNice));
-  renderer.FillRoundedRect(
-      D2D1::RectF(centerX - greatW * 0.5f, top, centerX + greatW * 0.5f, bottom),
-      game::ui::kRadiusBar,
-      zoneColor(game::ui::kColorSuccess, game::ui::kGaugeZoneAlphaGreat));
-  renderer.FillRoundedRect(
-      D2D1::RectF(centerX - specialW * 0.5f, top, centerX + specialW * 0.5f,
-                  bottom),
-      game::ui::kRadiusBar,
-      zoneColor(game::ui::kColorSpecial, game::ui::kGaugeZoneAlphaSpecial));
+  // 中心がバーの端に寄っている場合、帯の左右端をバー本体の範囲に収める
+  // （はみ出す部分は描画しない）。
+  auto fillClampedZone = [&](float zoneWidth, const DirectX::XMFLOAT4 &color) {
+    const float left =
+        std::clamp(centerX - zoneWidth * 0.5f, barLeft, barRight);
+    const float right =
+        std::clamp(centerX + zoneWidth * 0.5f, barLeft, barRight);
+    if (right <= left) {
+      return;
+    }
+    renderer.FillRoundedRect(D2D1::RectF(left, top, right, bottom),
+                             game::ui::kRadiusBar, color);
+  };
+
+  fillClampedZone(niceW,
+                  zoneColor(game::ui::kColorAccent, game::ui::kGaugeZoneAlphaNice));
+  fillClampedZone(greatW,
+                  zoneColor(game::ui::kColorSuccess, game::ui::kGaugeZoneAlphaGreat));
+  fillClampedZone(specialW,
+                  zoneColor(game::ui::kColorSpecial, game::ui::kGaugeZoneAlphaSpecial));
 }
 
 } // namespace
