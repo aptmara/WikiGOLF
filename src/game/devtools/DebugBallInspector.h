@@ -21,6 +21,7 @@ private:
   std::string m_result;
   DebugBallPhysicsValues m_physics;
   bool m_hasPhysics = false;
+  DirectX::XMFLOAT3 m_impulse{};
 };
 
 } // namespace game::debug
