@@ -6,6 +6,7 @@
 #include "DebugCollisionHistory.h"
 #include "DebugCollisionBreakRules.h"
 #include "DebugFreeCamera.h"
+#include "DebugEntityInspector.h"
 #include "DebugProfilerInspector.h"
 
 namespace core {
@@ -41,6 +42,7 @@ private:
   DebugBallInspector m_ballInspector;
   DebugCollisionHistory m_collisionHistory;
   DebugFreeCamera m_freeCamera;
+  DebugEntityInspector m_entityInspector;
   DebugProfilerInspector m_profilerInspector;
   DebugCollisionBreakSettings m_collisionBreak;
   bool m_hideTerrainMeshes = false;

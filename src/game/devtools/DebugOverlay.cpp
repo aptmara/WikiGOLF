@@ -104,6 +104,10 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       m_freeCamera.DrawControls();
       ImGui::EndTabItem();
     }
+    if (ImGui::BeginTabItem("Entity")) {
+      m_entityInspector.Draw(ctx, m_colliderSettings);
+      ImGui::EndTabItem();
+    }
     if (ImGui::BeginTabItem("ログ")) {
       DrawLog();
       ImGui::EndTabItem();
