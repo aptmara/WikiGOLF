@@ -33,6 +33,37 @@ struct GpuFrameSample {
   GpuPipelineStats pipeline;
 };
 
+#ifdef WIKIGOLF_DEBUG_TOOLS
+struct ProfilerNamedValue {
+  std::string name;
+  double value = 0.0;
+};
+
+struct ProfilerCpuScopeSnapshot {
+  std::string name;
+  double inclusiveMs = 0.0;
+  double exclusiveMs = 0.0;
+  uint32_t calls = 0;
+};
+
+struct ProfilerFrameSnapshot {
+  uint64_t frameIndex = 0;
+  std::string scene;
+  double cpuFrameMs = 0.0;
+  double profilerOverheadMs = 0.0;
+  size_t entityCount = 0;
+  double processCpuPercent = 0.0;
+  double workingSetMb = 0.0;
+  double privateMb = 0.0;
+  std::vector<ProfilerCpuScopeSnapshot> cpuScopes;
+  std::vector<ProfilerNamedValue> counters;
+  bool gpuReceived = false;
+  bool gpuValid = false;
+  std::vector<GpuScopeSample> gpuScopes;
+  GpuPipelineStats pipeline;
+};
+#endif
+
 class Profiler {
 public:
   static Profiler &Instance();
@@ -54,6 +85,11 @@ public:
   const std::filesystem::path &GetOutputDirectory() const {
     return m_outputDirectory;
   }
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  bool GetLatestCompletedFrameSnapshot(ProfilerFrameSnapshot &snapshot) const;
+  std::vector<ProfilerFrameSnapshot>
+  GetRecentCompletedFrameSnapshots(size_t maximumFrames) const;
+#endif
 
 private:
   using Clock = std::chrono::steady_clock;
@@ -98,6 +134,9 @@ private:
   void LogIntervalReport();
   void WriteReports();
   FrameData *FindFrame(uint64_t frameIndex);
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  ProfilerFrameSnapshot MakeSnapshot(const FrameData &frame) const;
+#endif
 
   bool m_initialized = false;
   bool m_frameActive = false;
@@ -135,5 +174,9 @@ public:
 
 #define PROFILE_JOIN_IMPL(a, b) a##b
 #define PROFILE_JOIN(a, b) PROFILE_JOIN_IMPL(a, b)
+#ifdef WIKIGOLF_PROFILING
 #define PROFILE_SCOPE(name)                                                    \
   core::ScopedTimer PROFILE_JOIN(profileTimer_, __LINE__)(name)
+#else
+#define PROFILE_SCOPE(name) ((void)0)
+#endif

@@ -37,11 +37,13 @@ bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height,
     return false;
   SetupSceneViewport();
 
+#ifdef WIKIGOLF_PROFILING
   m_gpuProfilerAvailable = InitializeGpuProfilerQueries();
   if (!m_gpuProfilerAvailable) {
     LOG_WARN("GraphicsDevice",
              "D3D11 GPU profiler queries are unavailable; CPU profiling will continue");
   }
+#endif
 
   return true;
 }
@@ -99,10 +101,13 @@ void GraphicsDevice::Shutdown() {
 
 void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
                                 float b, float a) {
+#ifdef WIKIGOLF_PROFILING
   ResolveGpuProfilerQueries();
+#endif
   m_gpuScopeStack.clear();
   m_currentGpuQueryFrame = nullptr;
 
+#ifdef WIKIGOLF_PROFILING
   if (m_gpuProfilerAvailable) {
     auto &queryFrame = m_gpuQueryFrames[m_gpuQueryWriteIndex];
     if (!queryFrame.issued) {
@@ -114,6 +119,7 @@ void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
       m_currentGpuQueryFrame = &queryFrame;
     }
   }
+#endif
 
   // 3D描画（Skybox/メッシュ）は内部描画解像度のオフスクリーンターゲットへ描画する。
   // MSAA有効時はMSAAカラーターゲットへ、無効時は直接「解決済み」ターゲットへ描画する。
@@ -296,6 +302,7 @@ void GraphicsDevice::ResolveSceneToBackbuffer() {
 }
 
 void GraphicsDevice::EndFrame() {
+#ifdef WIKIGOLF_PROFILING
   if (m_currentGpuQueryFrame) {
     while (!m_gpuScopeStack.empty()) {
       EndGpuScope();
@@ -307,16 +314,20 @@ void GraphicsDevice::EndFrame() {
     m_gpuQueryWriteIndex = (m_gpuQueryWriteIndex + 1) % kGpuQueryBufferCount;
     m_currentGpuQueryFrame = nullptr;
   }
+#endif
 
   UINT syncInterval = 0;
   if (m_vsyncEnabled) {
     syncInterval = 1;
   }
   m_swapChain->Present(syncInterval, 0);
+#ifdef WIKIGOLF_PROFILING
   ResolveGpuProfilerQueries();
+#endif
 }
 
 void GraphicsDevice::BeginGpuScope(std::string_view name) {
+#ifdef WIKIGOLF_PROFILING
   m_gpuScopeStack.push_back(std::numeric_limits<size_t>::max());
   if (!m_currentGpuQueryFrame) {
     return;
@@ -339,9 +350,13 @@ void GraphicsDevice::BeginGpuScope(std::string_view name) {
   queries.name = std::string(name);
   m_context->End(queries.start.Get());
   m_gpuScopeStack.back() = scopeIndex;
+#else
+  (void)name;
+#endif
 }
 
 void GraphicsDevice::EndGpuScope() {
+#ifdef WIKIGOLF_PROFILING
   if (m_gpuScopeStack.empty()) {
     return;
   }
@@ -353,6 +368,7 @@ void GraphicsDevice::EndGpuScope() {
     return;
   }
   m_context->End(m_currentGpuQueryFrame->scopes[scopeIndex].end.Get());
+#endif
 }
 
 std::vector<core::GpuFrameSample>

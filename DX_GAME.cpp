@@ -21,6 +21,13 @@
 #include "src/core/Profiler.h"
 #include "src/graphics/TextRenderer.h"
 #include "src/resources/ResourceManager.h"
+#ifdef WIKIGOLF_DEBUG_TOOLS
+#include "src/game/devtools/DebugBuildConfig.h"
+#include "src/game/devtools/DebugTimeController.h"
+#include "src/game/devtools/DebugRenderState.h"
+#include "src/game/devtools/DebugTerrainVisibility.h"
+#include "src/game/devtools/DebugUiLayer.h"
+#endif
 #include <Windows.h>
 #include <chrono>
 #include <filesystem>
@@ -39,6 +46,12 @@ graphics::TextRenderer *g_TextRenderer = nullptr;
 // ウィンドウプロシージャ
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
                          LPARAM lParam) {
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  if (game::debug::DebugUiLayer::ProcessWindowMessage(
+          hWnd, message, wParam, lParam) != 0) {
+    return 1;
+  }
+#endif
   if (g_Input) {
     g_Input->ProcessMessage(message, wParam, lParam);
   }
@@ -206,7 +219,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
            graphics.GetAdapterName(),
            static_cast<double>(graphics.GetDedicatedVideoMemoryBytes()) /
                (1024.0 * 1024.0));
+#ifdef WIKIGOLF_PROFILING
   core::Profiler::Instance().Initialize("profiling");
+#endif
 
   graphics::TextRenderer textRenderer;
   if (!textRenderer.Initialize(graphics.GetSwapChain())) {
@@ -217,6 +232,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // WndProcのWM_SIZEハンドラが追従処理を行えるようにする
   g_Graphics = &graphics;
   g_TextRenderer = &textRenderer;
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  game::debug::DebugUiLayer debugUi;
+  game::debug::DebugTimeController debugTime;
+  game::debug::DebugTerrainVisibility debugTerrainVisibility;
+  if (!debugUi.Initialize(hWnd, graphics.GetDevice(), graphics.GetContext())) {
+    LOG_ERROR("DebugUI", "Dear ImGui initialization failed.");
+    return -1;
+  }
+#endif
 
   // ウィンドウハンドル/GraphicsDeviceを登録し、読み込み済みのRender Scale/MSAA/FXAA/
   // VSyncをgraphicsへ反映する。保存済みモードがボーダーレス/フルスクリーンなら
@@ -312,6 +337,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       ctx.dt = dt;
       ctx.time += dt;
 
+#ifdef WIKIGOLF_DEBUG_TOOLS
+      debugUi.BeginFrame();
+      if (debugUi.IsPauseToggleRequested()) {
+        debugTime.TogglePaused();
+      }
+      if (debugUi.IsFrameStepRequested()) {
+        debugTime.RequestStep();
+      }
+      if (debugUi.IsTimeScaleCycleRequested()) {
+        debugTime.CycleTimeScale();
+      }
+      ctx.dt = debugTime.SimulationDelta(dt);
+#endif
+
       // 表示用FPSを指数移動平均で平滑化（瞬間値のちらつきを抑える）
       if (dt > 0.0f) {
         const float instantFps = 1.0f / dt;
@@ -323,9 +362,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       const char *sceneName = sceneManager.Current()
                                   ? sceneManager.Current()->GetName()
                                   : "NoScene";
+      uint64_t profileFrame = 0;
+#ifdef WIKIGOLF_PROFILING
       auto &profiler = core::Profiler::Instance();
-      const uint64_t profileFrame =
-          profiler.BeginFrame(sceneName, world.GetEntityCount());
+      profileFrame = profiler.BeginFrame(sceneName, world.GetEntityCount());
       profiler.SetCounter("Frame.DeltaSeconds", dt);
       profiler.SetCounter("GPU.DriverIsWarp",
                           graphics.GetDriverType() == D3D_DRIVER_TYPE_WARP ? 1.0
@@ -334,6 +374,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           "GPU.DedicatedVideoMemoryMB",
           static_cast<double>(graphics.GetDedicatedVideoMemoryBytes()) /
               (1024.0 * 1024.0));
+#endif
 
       {
           PROFILE_SCOPE("LogicUpdate");
@@ -349,12 +390,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
               sceneManager.Update(ctx);
           }
 
+#ifdef WIKIGOLF_DEBUG_TOOLS
+          debugUi.ApplyPreRender(ctx, dt);
+#endif
+
           // オーディオ更新
           {
               PROFILE_SCOPE("Logic.AudioSystem");
               audioSystem.Update(ctx);
           }
       }
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+      debugTerrainVisibility.Apply(
+          world, world.GetGlobal<game::debug::DebugRenderState>());
+#endif
 
       {
           PROFILE_SCOPE("Render_Total");
@@ -471,6 +521,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.SceneOverlay");
                   sceneManager.Render(ctx);
               }
+#ifdef WIKIGOLF_DEBUG_TOOLS
+              debugUi.Render(ctx, debugTime);
+#endif
           }
 
           {
@@ -486,10 +539,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           input.Update();
       }
 
+#ifdef WIKIGOLF_PROFILING
       profiler.EndFrame();
       for (auto &sample : graphics.ConsumeGpuProfileSamples()) {
         profiler.SubmitGpuFrame(std::move(sample));
       }
+#endif
 
       // FPS上限（0 = 無制限）。VSync ONの場合はPresentの垂直同期待ちで既に
       // 概ねフレームレートが制御されるが、無制限/高リフレッシュレート環境でも
@@ -517,7 +572,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ShowWindow(hWnd, SW_HIDE);
   audioSystem.Shutdown();
 
+#ifdef WIKIGOLF_PROFILING
   core::Profiler::Instance().Shutdown();
+#endif
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  debugUi.Shutdown();
+#endif
   textRenderer.Shutdown();
   graphics.Shutdown();
   core::Logger::Instance().Shutdown();

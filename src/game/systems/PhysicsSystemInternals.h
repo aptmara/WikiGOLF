@@ -191,6 +191,7 @@ struct PhysicsUpdateContext {
   int subSteps = 0;
   XMVECTOR gravity = XMVectorZero();
   TerrainData *terrainData = nullptr;
+  ecs::Entity terrainEntity = ecs::NULL_ENTITY;
   GolfGameState *golfState = nullptr;
   ecs::Entity ballEntity = ecs::NULL_ENTITY;
   const HoleSpatialGrid &holeGrid;

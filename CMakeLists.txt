@@ -54,6 +54,9 @@ enable_testing()
 
 option(WIKIGOLF_HTML_COURSES "Render course articles with litehtml" ON)
 option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
+option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
+option(WIKIGOLF_PROFILING "Enable CPU/GPU profiling and report output" OFF)
+include(cmake/WikiDebugTools.cmake)
 
 if(CMAKE_BINARY_DIR MATCHES "static" OR CMAKE_MSVC_RUNTIME_LIBRARY MATCHES "MultiThreaded$")
     set(WIKIGOLF_STATIC_BUILD_DEFAULT ON)
@@ -81,11 +84,16 @@ endif()
 
 # ソースファイルの収集
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.h")
+wikigolf_filter_debug_sources(SOURCES)
 
 # ゲーム本体は Release/ 直下に出力
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 list(FILTER SOURCES EXCLUDE REGEX "/graphics/html/.*")
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
+wikigolf_enable_debug_target(DX_GAME)
+if(WIKIGOLF_PROFILING)
+    target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_PROFILING=1)
+endif()
 set_target_properties(DX_GAME PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
@@ -718,3 +726,5 @@ if(MSVC)
     target_compile_options(test_wiki_terrain_height PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME wiki_terrain_height COMMAND test_wiki_terrain_height)
+
+wikigolf_add_debug_tests()

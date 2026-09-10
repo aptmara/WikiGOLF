@@ -4,6 +4,7 @@
 */
 
 #include "PhysicsSystemInternals.h"
+#include "CollisionDebugInfo.h"
 #include "../../core/Logger.h"
 
 namespace game::systems {
@@ -52,13 +53,18 @@ void ResolveStaticCollisions(PhysicsUpdateContext &frame) {
          ++perfStats.staticChecks;
          if (CheckSphereOBB(dyn.t->position, dyn.c->radius, otherT->position,
                             scaledSize, otherT->rotation, normal, depth)) {
+           XMFLOAT3 normalValue;
+           XMStoreFloat3(&normalValue, normal);
+           const CollisionEvent collision = MakeSphereCollisionEvent(
+               dyn.entity, otherEntity, dyn.t->position, dyn.c->radius,
+               normalValue, depth);
            // ホールはトリガーのみ
            if (ctx.world.Has<GolfHole>(otherEntity)) {
-             events->events.push_back({dyn.entity, otherEntity});
+             events->events.push_back(collision);
              return;
            }
 
-           events->events.push_back({dyn.entity, otherEntity});
+           events->events.push_back(collision);
 
           // 押し出し
           XMVECTOR pos = XMLoadFloat3(&dyn.t->position);

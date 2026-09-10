@@ -297,6 +297,7 @@ private:
 
 class ScopedGpuTimer {
 public:
+#ifdef WIKIGOLF_PROFILING
   ScopedGpuTimer(GraphicsDevice &graphics, std::string_view name)
       : m_graphics(graphics) {
     m_graphics.BeginGpuScope(name);
@@ -308,6 +309,9 @@ public:
 
 private:
   GraphicsDevice &m_graphics;
+#else
+  ScopedGpuTimer(GraphicsDevice &, std::string_view) {}
+#endif
 };
 
 } // namespace graphics
