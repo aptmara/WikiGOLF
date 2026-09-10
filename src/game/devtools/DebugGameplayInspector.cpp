@@ -1,6 +1,7 @@
 #include "DebugGameplayInspector.h"
 
 #include "DebugGameplaySnapshot.h"
+#include "DebugCupInStatus.h"
 #include "DebugSlopeStatus.h"
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"
@@ -20,6 +21,7 @@ void DrawVector3(const char *label, const DirectX::XMFLOAT3 &value) {
 void DrawGameplayInspector(core::GameContext &ctx) {
   const DebugGameplaySnapshot data = CaptureGameplaySnapshot(ctx.world);
   const DebugSlopeStatus slope = CaptureSlopeStatus(ctx.world);
+  const DebugCupInStatus cupIn = CaptureCupInStatus(ctx.world);
   ImGui::SeparatorText("ゴルフゲーム状態");
   if (!data.golf.available) {
     ImGui::TextDisabled("GolfGameStateはありません。");
@@ -79,6 +81,24 @@ void DrawGameplayInspector(core::GameContext &ctx) {
     ImGui::Text("転がり摩擦: %.3f / 反発: %.3f / Spin減衰: %.3f",
                 data.ball.rollingFriction, data.ball.restitution,
                 data.ball.spinDecay);
+  }
+
+  ImGui::SeparatorText("ホールイン判定");
+  if (!cupIn.available) {
+    ImGui::TextDisabled("判定可能なボールまたはホールがありません。");
+  } else {
+    ImGui::Text("カップイン: %s / ホールインワン: %s / ターゲット: %s",
+                BoolText(cupIn.readyForCupIn), BoolText(cupIn.holeInOne),
+                BoolText(cupIn.targetHole));
+    ImGui::Text("最寄りホール: #%u %s", cupIn.holeEntity,
+                cupIn.linkTarget.c_str());
+    ImGui::Text("水平範囲: %s  距離 %.3f / 判定半径 %.3f",
+                BoolText(cupIn.withinHorizontalRange),
+                cupIn.horizontalDistance, cupIn.captureRadius);
+    ImGui::Text("高さ範囲: %s  相対Y %.3f (-1.0 < Y < 0.0)",
+                BoolText(cupIn.withinVerticalRange), cupIn.verticalOffset);
+    ImGui::Text("低速条件: %s  速度 %.3f (< 0.1)",
+                BoolText(cupIn.slowEnough), cupIn.speed);
   }
 }
 

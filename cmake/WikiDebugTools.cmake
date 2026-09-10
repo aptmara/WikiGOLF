@@ -90,6 +90,17 @@ function(wikigolf_add_debug_tests)
         test_debug_terrain_render_rules.cpp)
     wikigolf_configure_debug_test(test_debug_terrain_render_rules)
 
+    add_executable(test_debug_cup_in_status
+        test_debug_cup_in_status.cpp
+        src/game/devtools/DebugCupInStatus.cpp
+        src/core/Logger.cpp)
+    target_precompile_headers(test_debug_cup_in_status PRIVATE src/pch.h)
+    if(MSVC)
+        target_compile_definitions(test_debug_cup_in_status PRIVATE
+            -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    endif()
+    wikigolf_configure_debug_test(test_debug_cup_in_status)
+
     if(WIKIGOLF_DEBUG_TOOLS)
         add_executable(test_debug_japanese_font
             test_debug_japanese_font.cpp
