@@ -4,6 +4,10 @@ project(DX_GAME)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ライブラリ (.lib, .exp) の出力先を lib/ に分離
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
 # Doxygen が利用可能な環境では、API ドキュメント生成用ターゲットを追加する。
 # 通常のゲームビルドには含めず、必要なときだけ明示的に実行する。
 find_package(Doxygen QUIET)
@@ -53,7 +57,25 @@ option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
 option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
 option(WIKIGOLF_PROFILING "Enable CPU/GPU profiling and report output" OFF)
 include(cmake/WikiDebugTools.cmake)
+
+if(CMAKE_BINARY_DIR MATCHES "static" OR CMAKE_MSVC_RUNTIME_LIBRARY MATCHES "MultiThreaded$")
+    set(WIKIGOLF_STATIC_BUILD_DEFAULT ON)
+else()
+    set(WIKIGOLF_STATIC_BUILD_DEFAULT OFF)
+endif()
+option(WIKIGOLF_STATIC_BUILD "Link static libraries instead of dynamic libraries" ${WIKIGOLF_STATIC_BUILD_DEFAULT})
+
+if(WIKIGOLF_STATIC_BUILD)
+    set(ASSIMP_LIBRARIES 
+        "${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/static/assimp-static-mt.lib"
+        "${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/static/zlibstatic.lib"
+    )
+else()
+    set(ASSIMP_LIBRARIES assimp-vc143-mt)
+endif()
+
 if(WIKIGOLF_HTML_COURSES OR WIKIGOLF_HTML_TESTS_ONLY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     include(cmake/WikiHtml.cmake)
 endif()
 if(WIKIGOLF_HTML_TESTS_ONLY)
@@ -64,13 +86,17 @@ endif()
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/*.h")
 wikigolf_filter_debug_sources(SOURCES)
 
-# 実行可能なターゲットの作成
+# ゲーム本体は Release/ 直下に出力
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 list(FILTER SOURCES EXCLUDE REGEX "/graphics/html/.*")
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
 wikigolf_enable_debug_target(DX_GAME)
 if(WIKIGOLF_PROFILING)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_PROFILING=1)
 endif()
+set_target_properties(DX_GAME PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)
 if(WIKIGOLF_HTML_COURSES)
     target_link_libraries(DX_GAME wiki_html)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_HTML_COURSES=1)
@@ -83,6 +109,18 @@ if(WIKIGOLF_HTML_COURSES)
         VERBATIM)
 
 endif()
+
+# サードパーティ素材・データのライセンス表記をビルド出力へ同梱
+add_custom_command(TARGET DX_GAME POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:DX_GAME>/licenses"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/WIKIPEDIA-LICENSE"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/WIKIPEDIA-LICENSE"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/Kenney-LICENSE"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/Kenney-LICENSE"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/assimp-LICENSE"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/assimp-LICENSE"
+    COMMENT "Deploying third-party license notices (Wikipedia/Kenney/assimp)..."
+    VERBATIM)
 target_precompile_headers(DX_GAME PRIVATE src/pch.h)
 
 # データベースの分割ファイルを自動的に結合するターゲット
@@ -113,7 +151,7 @@ target_include_directories(DX_GAME PRIVATE
 target_sources(DX_GAME PRIVATE src/thirdparty/sqlite3/sqlite3.c)
 
 # Assimpライブラリディレクトリ
-target_link_directories(DX_GAME PRIVATE libs/assimp-6.0.2)
+target_link_directories(DX_GAME PRIVATE libs/assimp-6.0.2 libs/assimp-6.0.2/static)
 
 # リンクするライブラリの設定
 target_link_libraries(DX_GAME 
@@ -131,7 +169,7 @@ target_link_libraries(DX_GAME
     mfplat
     mfreadwrite
     mfuuid
-    assimp-vc143-mt
+    ${ASSIMP_LIBRARIES}
 )
 
 # 文字セットをUnicodeに設定、C++20機能有効化、エンコーディング指定
@@ -141,12 +179,37 @@ if(MSVC)
 endif()
 
 # Post-build: Copy Assets
-add_custom_command(TARGET DX_GAME POST_BUILD
-    # Assets フォルダをそのままコピー
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:DX_GAME>/Assets
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll $<TARGET_FILE_DIR:DX_GAME>/assimp-vc143-mt.dll
-    COMMENT "Deploying assets to output directory..."
-)
+if(WIKIGOLF_STATIC_BUILD)
+    add_custom_command(TARGET DX_GAME POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/Fonts $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/kenney_input-images_1.5 $<TARGET_FILE_DIR:DX_GAME>/Assets/kenney_input-images_1.5
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/sounds $<TARGET_FILE_DIR:DX_GAME>/Assets/sounds
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/textures $<TARGET_FILE_DIR:DX_GAME>/Assets/textures
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/ui $<TARGET_FILE_DIR:DX_GAME>/Assets/ui
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/videos $<TARGET_FILE_DIR:DX_GAME>/Assets/videos
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/data
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001.sqlite $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001.sqlite
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part1.sqlite"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part2.sqlite"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part3.sqlite"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow.sqlite"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/backup_old_db"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/DX_GAME.lib" "$<TARGET_FILE_DIR:DX_GAME>/DX_GAME.exp"
+        COMMENT "Deploying filtered assets for static release..."
+    )
+else()
+    add_custom_command(TARGET DX_GAME POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets $<TARGET_FILE_DIR:DX_GAME>/Assets
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/DX_GAME.lib" "$<TARGET_FILE_DIR:DX_GAME>/DX_GAME.exp"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll $<TARGET_FILE_DIR:DX_GAME>/assimp-vc143-mt.dll
+        COMMENT "Deploying assets to output directory..."
+    )
+endif()
+
+# テスト・開発ツール等の実行ファイルは tests/ に出力
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/tools/SkyboxGen.cpp")
     add_executable(SkyboxGen tools/SkyboxGen.cpp src/graphics/SkyboxTextureGenerator.cpp)
@@ -475,8 +538,8 @@ add_executable(test_resource_manager_rules
     src/graphics/Shader.cpp)
 target_precompile_headers(test_resource_manager_rules PRIVATE src/pch.h)
 target_include_directories(test_resource_manager_rules PRIVATE src libs/assimp-6.0.2/include)
-target_link_directories(test_resource_manager_rules PRIVATE libs/assimp-6.0.2)
-target_link_libraries(test_resource_manager_rules d3d11 dxguid windowscodecs d3dcompiler assimp-vc143-mt)
+target_link_directories(test_resource_manager_rules PRIVATE libs/assimp-6.0.2 libs/assimp-6.0.2/static)
+target_link_libraries(test_resource_manager_rules d3d11 dxguid windowscodecs d3dcompiler ${ASSIMP_LIBRARIES})
 if(MSVC)
     target_compile_definitions(test_resource_manager_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_resource_manager_rules PRIVATE /utf-8 /Zc:__cplusplus)
