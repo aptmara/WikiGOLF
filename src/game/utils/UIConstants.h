@@ -150,7 +150,7 @@ constexpr float kShotBtnFontSize    = 20.0f;
 // =========================================================
 constexpr float kControlHintX       = 20.0f;
 constexpr float kControlHintY       = 676.0f;
-constexpr float kControlHintW       = 660.0f;
+constexpr float kControlHintW       = 980.0f;
 constexpr float kControlHintH       = 24.0f;
 constexpr float kControlHintFont    = 12.0f;
 
@@ -174,7 +174,7 @@ constexpr float kMarkerPulseSpeed   = 3.2f;
 constexpr float kMarkerPulseScale   = 0.16f;
 constexpr float kMapOpenHintDuration = 3.0f; ///< マップ開始時の操作ヒント表示秒数
 constexpr float kMapHelpPanelW       = 480.0f; ///< 操作ヘルプパネルの横幅
-constexpr float kMapHelpPanelH       = 220.0f; ///< 操作ヘルプパネルの縦幅
+constexpr float kMapHelpPanelH       = 270.0f; ///< 操作ヘルプパネルの縦幅
 
 
 // =========================================================

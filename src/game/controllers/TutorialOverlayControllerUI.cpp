@@ -49,7 +49,7 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
     std::wstring text;
     switch (m_step) {
         case TutorialStep::Camera:
-            text = L"【STEP 1】マウスの右ボタンをドラッグして、\nカメラを回して周りを見てみましょう。";
+            text = L"【STEP 1】マウスの左ボタンか右ボタンをドラッグして、\nカメラを回して周りを見てみましょう。";
             break;
         case TutorialStep::Club:
             text = L"【STEP 2】QキーとEキーを押して、\n使用するクラブを変更してみましょう。";

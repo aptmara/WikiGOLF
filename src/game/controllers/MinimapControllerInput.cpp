@@ -104,8 +104,8 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
   float zoomLerp = 1.0f - std::exp(-10.0f * ctx.dt);
   m_mapZoom += (m_targetMapZoom - m_mapZoom) * zoomLerp;
 
-  // パン操作 (左ドラッグ)。中クリックはエイムピン専用のため、ここでは使わない。
-  if (ctx.input.GetMouseButton(0)) {
+  // パン操作 (左ドラッグ/右ドラッグどちらも可)。中クリックはエイムピン専用のため、ここでは使わない。
+  if (ctx.input.GetMouseButton(0) || ctx.input.GetMouseButton(1)) {
     int deltaX = mouseX - m_prevMouseX;
     int deltaY = mouseY - m_prevMouseY;
     if (deltaX != 0 || deltaY != 0) {

@@ -246,8 +246,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       }
   }
 
-  // クラブ更新
-  if (m_clubController && !tutorialInputLocked && !isMapView &&
+  // クラブ更新 (Q/Eはマップビュー中も操作できる。マップの他の操作キーとは
+  // 重複しないため、ここでは isMapView による制限をかけない)
+  if (m_clubController && !tutorialInputLocked &&
       shot->phase == game::components::ShotState::Phase::Idle) {
       PROFILE_SCOPE("WikiGolf.ClubInput");
       game::controllers::ClubController::InputParams cParams;
