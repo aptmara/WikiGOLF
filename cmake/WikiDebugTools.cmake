@@ -72,6 +72,16 @@ function(wikigolf_add_debug_tests)
     add_executable(test_debug_scene_rules test_debug_scene_rules.cpp)
     wikigolf_configure_debug_test(test_debug_scene_rules)
 
+    if(WIKIGOLF_DEBUG_TOOLS)
+        add_executable(test_debug_japanese_font
+            test_debug_japanese_font.cpp
+            src/game/devtools/DebugFontLoader.cpp)
+        target_compile_definitions(test_debug_japanese_font PRIVATE
+            WIKIGOLF_TEST_FONT_PATH="${CMAKE_SOURCE_DIR}/Assets/Fonts/Mamelon-5-Hi-Regular.otf")
+        target_link_libraries(test_debug_japanese_font PRIVATE wikigolf_imgui)
+        wikigolf_configure_debug_test(test_debug_japanese_font)
+    endif()
+
     add_executable(test_debug_collider_geometry
         test_debug_collider_geometry.cpp
         src/game/devtools/DebugColliderGeometry.cpp)

@@ -50,7 +50,7 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
   }
 
   ImGui::SetNextWindowSize({620.0f, 520.0f}, ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("WikiGOLF Debug [F1]", &m_visible)) {
+  if (!ImGui::Begin("WikiGOLF デバッグ [F1]", &m_visible)) {
     ImGui::End();
     return;
   }
@@ -58,22 +58,22 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
   const char *sceneName = ctx.sceneManager && ctx.sceneManager->Current()
                               ? ctx.sceneManager->Current()->GetName()
                               : "NoScene";
-  ImGui::Text("Scene: %s", sceneName);
+  ImGui::Text("シーン: %s", sceneName);
 
   if (ImGui::BeginTabBar("DebugTabs")) {
-    if (ImGui::BeginTabItem("Simulation")) {
+    if (ImGui::BeginTabItem("シミュレーション")) {
       DrawSimulation(time);
       ImGui::EndTabItem();
     }
-    if (ImGui::BeginTabItem("Log")) {
+    if (ImGui::BeginTabItem("ログ")) {
       DrawLog();
       ImGui::EndTabItem();
     }
-    if (ImGui::BeginTabItem("Collision")) {
+    if (ImGui::BeginTabItem("衝突")) {
       DrawColliders(ctx);
       ImGui::EndTabItem();
     }
-    if (ImGui::BeginTabItem("Scene")) {
+    if (ImGui::BeginTabItem("シーン")) {
       DrawSceneSelector(ctx, time);
       ImGui::EndTabItem();
     }
@@ -89,23 +89,23 @@ void DebugOverlay::DrawSceneSelector(core::GameContext &ctx,
     time.Reset();
     DebugSceneNavigator::Navigate(ctx, target, reload);
   };
-  if (ImGui::Button("Title")) {
+  if (ImGui::Button("タイトル")) {
     navigate(Target::Title);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Loading")) {
+  if (ImGui::Button("ローディング")) {
     navigate(Target::Loading);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Golf (via Loading)")) {
+  if (ImGui::Button("ゴルフ（ロード経由）")) {
     navigate(Target::Golf);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Result")) {
+  if (ImGui::Button("リザルト")) {
     navigate(Target::Result);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Settings")) {
+  if (ImGui::Button("設定")) {
     navigate(Target::Settings);
   }
 
@@ -115,48 +115,48 @@ void DebugOverlay::DrawSceneSelector(core::GameContext &ctx,
           : "";
   const auto currentTarget = SceneTargetFromName(currentName);
   ImGui::BeginDisabled(!currentTarget.has_value());
-  if (ImGui::Button("Reload current") && currentTarget) {
+  if (ImGui::Button("現在のシーンを再読込") && currentTarget) {
     navigate(*currentTarget, true);
   }
   ImGui::EndDisabled();
   if (!currentTarget) {
-    ImGui::TextDisabled("The current scene does not support reload.");
+    ImGui::TextDisabled("現在のシーンは再読込に対応していません。");
   }
 }
 
 void DebugOverlay::DrawColliders(core::GameContext &ctx) {
-  ImGui::Checkbox("Show collider debug", &m_colliderSettings.enabled);
-  ImGui::Checkbox("Sphere", &m_colliderSettings.spheres);
+  ImGui::Checkbox("コライダーを表示", &m_colliderSettings.enabled);
+  ImGui::Checkbox("球", &m_colliderSettings.spheres);
   ImGui::SameLine();
-  ImGui::Checkbox("Box", &m_colliderSettings.boxes);
+  ImGui::Checkbox("ボックス", &m_colliderSettings.boxes);
   ImGui::SameLine();
-  ImGui::Checkbox("Cylinder", &m_colliderSettings.cylinders);
-  ImGui::Checkbox("Terrain bounds", &m_colliderSettings.terrain);
+  ImGui::Checkbox("円柱", &m_colliderSettings.cylinders);
+  ImGui::Checkbox("地形境界", &m_colliderSettings.terrain);
   ImGui::SameLine();
-  ImGui::Checkbox("Goal holes", &m_colliderSettings.holes);
+  ImGui::Checkbox("ゴールホール", &m_colliderSettings.holes);
   ImGui::Checkbox("Entity ID", &m_colliderSettings.entityIds);
-  ImGui::Checkbox("Contact point", &m_colliderSettings.contactPoints);
+  ImGui::Checkbox("接触点", &m_colliderSettings.contactPoints);
   ImGui::SameLine();
-  ImGui::Checkbox("Collision normal", &m_colliderSettings.collisionNormals);
-  ImGui::TextColored({0.3f, 0.9f, 0.4f, 1.0f}, "Green: collider");
+  ImGui::Checkbox("衝突法線", &m_colliderSettings.collisionNormals);
+  ImGui::TextColored({0.3f, 0.9f, 0.4f, 1.0f}, "緑: コライダー");
   ImGui::SameLine();
-  ImGui::TextColored({1.0f, 0.25f, 0.25f, 1.0f}, "Red: colliding");
+  ImGui::TextColored({1.0f, 0.25f, 0.25f, 1.0f}, "赤: 衝突中");
   ImGui::SameLine();
-  ImGui::TextColored({1.0f, 0.85f, 0.2f, 1.0f}, "Yellow: hole");
+  ImGui::TextColored({1.0f, 0.85f, 0.2f, 1.0f}, "黄: ホール");
 
   const auto *events =
       ctx.world.GetGlobal<game::components::CollisionEvents>();
   if (!events) {
     return;
   }
-  ImGui::SeparatorText("Current frame collision events");
-  ImGui::Text("Contacts: %zu", events->events.size());
+  ImGui::SeparatorText("現在フレームの衝突イベント");
+  ImGui::Text("接触数: %zu", events->events.size());
   if (ImGui::BeginTable("CollisionEvents", 4,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("Entity A");
     ImGui::TableSetupColumn("Entity B");
-    ImGui::TableSetupColumn("Point");
-    ImGui::TableSetupColumn("Depth");
+    ImGui::TableSetupColumn("接触点");
+    ImGui::TableSetupColumn("貫通量");
     ImGui::TableHeadersRow();
     for (const auto &event : events->events) {
       ImGui::TableNextRow();
@@ -176,17 +176,17 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx) {
 
 void DebugOverlay::DrawSimulation(DebugTimeController &time) {
   bool paused = time.IsPaused();
-  if (ImGui::Checkbox("Paused [F5]", &paused)) {
+  if (ImGui::Checkbox("一時停止 [F5]", &paused)) {
     time.SetPaused(paused);
   }
   ImGui::SameLine();
   ImGui::BeginDisabled(!time.IsPaused());
-  if (ImGui::Button("Step frame [F6]")) {
+  if (ImGui::Button("1フレーム進める [F6]")) {
     time.RequestStep();
   }
   ImGui::EndDisabled();
 
-  ImGui::SeparatorText("Time scale [F7 cycles]");
+  ImGui::SeparatorText("時間倍率 [F7で切替]");
   for (int index = 0;
        index < static_cast<int>(DebugTimeController::kTimeScales.size());
        ++index) {
@@ -210,18 +210,18 @@ void DebugOverlay::DrawSimulation(DebugTimeController &time) {
 }
 
 void DebugOverlay::DrawLog() {
-  ImGui::Checkbox("Debug", &m_logLevels[0]);
+  ImGui::Checkbox("デバッグ", &m_logLevels[0]);
   ImGui::SameLine();
-  ImGui::Checkbox("Info", &m_logLevels[1]);
+  ImGui::Checkbox("情報", &m_logLevels[1]);
   ImGui::SameLine();
-  ImGui::Checkbox("Warning", &m_logLevels[2]);
+  ImGui::Checkbox("警告", &m_logLevels[2]);
   ImGui::SameLine();
-  ImGui::Checkbox("Error", &m_logLevels[3]);
+  ImGui::Checkbox("エラー", &m_logLevels[3]);
   ImGui::SetNextItemWidth(360.0f);
-  ImGui::InputTextWithHint("##LogFilter", "Filter category or message",
+  ImGui::InputTextWithHint("##LogFilter", "カテゴリまたはメッセージを絞り込み",
                            m_logFilter, sizeof(m_logFilter));
   ImGui::SameLine();
-  if (ImGui::Button("Clear")) {
+  if (ImGui::Button("消去")) {
     core::Logger::Instance().ClearRecentEntries();
   }
 

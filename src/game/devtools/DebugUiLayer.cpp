@@ -1,4 +1,5 @@
 #include "DebugUiLayer.h"
+#include "DebugFontLoader.h"
 #include "DebugInputCaptureRules.h"
 
 #include "imgui.h"
@@ -17,6 +18,14 @@ bool DebugUiLayer::Initialize(HWND window, ID3D11Device *device,
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGui::StyleColorsDark();
+
+  ImGuiIO &io = ImGui::GetIO();
+  ImFont *japaneseFont = LoadJapaneseFont(*io.Fonts, kJapaneseFontPath);
+  if (japaneseFont) {
+    io.FontDefault = japaneseFont;
+  } else {
+    io.FontDefault = io.Fonts->AddFontDefault();
+  }
 
   if (!ImGui_ImplWin32_Init(window) || !ImGui_ImplDX11_Init(device, context)) {
     Shutdown();
