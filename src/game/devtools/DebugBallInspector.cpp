@@ -41,10 +41,33 @@ void DebugBallInspector::Draw(core::GameContext &ctx) {
     m_result = ResultText(result);
   }
   ImGui::EndDisabled();
+  ImGui::TextDisabled("テレポート後は接地判定を解除し、次の物理更新で再判定します。");
+
+  ImGui::SeparatorText("物理パラメーター");
+  if (!m_hasPhysics) {
+    m_hasPhysics = CaptureDebugBallPhysics(ctx.world, m_physics);
+  }
+  if (ImGui::Button("物理値を再読込")) {
+    m_hasPhysics = CaptureDebugBallPhysics(ctx.world, m_physics);
+    m_result = m_hasPhysics ? "現在の物理値を読み込みました。"
+                            : "有効なRigidBodyを取得できません。";
+  }
+  ImGui::BeginDisabled(!m_hasPhysics);
+  ImGui::DragFloat("質量", &m_physics.mass, 0.01f);
+  ImGui::DragFloat("空気抵抗", &m_physics.drag, 0.001f);
+  ImGui::DragFloat("転がり摩擦", &m_physics.rollingFriction, 0.01f);
+  ImGui::DragFloat("反発", &m_physics.restitution, 0.01f);
+  ImGui::DragFloat("スピン減衰", &m_physics.spinDecay, 0.01f);
+  if (ImGui::Button("物理値を適用")) {
+    const bool applied = ApplyDebugBallPhysics(ctx.world, m_physics);
+    m_result = applied ? "物理値を適用しました。"
+                       : "有効なRigidBodyへ適用できませんでした。";
+  }
+  ImGui::EndDisabled();
+  ImGui::TextDisabled("入力値はデバッグ検証用にクランプしません。");
   if (!m_result.empty()) {
     ImGui::TextUnformatted(m_result.c_str());
   }
-  ImGui::TextDisabled("テレポート後は接地判定を解除し、次の物理更新で再判定します。");
 }
 
 } // namespace game::debug
