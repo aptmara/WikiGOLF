@@ -120,6 +120,11 @@ function(wikigolf_add_debug_tests)
         src/game/devtools/DebugBallTrailHistory.cpp)
     wikigolf_configure_debug_test(test_debug_ball_trail)
 
+    add_executable(test_debug_collision_history
+        test_debug_collision_history.cpp
+        src/game/devtools/DebugCollisionHistory.cpp)
+    wikigolf_configure_debug_test(test_debug_collision_history)
+
     if(WIKIGOLF_DEBUG_TOOLS)
         add_executable(test_debug_profiler_history
             test_debug_profiler_history.cpp

@@ -62,6 +62,13 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
                               ? ctx.sceneManager->Current()->GetName()
                               : "NoScene";
   ImGui::Text("シーン: %s", sceneName);
+  const auto *collisionEvents =
+      ctx.world.GetGlobal<game::components::CollisionEvents>();
+  const bool collisionCaptured =
+      m_collisionHistory.Update(collisionEvents, ctx.dt > 0.0f);
+  if (m_pauseOnCollision && collisionCaptured) {
+    time.SetPaused(true);
+  }
 
   if (ImGui::BeginTabBar("DebugTabs")) {
     if (ImGui::BeginTabItem("シミュレーション")) {
@@ -85,7 +92,7 @@ void DebugOverlay::Draw(core::GameContext &ctx, DebugTimeController &time) {
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("衝突")) {
-      DrawColliders(ctx);
+      DrawColliders(ctx, time);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("シーン")) {
@@ -139,7 +146,8 @@ void DebugOverlay::DrawSceneSelector(core::GameContext &ctx,
   }
 }
 
-void DebugOverlay::DrawColliders(core::GameContext &ctx) {
+void DebugOverlay::DrawColliders(core::GameContext &ctx,
+                                 DebugTimeController &time) {
   if (ImGui::Checkbox("地形メッシュを隠して当たり判定のみ表示",
                       &m_hideTerrainMeshes) && m_hideTerrainMeshes) {
     m_colliderSettings.enabled = true;
@@ -182,15 +190,19 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx) {
   ImGui::TextColored({1.0f, 0.88f, 0.15f, 1.0f}, "黄線: 速度");
   ImGui::SameLine();
   ImGui::TextColored({0.15f, 0.85f, 1.0f, 1.0f}, "水色: 軌跡");
+  ImGui::Checkbox("衝突時に一時停止", &m_pauseOnCollision);
+  ImGui::SameLine();
+  ImGui::TextDisabled("現在: %s", time.IsPaused() ? "停止中" : "実行中");
 
   const auto *events =
       ctx.world.GetGlobal<game::components::CollisionEvents>();
-  if (!events) {
-    return;
-  }
   ImGui::SeparatorText("現在フレームの衝突イベント");
-  ImGui::Text("接触数: %zu", events->events.size());
-  if (ImGui::BeginTable("CollisionEvents", 4,
+  if (!events) {
+    ImGui::TextDisabled("衝突イベントリソースはありません。");
+  } else {
+    ImGui::Text("接触数: %zu", events->events.size());
+  }
+  if (events && ImGui::BeginTable("CollisionEvents", 4,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("Entity A");
     ImGui::TableSetupColumn("Entity B");
@@ -208,6 +220,41 @@ void DebugOverlay::DrawColliders(core::GameContext &ctx) {
                   event.contactPoint.y, event.contactPoint.z);
       ImGui::TableSetColumnIndex(3);
       ImGui::Text("%.4f", event.penetrationDepth);
+    }
+    ImGui::EndTable();
+  }
+
+  ImGui::SeparatorText("衝突履歴（直近100件）");
+  ImGui::Text("記録数: %zu", m_collisionHistory.Records().size());
+  ImGui::SameLine();
+  if (ImGui::Button("履歴を消去")) {
+    m_collisionHistory.Clear();
+  }
+  if (ImGui::BeginTable("CollisionHistory", 5,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_ScrollY,
+                        {0.0f, 190.0f})) {
+    ImGui::TableSetupColumn("Frame");
+    ImGui::TableSetupColumn("Entity A");
+    ImGui::TableSetupColumn("Entity B");
+    ImGui::TableSetupColumn("接触点");
+    ImGui::TableSetupColumn("貫通量");
+    ImGui::TableHeadersRow();
+    const auto &records = m_collisionHistory.Records();
+    for (auto record = records.rbegin(); record != records.rend(); ++record) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::Text("%llu",
+                  static_cast<unsigned long long>(record->simulationFrame));
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("%u", record->event.entityA);
+      ImGui::TableSetColumnIndex(2);
+      ImGui::Text("%u", record->event.entityB);
+      ImGui::TableSetColumnIndex(3);
+      ImGui::Text("%.2f, %.2f, %.2f", record->event.contactPoint.x,
+                  record->event.contactPoint.y, record->event.contactPoint.z);
+      ImGui::TableSetColumnIndex(4);
+      ImGui::Text("%.4f", record->event.penetrationDepth);
     }
     ImGui::EndTable();
   }

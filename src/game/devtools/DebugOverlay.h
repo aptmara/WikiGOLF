@@ -2,6 +2,7 @@
 
 #include <array>
 #include "DebugColliderRenderer.h"
+#include "DebugCollisionHistory.h"
 #include "DebugProfilerInspector.h"
 
 namespace core {
@@ -24,14 +25,16 @@ public:
 private:
   void DrawSimulation(DebugTimeController &time);
   void DrawLog();
-  void DrawColliders(core::GameContext &ctx);
+  void DrawColliders(core::GameContext &ctx, DebugTimeController &time);
   void DrawSceneSelector(core::GameContext &ctx, DebugTimeController &time);
 
   bool m_visible = false;
   std::array<bool, 4> m_logLevels = {true, true, true, true};
   char m_logFilter[128] = {};
   DebugColliderSettings m_colliderSettings;
+  DebugCollisionHistory m_collisionHistory;
   DebugProfilerInspector m_profilerInspector;
+  bool m_pauseOnCollision = false;
   bool m_hideTerrainMeshes = false;
 };
 
