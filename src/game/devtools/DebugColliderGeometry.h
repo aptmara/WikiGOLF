@@ -24,5 +24,11 @@ void AppendCylinderLines(std::vector<DebugLine3D> &lines,
 void AppendVectorArrow(std::vector<DebugLine3D> &lines,
                        const DirectX::XMFLOAT3 &origin,
                        const DirectX::XMFLOAT3 &vector, float scale);
+void AppendTerrainHeightfieldLines(std::vector<DebugLine3D> &lines,
+                                   const std::vector<float> &heights,
+                                   int resolutionX, int resolutionZ,
+                                   float width, float depth,
+                                   const DirectX::XMFLOAT3 &origin,
+                                   float heightOffset, int stride);
 
 } // namespace game::debug

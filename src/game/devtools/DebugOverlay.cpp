@@ -3,6 +3,7 @@
 #include "DebugTimeController.h"
 #include "DebugSceneNavigator.h"
 #include "DebugGameplayInspector.h"
+#include "DebugRenderState.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/SceneManager.h"
@@ -130,6 +131,12 @@ void DebugOverlay::DrawSceneSelector(core::GameContext &ctx,
 }
 
 void DebugOverlay::DrawColliders(core::GameContext &ctx) {
+  if (ImGui::Checkbox("地形メッシュを隠して当たり判定のみ表示",
+                      &m_hideTerrainMeshes) && m_hideTerrainMeshes) {
+    m_colliderSettings.enabled = true;
+    m_colliderSettings.terrain = true;
+  }
+  ctx.world.SetGlobal(DebugRenderState{m_hideTerrainMeshes});
   ImGui::Checkbox("コライダーを表示", &m_colliderSettings.enabled);
   ImGui::Checkbox("球", &m_colliderSettings.spheres);
   ImGui::SameLine();

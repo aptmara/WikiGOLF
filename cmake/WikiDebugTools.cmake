@@ -86,6 +86,10 @@ function(wikigolf_add_debug_tests)
     add_executable(test_debug_slope_rules test_debug_slope_rules.cpp)
     wikigolf_configure_debug_test(test_debug_slope_rules)
 
+    add_executable(test_debug_terrain_render_rules
+        test_debug_terrain_render_rules.cpp)
+    wikigolf_configure_debug_test(test_debug_terrain_render_rules)
+
     if(WIKIGOLF_DEBUG_TOOLS)
         add_executable(test_debug_japanese_font
             test_debug_japanese_font.cpp

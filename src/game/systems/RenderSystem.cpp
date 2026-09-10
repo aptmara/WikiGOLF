@@ -14,6 +14,10 @@
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
+#ifdef WIKIGOLF_DEBUG_TOOLS
+#include "../devtools/DebugRenderState.h"
+#include "../devtools/DebugTerrainRenderRules.h"
+#endif
 #include <DirectXCollision.h>
 #include <DirectXMath.h>
 #include <chrono>
@@ -318,6 +322,16 @@ void RenderSystem(core::GameContext &ctx) {
           ++stats.invisibleSkipped;
           return;
         }
+#ifdef WIKIGOLF_DEBUG_TOOLS
+        const auto *debugRender =
+            world.GetGlobal<game::debug::DebugRenderState>();
+        if (game::debug::ShouldHideTerrainMesh(
+                debugRender && debugRender->hideTerrainMeshes,
+                world.Has<components::TerrainObject>(e))) {
+          ++stats.invisibleSkipped;
+          return;
+        }
+#endif
         ++stats.visibleCandidates;
 
         // ステージ外周壁はカメラのすぐ側まで迫るため、視錐台/距離カリングで

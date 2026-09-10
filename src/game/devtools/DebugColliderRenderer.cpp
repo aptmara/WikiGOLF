@@ -7,6 +7,7 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
+#include "../utils/GameplayPhysicsConstants.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
@@ -200,10 +201,18 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
           if (!terrain.data) {
             return;
           }
-          const XMFLOAT3 size = {terrain.data->config.worldWidth, 0.0f,
-                                 terrain.data->config.worldDepth};
           std::vector<DebugLine3D> lines;
-          AppendBoxLines(lines, transform.position, size, transform.rotation);
+          const int maximumResolution = (std::max)(
+              terrain.data->config.resolutionX,
+              terrain.data->config.resolutionZ);
+          const int stride = (std::max)(1, maximumResolution / 24);
+          AppendTerrainHeightfieldLines(
+              lines, terrain.data->heightMap,
+              terrain.data->config.resolutionX,
+              terrain.data->config.resolutionZ,
+              terrain.data->config.worldWidth,
+              terrain.data->config.worldDepth, transform.position,
+              game::physics::kTerrainVisualSurfaceOffset, stride);
           const ImU32 color = collidingEntities.contains(entity)
                                   ? IM_COL32(255, 55, 55, 255)
                                   : IM_COL32(60, 150, 255, 220);

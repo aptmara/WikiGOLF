@@ -47,5 +47,14 @@ int main() {
   lines.clear();
   game::debug::AppendVectorArrow(lines, {}, {}, 0.2f);
   CHECK(lines.empty(), "zero velocity does not create an arrow");
+
+  lines.clear();
+  game::debug::AppendTerrainHeightfieldLines(
+      lines, {0.0f, 1.0f, 2.0f, 1.0f, 2.0f, 3.0f, 2.0f, 3.0f, 4.0f},
+      3, 3, 2.0f, 2.0f, {}, 0.02f, 1);
+  CHECK(lines.size() == 12, "terrain heightfield creates both grid axes");
+  CHECK(std::fabs(lines.front().from.y - 0.02f) < 0.00001f &&
+            std::fabs(lines.front().to.y - 1.02f) < 0.00001f,
+        "terrain wireframe follows collision heights");
   return 0;
 }

@@ -135,4 +135,49 @@ void AppendVectorArrow(std::vector<DebugLine3D> &lines,
   lines.push_back(right);
 }
 
+void AppendTerrainHeightfieldLines(std::vector<DebugLine3D> &lines,
+                                   const std::vector<float> &heights,
+                                   int resolutionX, int resolutionZ,
+                                   float width, float depth,
+                                   const DirectX::XMFLOAT3 &origin,
+                                   float heightOffset, int stride) {
+  if (resolutionX < 2 || resolutionZ < 2 ||
+      heights.size() < static_cast<size_t>(resolutionX * resolutionZ)) {
+    return;
+  }
+  stride = (std::max)(stride, 1);
+  const auto point = [&](int x, int z) {
+    const int clampedX = (std::min)(x, resolutionX - 1);
+    const int clampedZ = (std::min)(z, resolutionZ - 1);
+    return DirectX::XMFLOAT3{
+        origin.x - width * 0.5f +
+            width * clampedX / static_cast<float>(resolutionX - 1),
+        origin.y + heights[clampedZ * resolutionX + clampedX] + heightOffset,
+        origin.z + depth * 0.5f -
+            depth * clampedZ / static_cast<float>(resolutionZ - 1)};
+  };
+  for (int z = 0; z < resolutionZ; z += stride) {
+    for (int x = 0; x < resolutionX - 1; x += stride) {
+      lines.push_back({point(x, z), point(x + stride, z)});
+    }
+  }
+  if ((resolutionZ - 1) % stride != 0) {
+    const int z = resolutionZ - 1;
+    for (int x = 0; x < resolutionX - 1; x += stride) {
+      lines.push_back({point(x, z), point(x + stride, z)});
+    }
+  }
+  for (int x = 0; x < resolutionX; x += stride) {
+    for (int z = 0; z < resolutionZ - 1; z += stride) {
+      lines.push_back({point(x, z), point(x, z + stride)});
+    }
+  }
+  if ((resolutionX - 1) % stride != 0) {
+    const int x = resolutionX - 1;
+    for (int z = 0; z < resolutionZ - 1; z += stride) {
+      lines.push_back({point(x, z), point(x, z + stride)});
+    }
+  }
+}
+
 } // namespace game::debug

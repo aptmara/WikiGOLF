@@ -30,6 +30,7 @@ private:
   std::array<bool, 4> m_logLevels = {true, true, true, true};
   char m_logFilter[128] = {};
   DebugColliderSettings m_colliderSettings;
+  bool m_hideTerrainMeshes = false;
 };
 
 } // namespace game::debug
