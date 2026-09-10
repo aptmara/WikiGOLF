@@ -122,6 +122,10 @@ void DrawContact(ImDrawList &drawList, const CollisionEvent &event,
 
 void DebugColliderRenderer::Draw(core::GameContext &ctx,
                                  const DebugColliderSettings &settings) {
+  if (settings.trailClearGeneration != m_seenTrailClearGeneration) {
+    m_ballTrail.Clear();
+    m_seenTrailClearGeneration = settings.trailClearGeneration;
+  }
   if (!settings.enabled) {
     return;
   }
@@ -239,6 +243,35 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
         DrawLines(drawList, velocityLines, projection,
                   IM_COL32(255, 225, 40, 255));
       }
+    }
+  }
+
+  if (settings.ballTrail) {
+    const auto *state = ctx.world.GetGlobal<GolfGameState>();
+    if (state) {
+      const ecs::Entity ball = static_cast<ecs::Entity>(state->ballEntity);
+      const auto *transform = ctx.world.Get<Transform>(ball);
+      if (transform) {
+        m_ballTrail.Update(ball, transform->position,
+                           settings.trailSampleInterval,
+                           static_cast<std::size_t>(
+                               settings.trailMaximumPoints));
+      }
+    }
+    const auto &points = m_ballTrail.Points();
+    for (std::size_t index = 1; index < points.size(); ++index) {
+      ImVec2 from;
+      ImVec2 to;
+      if (!Project(points[index - 1], projection, from) ||
+          !Project(points[index], projection, to)) {
+        continue;
+      }
+      const float ratio = static_cast<float>(index) /
+                          static_cast<float>(points.size());
+      drawList.AddLine(from, to,
+                       IM_COL32(40, 220, 255,
+                                static_cast<int>(60.0f + ratio * 195.0f)),
+                       2.0f);
     }
   }
 }

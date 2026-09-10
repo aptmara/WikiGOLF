@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DebugBallTrailHistory.h"
+
 namespace core {
 struct GameContext;
 }
@@ -17,11 +19,19 @@ struct DebugColliderSettings {
   bool contactPoints = true;
   bool collisionNormals = true;
   bool velocityVector = true;
+  bool ballTrail = false;
+  int trailMaximumPoints = 300;
+  int trailSampleInterval = 2;
+  int trailClearGeneration = 0;
 };
 
 class DebugColliderRenderer {
 public:
   void Draw(core::GameContext &ctx, const DebugColliderSettings &settings);
+
+private:
+  DebugBallTrailHistory m_ballTrail;
+  int m_seenTrailClearGeneration = 0;
 };
 
 } // namespace game::debug

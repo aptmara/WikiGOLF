@@ -108,6 +108,11 @@ function(wikigolf_add_debug_tests)
     endif()
     wikigolf_configure_debug_test(test_debug_cup_in_status)
 
+    add_executable(test_debug_ball_trail
+        test_debug_ball_trail.cpp
+        src/game/devtools/DebugBallTrailHistory.cpp)
+    wikigolf_configure_debug_test(test_debug_ball_trail)
+
     if(WIKIGOLF_DEBUG_TOOLS)
         add_executable(test_debug_japanese_font
             test_debug_japanese_font.cpp
