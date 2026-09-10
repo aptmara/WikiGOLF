@@ -74,6 +74,9 @@ void ResultScene::OnExit(core::GameContext &ctx) {
   m_sparks.clear();
   m_shells.clear();
 
+  // 個別リストへ追加される前に遷移した場合も、Scene所有Entityを残さない。
+  Scene::OnExit(ctx);
+
   LOG_INFO("ResultScene", "OnExit: Cleanup complete");
 }
 

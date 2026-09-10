@@ -45,6 +45,32 @@ public:
   }
 };
 
+class PartialCleanupScene final : public core::Scene {
+public:
+  const char *GetName() const override { return "PartialCleanupScene"; }
+
+  void OnEnter(core::GameContext &) override {}
+
+  void OnExit(core::GameContext &context) override {
+    if (context.world.IsAlive(m_knownEntity)) {
+      context.world.DestroyEntity(m_knownEntity);
+    }
+    Scene::OnExit(context);
+  }
+
+  void CreateEntities(ecs::World &world) {
+    m_knownEntity = CreateEntity(world);
+    m_unlistedEntity = CreateEntity(world);
+  }
+
+  ecs::Entity KnownEntity() const { return m_knownEntity; }
+  ecs::Entity UnlistedEntity() const { return m_unlistedEntity; }
+
+private:
+  ecs::Entity m_knownEntity = ecs::NULL_ENTITY;
+  ecs::Entity m_unlistedEntity = ecs::NULL_ENTITY;
+};
+
 void TestEntityCapacityAndValidity() {
   ecs::World world;
 
@@ -177,6 +203,16 @@ int main() {
              "機能単位の一括破棄でも外部Entityを維持する");
   CHECK_TRUE(featureOwner.GetTrackedCount() == 0,
              "一括破棄後に所有記録を空にする");
+
+  PartialCleanupScene partialCleanupScene;
+  partialCleanupScene.CreateEntities(world);
+  const ecs::Entity knownEntity = partialCleanupScene.KnownEntity();
+  const ecs::Entity unlistedEntity = partialCleanupScene.UnlistedEntity();
+  partialCleanupScene.OnExit(context);
+  CHECK_TRUE(!world.IsAlive(knownEntity),
+             "シーン固有の終了処理で既知Entityを破棄する");
+  CHECK_TRUE(!world.IsAlive(unlistedEntity),
+             "基底終了処理が個別リストから漏れた所有Entityを破棄する");
 
   TestDeadEntityComponentAccess();
   TestGenerationWrap();
