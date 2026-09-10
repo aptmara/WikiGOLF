@@ -1,6 +1,7 @@
 #include "DebugGameplayInspector.h"
 
 #include "DebugGameplaySnapshot.h"
+#include "DebugSlopeStatus.h"
 #include "../../core/GameContext.h"
 #include "../../ecs/World.h"
 #include "imgui.h"
@@ -18,6 +19,7 @@ void DrawVector3(const char *label, const DirectX::XMFLOAT3 &value) {
 
 void DrawGameplayInspector(core::GameContext &ctx) {
   const DebugGameplaySnapshot data = CaptureGameplaySnapshot(ctx.world);
+  const DebugSlopeStatus slope = CaptureSlopeStatus(ctx.world);
   ImGui::SeparatorText("ゴルフゲーム状態");
   if (!data.golf.available) {
     ImGui::TextDisabled("GolfGameStateはありません。");
@@ -36,6 +38,15 @@ void DrawGameplayInspector(core::GameContext &ctx) {
     ImGui::Text("風: %.3f, %.3f / %.3f m/s", data.golf.windDirection.x,
                 data.golf.windDirection.y, data.golf.windSpeed);
     DrawVector3("最後のショット位置", data.golf.lastShotPosition);
+    if (slope.available) {
+      ImGui::Text("坂道上: %s / 傾斜角: %.2f度 / 法線Y: %.4f",
+                  BoolText(slope.evaluation.isOnSlope),
+                  slope.evaluation.angleDegrees, slope.evaluation.normalY);
+      ImGui::TextDisabled("坂道閾値: 法線Y < %.2f（約11.5度）",
+                          kSlopeFlatNormalYThreshold);
+    } else {
+      ImGui::TextDisabled("坂道判定: 地形サンプルなし");
+    }
   }
 
   ImGui::SeparatorText("ショット状態");
