@@ -25,6 +25,9 @@ public:
   /** @brief パネル全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
+  /** @brief チュートリアル専用ガイドと競合する通常操作表示を抑止します。*/
+  void SetTutorialMode(core::GameContext &ctx, bool enabled);
+
   /** @brief 生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 
@@ -32,6 +35,7 @@ private:
   ecs::Entity m_shotButtonBackground = UINT32_MAX;
   ecs::Entity m_shotButtonText = UINT32_MAX;
   ecs::Entity m_controlHint = UINT32_MAX;
+  bool m_tutorialMode = false;
   ecs::EntityOwner m_entityOwner;
 };
 

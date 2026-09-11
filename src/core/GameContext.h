@@ -23,6 +23,8 @@ class Input;
 namespace game::systems {
 class AudioSystem;
 class PostProcessSystem;
+class AchievementEventBus;
+class AchievementManager;
 }
 
 namespace core {
@@ -40,6 +42,8 @@ struct GameContext {
   game::systems::AudioSystem *audio = nullptr; // オーディオシステムへの参照
   core::SceneManager *sceneManager = nullptr;  // シーンマネージャーへの参照
   core::DisplaySettings *displaySettings = nullptr; // ウィンドウ表示設定への参照
+  game::systems::AchievementEventBus *achievementEvents = nullptr; // 実績イベントの発行口
+  game::systems::AchievementManager *achievements = nullptr; // 実績の進捗参照用
 
   // シーン遷移や終了リクエスト
   bool shouldClose = false;

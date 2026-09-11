@@ -189,7 +189,9 @@ public:
      * @param links   事前取得済みリンク一覧
      * @param extract 事前取得済み記事テキスト
 */
-    void SetPreloadedData(std::vector<game::WikiLink> links, std::string extract);
+    void SetPreloadedData(std::vector<game::WikiLink> links,
+                          std::string extract,
+                          bool skipSupplementalFetch = false);
 
     /**
      * @brief 目的記事の代表サムネイルをGPUテクスチャ化して保持します。

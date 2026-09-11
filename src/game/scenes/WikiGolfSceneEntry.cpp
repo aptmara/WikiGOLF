@@ -23,6 +23,8 @@
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../controllers/MinimapController.h"
+#include "../systems/AchievementEvent.h"
+#include "../systems/AchievementEventBus.h"
 #include "../systems/PhysicsSystem.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
@@ -63,6 +65,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_INFO("WikiGolf", "OnEnter");
 
   m_tutorialCupInFired = false;
+  m_tutorialFairwayGuidanceApplied = false;
+  m_tutorialGoalGuidanceApplied = false;
   m_tutorialFlagSampleEntities.clear();
 
   m_screenFade.Initialize(ctx);
@@ -245,6 +249,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   std::string targetPage;
   int targetId = -1;
   bool isUserOverride = false;
+  bool isDailyChallenge = false;
   constexpr int kTargetMinIncomingLinks = 10000;
   constexpr int kFallbackTargetMinIncomingLinks = 5000;
 
@@ -266,11 +271,14 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     targetPage = preloadedData->targetPage;
     targetId = preloadedData->targetPageId;
     isUserOverride = preloadedData->isUserOverride;
+    isDailyChallenge = preloadedData->isDailyChallenge;
 
     if (preloadedData->hasCachedData) {
       LOG_INFO("WikiGolf",
                "Found cached page data. Skipping initial network request.");
-      m_pageLoader->SetPreloadedData(preloadedData->cachedLinks, preloadedData->cachedExtract);
+      m_pageLoader->SetPreloadedData(preloadedData->cachedLinks,
+                                     preloadedData->cachedExtract,
+                                     m_isTutorial);
     }
 
     if (!preloadedData->targetThumbnailPixelsBGRA.empty()) {
@@ -426,11 +434,22 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   state.moveCount = 0;
   state.shotCount = 0;
+  state.elapsedTimeSeconds = 0.0f;
+  state.isDailyChallenge = isDailyChallenge;
+  state.isFreePlay = isUserOverride;
   state.gameCleared = false;
   state.canShoot = true;
   state.ballEntity = m_ballEntity;
   state.windSpeed = 0.0f; // LoadPageで設定
 
+  if (ctx.achievementEvents) {
+    game::systems::AchievementEvent roundStarted;
+    roundStarted.type = game::systems::AchievementEventType::RoundStarted;
+    roundStarted.isDailyChallenge = isDailyChallenge;
+    roundStarted.isTutorial = m_isTutorial;
+    roundStarted.isFreePlay = isUserOverride;
+    ctx.achievementEvents->Publish(roundStarted);
+  }
 
   LOG_INFO("WikiGolf", "Saving global state...");
   ctx.world.SetGlobal(state);

@@ -10,6 +10,8 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/WikiComponents.h"
 #include "../components/Transform.h"
+#include "../systems/AchievementEvent.h"
+#include "../systems/AchievementEventBus.h"
 #include "../systems/TimeOfDaySystem.h"
 #include "../utils/CarryDistanceTable.h"
 #include "../utils/JudgeFeedback.h"
@@ -130,6 +132,14 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             // 判定ロジック（パーフェクト中心はパワー確定位置に連動する）
             shot->judgement = game::utils::EvaluateImpactJudgement(
                 shot->confirmedImpact, shot->impactPerfectCenter);
+
+            if (ctx.achievementEvents) {
+                game::systems::AchievementEvent shotJudged;
+                shotJudged.type = game::systems::AchievementEventType::ShotJudged;
+                shotJudged.judgement = shot->judgement;
+                ctx.achievementEvents->Publish(shotJudged);
+            }
+
             if (shot->judgement == game::components::ShotJudgement::Special) {
                 if (hud) hud->UpdateJudge(ctx, L"", game::ui::kColorSpecial);
             } else if (shot->judgement == game::components::ShotJudgement::Great) {

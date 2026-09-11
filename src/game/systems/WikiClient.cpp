@@ -5,6 +5,7 @@
 
 #include "WikiClient.h"
 #include "WikiClientJson.h"
+#include "DailyChallengeRules.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
 #include <algorithm>
@@ -142,10 +143,19 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
 }
 
 std::string WikiClient::FetchRandomPageTitle() {
+  m_lastServerDateSeed = 0;
   std::string response = PerformGetRequest(
       L"ja.wikipedia.org", L"/w/"
                            L"api.php?action=query&list=random&rnnamespace=0&"
-                           L"rnlimit=1&format=json&formatversion=2");
+                           L"rnlimit=1&curtimestamp=1&format=json&formatversion=2");
+
+  constexpr std::string_view timestampField = "\"curtimestamp\":\"";
+  const size_t timestampPosition = response.find(timestampField);
+  if (timestampPosition != std::string::npos) {
+    const size_t timestampStart = timestampPosition + timestampField.size();
+    m_lastServerDateSeed = ParseDailyChallengeSeed(
+        std::string_view(response).substr(timestampStart));
+  }
 
   size_t titlePos = response.find("\"title\":\"");
   if (titlePos != std::string::npos) {

@@ -43,7 +43,7 @@ void GameplayControlsPanel::Initialize(core::GameContext &ctx) {
   m_shotButtonText = m_entityOwner.Create(ctx.world);
   auto &buttonText =
       ctx.world.Add<game::components::UIText>(m_shotButtonText);
-  buttonText.text = L"SHOT   SPACE / CLICK";
+  buttonText.text = L"SHOT   CLICK";
   buttonText.x = game::ui::kShotBtnX;
   buttonText.y = game::ui::kShotBtnY + 22.0f;
   buttonText.width = game::ui::kShotBtnW;
@@ -61,7 +61,7 @@ void GameplayControlsPanel::Initialize(core::GameContext &ctx) {
 
   m_controlHint = m_entityOwner.Create(ctx.world);
   auto &hint = ctx.world.Add<game::components::UIText>(m_controlHint);
-  hint.text = L"Q / E  CLUB     RMB  CAMERA     M  MAP";
+  hint.text = L"Q/E クラブ切替   LMB/RMBドラッグ カメラ回転(Shiftで微調整)   ホイール ズーム   中クリック 照準ピン設置   M マップ表示   ESC ポーズ";
   hint.x = game::ui::kControlHintX;
   hint.y = game::ui::kControlHintY;
   hint.width = game::ui::kControlHintW;
@@ -82,9 +82,16 @@ void GameplayControlsPanel::SetShotPhaseVisible(core::GameContext &ctx,
 }
 
 void GameplayControlsPanel::SetVisible(core::GameContext &ctx, bool visible) {
+  visible = visible && !m_tutorialMode;
   SetTextVisible(ctx.world, m_shotButtonBackground, visible);
   SetTextVisible(ctx.world, m_shotButtonText, visible);
   SetTextVisible(ctx.world, m_controlHint, visible);
+}
+
+void GameplayControlsPanel::SetTutorialMode(core::GameContext &ctx,
+                                            bool enabled) {
+  m_tutorialMode = enabled;
+  SetVisible(ctx, !enabled);
 }
 
 void GameplayControlsPanel::Shutdown(core::GameContext &ctx) {

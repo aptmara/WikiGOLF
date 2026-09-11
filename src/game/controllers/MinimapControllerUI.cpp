@@ -242,11 +242,13 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
 
   // 操作ヘルプの各操作説明テキスト行を生成
   std::vector<std::wstring> helpTexts = {
-    L"[ドラッグ / 左クリック] マップをパン",
+    L"[左 / 右ドラッグ] マップをパン",
     L"[スクロール / + / -] ズームイン / ズームアウト",
     L"[C / Space] ボール位置にフォーカス",
     L"[F] フィールド全体を表示",
     L"[0] ズーム率を等倍(100%)にリセット",
+    L"[Q / E] クラブを切り替え",
+    L"[中クリック] 照準ピンを設置",
     L"[?] 操作ガイドの表示切り替え",
     L"[M / Esc] マップビューを閉じる"
   };
@@ -276,9 +278,9 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   // マップビュー突入時の簡易操作ヒント下部バー背景の生成
   m_mapOpenHintBg = m_entityOwner.Create(ctx.world);
   auto &openBg = ctx.world.Add<UIText>(m_mapOpenHintBg);
-  openBg.x = 240.0f;
+  openBg.x = 120.0f;
   openBg.y = 665.0f;
-  openBg.width = 800.0f;
+  openBg.width = 1040.0f;
   openBg.height = 36.0f;
   openBg.style.bgColor = game::ui::kColorBgDark;
   openBg.style.borderColor = game::ui::kColorBorder;
@@ -290,13 +292,13 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   // マップビュー突入時の簡易操作ヒントテキストの生成
   m_mapOpenHintText = m_entityOwner.Create(ctx.world);
   auto &openTxt = ctx.world.Add<UIText>(m_mapOpenHintText);
-  openTxt.text = L"[ドラッグ] パン  [スクロール/+/-] ズーム  [C/Space] ボール中央  [F] 全体表示  [?] ヘルプ  [Esc/M] 閉じる";
+  openTxt.text = L"[左/右ドラッグ] パン  [スクロール/+/-] ズーム  [Q/E] クラブ  [中クリック] 照準ピン  [C/Space] ボール中央  [F] 全体表示  [?] ヘルプ  [Esc/M] 閉じる";
   openTxt.x = openBg.x + 10.0f;
   openTxt.y = openBg.y + 6.0f;
   openTxt.width = openBg.width - 20.0f;
   openTxt.height = openBg.height - 12.0f;
   openTxt.style = graphics::TextStyle::Guide();
-  openTxt.style.fontSize = 13.0f;
+  openTxt.style.fontSize = 12.0f;
   openTxt.style.align = graphics::TextAlign::Center;
   openTxt.style.color = game::ui::kColorTextPrimary; // 紙面調のヒントバー上に表示するため本文色にする
   // 紙面パネル上では Guide() の黒縁取り+影が小さい文字を滲ませて見せてしまうため外す。
@@ -314,6 +316,40 @@ void MinimapController::ClearHoleIcons(core::GameContext &ctx) {
     ctx.world.DestroyEntity(icon.iconEntity);
   }
   m_mapHoleIcons.clear();
+}
+
+void MinimapController::SetTutorialHelpMode(core::GameContext& ctx,
+                                            bool enabled) {
+  static const std::vector<std::wstring> tutorialHelp = {
+      L"[M] マップビューを開く",
+      L"[左ドラッグ] マップをパン",
+      L"[スクロール] ズームイン / ズームアウト",
+      L"[中クリック] 照準ピンを設置",
+      L"[?] 操作ガイドの表示切り替え",
+      L"[Esc] マップビューを閉じる",
+  };
+  static const std::vector<std::wstring> normalHelp = {
+      L"[左 / 右ドラッグ] マップをパン",
+      L"[スクロール / + / -] ズームイン / ズームアウト",
+      L"[C / Space] ボール位置にフォーカス",
+      L"[F] フィールド全体を表示",
+      L"[0] ズーム率を等倍(100%)にリセット",
+      L"[Q / E] クラブを切り替え",
+      L"[中クリック] 照準ピンを設置",
+      L"[?] 操作ガイドの表示切り替え",
+      L"[M / Esc] マップビューを閉じる",
+  };
+  const auto& texts = enabled ? tutorialHelp : normalHelp;
+  for (size_t i = 0; i < m_mapHelpLines.size(); ++i) {
+    if (auto* line = ctx.world.Get<UIText>(m_mapHelpLines[i])) {
+      line->text = i < texts.size() ? texts[i] : L"";
+    }
+  }
+  if (auto* hint = ctx.world.Get<UIText>(m_mapOpenHintText)) {
+    hint->text = enabled
+        ? L"[左ドラッグ] パン  [スクロール] ズーム  [中クリック] 照準ピン  [?] ヘルプ  [Esc] 閉じる"
+        : L"[左/右ドラッグ] パン  [スクロール/+/-] ズーム  [Q/E] クラブ  [中クリック] 照準ピン  [C/Space] ボール中央  [F] 全体表示  [?] ヘルプ  [Esc/M] 閉じる";
+  }
 }
 
 /**

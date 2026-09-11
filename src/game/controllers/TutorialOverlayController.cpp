@@ -13,12 +13,14 @@
 #include "ClubController.h"
 #include "ShotController.h"
 #include "MinimapController.h"
+#include "hud/HudStyles.h"
 #include "../components/Transform.h"
 #include "../components/UIText.h"
 #include "../components/UIImage.h"
 #include "../components/WikiComponents.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Camera.h"
+#include "../utils/UIConstants.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../audio/AudioSystem.h"
@@ -38,13 +40,15 @@ using namespace DirectX;
 void TutorialOverlayController::Initialize(core::GameContext& ctx) {
     LOG_INFO("TutorialOverlay", "Initialize");
 
-    m_step                = TutorialStep::Camera;
+    m_step                = TutorialStep::Intro;
     m_terrainEventStarted = false;
     m_terrainCardIndex    = 0;
     m_terrainCardTimer    = 0.0f;
     m_initialCameraYaw    = 0.0f;
+    m_initialCameraDistance = 0.0f;
     m_initialClubIndex    = 0;
     m_inputLocked         = false;
+    m_visible             = true;
     m_eventCamLerpTimer   = 0.0f;
     m_eventCamDisplayTimer = 0.0f;
     m_cupInWaitTimer      = 0.0f;
@@ -64,37 +68,47 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
     m_overlayBgEntity = m_entityOwner.Create(ctx.world);
     auto& bg = ctx.world.Add<components::UIText>(m_overlayBgEntity);
     bg.text = L"";
-    bg.x = 240.0f; bg.y = 80.0f;
-    bg.width = 800.0f; bg.height = 140.0f;
-    bg.style.bgColor       = {0.05f, 0.1f, 0.15f, 0.85f};
-    bg.style.cornerRadius  = 16.0f;
-    bg.style.borderWidth   = 2.0f;
-    bg.style.borderColor   = {0.8f, 0.7f, 0.3f, 1.0f};
-    bg.layer   = 200;
+    bg.x = 310.0f; bg.y = 22.0f;
+    bg.width = 660.0f; bg.height = 172.0f;
+    hud::ApplySurfaceStyle(bg.style);
+    bg.layer   = game::ui::kLayerOverlay;
     bg.visible = true;
 
     // オーバーレイテキスト
     m_overlayTextEntity = m_entityOwner.Create(ctx.world);
     auto& txt = ctx.world.Add<components::UIText>(m_overlayTextEntity);
-    txt.text  = L"チュートリアル開始";
-    txt.x = 240.0f; txt.y = 110.0f;
-    txt.width = 800.0f;
-    txt.style.fontSize = 24.0f;
-    txt.style.color    = {1.0f, 1.0f, 1.0f, 1.0f};
-    txt.style.align    = graphics::TextAlign::Center;
-    txt.layer   = 201;
+    txt.text  = L"WIKIGOLF ガイド";
+    txt.x = 338.0f; txt.y = 42.0f;
+    txt.width = 604.0f;
+    txt.style.fontSize = 20.0f;
+    txt.style.color    = game::ui::kColorTextPrimary;
+    txt.style.align    = graphics::TextAlign::Left;
+    txt.layer   = game::ui::kLayerOverlay + 1;
     txt.visible = true;
 
-    // スキップヒント
+    // 現在行う操作。スキップとは別の青い操作チップとして表示する。
+    m_actionTextEntity = m_entityOwner.Create(ctx.world);
+    auto& action = ctx.world.Add<components::UIText>(m_actionTextEntity);
+    action.text = L"[ ENTER ] はじめる";
+    action.x = 338.0f; action.y = 108.0f;
+    action.width = 410.0f; action.height = 34.0f;
+    action.style.fontSize = 15.0f;
+    action.style.color = game::ui::kColorAccent;
+    action.style.align = graphics::TextAlign::Center;
+    hud::ApplyActiveRowStyle(action.style);
+    action.layer = game::ui::kLayerOverlay + 1;
+    action.visible = true;
+
+    // 任意のスキップヒント
     m_skipTextEntity = m_entityOwner.Create(ctx.world);
     auto& skip = ctx.world.Add<components::UIText>(m_skipTextEntity);
-    skip.text  = L"Enterキーでスキップ";
-    skip.x = 240.0f; skip.y = 180.0f;
-    skip.width = 780.0f;
-    skip.style.fontSize = 18.0f;
-    skip.style.color    = {0.6f, 0.6f, 0.6f, 1.0f};
+    skip.text  = L"ENTER  次へ / スキップ";
+    skip.x = 338.0f; skip.y = 150.0f;
+    skip.width = 604.0f;
+    skip.style.fontSize = 13.0f;
+    skip.style.color    = game::ui::kColorAccent;
     skip.style.align    = graphics::TextAlign::Right;
-    skip.layer   = 201;
+    skip.layer   = game::ui::kLayerOverlay + 1;
     skip.visible = true;
 
     // 旧動作フォールバック用地形カード（m_eventCamTargets 未設定時に使う）
@@ -103,10 +117,19 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
         { L"Rough (ラフ)",           L"草が深く、ボールの転がりが少し悪くなります。" },
         { L"Bunker (バンカー)",       L"砂地です。転がりにくく、パワーも落ちやすくなります。" },
         { L"Green (グリーン)",        L"カップ周りの滑らかな地形です。よく転がります。" },
-        { L"OB / Water / Lava",      L"水や溶岩などの危険エリア。入るとペナルティで1打戻されます。" }
+        { L"OB / Water",             L"コース外や水に入るとOBです。1打加算され、打つ前の位置へ戻ります。" }
     };
 
     UpdateUI(ctx);
+}
+
+void TutorialOverlayController::SetVisible(core::GameContext& ctx,
+                                           bool visible) {
+    m_visible = visible;
+    UpdateUI(ctx);
+    if (auto* check = ctx.world.Get<components::UIImage>(m_checkMarkEntity)) {
+        check->visible = visible;
+    }
 }
 
 // -------------------------------------------------------
@@ -126,6 +149,7 @@ void TutorialOverlayController::Shutdown(core::GameContext& ctx) {
     m_entityOwner.DestroyAll(ctx.world);
     m_overlayBgEntity = UINT32_MAX;
     m_overlayTextEntity = UINT32_MAX;
+    m_actionTextEntity = UINT32_MAX;
     m_skipTextEntity = UINT32_MAX;
     m_checkMarkEntity = UINT32_MAX;
 }

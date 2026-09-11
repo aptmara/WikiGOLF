@@ -4,6 +4,7 @@
  * @brief Wikipedia APIと通信するためのクライアント
 */
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -61,6 +62,9 @@ public:
    * @return 記事タイトル（失敗時は空文字列）
 */
   std::string FetchRandomPageTitle();
+
+  /** @brief 直前のランダム記事取得時にWikipediaが返したUTC日付seedです。 */
+  std::uint32_t GetLastServerDateSeed() const { return m_lastServerDateSeed; }
 
   /**
    * @brief 記事のリンク一覧を取得
@@ -173,6 +177,7 @@ private:
   HINTERNET m_hSession = nullptr;
   HINTERNET m_hConnect = nullptr; /**< ja.wikipedia.org への既定接続*/
   std::unordered_map<std::wstring, HINTERNET> m_hostConnections; /**< 他ホスト用の接続キャッシュ*/
+  std::uint32_t m_lastServerDateSeed = 0;
 };
 
 } // namespace game::systems

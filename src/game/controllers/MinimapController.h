@@ -25,6 +25,27 @@ namespace game::controllers {
 */
 class MinimapController {
 public:
+  struct InputPermissions {
+    bool openWithM = true;
+    bool closeWithEscape = true;
+    bool panWithLeftDrag = true;
+    bool panWithRightDrag = true;
+    bool zoomWithWheel = true;
+    bool zoomWithKeys = true;
+    bool toggleHelp = true;
+    bool recenter = true;
+    bool fitCourse = true;
+    bool resetZoom = true;
+  };
+
+  struct InputActivity {
+    uint32_t opened = 0;
+    uint32_t closed = 0;
+    uint32_t panned = 0;
+    uint32_t wheelZoomed = 0;
+    uint32_t helpToggled = 0;
+  };
+
   struct Config {
     ecs::Entity cameraEntity;
     ecs::Entity ballEntity;
@@ -63,7 +84,10 @@ public:
   void UpdateMapCamera(core::GameContext &ctx, float fieldWidth, float fieldDepth);
 
   /** @brief 入力処理（Mキーでトグル、マップビュー時のパン/ズームなど）*/
-  void ProcessInput(core::GameContext &ctx, int mouseX, int mouseY, float fieldWidth, float fieldDepth, ecs::Entity skyboxEntity);
+  void ProcessInput(core::GameContext &ctx, int mouseX, int mouseY,
+                    float fieldWidth, float fieldDepth,
+                    ecs::Entity skyboxEntity,
+                    const InputPermissions& permissions = {});
 
   // ------------------------------------------------------------------
   // イベント・状態操作
@@ -104,6 +128,7 @@ public:
 
   /** @brief 現在マップビュー状態かどうか*/
   bool IsMapView() const { return m_isMapView; }
+  const InputActivity& GetInputActivity() const { return m_inputActivity; }
   void* GetMapSRV() const {
     if (!m_minimapRenderer) {
       return nullptr;
@@ -113,6 +138,9 @@ public:
 
   /** @brief ミニマップUI全体の表示/非表示切り替え（ロード中は非表示にするため）*/
   void SetVisible(core::GameContext& ctx, bool visible);
+
+  /** @brief チュートリアルで許可する操作だけをマップ内ヘルプへ表示します。*/
+  void SetTutorialHelpMode(core::GameContext& ctx, bool enabled);
 
   // ------------------------------------------------------------------
   // Getter / Setter
@@ -143,6 +171,7 @@ private:
   float m_mapBoundaryHitTime = 0.0f;
   float m_markerPulseTimer = 0.0f;
   bool m_mapHelpVisible = false;
+  InputActivity m_inputActivity;
   bool m_isVisible = true; ///< HUDの表示状態です。ロード中の更新再表示を防ぎます。
 
   int m_prevMouseX = 0;

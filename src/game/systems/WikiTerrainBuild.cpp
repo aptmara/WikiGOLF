@@ -115,7 +115,8 @@ void WikiTerrainSystem::BeginBuildField(
     }
   }
 
-  const bool useTutorialPreset = m_tutorialMode && pageTitle == "チュートリアル";
+  const bool useTutorialPreset = m_tutorialMode &&
+      (pageTitle == "チュートリアル" || pageTitle == "フェアウェイ");
 
   // ラムダにコピーして非同期実行（thisへの参照を持たない）
   m_terrainFuture = std::async(

@@ -181,7 +181,8 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   }
 
   // 地形データの生成
-  if (m_tutorialMode && pageTitle == "チュートリアル") {
+  if (m_tutorialMode &&
+      (pageTitle == "チュートリアル" || pageTitle == "フェアウェイ")) {
     m_terrainData = std::make_shared<TerrainData>(
         TerrainGenerator::GenerateTutorialTerrain(config, holePositions));
   } else {

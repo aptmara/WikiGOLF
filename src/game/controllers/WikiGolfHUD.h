@@ -87,6 +87,9 @@ public:
 */
     void SetVisible(core::GameContext& ctx, bool visible);
 
+    /** @brief 通常操作ヒントを隠し、チュートリアルガイドとの競合を防ぎます。*/
+    void SetTutorialMode(core::GameContext& ctx, bool enabled);
+
     /**
      * @brief 着弾点プレビュー(トップビュー)トグルボタンの見た目を更新します。
      * @param hovered マウスがボタン上にあるか

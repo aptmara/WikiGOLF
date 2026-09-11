@@ -8,6 +8,8 @@
 #include "src/game/scenes/TitleScene.h"
 #include "src/game/scenes/WikiGolfScene.h"
 #include "src/game/components/Camera.h"
+#include "src/game/systems/AchievementEventBus.h"
+#include "src/game/systems/AchievementManager.h"
 #include "src/game/systems/PostProcessSystem.h"
 #include "src/game/systems/RenderSystem.h"
 #include "src/game/systems/SkyboxRenderSystem.h"
@@ -275,6 +277,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ctx.displaySettings = &displaySettings;
   ctx.postProcess = &postProcessSystem;
 
+  // 実績システム（イベントバス経由でメインロジックと疎結合）
+  game::systems::AchievementEventBus achievementEventBus;
+  game::systems::AchievementManager achievementManager;
+  ctx.achievementEvents = &achievementEventBus;
+  ctx.achievements = &achievementManager;
+  achievementManager.Initialize(ctx, achievementEventBus);
+
   // 同梱フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
   // 用途別に使い分ける（TextStyle.h の各プリセット参照）:
   //   Mamelon 5 Hi        - 見出し・特別演出用の装飾フォント
@@ -399,6 +408,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
               PROFILE_SCOPE("Logic.AudioSystem");
               audioSystem.Update(ctx);
           }
+
+          // 実績トースト通知の更新（シーン非依存で常時動作）
+          {
+              PROFILE_SCOPE("Logic.AchievementManager");
+              achievementManager.Update(ctx);
+          }
       }
 
 #ifdef WIKIGOLF_DEBUG_TOOLS
@@ -521,6 +536,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.SceneOverlay");
                   sceneManager.Render(ctx);
               }
+              {
+                  // シーン独自オーバーレイ（RankingSceneの暗転矩形等）よりも
+                  // 後に描画し、実績トーストを常に最前面に保つ。
+                  PROFILE_SCOPE("Render.AchievementToast");
+                  textRenderer.BeginDraw();
+                  achievementManager.Render(ctx, textRenderer);
+                  textRenderer.EndDraw();
+              }
 #ifdef WIKIGOLF_DEBUG_TOOLS
               debugUi.Render(ctx, debugTime);
 #endif
@@ -570,6 +593,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // 重い後片付けより先に画面と音を止め、経路計算へ中断を要求する。
   game::systems::WikiShortestPath::RequestCancelAll();
   ShowWindow(hWnd, SW_HIDE);
+  achievementManager.Shutdown(ctx);
   audioSystem.Shutdown();
 
 #ifdef WIKIGOLF_PROFILING

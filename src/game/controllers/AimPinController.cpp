@@ -100,23 +100,29 @@ AimPinController::Update(core::GameContext &ctx, const UpdateParams &params) {
     return result;
   }
 
-  auto *pin = ctx.world.GetGlobal<game::components::AimPinState>();
-  if (!pin) {
-    return result;
-  }
-
-  const float pdx = worldPos.x - ballTransform->position.x;
-  const float pdz = worldPos.z - ballTransform->position.z;
-  const float distance = std::sqrt(pdx * pdx + pdz * pdz);
-
-  pin->active = true;
-  pin->worldPosition = worldPos;
-  pin->distanceFromBall = distance;
-  RebuildWorldMarker(ctx, worldPos);
+  const float distance = PlacePin(ctx, params.ballEntity, worldPos);
+  if (distance < 0.0f) return result;
 
   result.pinPlaced = true;
   result.distance = distance;
   return result;
+}
+
+float AimPinController::PlacePin(core::GameContext& ctx,
+                                 ecs::Entity ballEntity,
+                                 const DirectX::XMFLOAT3& worldPos) {
+  auto* ball = ctx.world.Get<game::components::Transform>(ballEntity);
+  auto* pin = ctx.world.GetGlobal<game::components::AimPinState>();
+  if (!ball || !pin) return -1.0f;
+
+  const float dx = worldPos.x - ball->position.x;
+  const float dz = worldPos.z - ball->position.z;
+  const float distance = std::sqrt(dx * dx + dz * dz);
+  pin->active = true;
+  pin->worldPosition = worldPos;
+  pin->distanceFromBall = distance;
+  RebuildWorldMarker(ctx, worldPos);
+  return distance;
 }
 
 void AimPinController::ClearPin(core::GameContext &ctx) {

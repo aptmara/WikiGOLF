@@ -159,6 +159,15 @@ public:
   std::pair<std::string, int> FetchPopularPageTitle(int minIncomingLinks = 100);
 
   /**
+   * @brief 人気記事を指定seedから決定的に取得します。
+   * @param minIncomingLinks 最小入力リンク数
+   * @param seed 候補選択に使用するseed
+   * @return 記事タイトルとページID（失敗時は空文字列と-1）
+*/
+  std::pair<std::string, int>
+  FetchPopularPageTitle(int minIncomingLinks, std::uint32_t seed);
+
+  /**
    * @brief 実行中の全インスタンスのDBクエリに中断を要求します。
    *
    * ウィンドウが閉じられた際などに呼び出し、リンク取得のような
@@ -185,6 +194,9 @@ public:
   static void ClearProcessCaches();
 
 private:
+  std::pair<std::string, int> FetchPopularPageTitleWithIndexSelector(
+      const std::function<std::size_t(std::size_t)> &selectIndex);
+
   sqlite3 *m_db = nullptr;
   std::vector<int> m_popularPageIds; /**< 人気記事IDのキャッシュ*/
 };

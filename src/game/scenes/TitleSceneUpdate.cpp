@@ -31,6 +31,8 @@
 #include "../../core/StringUtils.h"
 #include "LoadingScene.h"
 #include "SettingsScene.h"
+#include "AchievementScene.h"
+#include "RankingScene.h"
 #include "WikiGolfScene.h"
 #include <filesystem>
 #include <fstream>
@@ -113,6 +115,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
 
   // UIButton の状態をポーリングしてアクションを処理
   bool newGame = false;
+  bool startDailyChallenge = false;
   bool startTutorial = false;
   bool exitGame = false;
   bool prevHoveredAny = false;
@@ -222,6 +225,9 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
           }
           m_popupTimer = std::max(m_popupTimer, 0.8f);
         }
+      } else if (btn.action == "daily") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
+        startDailyChallenge = true;
       } else if (btn.action == "tutorial") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
         startTutorial = true;
@@ -234,13 +240,12 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       } else if (btn.action == "option") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
         ctx.sceneManager->PushScene(std::make_unique<SettingsScene>());
-      } else if (btn.action == "daily" || btn.action == "ranking" || btn.action == "achievement") {
-        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
-        auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
-        if (ptxt) {
-            ptxt->text = L"Coming Soon...\n\n現在開発中です";
-        }
-        m_popupTimer = 2.0f; // 2秒間表示
+      } else if (btn.action == "ranking") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+        ctx.sceneManager->PushScene(std::make_unique<RankingScene>());
+      } else if (btn.action == "achievement") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+        ctx.sceneManager->PushScene(std::make_unique<AchievementScene>());
       } else if (btn.action == "exit") {
         exitGame = true;
       } else if (btn.action == "wikipedia") {
@@ -256,6 +261,13 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
     StopIntroAudio(ctx);
     title_scene_detail::ResetStandardStartData(ctx);
     auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(false); });
+    ctx.sceneManager->ChangeScene(std::move(loadingScene));
+  }
+  if (startDailyChallenge) {
+    StopIntroAudio(ctx);
+    title_scene_detail::ResetDailyChallengeStartData(ctx);
+    auto loadingScene = std::make_unique<LoadingScene>(
+        []() { return std::make_unique<WikiGolfScene>(false); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));
   }
   if (startTutorial) {

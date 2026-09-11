@@ -4,6 +4,7 @@
 */
 
 #include "WikiShortestPath.h"
+#include "DailyChallengeRules.h"
 #include "WikiShortestPathInternals.h"
 #include "../../core/Logger.h"
 #include <algorithm>
@@ -17,6 +18,27 @@ using namespace wiki_shortest_path_detail;
 
 std::pair<std::string, int>
 WikiShortestPath::FetchPopularPageTitle(int minIncomingLinks) {
+  (void)minIncomingLinks;
+  return FetchPopularPageTitleWithIndexSelector(
+      [](std::size_t candidateCount) {
+        return static_cast<std::size_t>(rand()) % candidateCount;
+      });
+}
+
+std::pair<std::string, int>
+WikiShortestPath::FetchPopularPageTitle(int minIncomingLinks,
+                                        std::uint32_t seed) {
+  (void)minIncomingLinks;
+  DailyChallengeRandom random(seed);
+  return FetchPopularPageTitleWithIndexSelector(
+      [&random](std::size_t candidateCount) {
+        return random.NextIndex(candidateCount);
+      });
+}
+
+std::pair<std::string, int>
+WikiShortestPath::FetchPopularPageTitleWithIndexSelector(
+    const std::function<std::size_t(std::size_t)> &selectIndex) {
   if (!m_db)
     return {"", -1};
 
@@ -28,8 +50,8 @@ WikiShortestPath::FetchPopularPageTitle(int minIncomingLinks) {
 
   // 10回リトライ（フィルタリング用）
   for (int i = 0; i < 10; ++i) {
-    int randIdx = rand() % m_popularPageIds.size();
-    int pageId = m_popularPageIds[randIdx];
+    const std::size_t index = selectIndex(m_popularPageIds.size());
+    int pageId = m_popularPageIds[index];
 
     std::string title = FetchPageTitle(pageId);
 

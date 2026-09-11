@@ -90,6 +90,8 @@ struct WikiGlobalData {
   int targetPageId = -1;
   int initialPar = -1;
   bool isUserOverride = false;
+  bool isDailyChallenge = false;
+  std::uint32_t dailyChallengeSeed = 0;
 
   // 初回ロード済みデータ (LoadingSceneで取得済みの場合に使用)
   bool hasCachedData = false;
@@ -192,6 +194,9 @@ struct GolfGameState {
   int shotCount = 0;        ///< 打数
   int par = 5;              ///< パー（リンク数÷2+2）
   int moveCount = 0;        ///< 遷移回数
+  float elapsedTimeSeconds = 0.0f; ///< デイリーチャレンジの経過時間
+  bool isDailyChallenge = false; ///< デイリーチャレンジ中か
+  bool isFreePlay = false;  ///< 自由入力（スタート/ゴール記事を手動指定）で開始したか
   bool gameCleared = false; ///< クリアフラグ
   bool canShoot = true;     ///< ショット可能か
 

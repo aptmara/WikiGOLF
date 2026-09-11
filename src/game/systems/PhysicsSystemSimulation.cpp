@@ -4,6 +4,8 @@
 */
 
 #include "PhysicsSystemInternals.h"
+#include "AchievementEvent.h"
+#include "AchievementEventBus.h"
 #include "CollisionDebugInfo.h"
 #include "GameJuiceSystem.h"
 #include "../../audio/AudioSystem.h"
@@ -70,6 +72,12 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
             golfState->isOB = true;
             LOG_INFO("Physics", "Ball stopped in OB terrain. material={}",
                      static_cast<int>(currentMaterial));
+            if (ctx.achievementEvents) {
+              AchievementEvent hazardEntered;
+              hazardEntered.type = AchievementEventType::HazardEntered;
+              hazardEntered.material = currentMaterial;
+              ctx.achievementEvents->Publish(hazardEntered);
+            }
           }
         }
       }

@@ -27,10 +27,12 @@ long long ElapsedMs(const std::chrono::steady_clock::time_point& startedAt) {
 } // namespace
 
 void WikiPageDataFetcher::SetPreloadedData(
-    std::vector<game::WikiLink> links, std::string extract) {
+    std::vector<game::WikiLink> links, std::string extract,
+    bool skipSupplementalFetch) {
     m_preloadedLinks = std::move(links);
     m_preloadedExtract = std::move(extract);
     m_hasPreloadedData = true;
+    m_skipSupplementalFetch = skipSupplementalFetch;
 }
 
 PageDataAsyncResult WikiPageDataFetcher::Fetch(const std::string& pageName) {
@@ -44,6 +46,14 @@ PageDataAsyncResult WikiPageDataFetcher::Fetch(const std::string& pageName) {
         result.allLinks = std::move(m_preloadedLinks);
         result.articleText = std::move(m_preloadedExtract);
         m_hasPreloadedData = false;
+        if (m_skipSupplementalFetch) {
+            m_skipSupplementalFetch = false;
+            result.hasData = true;
+            LOG_INFO("WikiPageLoader",
+                     "Offline preloaded page complete page='{}' links={} elapsed={}ms",
+                     pageName, result.allLinks.size(), ElapsedMs(loadStartedAt));
+            return result;
+        }
     } else {
         LOG_INFO("WikiPageLoader", "Fetching live data async for: {}", pageName);
         const auto linksStartedAt = std::chrono::steady_clock::now();

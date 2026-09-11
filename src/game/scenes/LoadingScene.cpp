@@ -36,7 +36,8 @@ namespace {
 */
 bool HasExplicitStartData(const game::components::WikiGlobalData &data) {
   return data.isUserOverride || !data.startPage.empty() ||
-         !data.targetPage.empty() || data.targetPageId != -1;
+         !data.targetPage.empty() || data.targetPageId != -1 ||
+         data.isDailyChallenge;
 }
 
 /**
@@ -99,12 +100,16 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   std::string overrideTargetPage;
   int overrideTargetId = -1;
   bool overrideIsUserOverride = false;
+  bool overrideIsDailyChallenge = false;
+  std::uint32_t overrideDailyChallengeSeed = 0;
   if (auto* globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>()) {
     if (HasExplicitStartData(*globalData)) {
       overrideStartPage = globalData->startPage;
       overrideTargetPage = globalData->targetPage;
       overrideTargetId = globalData->targetPageId;
       overrideIsUserOverride = globalData->isUserOverride;
+      overrideIsDailyChallenge = globalData->isDailyChallenge;
+      overrideDailyChallengeSeed = globalData->dailyChallengeSeed;
       LOG_INFO("LoadingScene", "Found overridden global data: Start={}, Target={}", overrideStartPage, overrideTargetPage);
     } else {
       LOG_INFO("LoadingScene", "No explicit start data. Standard random selection will run.");
@@ -114,7 +119,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   // 非同期ロード開始
   m_isLoading = true;
   auto progressPtr = m_loadProgress;
-  m_loadTask = std::async(std::launch::async, [progressPtr, overrideStartPage, overrideTargetPage, overrideTargetId, overrideIsUserOverride]() {
+  m_loadTask = std::async(std::launch::async, [progressPtr, overrideStartPage, overrideTargetPage, overrideTargetId, overrideIsUserOverride, overrideIsDailyChallenge, overrideDailyChallengeSeed]() {
     const auto loadStartedAt = std::chrono::steady_clock::now();
     const auto setProgress = [progressPtr](float value) {
       if (progressPtr) {
@@ -135,6 +140,8 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     data->targetPage = overrideTargetPage;
     data->targetPageId = overrideTargetId;
     data->isUserOverride = overrideIsUserOverride;
+    data->isDailyChallenge = overrideIsDailyChallenge;
+    data->dailyChallengeSeed = overrideDailyChallengeSeed;
 
     // WikiShortestPathの初期化（重い処理）
     const auto dbStartedAt = std::chrono::steady_clock::now();
@@ -178,6 +185,12 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     if (data->startPage.empty()) {
       const auto randomStartedAt = std::chrono::steady_clock::now();
       data->startPage = wikiClient.FetchRandomPageTitle();
+      if (data->isDailyChallenge) {
+        data->dailyChallengeSeed = wikiClient.GetLastServerDateSeed();
+        LOG_INFO("LoadingScene",
+                 "AsyncLoad daily challenge server date seed={}",
+                 data->dailyChallengeSeed);
+      }
       LOG_INFO("LoadingScene",
                "AsyncLoad random start fetched: title='{}' elapsed={}ms",
                data->startPage, ElapsedMs(randomStartedAt));
@@ -191,14 +204,23 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     // 人気記事からターゲット選定
     constexpr int kTargetMinIncomingLinks = 10000;
     constexpr int kFallbackTargetMinIncomingLinks = 5000;
+    std::uint32_t dailySelectionOffset = 0;
+    const auto fetchPopularTarget = [&](int minIncomingLinks) {
+      if (data->isDailyChallenge) {
+        return data->pathSystem->FetchPopularPageTitle(
+            minIncomingLinks,
+            data->dailyChallengeSeed + dailySelectionOffset++);
+      }
+      return data->pathSystem->FetchPopularPageTitle(minIncomingLinks);
+    };
     if (data->targetPage.empty() && dbLoaded && data->pathSystem->IsAvailable()) {
       const auto targetStartedAt = std::chrono::steady_clock::now();
-      auto result = data->pathSystem->FetchPopularPageTitle(kTargetMinIncomingLinks);
+      auto result = fetchPopularTarget(kTargetMinIncomingLinks);
       data->targetPage = result.first;
       data->targetPageId = result.second;
       setProgress(0.7f);
       if (data->targetPage.empty()) {
-        result = data->pathSystem->FetchPopularPageTitle(kFallbackTargetMinIncomingLinks);
+        result = fetchPopularTarget(kFallbackTargetMinIncomingLinks);
         data->targetPage = result.first;
         data->targetPageId = result.second;
       }
@@ -225,7 +247,14 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
                data->targetPage, ElapsedMs(fallbackStartedAt));
     }
 
-    if (overrideTargetPage.empty() && data->startPage == data->targetPage) {
+    if (overrideTargetPage.empty() && data->startPage == data->targetPage &&
+        data->isDailyChallenge) {
+      data->startPage = wikiClient.FetchRandomPageTitle();
+      LOG_INFO("LoadingScene",
+               "AsyncLoad daily duplicate start replaced: title='{}'",
+               data->startPage);
+    } else if (overrideTargetPage.empty() &&
+               data->startPage == data->targetPage) {
       const auto retryStartedAt = std::chrono::steady_clock::now();
       data->targetPage = wikiClient.FetchTargetPageTitle();
       data->targetPageId = -1;
@@ -269,13 +298,14 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
                  attempt + 1, ElapsedMs(attemptStartedAt),
                  ElapsedMs(pathCheckStartedAt));
 
-        if (overrideIsUserOverride || pathResult.degrees > 1) {
+        if (overrideIsUserOverride || data->isDailyChallenge ||
+            pathResult.degrees > 1) {
           break;
         }
 
-        auto newTarget = data->pathSystem->FetchPopularPageTitle(100);
+        auto newTarget = fetchPopularTarget(100);
         if (newTarget.first.empty()) {
-          newTarget = data->pathSystem->FetchPopularPageTitle(50);
+          newTarget = fetchPopularTarget(50);
         }
 
         if (newTarget.first.empty()) {

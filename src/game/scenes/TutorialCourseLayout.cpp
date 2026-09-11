@@ -28,7 +28,7 @@ constexpr TutorialLinkPlacement kLinkPlacements[] = {
 } // namespace
 
 bool TutorialCourseLayout::IsPresetPage(const std::string& pageName) const {
-    return pageName == "チュートリアル";
+    return pageName == "チュートリアル" || pageName == "フェアウェイ";
 }
 
 std::vector<graphics::LinkRegion> TutorialCourseLayout::BuildGameplayLinks(
