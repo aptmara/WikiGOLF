@@ -70,7 +70,9 @@ VS_OUTPUT main(VS_INPUT input) {
     float yaw = inst.Flags.w;
 
     float timePhase = globalTime * (1.9f + speedFactor * 4.6f) + phase;
-    float windAmplitude = amplitude * (0.65f + speedFactor * 1.45f);
+    // 無風時はほぼ静止し、風速が上がるほどはためきが強くなるよう
+    // 芝(GrassVS.hlsl)と同じ考え方でamplitudeを風速に連動させる。
+    float windAmplitude = amplitude * (0.18f + speedFactor * 1.32f);
 
     float tipWeight = u * u * (3.0f - 2.0f * u);
     float freeEdge = smoothstep(0.62f, 1.0f, u);

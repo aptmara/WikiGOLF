@@ -169,8 +169,13 @@ void WindPanel::Update(core::GameContext &ctx, float elapsedTime,
   const float angle = std::atan2(crossProduct.y, dotProduct);
   SetTextIfChanged(*directionAndUnit, ResolveDirection(angle) + L" m/s");
 
-  constexpr float kCycleSeconds = 0.55f;
-  const float phase = std::fmod(elapsedTime, kCycleSeconds) / kCycleSeconds;
+  // 3D旗のはためき速度(FlagVS.hlslのtimePhaseレート)と同じ風速倍率を使い、
+  // HUDの矢印アニメーションを実際の旗のなびきと同期させる。
+  constexpr float kBaseCycleSeconds = 0.55f;
+  const float speedFactor = std::clamp(windSpeed / 12.0f, 0.0f, 1.0f);
+  const float cycleSeconds =
+      kBaseCycleSeconds * 1.9f / (1.9f + speedFactor * 4.6f);
+  const float phase = std::fmod(elapsedTime, cycleSeconds) / cycleSeconds;
   const float rise = std::sin(phase * DirectX::XM_PI);
   const float amplitude = 5.0f + std::min(windSpeed, 12.0f);
   directionAndUnit->x = game::ui::kWindCardX + 76.0f;
