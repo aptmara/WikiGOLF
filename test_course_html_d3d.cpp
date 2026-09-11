@@ -40,11 +40,18 @@ int main() {
                 context->CopyResource(copy.Get(),tile.texture.Get());
                 D3D11_MAPPED_SUBRESOURCE mapped{};
                 Require(SUCCEEDED(context->Map(copy.Get(),0,D3D11_MAP_READ,0,&mapped)),"readback");
+                bool tileInk=false;
                 for(UINT y=0;y<desc.Height;++y) {
                     auto* row=static_cast<const unsigned char*>(mapped.pData)+y*mapped.RowPitch;
-                    for(UINT x=0;x<desc.Width;++x) if(row[x*4]<200 || row[x*4+1]<200 || row[x*4+2]<200) ink=true;
+                    for(UINT x=0;x<desc.Width;++x) {
+                        if(row[x*4]<200 || row[x*4+1]<200 || row[x*4+2]<200) {
+                            ink=true;
+                            tileInk=true;
+                        }
+                    }
                 }
                 context->Unmap(copy.Get(),0);
+                Require(tileInk,"each HTML tile retains rendered content");
             }
             Require(ink,"rendered nonwhite content");
             Require(offset==result.height && pixels<=graphics::html::kMaxTexturePixels,"texture budget");

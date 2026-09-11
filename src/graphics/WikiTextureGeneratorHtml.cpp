@@ -1,6 +1,7 @@
 #include "WikiTextureGenerator.h"
 #include "../core/StringUtils.h"
 #include "../core/Logger.h"
+#include "../core/Profiler.h"
 #ifdef WIKIGOLF_HTML_COURSES
 #include "html/CourseHtmlContainer.h"
 #include <algorithm>
@@ -32,6 +33,9 @@ struct WikiHtmlRenderState final : html::CourseHtmlContainer {
     litehtml::uint_ptr nextFont = 1;
     html::RasterSize raster;
     unsigned clipDepth = 0;
+    std::uint64_t textDraws = 0;
+    std::uint64_t imageDraws = 0;
+    std::uint64_t shapeDraws = 0;
     void ResetClips() { while (clipDepth) { context->PopAxisAlignedClip(); --clipDepth; } }
     ~WikiHtmlRenderState() override {
         cancelled.store(true);
@@ -78,6 +82,7 @@ struct WikiHtmlRenderState final : html::CourseHtmlContainer {
     }
     void draw_text(litehtml::uint_ptr, const char* text, litehtml::uint_ptr font,
                    litehtml::web_color color, const litehtml::position& pos) override {
+        ++textDraws;
         brush->SetColor(Color(color));
         auto layout = Text(text, font);
         context->DrawTextLayout(D2D1::Point2F(pos.x.value(), pos.y.value()), layout.Get(), brush.Get());
@@ -88,6 +93,7 @@ struct WikiHtmlRenderState final : html::CourseHtmlContainer {
     }
     void draw_image(litehtml::uint_ptr, const litehtml::background_layer& layer,
                     const std::string& url, const std::string&) override {
+        ++imageDraws;
         context->PushAxisAlignedClip(Rect(layer.clip_box), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         auto it = images.find(url);
         if (it != images.end()) context->DrawBitmap(it->second.Get(), Rect(layer.origin_box));
@@ -96,6 +102,7 @@ struct WikiHtmlRenderState final : html::CourseHtmlContainer {
     }
     void draw_solid_fill(litehtml::uint_ptr, const litehtml::background_layer& layer,
                          const litehtml::web_color& color) override {
+        ++shapeDraws;
         brush->SetColor(Color(color));
         context->PushAxisAlignedClip(Rect(layer.clip_box), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         context->FillRectangle(Rect(layer.border_box), brush.Get());
@@ -103,6 +110,7 @@ struct WikiHtmlRenderState final : html::CourseHtmlContainer {
     }
     void draw_borders(litehtml::uint_ptr, const litehtml::borders& b,
                       const litehtml::position& p, bool) override {
+        ++shapeDraws;
         const auto r = Rect(p);
         auto edge = [&](const litehtml::border& e, D2D1_RECT_F bounds) {
             if (e.width.value() <= 0 || e.style == litehtml::border_style_none || e.style == litehtml::border_style_hidden) return;
@@ -114,6 +122,7 @@ struct WikiHtmlRenderState final : html::CourseHtmlContainer {
         edge(b.right,D2D1::RectF(r.right-b.right.width.value(),r.top,r.right,r.bottom));
     }
     void draw_list_marker(litehtml::uint_ptr, const litehtml::list_marker& m) override {
+        ++shapeDraws;
         brush->SetColor(Color(m.color));
         const auto r = Rect(m.pos);
         if (m.marker_type == litehtml::list_style_type_none) return;
@@ -183,7 +192,14 @@ bool WikiTextureGenerator::GenerateHtmlTile(WikiTextureGenerationState& state) {
     auto& render = *state.htmlState;
     try {
         if (render.layoutFuture.valid()) {
-            if (render.layoutFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) return false;
+            {
+                PROFILE_SCOPE("HTMLTile.WaitForLayout");
+                if (render.layoutFuture.wait_for(std::chrono::milliseconds(0)) !=
+                    std::future_status::ready) {
+                    return false;
+                }
+            }
+            PROFILE_SCOPE("HTMLTile.FinalizeLayout");
             if (!render.layoutFuture.get()) throw std::runtime_error("HTML layout limit");
             render.raster = html::FitRaster(render.Width(), render.Height());
             const auto raster = render.raster;
@@ -218,6 +234,7 @@ bool WikiTextureGenerator::GenerateHtmlTile(WikiTextureGenerationState& state) {
             return false;
         }
         const auto height = std::min(512u, state.remainingHeight);
+        PROFILE_SCOPE("HTMLTile.Total");
         D3D11_TEXTURE2D_DESC renderDesc{};
         renderDesc.Width=state.actualWidth; renderDesc.Height=height;
         renderDesc.MipLevels=renderDesc.ArraySize=1;
@@ -225,43 +242,80 @@ bool WikiTextureGenerator::GenerateHtmlTile(WikiTextureGenerationState& state) {
         renderDesc.SampleDesc.Count=1;
         renderDesc.BindFlags=D3D11_BIND_RENDER_TARGET;
         ComPtr<ID3D11Texture2D> renderTexture;
-        Check(m_d3dDevice->CreateTexture2D(&renderDesc,nullptr,&renderTexture));
         WikiTextureResult::Tile tile{};
-        ComPtr<IDXGISurface> surface; Check(renderTexture.As(&surface));
-        auto props=D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET|D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-            D2D1::PixelFormat(renderDesc.Format,D2D1_ALPHA_MODE_PREMULTIPLIED),96,96);
         ComPtr<ID2D1Bitmap1> bitmap;
-        Check(m_d2dContext->CreateBitmapFromDxgiSurface(surface.Get(),&props,&bitmap));
+        {
+            PROFILE_SCOPE("HTMLTile.CreateRenderTarget");
+            Check(m_d3dDevice->CreateTexture2D(&renderDesc,nullptr,&renderTexture));
+            ComPtr<IDXGISurface> surface;
+            Check(renderTexture.As(&surface));
+            auto props=D2D1::BitmapProperties1(
+                D2D1_BITMAP_OPTIONS_TARGET|D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+                D2D1::PixelFormat(renderDesc.Format,D2D1_ALPHA_MODE_PREMULTIPLIED),96,96);
+            Check(m_d2dContext->CreateBitmapFromDxgiSurface(surface.Get(),&props,&bitmap));
+        }
         m_d2dContext->SetTarget(bitmap.Get());
         m_d2dContext->SetTransform(D2D1::Matrix3x2F::Scale(render.raster.scaleX,render.raster.scaleY)*
             D2D1::Matrix3x2F::Translation(0,-static_cast<float>(state.currentOffsetY)));
-        m_d2dContext->BeginDraw(); m_d2dContext->Clear(D2D1::ColorF(1,1,1));
-        try { render.Draw(state.currentOffsetY/render.raster.scaleY, height/render.raster.scaleY); }
-        catch (...) { render.ResetClips(); m_d2dContext->EndDraw(); throw; }
-        Check(m_d2dContext->EndDraw());
+        render.textDraws = 0;
+        render.imageDraws = 0;
+        render.shapeDraws = 0;
+        {
+            PROFILE_SCOPE("HTMLTile.DrawTree");
+            m_d2dContext->BeginDraw();
+            m_d2dContext->Clear(D2D1::ColorF(1,1,1));
+            try {
+                render.Draw(state.currentOffsetY/render.raster.scaleY,
+                            height/render.raster.scaleY);
+            } catch (...) {
+                render.ResetClips();
+                m_d2dContext->EndDraw();
+                throw;
+            }
+        }
+        {
+            PROFILE_SCOPE("HTMLTile.EndDraw");
+            Check(m_d2dContext->EndDraw());
+        }
+#ifdef WIKIGOLF_PROFILING
+        auto& profiler = core::Profiler::Instance();
+        profiler.SetCounter("HTMLTile.TextDraws",
+                            static_cast<double>(render.textDraws));
+        profiler.SetCounter("HTMLTile.ImageDraws",
+                            static_cast<double>(render.imageDraws));
+        profiler.SetCounter("HTMLTile.ShapeDraws",
+                            static_cast<double>(render.shapeDraws));
+#endif
         m_d2dContext->SetTarget(nullptr);
         m_d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
         D3D11_TEXTURE2D_DESC textureDesc=renderDesc;
         textureDesc.MipLevels=0;
         textureDesc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         textureDesc.MiscFlags=D3D11_RESOURCE_MISC_GENERATE_MIPS;
-        Check(m_d3dDevice->CreateTexture2D(&textureDesc,nullptr,&tile.texture));
-        ComPtr<ID3D11DeviceContext> d3dContext;
-        m_d3dDevice->GetImmediateContext(&d3dContext);
-        d3dContext->CopySubresourceRegion(
-            tile.texture.Get(),0,0,0,0,renderTexture.Get(),0,nullptr);
-        D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-        srvDesc.Format=textureDesc.Format;
-        srvDesc.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;
-        srvDesc.Texture2D.MostDetailedMip=0;
-        srvDesc.Texture2D.MipLevels=UINT(-1);
-        Check(m_d3dDevice->CreateShaderResourceView(
-            tile.texture.Get(),&srvDesc,&tile.srv));
-        d3dContext->GenerateMips(tile.srv.Get());
+        {
+            PROFILE_SCOPE("HTMLTile.CreateTexture");
+            Check(m_d3dDevice->CreateTexture2D(&textureDesc,nullptr,&tile.texture));
+            D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+            srvDesc.Format=textureDesc.Format;
+            srvDesc.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MostDetailedMip=0;
+            srvDesc.Texture2D.MipLevels=UINT(-1);
+            Check(m_d3dDevice->CreateShaderResourceView(
+                tile.texture.Get(),&srvDesc,&tile.srv));
+        }
+        {
+            PROFILE_SCOPE("HTMLTile.CopyAndGenerateMips");
+            ComPtr<ID3D11DeviceContext> d3dContext;
+            m_d3dDevice->GetImmediateContext(&d3dContext);
+            d3dContext->CopySubresourceRegion(
+                tile.texture.Get(),0,0,0,0,renderTexture.Get(),0,nullptr);
+            d3dContext->GenerateMips(tile.srv.Get());
+        }
         tile.width=state.actualWidth; tile.height=height; tile.offsetY=static_cast<float>(state.currentOffsetY);
         state.result.tiles.push_back(std::move(tile));
         state.currentOffsetY+=height; state.remainingHeight-=height;
         if (state.remainingHeight) return false;
+        PROFILE_SCOPE("HTMLTile.Finalize");
         state.result.texture=state.result.tiles.front().texture;
         state.result.srv=state.result.tiles.front().srv;
         std::uint64_t cachedPixels = std::uint64_t(state.result.width)*state.result.height;

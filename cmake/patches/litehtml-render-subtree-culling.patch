@@ -1,0 +1,67 @@
+diff --git a/include/litehtml/render_item.h b/include/litehtml/render_item.h
+index 1c5dc139..45cf23f3 100644
+--- a/include/litehtml/render_item.h
++++ b/include/litehtml/render_item.h
+@@ -31,0 +32,2 @@ namespace litehtml
++        position                                  m_redraw_box;
++        bool                                      m_redraw_box_valid = false;
+@@ -463,0 +466 @@ namespace litehtml
++        void cache_redraw_box();
+diff --git a/src/document.cpp b/src/document.cpp
+index 9575298c..cf1bfe4e 100644
+--- a/src/document.cpp
++++ b/src/document.cpp
+@@ -560,0 +561 @@ namespace litehtml
++                m_root_render->cache_redraw_box();
+diff --git a/src/render_item.cpp b/src/render_item.cpp
+index 4f4976d6..33abddbf 100644
+--- a/src/render_item.cpp
++++ b/src/render_item.cpp
+@@ -797,0 +798,36 @@ void litehtml::render_item::add_positioned(const std::shared_ptr<litehtml::rende
++void litehtml::render_item::cache_redraw_box()
++{
++    m_redraw_box_valid = false;
++    if(!is_visible())
++    {
++        return;
++    }
++
++    const pixel_t left = m_pos.left() - m_padding.left - m_borders.left;
++    const pixel_t top = m_pos.top() - m_padding.top - m_borders.top;
++    const pixel_t right = m_pos.right() + m_padding.right + m_borders.right;
++    const pixel_t bottom = m_pos.bottom() + m_padding.bottom + m_borders.bottom;
++    m_redraw_box = position(left, top, right - left, bottom - top);
++    m_redraw_box_valid = true;
++
++    for(auto& child : m_children)
++    {
++        child->cache_redraw_box();
++        if(src_el()->css().get_overflow() != overflow_visible || !child->m_redraw_box_valid ||
++           child->src_el()->css().get_position() == element_position_fixed)
++        {
++            continue;
++        }
++
++        position child_box = child->m_redraw_box;
++        child_box.x += m_pos.x - get_scroll_left();
++        child_box.y += m_pos.y - get_scroll_top();
++        const pixel_t box_right = std::max(m_redraw_box.right(), child_box.right());
++        const pixel_t box_bottom = std::max(m_redraw_box.bottom(), child_box.bottom());
++        m_redraw_box.x = std::min(m_redraw_box.left(), child_box.left());
++        m_redraw_box.y = std::min(m_redraw_box.top(), child_box.top());
++        m_redraw_box.width = box_right - m_redraw_box.x;
++        m_redraw_box.height = box_bottom - m_redraw_box.y;
++    }
++}
++
+@@ -961,0 +998,10 @@ void litehtml::render_item::draw_children(uint_ptr hdc, pixel_t x, pixel_t y, co
++            if(flag != draw_positioned && clip && el->m_redraw_box_valid)
++            {
++                position redraw_box = el->m_redraw_box;
++                redraw_box.x += pos.x;
++                redraw_box.y += pos.y;
++                if(!redraw_box.does_intersect(clip, true))
++                {
++                    continue;
++                }
++            }

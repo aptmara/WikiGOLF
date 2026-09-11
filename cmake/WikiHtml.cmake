@@ -1,9 +1,16 @@
 include(FetchContent)
+find_package(Git REQUIRED)
 set(LITEHTML_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(LITEHTML_ENABLE_LINT OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(litehtml
     GIT_REPOSITORY https://github.com/litehtml/litehtml.git
     GIT_TAG c287df656a8b29bc63a6fe8b05e463034f44f7f2
+    PATCH_COMMAND
+        ${CMAKE_COMMAND}
+        -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
+        -DSOURCE_DIR=<SOURCE_DIR>
+        -DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/patches/litehtml-render-subtree-culling.patch
+        -P ${CMAKE_CURRENT_LIST_DIR}/ApplyGitPatch.cmake
 )
 FetchContent_MakeAvailable(litehtml)
 add_library(wiki_html STATIC
