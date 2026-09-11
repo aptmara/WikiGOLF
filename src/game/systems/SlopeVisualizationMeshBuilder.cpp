@@ -69,10 +69,16 @@ SlopeVisualizationMeshBuilder::BuildResult SlopeVisualizationMeshBuilder::Build(
 
       const SampledPoint sp = SamplePoint(terrain, worldX, worldZ, config);
 
+      // 中心からの正規化距離[0,1超も含む]。ピクセルシェーダー側で
+      // これを使って円形にフェードアウトさせ、円形オーバーレイに見せる。
+      const float dx = worldX - center.x;
+      const float dz = worldZ - center.z;
+      const float distNorm = std::sqrt(dx * dx + dz * dz) / (std::max)(config.radius, 0.01f);
+
       graphics::Vertex v;
       v.position  = {worldX, sp.height + config.heightOffset, worldZ};
       v.normal    = {0.0f, 1.0f, 0.0f};
-      v.texCoord  = {0.0f, 0.0f};
+      v.texCoord  = {distNorm, 0.0f};
       v.color     = SlopeToColor(sp.slope01);
       v.tangent   = {sp.downhill.x, 0.0f, sp.downhill.y};
       v.bitangent = {0.0f, 1.0f, 0.0f};

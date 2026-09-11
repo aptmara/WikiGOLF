@@ -99,7 +99,9 @@ void SlopeVisualizationSystem::RebuildMesh(core::GameContext &ctx,
     mr.hasTexture = false;
     mr.hasNormalMap = false;
     mr.isTransparent = true;
-    mr.blendMode = BlendMode::Alpha;
+    // 加算ブレンドにすることで、地面のHTML描画（ウィキ記事テクスチャ）を
+    // 覆い隠さずに傾斜の色だけを重ねて表示する
+    mr.blendMode = BlendMode::Add;
     mr.isVisible = false; // 直後のApplyFade()でフェード係数に応じて反映される
   } else if (auto *mr = ctx.world.Get<MeshRenderer>(m_overlayEntity)) {
     mr->mesh = meshHandle;

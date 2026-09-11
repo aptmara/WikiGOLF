@@ -16,7 +16,7 @@ cbuffer ConstantBuffer : register(b0) {
 struct VS_INPUT {
     float3 position : POSITION;   /**< ローカル座標（構築時にワールド座標として書き込み済み） */
     float3 normal : NORMAL;       /**< 未使用（常に真上を向く前提） */
-    float2 texCoord : TEXCOORD;   /**< 未使用 */
+    float2 texCoord : TEXCOORD;   /**< x=中心からの正規化距離[0,1超も含む]（円形フェード用） */
     float4 color : COLOR;         /**< rgb=傾斜カラー(青→赤), a=傾斜強度[0,1] */
     float3 tangent : TANGENT;     /**< 傾斜が下る方向（ワールドXZ、正規化、Y=0） */
     float3 bitangent : BINORMAL;  /**< 未使用 */
@@ -31,6 +31,7 @@ struct VS_OUTPUT {
     float4 color : COLOR;
     float3 flowDir : TEXCOORD0;   /**< ワールド空間の傾斜下り方向 */
     float2 worldXZ : TEXCOORD1;   /**< ワールドXZ座標（流れる縞の位相計算用） */
+    float distNorm : TEXCOORD2;   /**< 中心からの正規化距離[0,1超も含む]（円形フェード用） */
 };
 
 /**
@@ -48,6 +49,7 @@ VS_OUTPUT main(VS_INPUT input) {
     float3x3 world3x3 = (float3x3)World;
     output.flowDir = mul(input.tangent, world3x3);
     output.worldXZ = worldPos.xz;
+    output.distNorm = input.texCoord.x;
     output.color = input.color;
 
     return output;

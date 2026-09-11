@@ -16,7 +16,7 @@ class WikiTerrainSystem;
 
 /** @brief 傾斜可視化メッシュの生成パラメータ*/
 struct SlopeOverlayConfig {
-  float radius = 9.0f;         /**< ボール中心からの表示半径(m)*/
+  float radius = 13.0f;        /**< ボール中心からの表示半径(m)*/
   float cellSize = 0.5f;       /**< グリッドセル間隔(m)*/
   float sampleOffset = 0.35f;  /**< 勾配サンプリング用の隣接オフセット(m)*/
   float maxSlope = 0.12f;      /**< 色が最大(赤)になる傾斜(高さ差/水平距離)*/
@@ -41,7 +41,10 @@ public:
   };
 
   /**
-   * @brief 中心座標を基準に正方形グリッドの傾斜可視化メッシュを構築します。
+   * @brief 中心座標を基準に円形の傾斜可視化メッシュを構築します。
+   *        （内部的には正方形グリッドを生成し、各頂点のtexCoord.xに
+   *        中心からの正規化距離[0,1]を格納して、ピクセルシェーダー側で
+   *        円形にフェードアウトさせています）
    * @param terrain 高さ取得に使う地形システム
    * @param center 表示範囲の中心（通常はボール位置）
    * @param config 生成設定

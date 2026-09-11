@@ -23,6 +23,7 @@ struct PS_INPUT {
     float4 color : COLOR;        /**< rgb=傾斜カラー(青→赤), a=傾斜強度[0,1] */
     float3 flowDir : TEXCOORD0;  /**< ワールド空間の傾斜下り方向 */
     float2 worldXZ : TEXCOORD1;  /**< ワールドXZ座標 */
+    float distNorm : TEXCOORD2;  /**< 中心からの正規化距離[0,1超も含む]（円形フェード用） */
 };
 
 /**
@@ -54,10 +55,16 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float triWave = 1.0f - abs(phase * 2.0f - 1.0f); // 0→1→0の三角波
     float arrow = smoothstep(0.55f, 0.97f, triWave);
 
-    // 傾斜が緩やかな場所は縞を目立たせず、急な場所ほど強く流す
-    float baseAlpha = lerp(0.08f, 0.50f, slope);
-    float flowAlpha = arrow * lerp(0.0f, 0.85f, slope);
+    // 加算ブレンドで合成するため、地面のHTML描画を覆い隠さないよう
+    // 強度は控えめに留める（傾斜が緩やかな場所は縞を目立たせず、急な場所ほど強く流す）
+    float baseAlpha = lerp(0.05f, 0.28f, slope);
+    float flowAlpha = arrow * lerp(0.0f, 0.45f, slope);
     float alpha = saturate(baseAlpha + flowAlpha) * fade;
+
+    // 中心からの距離に応じて円形にフェードアウトさせ、正方形グリッドの
+    // 角を隠して円形オーバーレイに見せる（外周にごく薄いソフトエッジ）
+    float circleFade = 1.0f - smoothstep(0.85f, 1.0f, input.distNorm);
+    alpha *= circleFade;
 
     return float4(input.color.rgb, alpha);
 }
