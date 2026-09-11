@@ -39,13 +39,20 @@ ProfilerFrameSnapshot Profiler::MakeSnapshot(const FrameData &frame) const {
   snapshot.privateMb = frame.process.privateMb;
   snapshot.gpuReceived = frame.gpuReceived;
   snapshot.gpuValid = frame.gpuValid;
+  snapshot.pipelineStatsValid = frame.pipelineStatsValid;
   snapshot.gpuScopes = frame.gpuScopes;
   snapshot.pipeline = frame.pipeline;
 
   snapshot.cpuScopes.reserve(frame.cpuScopes.size());
-  for (const auto &[name, scope] : frame.cpuScopes) {
-    snapshot.cpuScopes.push_back(
-        {name, scope.inclusiveMs, scope.exclusiveMs, scope.calls});
+  for (const auto &[id, scope] : frame.cpuScopes) {
+    if (id >= m_scopeMetadata.size()) {
+      continue;
+    }
+    const auto &metadata = m_scopeMetadata[id];
+    snapshot.cpuScopes.push_back({metadata.name, scope.inclusiveMs,
+                                  scope.exclusiveMs, scope.calls,
+                                  metadata.function, metadata.file,
+                                  metadata.line});
   }
   std::sort(snapshot.cpuScopes.begin(), snapshot.cpuScopes.end(),
             [](const auto &lhs, const auto &rhs) {
@@ -53,8 +60,10 @@ ProfilerFrameSnapshot Profiler::MakeSnapshot(const FrameData &frame) const {
             });
 
   snapshot.counters.reserve(frame.counters.size());
-  for (const auto &[name, value] : frame.counters) {
-    snapshot.counters.push_back({name, value});
+  for (const auto &[id, value] : frame.counters) {
+    if (id < m_counterNames.size()) {
+      snapshot.counters.push_back({m_counterNames[id], value});
+    }
   }
   std::sort(snapshot.counters.begin(), snapshot.counters.end(),
             [](const auto &lhs, const auto &rhs) {

@@ -113,9 +113,13 @@ void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
     if (!queryFrame.issued) {
       queryFrame.frameIndex = profileFrameIndex;
       queryFrame.usedScopeCount = 0;
+      queryFrame.pipelineIssued =
+          (profileFrameIndex % kPipelineStatisticsInterval) == 0;
       m_context->Begin(queryFrame.disjoint.Get());
       m_context->End(queryFrame.frameStart.Get());
-      m_context->Begin(queryFrame.pipeline.Get());
+      if (queryFrame.pipelineIssued) {
+        m_context->Begin(queryFrame.pipeline.Get());
+      }
       m_currentGpuQueryFrame = &queryFrame;
     }
   }
@@ -307,7 +311,9 @@ void GraphicsDevice::EndFrame() {
     while (!m_gpuScopeStack.empty()) {
       EndGpuScope();
     }
-    m_context->End(m_currentGpuQueryFrame->pipeline.Get());
+    if (m_currentGpuQueryFrame->pipelineIssued) {
+      m_context->End(m_currentGpuQueryFrame->pipeline.Get());
+    }
     m_context->End(m_currentGpuQueryFrame->frameEnd.Get());
     m_context->End(m_currentGpuQueryFrame->disjoint.Get());
     m_currentGpuQueryFrame->issued = true;

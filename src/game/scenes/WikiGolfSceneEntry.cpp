@@ -9,6 +9,7 @@
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
+#include "../../core/Profiler.h"
 #include "../../core/SceneManager.h"
 #include "../../ecs/World.h"
 #include "../../graphics/GraphicsDevice.h"
@@ -62,6 +63,7 @@ const char *EntityAliveLabel(const ecs::World &world, ecs::Entity entity) {
  * @brief シーンに侵入した際の初期化処理を行います。
 */
 void WikiGolfScene::OnEnter(core::GameContext &ctx) {
+  PROFILE_SCOPE("WikiGolf.OnEnter");
   LOG_INFO("WikiGolf", "OnEnter");
 
   m_tutorialCupInFired = false;

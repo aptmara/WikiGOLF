@@ -23,11 +23,67 @@
 
 namespace core {
 
-void Profiler::BeginScope(std::string_view name) {
+Profiler::MetricId Profiler::InternScope(std::string_view name,
+                                        std::string_view function,
+                                        std::string_view file, uint32_t line) {
+  uint64_t hash = 1469598103934665603ull;
+  const auto appendHash = [&hash](std::string_view value) {
+    for (const unsigned char character : value) {
+      hash ^= character;
+      hash *= 1099511628211ull;
+    }
+    hash ^= 0xff;
+    hash *= 1099511628211ull;
+  };
+  appendHash(name);
+  appendHash(function);
+  appendHash(file);
+  hash ^= line;
+  hash *= 1099511628211ull;
+  const auto found = m_scopeIds.find(hash);
+  if (found != m_scopeIds.end()) {
+    for (const auto id : found->second) {
+      const auto &metadata = m_scopeMetadata[id];
+      if (metadata.name == name && metadata.function == function &&
+          metadata.file == file && metadata.line == line) {
+        return id;
+      }
+    }
+  }
+  const auto id = static_cast<MetricId>(m_scopeMetadata.size());
+  m_scopeMetadata.push_back(
+      {std::string(name), std::string(function), std::string(file), line});
+  m_scopeIds[hash].push_back(id);
+  return id;
+}
+
+Profiler::MetricId Profiler::InternCounter(std::string_view name) {
+  uint64_t hash = 1469598103934665603ull;
+  for (const unsigned char character : name) {
+    hash ^= character;
+    hash *= 1099511628211ull;
+  }
+  const auto found = m_counterIds.find(hash);
+  if (found != m_counterIds.end()) {
+    for (const auto id : found->second) {
+      if (m_counterNames[id] == name) {
+        return id;
+      }
+    }
+  }
+  const auto id = static_cast<MetricId>(m_counterNames.size());
+  m_counterNames.emplace_back(name);
+  m_counterIds[hash].push_back(id);
+  return id;
+}
+
+void Profiler::BeginScope(std::string_view name, std::string_view function,
+                          std::string_view file, uint32_t line) {
   if (!m_frameActive) {
     return;
   }
-  m_scopeStack.push_back(ActiveScope{std::string(name), Clock::now(), 0.0});
+  m_scopeStack.push_back(
+      ActiveScope{InternScope(name, function, file, line), Clock::now(), 0.0});
 }
 
 void Profiler::EndScope() {
@@ -39,7 +95,7 @@ void Profiler::EndScope() {
   m_scopeStack.pop_back();
   const double inclusiveMs = profiler_detail::ToMilliseconds(Clock::now() - scope.startedAt);
   const double exclusiveMs = std::max(0.0, inclusiveMs - scope.childMs);
-  auto &result = m_frameScopes[scope.name];
+  auto &result = m_frameScopes[scope.id];
   result.inclusiveMs += inclusiveMs;
   result.exclusiveMs += exclusiveMs;
   ++result.calls;
@@ -51,13 +107,13 @@ void Profiler::EndScope() {
 
 void Profiler::SetCounter(std::string_view name, double value) {
   if (m_frameActive) {
-    m_frameCounters[std::string(name)] = value;
+    m_frameCounters[InternCounter(name)] = value;
   }
 }
 
 void Profiler::AddCounter(std::string_view name, double value) {
   if (m_frameActive) {
-    m_frameCounters[std::string(name)] += value;
+    m_frameCounters[InternCounter(name)] += value;
   }
 }
 
@@ -68,8 +124,10 @@ void Profiler::SubmitGpuFrame(GpuFrameSample sample) {
   }
   frame->gpuReceived = true;
   frame->gpuValid = sample.valid;
+  frame->pipelineStatsValid = sample.pipelineValid;
   frame->gpuScopes = std::move(sample.scopes);
   frame->pipeline = sample.pipeline;
+  FinalizeFrame(*frame);
 }
 
 Profiler::FrameData *Profiler::FindFrame(uint64_t frameIndex) {

@@ -32,7 +32,8 @@ namespace {
 
 constexpr float kGrassStreamChunkSize = 12.0f;
 constexpr float kGrassStreamingPadding = 24.0f;
-constexpr size_t kGrassChunksGeneratedPerFrame = 4;
+constexpr size_t kGrassInstancesGeneratedPerBuildFrame = 128;
+constexpr size_t kGrassInstancesGeneratedPerStreamingFrame = 512;
 
 float GrassStreamingDrawDistance(core::GraphicsPreset preset) {
   if (preset == core::GraphicsPreset::Ultra) {
@@ -62,23 +63,27 @@ void WikiTerrainSystem::BeginSurfaceGrassBuild(core::GameContext &ctx,
 
 bool WikiTerrainSystem::StepSurfaceGrassBuild(core::GameContext &ctx) {
   UpdateSurfaceGrassChunks(ctx, 0.0f, 0.0f,
-                           kGrassChunksGeneratedPerFrame);
-  return m_pendingSurfaceGrassChunks.empty();
+                           kGrassInstancesGeneratedPerBuildFrame);
+  return m_pendingSurfaceGrassChunks.empty() &&
+         !m_surfaceGrassChunkBuild.active;
 }
 
-void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
-                                                  int streamChunkX,
-                                                  int streamChunkZ) {
+bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
+    core::GameContext &ctx, int streamChunkX, int streamChunkZ,
+    size_t instanceBudget, size_t &generatedInstances) {
+  generatedInstances = 0;
   const float fieldWidth = m_grassFieldWidth;
   const float fieldDepth = m_grassFieldDepth;
   if (!m_terrainData || fieldWidth <= 0.0f || fieldDepth <= 0.0f) {
-    return;
+    m_surfaceGrassChunkBuild = {};
+    return true;
   }
 
   const int resX = m_terrainData->config.resolutionX;
   const int resZ = m_terrainData->config.resolutionZ;
   if (resX < 2 || resZ < 2 || m_terrainData->materialMap.empty()) {
-    return;
+    m_surfaceGrassChunkBuild = {};
+    return true;
   }
 
   core::GraphicsPreset graphicsPreset = core::GraphicsPreset::High;
@@ -86,7 +91,8 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
     graphicsPreset = ctx.displaySettings->GetEffectiveGraphicsPreset();
   }
   if (graphicsPreset == core::GraphicsPreset::Low) {
-    return;
+    m_surfaceGrassChunkBuild = {};
+    return true;
   }
 
   struct VegetationQuality {
@@ -143,10 +149,17 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
       static_cast<float>(streamChunkZ + 1) * kGrassStreamChunkSize);
   if (streamingBounds.minX >= streamingBounds.maxX ||
       streamingBounds.minZ >= streamingBounds.maxZ) {
-    return;
+    m_surfaceGrassChunkBuild = {};
+    return true;
   }
   const uint64_t streamChunkKey =
       MakeGrassStreamChunkKey(streamChunkX, streamChunkZ);
+  if (!m_surfaceGrassChunkBuild.active ||
+      m_surfaceGrassChunkBuild.chunkKey != streamChunkKey) {
+    m_surfaceGrassChunkBuild = {};
+    m_surfaceGrassChunkBuild.active = true;
+    m_surfaceGrassChunkBuild.chunkKey = streamChunkKey;
+  }
   auto &ownedEntities = m_surfaceGrassEntitiesByChunk[streamChunkKey];
 
   auto materialAt = [&](float x, float z) {
@@ -260,7 +273,8 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
     grassSpatialIndex = ctx.world.GetGlobal<GrassRenderSpatialIndex>();
   }
   if (!grassSpatialIndex) {
-    return;
+    m_surfaceGrassChunkBuild = {};
+    return true;
   }
   grassSpatialIndex->chunkSize = kGrassStreamChunkSize;
   enum class GrassSurfaceGroup {
@@ -269,35 +283,12 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
     Fairway,
     Green,
   };
-  struct GrassBatchKey {
-    int chunkX = 0;
-    int chunkZ = 0;
-    int variantIndex = 0;
-    GrassSurfaceGroup surface = GrassSurfaceGroup::Rough;
-
-    bool operator==(const GrassBatchKey &other) const {
-      return chunkX == other.chunkX && chunkZ == other.chunkZ &&
-             variantIndex == other.variantIndex && surface == other.surface;
-    }
-  };
-  struct GrassBatchKeyHash {
-    size_t operator()(const GrassBatchKey &key) const {
-      size_t hash = static_cast<size_t>(key.chunkX);
-      hash = hash * 31u + static_cast<size_t>(key.chunkZ);
-      hash = hash * 31u + static_cast<size_t>(key.variantIndex);
-      hash = hash * 31u + static_cast<size_t>(key.surface);
-      return hash;
-    }
-  };
-
-  std::unordered_map<GrassBatchKey, ecs::Entity, GrassBatchKeyHash>
-      grassBatches;
   auto appendGrassInstance =
       [&](float x, float y, float z, float horizontalScale,
           float heightScale, const XMFLOAT4 &rotation, const XMFLOAT4 &color,
           resources::MeshHandle mesh, resources::MeshHandle lodMesh,
           int variantIndex, GrassSurfaceGroup surface, float lodSwitchDistance,
-          float maxDrawDistance, bool twoSided) {
+          float maxDrawDistance, bool twoSided) -> bool {
         // GrassVSの距離ディザーが完了する前にCPU側でインスタンスを
         // 丸ごと落とすと、残っていた葉がパッチ形状のまま瞬時に消える。
         // 最遠頂点までフェード終了距離へ到達できる余白を確保する。
@@ -305,17 +296,13 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
         const float effectiveMaxDrawDistance =
             std::max(maxDrawDistance, shaderFadeEnd + horizontalScale);
 
-        GrassBatchKey key;
-        key.chunkX =
-            static_cast<int>(std::floor(x / kGrassStreamChunkSize));
-        key.chunkZ =
-            static_cast<int>(std::floor(z / kGrassStreamChunkSize));
-        key.variantIndex = variantIndex;
-        key.surface = surface;
+        const uint32_t batchKey =
+            static_cast<uint32_t>(surface) * kGrassVariantCount +
+            static_cast<uint32_t>(variantIndex);
 
         ecs::Entity batchEntity = 0xFFFFFFFF;
-        const auto batchIt = grassBatches.find(key);
-        if (batchIt == grassBatches.end()) {
+        const auto batchIt = m_surfaceGrassChunkBuild.batches.find(batchKey);
+        if (batchIt == m_surfaceGrassChunkBuild.batches.end()) {
           batchEntity = ctx.world.CreateEntity();
           auto &newBatch = ctx.world.Add<GrassRenderBatch>(batchEntity);
           newBatch.mesh = mesh;
@@ -329,10 +316,10 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
             newBatch.maxThreeDOverheadRatio = 0.75f;
           }
           newBatch.twoSided = twoSided;
-          grassBatches.emplace(key, batchEntity);
+          m_surfaceGrassChunkBuild.batches.emplace(batchKey, batchEntity);
           grassSpatialIndex
               ->batchesByChunk[GrassRenderSpatialIndex::MakeKey(
-                  key.chunkX, key.chunkZ)]
+                  streamChunkX, streamChunkZ)]
               .push_back(batchEntity);
           m_entities.push_back(batchEntity);
           m_surfaceGrassEntities.push_back(batchEntity);
@@ -344,7 +331,7 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
 
         auto *batch = ctx.world.Get<GrassRenderBatch>(batchEntity);
         if (!batch) {
-          return;
+          return false;
         }
         batch->maxDrawDistance =
             std::max(batch->maxDrawDistance, effectiveMaxDrawDistance);
@@ -363,11 +350,11 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
         instance.color = color;
         instance.position = transform.position;
 
-        const size_t instanceIndex = batch->instances.size();
-        batch->instances.push_back(instance);
-
         const float horizontalExtent = horizontalScale;
         const float verticalExtent = std::max(0.08f, heightScale * 1.35f);
+
+        const size_t instanceIndex = batch->instances.size();
+        batch->instances.push_back(instance);
         batch->boundsMin.x =
             std::min(batch->boundsMin.x, x - horizontalExtent);
         batch->boundsMin.y =
@@ -387,6 +374,7 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
         grass.position = transform.position;
         grass.halfExtent = horizontalScale * 0.72f;
         m_grassPatches.push_back(grass);
+        return true;
       };
 
   const float startX = -0.5f * static_cast<float>(columns - 1) * spacing;
@@ -406,6 +394,7 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
           (streamingBounds.maxZ - startZ + roughJitterRadius) / spacing)),
       0, rows - 1);
 
+  size_t roughCellIndex = 0;
   for (int row = firstRow; row <= lastRow; ++row) {
     // 一行ごとに半間隔ずらす千鳥配置で、格子模様の集合体に見えるのを防ぐ。
     float rowStagger = spacing * 0.5f;
@@ -425,6 +414,11 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
             spacing)),
         0, columns - 1);
     for (int column = firstColumn; column <= lastColumn; ++column) {
+      ++roughCellIndex;
+      if (roughCellIndex <= m_surfaceGrassChunkBuild.roughCellIndex) {
+        continue;
+      }
+      m_surfaceGrassChunkBuild.roughCellIndex = roughCellIndex;
       const unsigned cellSeed = MakeGrassCellSeed(grassSeed, row, column);
       const float jitterX =
           (GrassRandom01(cellSeed, 0) * 2.0f - 1.0f) * roughJitterRadius;
@@ -498,12 +492,17 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
       if (isSemiRough) {
         drawDistance = quality.semiRoughDrawDistance;
       }
-      appendGrassInstance(
-          x, terrainHeight + 0.003f, z,
-          horizontalScale * slopeFootprintScale, heightScale,
-          rotation, color, grassMeshVariants[variantIndex],
-          resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
-          drawDistance, false);
+      if (appendGrassInstance(
+              x, terrainHeight + 0.003f, z,
+              horizontalScale * slopeFootprintScale, heightScale, rotation,
+              color, grassMeshVariants[variantIndex],
+              resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
+              drawDistance, false)) {
+        ++generatedInstances;
+        if (generatedInstances >= instanceBudget) {
+          return false;
+        }
+      }
     }
   }
 
@@ -581,8 +580,14 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
           (streamingBounds.maxX - turfStartX) / turfSpacing)),
       0, turfColumns - 1);
 
+  size_t turfCellIndex = 0;
   for (int row = firstTurfRow; row <= lastTurfRow; ++row) {
     for (int column = firstTurfColumn; column <= lastTurfColumn; ++column) {
+      ++turfCellIndex;
+      if (turfCellIndex <= m_surfaceGrassChunkBuild.turfCellIndex) {
+        continue;
+      }
+      m_surfaceGrassChunkBuild.turfCellIndex = turfCellIndex;
       const float x =
           turfStartX + static_cast<float>(column) * turfSpacing;
       const float z = turfStartZ + static_cast<float>(row) * turfSpacing;
@@ -674,14 +679,21 @@ void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,
         lodDistance = quality.greenLodDistance;
         drawDistance = quality.greenDrawDistance;
       }
-      appendGrassInstance(
-          x, terrainHeight + 0.0015f, z,
-          turfHorizontalScale * slopeFootprintScale, heightScale,
-          rotation, color, nearTurfMesh, midTurfMesh, variantIndex, surface,
-          lodDistance, drawDistance, true);
+      if (appendGrassInstance(
+              x, terrainHeight + 0.0015f, z,
+              turfHorizontalScale * slopeFootprintScale, heightScale,
+              rotation, color, nearTurfMesh, midTurfMesh, variantIndex,
+              surface, lodDistance, drawDistance, true)) {
+        ++generatedInstances;
+        if (generatedInstances >= instanceBudget) {
+          return false;
+        }
+      }
     }
   }
 
+  m_surfaceGrassChunkBuild = {};
+  return true;
 }
 
 void WikiTerrainSystem::ClearSurfaceGrass(core::GameContext &ctx) {
@@ -701,6 +713,7 @@ void WikiTerrainSystem::ClearSurfaceGrass(core::GameContext &ctx) {
   m_surfaceGrassEntities.clear();
   m_surfaceGrassEntitiesByChunk.clear();
   m_pendingSurfaceGrassChunks.clear();
+  m_surfaceGrassChunkBuild = {};
   m_grassPatches.clear();
   m_grassViewChunkX = (std::numeric_limits<int>::max)();
   m_grassViewChunkZ = (std::numeric_limits<int>::max)();
@@ -822,6 +835,11 @@ void WikiTerrainSystem::UpdateSurfaceGrassChunks(
       }
     }
     RemoveSurfaceGrassChunks(ctx, chunksToRemove);
+    if (m_surfaceGrassChunkBuild.active &&
+        desiredChunks.find(m_surfaceGrassChunkBuild.chunkKey) ==
+            desiredChunks.end()) {
+      m_surfaceGrassChunkBuild = {};
+    }
 
     struct PendingChunk {
       uint64_t key = 0;
@@ -850,16 +868,35 @@ void WikiTerrainSystem::UpdateSurfaceGrassChunks(
   }
 
   size_t generatedChunks = 0;
-  while (!m_pendingSurfaceGrassChunks.empty() &&
-         generatedChunks < generationBudget) {
-    const uint64_t chunkKey = m_pendingSurfaceGrassChunks.front();
-    m_pendingSurfaceGrassChunks.pop_front();
-    if (m_surfaceGrassEntitiesByChunk.find(chunkKey) ==
-        m_surfaceGrassEntitiesByChunk.end()) {
-      GenerateSurfaceGrassChunk(ctx, GrassStreamChunkX(chunkKey),
-                                GrassStreamChunkZ(chunkKey));
+  size_t generatedInstances = 0;
+  while (generatedInstances < generationBudget) {
+    if (!m_surfaceGrassChunkBuild.active) {
+      if (m_pendingSurfaceGrassChunks.empty()) {
+        break;
+      }
+      const uint64_t chunkKey = m_pendingSurfaceGrassChunks.front();
+      m_pendingSurfaceGrassChunks.pop_front();
+      if (m_surfaceGrassEntitiesByChunk.find(chunkKey) !=
+          m_surfaceGrassEntitiesByChunk.end()) {
+        continue;
+      }
+      m_surfaceGrassChunkBuild.active = true;
+      m_surfaceGrassChunkBuild.chunkKey = chunkKey;
     }
-    ++generatedChunks;
+
+    size_t chunkInstances = 0;
+    const uint64_t chunkKey = m_surfaceGrassChunkBuild.chunkKey;
+    const bool completed = GenerateSurfaceGrassChunk(
+        ctx, GrassStreamChunkX(chunkKey), GrassStreamChunkZ(chunkKey),
+        generationBudget - generatedInstances, chunkInstances);
+    generatedInstances += chunkInstances;
+    if (completed) {
+      ++generatedChunks;
+      continue;
+    }
+    if (chunkInstances == 0) {
+      break;
+    }
   }
   auto &profiler = core::Profiler::Instance();
   profiler.SetCounter("GrassStreaming.ActiveChunks",
@@ -869,6 +906,8 @@ void WikiTerrainSystem::UpdateSurfaceGrassChunks(
                       static_cast<double>(m_pendingSurfaceGrassChunks.size()));
   profiler.SetCounter("GrassStreaming.GeneratedChunks",
                       static_cast<double>(generatedChunks));
+  profiler.SetCounter("GrassStreaming.GeneratedInstances",
+                      static_cast<double>(generatedInstances));
 }
 
 void WikiTerrainSystem::UpdateSurfaceGrass(core::GameContext &ctx,
@@ -884,7 +923,7 @@ void WikiTerrainSystem::UpdateSurfaceGrass(core::GameContext &ctx,
 
   UpdateSurfaceGrassChunks(ctx, cameraTransform->position.x,
                            cameraTransform->position.z,
-                           kGrassChunksGeneratedPerFrame);
+                           kGrassInstancesGeneratedPerStreamingFrame);
 }
 
 } // namespace game::systems

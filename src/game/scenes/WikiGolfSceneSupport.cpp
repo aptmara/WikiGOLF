@@ -5,11 +5,13 @@
 
 #include "WikiGolfSceneSupport.h"
 #include "../../core/GameContext.h"
+#include "../../core/Profiler.h"
 #include "../../resources/ResourceManager.h"
 
 namespace game::scenes::scene_detail {
 
 void PreloadGameplayResources(core::GameContext& ctx) {
+    PROFILE_SCOPE("WikiGolf.PreloadGameplayResources");
     ctx.resource.LoadMesh("builtin/cube");
     ctx.resource.LoadMesh("builtin/sphere");
     ctx.resource.LoadMesh("builtin/cylinder");

@@ -4,6 +4,7 @@
 */
 
 #include "WikiTerrainSystem.h"
+#include "TerrainMaterialAssets.h"
 #include "HtmlTerrainRegions.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../../core/DisplaySettings.h"
@@ -139,29 +140,12 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
   m_biome = biome;
 
   // 地形用テクスチャ配列のロード
-  std::vector<std::string> albedoPaths = {
-      "Assets/textures/terrain_materials/terrain_00_fairway_albedo.png",
-      "Assets/textures/terrain_materials/terrain_01_rough_albedo.png",
-      "Assets/textures/terrain_materials/terrain_02_bunker_albedo.png",
-      "Assets/textures/terrain_materials/terrain_03_green_albedo.png",
-      "Assets/textures/terrain_materials/terrain_04_ice_albedo.png",
-      "Assets/textures/terrain_materials/terrain_05_water_albedo.png",
-      "Assets/textures/terrain_materials/terrain_06_lava_albedo.png",
-      "Assets/textures/terrain_materials/terrain_07_stone_albedo.png"};
-  std::vector<std::string> normalPaths = {
-      "Assets/textures/terrain_materials/terrain_00_fairway_normal_dx.png",
-      "Assets/textures/terrain_materials/terrain_01_rough_normal_dx.png",
-      "Assets/textures/terrain_materials/terrain_02_bunker_normal_dx.png",
-      "Assets/textures/terrain_materials/terrain_03_green_normal_dx.png",
-      "Assets/textures/terrain_materials/terrain_04_ice_normal_dx.png",
-      "Assets/textures/terrain_materials/terrain_05_water_normal_dx.png",
-      "Assets/textures/terrain_materials/terrain_06_lava_normal_dx.png",
-      "Assets/textures/terrain_materials/terrain_07_stone_normal_dx.png"};
-
   auto terrainAlbedoSRV =
-      ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray", albedoPaths);
+      ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray",
+                                       TerrainAlbedoTexturePaths());
   auto terrainNormalSRV =
-      ctx.resource.LoadTextureArraySRV("TerrainNormalArray", normalPaths);
+      ctx.resource.LoadTextureArraySRV("TerrainNormalArray",
+                                       TerrainNormalTexturePaths());
   auto terrainShader = ctx.resource.LoadShader(
       "Terrain", L"Assets/shaders/TerrainVS.hlsl", L"Assets/shaders/TerrainPS.hlsl");
 

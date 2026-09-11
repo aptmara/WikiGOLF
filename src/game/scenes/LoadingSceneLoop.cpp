@@ -7,6 +7,7 @@
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
+#include "../../core/Profiler.h"
 #include "../../core/SceneManager.h"
 #include "../../graphics/TextRenderer.h"
 #include "../../graphics/WikiTextureGenerator.h"
@@ -29,11 +30,13 @@
 namespace game::scenes {
 
 void LoadingScene::OnUpdate(core::GameContext &ctx) {
+  PROFILE_SCOPE("LoadingScene.OnUpdate");
   float dt = ctx.dt;
   m_sceneTime += dt;
 
   // ゲームプレイ用アセットを1フレームに1件だけ先行ロード
   if (m_preloadIndex < m_preloadTasks.size()) {
+    PROFILE_SCOPE("LoadingScene.PreloadTask");
     m_preloadTasks[m_preloadIndex](ctx);
     ++m_preloadIndex;
     if (m_preloadIndex >= m_preloadTasks.size() && !m_preloadComplete) {

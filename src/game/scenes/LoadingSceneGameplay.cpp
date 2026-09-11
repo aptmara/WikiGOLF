@@ -16,6 +16,7 @@
 #include "../components/UIText.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
+#include "../systems/TerrainMaterialAssets.h"
 #include "LoadingSceneUtils.h"
 #include <algorithm>
 #include <array>
@@ -29,6 +30,23 @@
 namespace game::scenes {
 
 void LoadingScene::BuildGameplayPreloadQueue() {
+  m_preloadTasks.emplace_back([](core::GameContext &ctx) {
+    ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray",
+                                     game::systems::TerrainAlbedoTexturePaths());
+  });
+  m_preloadTasks.emplace_back([](core::GameContext &ctx) {
+    ctx.resource.LoadTextureArraySRV("TerrainNormalArray",
+                                     game::systems::TerrainNormalTexturePaths());
+  });
+  m_preloadTasks.emplace_back([](core::GameContext &ctx) {
+    ctx.resource.LoadShader("Terrain", L"Assets/shaders/TerrainVS.hlsl",
+                            L"Assets/shaders/TerrainPS.hlsl");
+  });
+  m_preloadTasks.emplace_back([](core::GameContext &ctx) {
+    ctx.resource.LoadShader("Wall", L"Assets/shaders/WallVS.hlsl",
+                            L"Assets/shaders/WallPS.hlsl");
+  });
+
   // クラブアイコン（Club_01〜Club_09）
   static const std::array<const char *, 9> kClubTextures = {
       "Assets/textures/Club_01_1W_Driver.png",

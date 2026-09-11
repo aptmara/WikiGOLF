@@ -51,10 +51,17 @@ void Profiler::Initialize(const std::filesystem::path &outputRoot) {
   m_frames.clear();
   m_frames.reserve(36000);
   m_frameLookup.clear();
+  m_sceneSummary.clear();
+  m_cpuSummary.clear();
+  m_gpuSummary.clear();
+  m_slowFrames.clear();
+  m_finalizedFrameCount = 0;
+  m_gpuValidFrameCount = 0;
   m_currentFrameIndex = 0;
   m_lastReportAt = Clock::now();
   m_lastProcessSampleAt = m_lastReportAt;
-  CaptureProcessMetrics();
+  m_cachedProcessMetrics = CaptureProcessMetrics();
+  OpenRawReports();
   m_initialized = true;
 
   LOG_INFO("Profiler", "Detailed profiler started. Output='{}'",
@@ -68,7 +75,14 @@ void Profiler::Shutdown() {
   if (m_frameActive) {
     EndFrame();
   }
+  for (auto &frame : m_frames) {
+    FinalizeFrame(frame);
+  }
   WriteReports();
+  m_framesFile.close();
+  m_scopesFile.close();
+  m_countersFile.close();
+  m_slowFramesFile.close();
   LOG_INFO("Profiler", "Detailed profiler stopped. Frames={} Output='{}'",
            m_frames.size(), m_outputDirectory.string());
   m_initialized = false;
@@ -112,7 +126,12 @@ void Profiler::EndFrame() {
   frame.scene = m_currentScene;
   frame.cpuFrameMs = profiler_detail::ToMilliseconds(profilerStartedAt - m_frameStartedAt);
   frame.entityCount = m_currentEntityCount;
-  frame.process = CaptureProcessMetrics();
+  const auto now = Clock::now();
+  if (now - m_lastProcessSampleAt >= std::chrono::milliseconds(250)) {
+    m_cachedProcessMetrics = CaptureProcessMetrics();
+    frame.processSampled = true;
+  }
+  frame.process = m_cachedProcessMetrics;
   frame.cpuScopes = std::move(m_frameScopes);
   frame.counters = std::move(m_frameCounters);
 
@@ -120,8 +139,8 @@ void Profiler::EndFrame() {
   m_frames.push_back(std::move(frame));
   m_frameActive = false;
 
-  const auto now = Clock::now();
-  if (now - m_lastReportAt >= std::chrono::seconds(1)) {
+  const auto reportNow = Clock::now();
+  if (reportNow - m_lastReportAt >= std::chrono::seconds(1)) {
     LogIntervalReport();
     m_lastReportAt = Clock::now();
     m_lastReportFrame = m_frames.size();
@@ -129,6 +148,12 @@ void Profiler::EndFrame() {
 
   m_frames.back().profilerOverheadMs =
       profiler_detail::ToMilliseconds(Clock::now() - profilerStartedAt);
+
+  constexpr size_t kMaximumGpuLatencyFrames = 16;
+  if (m_frames.size() > kMaximumGpuLatencyFrames) {
+    auto &expired = m_frames[m_frames.size() - kMaximumGpuLatencyFrames - 1];
+    FinalizeFrame(expired);
+  }
 }
 
 } // namespace core

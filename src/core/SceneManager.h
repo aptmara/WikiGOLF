@@ -5,6 +5,7 @@
 */
 
 #include "Logger.h"
+#include "Profiler.h"
 #include "Scene.h"
 #include <chrono>
 #include <memory>
@@ -44,11 +45,13 @@ public:
 
   /** @brief フレーム更新（遷移処理とOnUpdate呼び出し）*/
   void Update(GameContext &ctx) {
-    // 遷移リクエストを処理
-    ProcessPendingOp(ctx);
+    {
+      PROFILE_SCOPE("SceneManager.ProcessPendingOp");
+      ProcessPendingOp(ctx);
+    }
 
-    // 現在のシーンを更新
     if (auto *scene = Current()) {
+      PROFILE_SCOPE("SceneManager.OnUpdate");
       scene->OnUpdate(ctx);
     }
   }
@@ -93,7 +96,10 @@ private:
       if (m_pendingScene) {
         LOG_INFO("SceneManager", "Push: {}", m_pendingScene->GetName());
         const auto enterStartedAt = std::chrono::steady_clock::now();
-        m_pendingScene->OnEnter(ctx);
+        {
+          PROFILE_SCOPE("SceneManager.OnEnter");
+          m_pendingScene->OnEnter(ctx);
+        }
         LOG_INFO("SceneManager", "OnEnter finished: {} ({} ms)",
                  m_pendingScene->GetName(), ElapsedMs(enterStartedAt));
         m_sceneStack.push_back(std::move(m_pendingScene));
@@ -105,7 +111,10 @@ private:
         LOG_INFO("SceneManager", "Pop: {}", m_sceneStack.back()->GetName());
         const std::string sceneName = m_sceneStack.back()->GetName();
         const auto exitStartedAt = std::chrono::steady_clock::now();
-        m_sceneStack.back()->OnExit(ctx);
+        {
+          PROFILE_SCOPE("SceneManager.OnExit");
+          m_sceneStack.back()->OnExit(ctx);
+        }
         LOG_INFO("SceneManager", "OnExit finished: {} ({} ms)", sceneName,
                  ElapsedMs(exitStartedAt));
         m_sceneStack.pop_back();
@@ -118,14 +127,20 @@ private:
           LOG_INFO("SceneManager", "Exit: {}", m_sceneStack.back()->GetName());
           const std::string sceneName = m_sceneStack.back()->GetName();
           const auto exitStartedAt = std::chrono::steady_clock::now();
-          m_sceneStack.back()->OnExit(ctx);
+          {
+            PROFILE_SCOPE("SceneManager.OnExit");
+            m_sceneStack.back()->OnExit(ctx);
+          }
           LOG_INFO("SceneManager", "OnExit finished: {} ({} ms)", sceneName,
                    ElapsedMs(exitStartedAt));
           m_sceneStack.pop_back();
         }
         LOG_INFO("SceneManager", "Change to: {}", m_pendingScene->GetName());
         const auto enterStartedAt = std::chrono::steady_clock::now();
-        m_pendingScene->OnEnter(ctx);
+        {
+          PROFILE_SCOPE("SceneManager.OnEnter");
+          m_pendingScene->OnEnter(ctx);
+        }
         LOG_INFO("SceneManager", "OnEnter finished: {} ({} ms)",
                  m_pendingScene->GetName(), ElapsedMs(enterStartedAt));
         m_sceneStack.push_back(std::move(m_pendingScene));
@@ -139,14 +154,20 @@ private:
                    m_sceneStack.back()->GetName());
           const std::string sceneName = m_sceneStack.back()->GetName();
           const auto exitStartedAt = std::chrono::steady_clock::now();
-          m_sceneStack.back()->OnExit(ctx);
+          {
+            PROFILE_SCOPE("SceneManager.OnExit");
+            m_sceneStack.back()->OnExit(ctx);
+          }
           LOG_INFO("SceneManager", "OnExit finished: {} ({} ms)", sceneName,
                    ElapsedMs(exitStartedAt));
           m_sceneStack.pop_back();
         }
         LOG_INFO("SceneManager", "Reset to: {}", m_pendingScene->GetName());
         const auto enterStartedAt = std::chrono::steady_clock::now();
-        m_pendingScene->OnEnter(ctx);
+        {
+          PROFILE_SCOPE("SceneManager.OnEnter");
+          m_pendingScene->OnEnter(ctx);
+        }
         LOG_INFO("SceneManager", "OnEnter finished: {} ({} ms)",
                  m_pendingScene->GetName(), ElapsedMs(enterStartedAt));
         m_sceneStack.push_back(std::move(m_pendingScene));

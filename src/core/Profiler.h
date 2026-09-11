@@ -7,10 +7,14 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <map>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+
+#include "ProfilerStatistics.h"
 
 namespace core {
 
@@ -29,6 +33,7 @@ struct GpuPipelineStats {
 struct GpuFrameSample {
   uint64_t frameIndex = 0;
   bool valid = false;
+  bool pipelineValid = false;
   std::vector<GpuScopeSample> scopes;
   GpuPipelineStats pipeline;
 };
@@ -44,6 +49,9 @@ struct ProfilerCpuScopeSnapshot {
   double inclusiveMs = 0.0;
   double exclusiveMs = 0.0;
   uint32_t calls = 0;
+  std::string function;
+  std::string file;
+  uint32_t line = 0;
 };
 
 struct ProfilerFrameSnapshot {
@@ -59,6 +67,7 @@ struct ProfilerFrameSnapshot {
   std::vector<ProfilerNamedValue> counters;
   bool gpuReceived = false;
   bool gpuValid = false;
+  bool pipelineStatsValid = false;
   std::vector<GpuScopeSample> gpuScopes;
   GpuPipelineStats pipeline;
 };
@@ -74,7 +83,8 @@ public:
   uint64_t BeginFrame(std::string_view sceneName, size_t entityCount);
   void EndFrame();
 
-  void BeginScope(std::string_view name);
+  void BeginScope(std::string_view name, std::string_view function = {},
+                  std::string_view file = {}, uint32_t line = 0);
   void EndScope();
 
   void SetCounter(std::string_view name, double value);
@@ -93,6 +103,14 @@ public:
 
 private:
   using Clock = std::chrono::steady_clock;
+  using MetricId = uint32_t;
+
+  struct ScopeMetadata {
+    std::string name;
+    std::string function;
+    std::string file;
+    uint32_t line = 0;
+  };
 
   struct ScopeData {
     double inclusiveMs = 0.0;
@@ -101,7 +119,7 @@ private:
   };
 
   struct ActiveScope {
-    std::string name;
+    MetricId id = 0;
     Clock::time_point startedAt;
     double childMs = 0.0;
   };
@@ -119,18 +137,54 @@ private:
     double profilerOverheadMs = 0.0;
     size_t entityCount = 0;
     ProcessMetrics process;
-    std::unordered_map<std::string, ScopeData> cpuScopes;
-    std::unordered_map<std::string, double> counters;
+    bool processSampled = false;
+    std::unordered_map<MetricId, ScopeData> cpuScopes;
+    std::unordered_map<MetricId, double> counters;
     bool gpuReceived = false;
     bool gpuValid = false;
+    bool pipelineStatsValid = false;
+    bool finalized = false;
+    double gpuFrameMs = 0.0;
+    uint32_t gpuQueryLatencyFrames = 0;
     std::vector<GpuScopeSample> gpuScopes;
     GpuPipelineStats pipeline;
+  };
+
+  struct SceneAggregate {
+    uint64_t frames = 0;
+    uint64_t gpuValidFrames = 0;
+    profiler_detail::BoundedStatistics cpu;
+    profiler_detail::BoundedStatistics gpu;
+    profiler_detail::BoundedStatistics overhead;
+    double peakWorkingSetMb = 0.0;
+    double peakPrivateMb = 0.0;
+  };
+
+  struct ScopeAggregate {
+    profiler_detail::BoundedStatistics inclusive;
+    profiler_detail::BoundedStatistics exclusive;
+    uint64_t calls = 0;
+  };
+
+  struct SlowFrame {
+    uint64_t index = 0;
+    std::string scene;
+    double cpuMs = 0.0;
+    double gpuMs = 0.0;
   };
 
   Profiler() = default;
   ~Profiler();
 
   ProcessMetrics CaptureProcessMetrics();
+  MetricId InternScope(std::string_view name, std::string_view function,
+                       std::string_view file, uint32_t line);
+  MetricId InternCounter(std::string_view name);
+  void OpenRawReports();
+  void FinalizeFrame(FrameData &frame);
+  void WriteFrameRows(const FrameData &frame);
+  void AccumulateFrame(const FrameData &frame);
+  void ReleaseOldFrameDetails();
   void LogIntervalReport();
   void WriteReports();
   FrameData *FindFrame(uint64_t frameIndex);
@@ -148,10 +202,26 @@ private:
   size_t m_lastReportFrame = 0;
   std::filesystem::path m_outputDirectory;
   std::vector<ActiveScope> m_scopeStack;
-  std::unordered_map<std::string, ScopeData> m_frameScopes;
-  std::unordered_map<std::string, double> m_frameCounters;
+  std::unordered_map<MetricId, ScopeData> m_frameScopes;
+  std::unordered_map<MetricId, double> m_frameCounters;
   std::vector<FrameData> m_frames;
   std::unordered_map<uint64_t, size_t> m_frameLookup;
+
+  std::vector<ScopeMetadata> m_scopeMetadata;
+  std::unordered_map<uint64_t, std::vector<MetricId>> m_scopeIds;
+  std::vector<std::string> m_counterNames;
+  std::unordered_map<uint64_t, std::vector<MetricId>> m_counterIds;
+  std::map<std::string, SceneAggregate> m_sceneSummary;
+  std::map<MetricId, ScopeAggregate> m_cpuSummary;
+  std::map<std::string, ScopeAggregate> m_gpuSummary;
+  std::vector<SlowFrame> m_slowFrames;
+  uint64_t m_finalizedFrameCount = 0;
+  uint64_t m_gpuValidFrameCount = 0;
+  ProcessMetrics m_cachedProcessMetrics;
+  std::ofstream m_framesFile;
+  std::ofstream m_scopesFile;
+  std::ofstream m_countersFile;
+  std::ofstream m_slowFramesFile;
 
   uint64_t m_lastProcessKernelTime = 0;
   uint64_t m_lastProcessUserTime = 0;
@@ -161,8 +231,9 @@ private:
 
 class ScopedTimer {
 public:
-  explicit ScopedTimer(std::string_view name) {
-    Profiler::Instance().BeginScope(name);
+  ScopedTimer(std::string_view name, std::string_view function,
+              std::string_view file, uint32_t line) {
+    Profiler::Instance().BeginScope(name, function, file, line);
   }
   ~ScopedTimer() { Profiler::Instance().EndScope(); }
 
@@ -176,7 +247,8 @@ public:
 #define PROFILE_JOIN(a, b) PROFILE_JOIN_IMPL(a, b)
 #ifdef WIKIGOLF_PROFILING
 #define PROFILE_SCOPE(name)                                                    \
-  core::ScopedTimer PROFILE_JOIN(profileTimer_, __LINE__)(name)
+  core::ScopedTimer PROFILE_JOIN(profileTimer_, __LINE__)(                     \
+      name, __FUNCTION__, __FILE__, static_cast<uint32_t>(__LINE__))
 #else
 #define PROFILE_SCOPE(name) ((void)0)
 #endif

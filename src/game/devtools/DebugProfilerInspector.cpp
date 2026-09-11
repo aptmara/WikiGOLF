@@ -50,7 +50,7 @@ void SelectNamedItem(const char *label, const Collection &items,
 }
 
 void DrawCpuScopeTable(const core::ProfilerFrameSnapshot &frame) {
-  if (!ImGui::BeginTable("CpuScopeDetails", 4,
+  if (!ImGui::BeginTable("CpuScopeDetails", 6,
                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                              ImGuiTableFlags_ScrollY,
                          {0.0f, 180.0f})) {
@@ -60,6 +60,8 @@ void DrawCpuScopeTable(const core::ProfilerFrameSnapshot &frame) {
   ImGui::TableSetupColumn("包括 ms");
   ImGui::TableSetupColumn("自己 ms");
   ImGui::TableSetupColumn("回数");
+  ImGui::TableSetupColumn("関数");
+  ImGui::TableSetupColumn("位置");
   ImGui::TableHeadersRow();
   for (const auto &scope : frame.cpuScopes) {
     ImGui::TableNextRow();
@@ -71,6 +73,10 @@ void DrawCpuScopeTable(const core::ProfilerFrameSnapshot &frame) {
     ImGui::Text("%.3f", scope.exclusiveMs);
     ImGui::TableSetColumnIndex(3);
     ImGui::Text("%u", scope.calls);
+    ImGui::TableSetColumnIndex(4);
+    ImGui::TextUnformatted(scope.function.c_str());
+    ImGui::TableSetColumnIndex(5);
+    ImGui::Text("%s:%u", scope.file.c_str(), scope.line);
   }
   ImGui::EndTable();
 }
@@ -110,11 +116,17 @@ void DebugProfilerInspector::Draw() {
 
   const auto &latest = m_history.Frames().back();
   const core::ProfilerFrameSnapshot *latestGpu = nullptr;
+  const core::ProfilerFrameSnapshot *latestPipeline = nullptr;
   for (auto frame = m_history.Frames().rbegin();
        frame != m_history.Frames().rend(); ++frame) {
-    if (frame->gpuReceived) {
+    if (!latestPipeline && frame->pipelineStatsValid) {
+      latestPipeline = &*frame;
+    }
+    if (!latestGpu && frame->gpuReceived) {
       latestGpu = &*frame;
-      break;
+      if (latestPipeline) {
+        break;
+      }
     }
   }
   ImGui::Text("フレーム: %llu / シーン: %s / 履歴: %zu",
@@ -160,15 +172,18 @@ void DebugProfilerInspector::Draw() {
       SelectNamedItem("GPUスコープ選択", latestGpu->gpuScopes, m_gpuScope);
     }
     PlotSeries("GPU時間", m_history.GpuScopeSeries(m_gpuScope), " ms");
+    ImGui::Text("パイプライン統計フレーム: %llu（8フレームごと）",
+                static_cast<unsigned long long>(
+                    latestPipeline ? latestPipeline->frameIndex : 0));
     ImGui::Text("頂点: %llu / プリミティブ: %llu / PS呼出: %llu",
                 static_cast<unsigned long long>(
-                    latestGpu ? latestGpu->pipeline.inputAssemblerVertices : 0),
+                    latestPipeline ? latestPipeline->pipeline.inputAssemblerVertices : 0),
                 static_cast<unsigned long long>(
-                    latestGpu ? latestGpu->pipeline.inputAssemblerPrimitives
-                              : 0),
+                    latestPipeline ? latestPipeline->pipeline.inputAssemblerPrimitives
+                                   : 0),
                 static_cast<unsigned long long>(
-                    latestGpu ? latestGpu->pipeline.pixelShaderInvocations
-                              : 0));
+                    latestPipeline ? latestPipeline->pipeline.pixelShaderInvocations
+                                   : 0));
   }
 
   if (ImGui::CollapsingHeader("物理詳細",

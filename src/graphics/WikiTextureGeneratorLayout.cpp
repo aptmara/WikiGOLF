@@ -239,6 +239,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
 
     DWRITE_TEXT_METRICS m{};
     seg.layout->GetMetrics(&m);
+    seg.height = m.height;
     state.textSegments.push_back(std::move(seg));
     return m.height;
   };
@@ -300,6 +301,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
       placed.captionLayout = captionLayout;
       placed.width = imgW;
       placed.height = imgH;
+      placed.drawHeight = blockHeight;
       placed.x = state.marginX + maxWidth - imgW;
       placed.y = cursorY;
       state.placedImages.push_back(std::move(placed));
@@ -348,6 +350,7 @@ bool WikiTextureGenerator::BeginGenerateTexture(
     placed.captionLayout = captionLayout;
     placed.width = imgW;
     placed.height = imgH;
+    placed.drawHeight = blockHeight;
     placed.x = state.marginX + narrowWidth + kImageGap;
     placed.y = cursorY;
     state.placedImages.push_back(std::move(placed));

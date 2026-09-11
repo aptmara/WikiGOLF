@@ -75,6 +75,7 @@ struct RenderFrameStats {
   size_t grassInstancesConsidered = 0;
   size_t grassInstancesDistanceSkipped = 0;
   size_t grassInstancesOverheadSkipped = 0;
+  size_t grassInstancesFrustumSkipped = 0;
   size_t grassNearLodInstances = 0;
   size_t grassMidLodInstances = 0;
 };
@@ -265,6 +266,18 @@ void RenderSystem(core::GameContext &ctx) {
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> opaqueBuckets;
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> transparentBuckets;
 
+  auto reserveAdditionalInstances = [](auto &instances,
+                                       size_t additionalCount) {
+    const size_t requiredCapacity = instances.size() + additionalCount;
+    if (requiredCapacity <= instances.capacity()) {
+      return;
+    }
+    const size_t grownCapacity = instances.capacity() == 0
+                                     ? requiredCapacity
+                                     : instances.capacity() * 2;
+    instances.reserve(std::max(requiredCapacity, grownCapacity));
+  };
+
   // 構造化バッファの生成・リサイズ関数
   auto checkInstancedBuffer = [&](size_t requiredCount) {
     if (requiredCount <= state->instancedBufferSize && state->instancedBuffer) {
@@ -424,9 +437,10 @@ void RenderSystem(core::GameContext &ctx) {
             ++stats.missingResourceSkipped;
             return;
           }
+          graphics::Mesh *lodCandidateMesh = nullptr;
           if (batch.lodMesh.IsValid()) {
-            auto *lodMesh = ctx.resource.GetMesh(batch.lodMesh);
-            if (!lodMesh || !lodMesh->IsValid()) {
+            lodCandidateMesh = ctx.resource.GetMesh(batch.lodMesh);
+            if (!lodCandidateMesh || !lodCandidateMesh->IsValid()) {
               ++stats.missingResourceSkipped;
               return;
             }
@@ -479,15 +493,15 @@ void RenderSystem(core::GameContext &ctx) {
           nearKey.twoSided = batch.twoSided;
 
           auto &nearInstances = opaqueBuckets[nearKey];
-          nearInstances.reserve(nearInstances.size() + batch.instances.size());
+          reserveAdditionalInstances(nearInstances, batch.instances.size());
 
           std::vector<RenderInstance> *midInstances = nullptr;
           if (batch.lodMesh.IsValid() && batch.lodSwitchDistance > 0.0f) {
             RenderKey midKey = nearKey;
             midKey.mesh = batch.lodMesh;
             midInstances = &opaqueBuckets[midKey];
-            midInstances->reserve(midInstances->size() +
-                                  batch.instances.size());
+            reserveAdditionalInstances(*midInstances,
+                                       batch.instances.size());
           }
 
           for (const auto &grassInstance : batch.instances) {
@@ -511,6 +525,19 @@ void RenderSystem(core::GameContext &ctx) {
                 continue;
               }
             }
+            const bool usesMidLod =
+                midInstances &&
+                distanceSq >
+                    batch.lodSwitchDistance * batch.lodSwitchDistance;
+            const auto *instanceMesh =
+                usesMidLod ? lodCandidateMesh : candidateMesh;
+            BoundingSphere instanceBounds;
+            instanceMesh->GetBounds().Transform(
+                instanceBounds, XMLoadFloat4x4(&grassInstance.world));
+            if (worldFrustum.Contains(instanceBounds) == DISJOINT) {
+              ++stats.grassInstancesFrustumSkipped;
+              continue;
+            }
 
             RenderInstance instance;
             instance.entity = e;
@@ -518,9 +545,7 @@ void RenderSystem(core::GameContext &ctx) {
             instance.color = grassInstance.color;
             instance.flags = grassInstance.flags;
 
-            if (midInstances &&
-                distanceSq >
-                    batch.lodSwitchDistance * batch.lodSwitchDistance) {
+            if (usesMidLod) {
               midInstances->push_back(instance);
               ++stats.grassMidLodInstances;
             } else {
@@ -746,6 +771,9 @@ void RenderSystem(core::GameContext &ctx) {
   profiler.SetCounter(
       "Render.GrassInstancesOverheadSkipped",
       static_cast<double>(stats.grassInstancesOverheadSkipped));
+  profiler.SetCounter(
+      "Render.GrassInstancesFrustumSkipped",
+      static_cast<double>(stats.grassInstancesFrustumSkipped));
   profiler.SetCounter("Render.GrassNearLodInstances",
                       static_cast<double>(stats.grassNearLodInstances));
   profiler.SetCounter("Render.GrassMidLodInstances",
@@ -780,7 +808,7 @@ void RenderSystem(core::GameContext &ctx) {
              "Render stats frame={} elapsed={:.3f}ms candidates={} visible={} "
              "grassBatches={} grassInstancesConsidered={} "
              "grassInstancesDistanceSkipped={} grassInstancesOverheadSkipped={} "
-             "grassNearLod={} grassMidLod={} "
+             "grassInstancesFrustumSkipped={} grassNearLod={} grassMidLod={} "
              "drawn={} opaque={} transparent={} textured={} normalMapped={} "
              "terrain={} holeFlags={} skippedInvisible={} skippedAlpha={} "
              "skippedTransparentDistance={} skippedLodDistance={} "
@@ -790,6 +818,7 @@ void RenderSystem(core::GameContext &ctx) {
              stats.grassBatchCandidates, stats.grassInstancesConsidered,
              stats.grassInstancesDistanceSkipped,
              stats.grassInstancesOverheadSkipped,
+             stats.grassInstancesFrustumSkipped,
              stats.grassNearLodInstances, stats.grassMidLodInstances,
              stats.drawn,
              stats.opaqueDrawn, stats.transparentDrawn, stats.texturedDrawn,

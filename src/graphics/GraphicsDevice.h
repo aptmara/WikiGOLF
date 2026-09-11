@@ -226,6 +226,7 @@ private:
     uint64_t frameIndex = 0;
     size_t usedScopeCount = 0;
     bool issued = false;
+    bool pipelineIssued = false;
   };
 
 private:
@@ -287,6 +288,7 @@ private:
   std::wstring m_preferredAdapterName; /**< 空なら自動選択（高性能優先） */
 
   static constexpr size_t kGpuQueryBufferCount = 8;
+  static constexpr uint64_t kPipelineStatisticsInterval = 8;
   std::array<GpuFrameQueries, kGpuQueryBufferCount> m_gpuQueryFrames;
   size_t m_gpuQueryWriteIndex = 0;
   GpuFrameQueries *m_currentGpuQueryFrame = nullptr;

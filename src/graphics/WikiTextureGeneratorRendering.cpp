@@ -27,6 +27,11 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   const uint32_t kMaxTileHeight = 512;
   uint32_t tileH = std::min(state.remainingHeight, kMaxTileHeight);
   uint32_t width = state.actualWidth;
+  const float tileTop = static_cast<float>(state.currentOffsetY);
+  const float tileBottom = tileTop + static_cast<float>(tileH);
+  const auto intersectsTile = [tileTop, tileBottom](float top, float bottom) {
+    return bottom > tileTop && top < tileBottom;
+  };
 
   // ブラシ色
   D2D1::ColorF colBg(1.0f, 1.0f, 1.0f, 1.0f);
@@ -77,6 +82,8 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
     m_d2dContext->CreateSolidColorBrush(colLinkBack, &state.bBackLink);
     m_d2dContext->CreateSolidColorBrush(colTargetBack, &state.bBackTarget);
     m_d2dContext->CreateSolidColorBrush(colTargetGlow, &state.bGlow);
+    m_d2dContext->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1),
+                                        &state.bWhite);
 
     // リンク文字列の装飾（太字・下線・色）を、その文字列を含む区画へ適用する
     auto findOwningSegmentMutable =
@@ -116,10 +123,22 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   D2D1_MATRIX_3X2_F transform = D2D1::Matrix3x2F::Translation(0.0f, -static_cast<float>(state.currentOffsetY));
   m_d2dContext->SetTransform(transform);
 
-  m_d2dContext->DrawTextLayout(D2D1::Point2F(state.marginX, state.titleTopY), state.titleLayout.Get(), state.bText.Get());
-  m_d2dContext->DrawLine(D2D1::Point2F(state.marginX, state.separatorY), D2D1::Point2F(width - state.marginX, state.separatorY), state.bBorder.Get(), 2.0f);
+  if (state.titleLayout &&
+      intersectsTile(state.titleTopY,
+                     state.titleTopY + state.titleMetrics.height)) {
+    m_d2dContext->DrawTextLayout(
+        D2D1::Point2F(state.marginX, state.titleTopY),
+        state.titleLayout.Get(), state.bText.Get());
+  }
+  if (state.separatorY >= tileTop && state.separatorY < tileBottom) {
+    m_d2dContext->DrawLine(
+        D2D1::Point2F(state.marginX, state.separatorY),
+        D2D1::Point2F(width - state.marginX, state.separatorY),
+        state.bBorder.Get(), 2.0f);
+  }
 
   for (const auto &l : state.result.links) {
+    if (!intersectsTile(l.y, l.y + l.height)) continue;
     D2D1_RECT_F r = D2D1::RectF(l.x, l.y, l.x + l.width, l.y + l.height);
     if (l.isTarget) {
       m_d2dContext->FillRectangle(r, state.bBackTarget.Get());
@@ -131,12 +150,15 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
 
   // 本文（float画像の左右で幅の異なる区画に分けて描画）
   for (const auto &seg : state.textSegments) {
-    if (!seg.layout) continue;
+    if (!seg.layout || !intersectsTile(seg.yTop, seg.yTop + seg.height)) {
+      continue;
+    }
     m_d2dContext->DrawTextLayout(D2D1::Point2F(state.marginX, seg.yTop), seg.layout.Get(), state.bText.Get());
   }
 
   // Wikipedia風の画像枠＋キャプション
   for (const auto &img : state.placedImages) {
+    if (!intersectsTile(img.y, img.y + img.drawHeight)) continue;
     D2D1_RECT_F dest = D2D1::RectF(img.x, img.y, img.x + img.width, img.y + img.height);
     m_d2dContext->DrawBitmap(img.bitmap.Get(), &dest);
     m_d2dContext->DrawRectangle(dest, state.bBorder.Get(), 1.5f);
@@ -150,6 +172,7 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
   // 見出し下部にWikipedia風の区切り罫線を描画
   for (const auto &h : state.result.headings) {
     float lineY = h.y + h.height + 6.0f;
+    if (lineY < tileTop || lineY >= tileBottom) continue;
     m_d2dContext->DrawLine(D2D1::Point2F(state.marginX, lineY),
                           D2D1::Point2F(width - state.marginX, lineY),
                           state.bBorder.Get(), 1.5f);
@@ -166,15 +189,17 @@ bool WikiTextureGenerator::GenerateNextTile(WikiTextureGenerationState &state) {
 
       D2D1_RECT_F linkRect = D2D1::RectF(lx, ly, lx + 200.0f, ly + 50.0f);
       bool isTarget = (state.links[i].second == state.targetPage);
-      if (isTarget) {
-        m_d2dContext->FillRectangle(linkRect, state.bTarget.Get());
-      } else {
-        m_d2dContext->FillRectangle(linkRect, state.bLink.Get());
+      if (intersectsTile(ly, ly + 50.0f)) {
+        if (isTarget) {
+          m_d2dContext->FillRectangle(linkRect, state.bTarget.Get());
+        } else {
+          m_d2dContext->FillRectangle(linkRect, state.bLink.Get());
+        }
+        m_d2dContext->DrawTextW(
+            state.links[i].first.c_str(),
+            static_cast<UINT32>(state.links[i].first.length()),
+            m_bodyFormat.Get(), linkRect, state.bWhite.Get());
       }
-
-      ComPtr<ID2D1SolidColorBrush> bWhite;
-      m_d2dContext->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1), &bWhite);
-      m_d2dContext->DrawTextW(state.links[i].first.c_str(), static_cast<UINT32>(state.links[i].first.length()), m_bodyFormat.Get(), linkRect, bWhite.Get());
 
       unmatchedCount++;
       if (state.currentOffsetY == 0) {

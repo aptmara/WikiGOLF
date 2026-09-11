@@ -104,11 +104,20 @@ private:
     float halfExtent = 1.0f;
   };
 
+  struct SurfaceGrassChunkBuildState {
+    bool active = false;
+    uint64_t chunkKey = 0;
+    size_t roughCellIndex = 0;
+    size_t turfCellIndex = 0;
+    std::unordered_map<uint32_t, ecs::Entity> batches;
+  };
+
   std::vector<ecs::Entity> m_entities;
   std::vector<ecs::Entity> m_surfaceGrassEntities;
   std::unordered_map<uint64_t, std::vector<ecs::Entity>>
       m_surfaceGrassEntitiesByChunk;
   std::deque<uint64_t> m_pendingSurfaceGrassChunks;
+  SurfaceGrassChunkBuildState m_surfaceGrassChunkBuild;
   std::vector<GrassPatch> m_grassPatches;
   ecs::Entity m_floorEntity = 0xFFFFFFFF;
   std::shared_ptr<TerrainData> m_terrainData;
@@ -175,8 +184,9 @@ private:
   bool StepSurfaceGrassBuild(core::GameContext &ctx);
   void UpdateSurfaceGrassChunks(core::GameContext &ctx, float centerX,
                                 float centerZ, size_t generationBudget);
-  void GenerateSurfaceGrassChunk(core::GameContext &ctx, int chunkX,
-                                 int chunkZ);
+  bool GenerateSurfaceGrassChunk(core::GameContext &ctx, int chunkX,
+                                 int chunkZ, size_t instanceBudget,
+                                 size_t &generatedInstances);
   void RemoveSurfaceGrassChunks(core::GameContext &ctx,
                                 const std::vector<uint64_t> &chunkKeys);
   void ClearSurfaceGrass(core::GameContext &ctx);

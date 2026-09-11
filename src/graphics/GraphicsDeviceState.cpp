@@ -114,7 +114,6 @@ void GraphicsDevice::ResolveGpuProfilerQueries() {
 
     uint64_t frameStart = 0;
     uint64_t frameEnd = 0;
-    D3D11_QUERY_DATA_PIPELINE_STATISTICS pipeline{};
     if (sample.valid) {
       const HRESULT startResult =
           m_context->GetData(frame.frameStart.Get(), &frameStart,
@@ -122,11 +121,8 @@ void GraphicsDevice::ResolveGpuProfilerQueries() {
       const HRESULT endResult =
           m_context->GetData(frame.frameEnd.Get(), &frameEnd, sizeof(frameEnd),
                              D3D11_ASYNC_GETDATA_DONOTFLUSH);
-      const HRESULT pipelineResult =
-          m_context->GetData(frame.pipeline.Get(), &pipeline, sizeof(pipeline),
-                             D3D11_ASYNC_GETDATA_DONOTFLUSH);
       sample.valid = startResult == S_OK && endResult == S_OK &&
-                     pipelineResult == S_OK && frameEnd >= frameStart;
+                     frameEnd >= frameStart;
     }
 
     if (sample.valid) {
@@ -153,10 +149,19 @@ void GraphicsDevice::ResolveGpuProfilerQueries() {
         }
       }
 
-      sample.pipeline.inputAssemblerVertices = pipeline.IAVertices;
-      sample.pipeline.inputAssemblerPrimitives = pipeline.IAPrimitives;
-      sample.pipeline.vertexShaderInvocations = pipeline.VSInvocations;
-      sample.pipeline.pixelShaderInvocations = pipeline.PSInvocations;
+      if (frame.pipelineIssued) {
+        D3D11_QUERY_DATA_PIPELINE_STATISTICS pipeline{};
+        const HRESULT pipelineResult = m_context->GetData(
+            frame.pipeline.Get(), &pipeline, sizeof(pipeline),
+            D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        sample.pipelineValid = pipelineResult == S_OK;
+        if (sample.pipelineValid) {
+          sample.pipeline.inputAssemblerVertices = pipeline.IAVertices;
+          sample.pipeline.inputAssemblerPrimitives = pipeline.IAPrimitives;
+          sample.pipeline.vertexShaderInvocations = pipeline.VSInvocations;
+          sample.pipeline.pixelShaderInvocations = pipeline.PSInvocations;
+        }
+      }
     }
 
     m_readyGpuSamples.push_back(std::move(sample));

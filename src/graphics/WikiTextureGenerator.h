@@ -114,6 +114,7 @@ struct WikiTextureResult {
 struct WikiTextSegment {
   ComPtr<IDWriteTextLayout> layout;
   float yTop = 0.0f;       /**< テクスチャ全体（連続座標）でのY開始位置 */
+  float height = 0.0f;     /**< レイアウト実測高さ */
   size_t textStart = 0;    /**< state.articleText内でのグローバル開始位置 */
   size_t textLength = 0;
 };
@@ -126,6 +127,7 @@ struct WikiPlacedImage {
   ComPtr<IDWriteTextLayout> captionLayout;
   float x = 0.0f, y = 0.0f;
   float width = 0.0f, height = 0.0f;
+  float drawHeight = 0.0f; /**< キャプションを含む描画領域の高さ */
 };
 
 struct WikiTextureGenerationState {
@@ -167,6 +169,7 @@ struct WikiTextureGenerationState {
   ComPtr<ID2D1SolidColorBrush> bBackLink;
   ComPtr<ID2D1SolidColorBrush> bBackTarget;
   ComPtr<ID2D1SolidColorBrush> bGlow;
+  ComPtr<ID2D1SolidColorBrush> bWhite;
 
   WikiTextureResult result;
   bool started = false;

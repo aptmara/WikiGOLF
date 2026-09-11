@@ -52,6 +52,29 @@ endif()
 # テスト有効化
 enable_testing()
 
+add_executable(test_profiler_statistics test_profiler_statistics.cpp)
+target_include_directories(test_profiler_statistics PRIVATE src)
+if(MSVC)
+    target_compile_options(test_profiler_statistics PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME profiler_statistics COMMAND test_profiler_statistics)
+
+add_executable(test_profiler_output
+    test_profiler_output.cpp
+    src/core/Profiler.cpp
+    src/core/ProfilerMetrics.cpp
+    src/core/ProfilerReports.cpp
+    src/core/Logger.cpp)
+target_precompile_headers(test_profiler_output PRIVATE src/pch.h)
+target_include_directories(test_profiler_output PRIVATE src)
+target_link_libraries(test_profiler_output PRIVATE psapi)
+if(MSVC)
+    target_compile_definitions(test_profiler_output PRIVATE
+        -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_profiler_output PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME profiler_output COMMAND test_profiler_output)
+
 option(WIKIGOLF_HTML_COURSES "Render course articles with litehtml" ON)
 option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
 option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)

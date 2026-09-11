@@ -6,6 +6,7 @@
 #include "ResourceManager.h"
 #include "ResourceManagerInternals.h"
 #include "../core/Logger.h"
+#include "../core/Profiler.h"
 #include "../graphics/GraphicsDevice.h"
 #include <chrono>
 #include <vector>
@@ -143,6 +144,7 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
 Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
 ResourceManager::LoadTextureArraySRV(const std::string &name,
                                      const std::vector<std::string> &paths) {
+  PROFILE_SCOPE(std::string("Resource.TextureArray.") + name);
   if (auto it = m_textureCache.find(name); it != m_textureCache.end()) {
     return it->second;
   }
@@ -159,7 +161,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 
   UINT commonWidth = 0;
   UINT commonHeight = 0;
-  std::vector<std::vector<BYTE>> allPixels;
+  std::vector<const std::string *> validPaths;
 
   for (const auto &path : paths) {
     int size_needed =
@@ -177,15 +179,14 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
     }
 
     Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
-    decoder->GetFrame(0, &frame);
-    Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
-    s_factory->CreateFormatConverter(&converter);
-    converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
-                          WICBitmapDitherTypeNone, nullptr, 0.0,
-                          WICBitmapPaletteTypeMedianCut);
+    if (FAILED(decoder->GetFrame(0, &frame))) {
+      LOG_ERROR("Resource", "Array: Failed to read frame {}", path);
+      continue;
+    }
 
-    UINT w, h;
-    converter->GetSize(&w, &h);
+    UINT w = 0;
+    UINT h = 0;
+    frame->GetSize(&w, &h);
 
     if (commonWidth == 0) {
       commonWidth = w;
@@ -194,37 +195,63 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
       LOG_ERROR("Resource", "Array: Size mismatch in {}. Expected {}x{}, got {}x{}", path, commonWidth, commonHeight, w, h);
       continue;
     }
-
-    std::vector<BYTE> pixels(w * h * 4);
-    converter->CopyPixels(nullptr, w * 4, (UINT)pixels.size(), pixels.data());
-    allPixels.push_back(std::move(pixels));
+    validPaths.push_back(&path);
   }
 
-  if (allPixels.empty())
+  if (validPaths.empty())
     return {};
 
   D3D11_TEXTURE2D_DESC desc = {};
   desc.Width = commonWidth;
   desc.Height = commonHeight;
   desc.MipLevels = 1;
-  desc.ArraySize = (UINT)allPixels.size();
+  desc.ArraySize = static_cast<UINT>(validPaths.size());
   desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
   desc.SampleDesc.Count = 1;
   desc.Usage = D3D11_USAGE_DEFAULT;
   desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
-  std::vector<D3D11_SUBRESOURCE_DATA> initData(allPixels.size());
-  for (size_t i = 0; i < allPixels.size(); ++i) {
-    initData[i].pSysMem = allPixels[i].data();
-    initData[i].SysMemPitch = commonWidth * 4;
-    initData[i].SysMemSlicePitch = (UINT)allPixels[i].size();
-  }
-
   Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-  HRESULT hr = m_device.GetDevice()->CreateTexture2D(&desc, initData.data(), &texture);
+  HRESULT hr = m_device.GetDevice()->CreateTexture2D(&desc, nullptr, &texture);
   if (FAILED(hr)) {
     LOG_ERROR("Resource", "Array: CreateTexture2D failed (hr=0x{:08X})", (uint32_t)hr);
     return {};
+  }
+
+  std::vector<BYTE> pixels;
+  pixels.resize(static_cast<size_t>(commonWidth) * commonHeight * 4);
+  for (size_t layer = 0; layer < validPaths.size(); ++layer) {
+    const auto &path = *validPaths[layer];
+    int sizeNeeded =
+        MultiByteToWideChar(CP_UTF8, 0, path.data(),
+                            static_cast<int>(path.size()), nullptr, 0);
+    std::wstring widePath(sizeNeeded, 0);
+    MultiByteToWideChar(CP_UTF8, 0, path.data(),
+                        static_cast<int>(path.size()), widePath.data(),
+                        sizeNeeded);
+
+    Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+    Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+    if (FAILED(s_factory->CreateDecoderFromFilename(
+            widePath.c_str(), nullptr, GENERIC_READ,
+            WICDecodeMetadataCacheOnLoad, &decoder)) ||
+        FAILED(decoder->GetFrame(0, &frame)) ||
+        FAILED(s_factory->CreateFormatConverter(&converter)) ||
+        FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
+                                     WICBitmapDitherTypeNone, nullptr, 0.0,
+                                     WICBitmapPaletteTypeMedianCut)) ||
+        FAILED(converter->CopyPixels(
+            nullptr, commonWidth * 4, static_cast<UINT>(pixels.size()),
+            pixels.data()))) {
+      LOG_ERROR("Resource", "Array: Failed to upload layer {}", path);
+      return {};
+    }
+    const UINT subresource =
+        D3D11CalcSubresource(0, static_cast<UINT>(layer), 1);
+    m_device.GetContext()->UpdateSubresource(
+        texture.Get(), subresource, nullptr, pixels.data(), commonWidth * 4,
+        static_cast<UINT>(pixels.size()));
   }
 
   D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -243,7 +270,8 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
   }
 
   m_textureCache[name] = srv;
-  LOG_INFO("Resource", "Loaded TextureArray: {} (Layers:{}, {}x{})", name, (int)allPixels.size(), commonWidth, commonHeight);
+  LOG_INFO("Resource", "Loaded TextureArray: {} (Layers:{}, {}x{})", name,
+           static_cast<int>(validPaths.size()), commonWidth, commonHeight);
   return srv;
 }
 
