@@ -39,6 +39,15 @@ public:
                                const std::vector<graphics::Vertex> &vertices,
                                const std::vector<uint32_t> &indices);
 
+  /**
+   * @brief CPUスキニング結果を毎フレーム書き込める動的メッシュを作成する
+   * @details 名前キャッシュは行わない（呼び出し側がハンドルを保持する
+   *          エンティティ専属メッシュ、例: スケルタルアニメーション用モデル）
+  */
+  MeshHandle
+  CreateDynamicSkinnedMesh(const std::vector<graphics::Vertex> &initialVertices,
+                          const std::vector<uint32_t> &indices);
+
   /** @brief キャッシュ済みメッシュを取得（存在しない場合は無効ハンドル） */
   MeshHandle FindMesh(const std::string &name) const;
 
@@ -69,6 +78,15 @@ public:
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
   LoadTextureArraySRV(const std::string &name,
                       const std::vector<std::string> &paths);
+
+  /**
+   * @brief メモリ上の画像バイト列(png/jpg等)からテクスチャをSRVとしてロード（キャッシュ付き）
+   * @details GLB等に埋め込まれたテクスチャをファイルに書き出さずそのまま読み込む用途。
+   * @param cacheKey キャッシュキー（同じキーなら再デコードしない）
+  */
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
+  LoadTextureSRVFromMemory(const std::string &cacheKey, const void *data,
+                          size_t sizeBytes);
 
   /** @brief 全リソースを解放（シーン遷移用） */
   void Clear();

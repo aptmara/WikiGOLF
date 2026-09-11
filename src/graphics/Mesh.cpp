@@ -4,6 +4,7 @@
 */
 
 #include "Mesh.h"
+#include <cstring>
 
 namespace graphics {
 
@@ -43,6 +44,64 @@ bool Mesh::Create(ID3D11Device *device, const std::vector<Vertex> &vertices,
     return false;
 
   m_indexCount = static_cast<uint32_t>(indices.size());
+  return true;
+}
+
+bool Mesh::CreateDynamic(ID3D11Device *device,
+                         const std::vector<Vertex> &initialVertices,
+                         const std::vector<uint32_t> &indices) {
+  if (!device || initialVertices.empty() || indices.empty()) {
+    return false;
+  }
+
+  DirectX::BoundingSphere::CreateFromPoints(
+      m_bounds, initialVertices.size(), &initialVertices.front().position,
+      sizeof(Vertex));
+
+  D3D11_BUFFER_DESC vbDesc = {};
+  vbDesc.Usage = D3D11_USAGE_DYNAMIC;
+  vbDesc.ByteWidth = static_cast<UINT>(sizeof(Vertex) * initialVertices.size());
+  vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+  vbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+  D3D11_SUBRESOURCE_DATA vbData = {};
+  vbData.pSysMem = initialVertices.data();
+
+  HRESULT hr = device->CreateBuffer(&vbDesc, &vbData, &m_vertexBuffer);
+  if (FAILED(hr))
+    return false;
+
+  D3D11_BUFFER_DESC ibDesc = {};
+  ibDesc.Usage = D3D11_USAGE_DEFAULT;
+  ibDesc.ByteWidth = static_cast<UINT>(sizeof(uint32_t) * indices.size());
+  ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+  D3D11_SUBRESOURCE_DATA ibData = {};
+  ibData.pSysMem = indices.data();
+
+  hr = device->CreateBuffer(&ibDesc, &ibData, &m_indexBuffer);
+  if (FAILED(hr))
+    return false;
+
+  m_indexCount = static_cast<uint32_t>(indices.size());
+  m_vertexCapacity = static_cast<uint32_t>(initialVertices.size());
+  return true;
+}
+
+bool Mesh::UpdateVertices(ID3D11DeviceContext *context,
+                          const std::vector<Vertex> &vertices) {
+  if (!context || !m_vertexBuffer || vertices.size() != m_vertexCapacity) {
+    return false;
+  }
+
+  D3D11_MAPPED_SUBRESOURCE mapped = {};
+  HRESULT hr = context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD,
+                            0, &mapped);
+  if (FAILED(hr))
+    return false;
+
+  memcpy(mapped.pData, vertices.data(), sizeof(Vertex) * vertices.size());
+  context->Unmap(m_vertexBuffer.Get(), 0);
   return true;
 }
 

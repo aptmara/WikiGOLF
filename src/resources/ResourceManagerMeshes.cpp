@@ -301,6 +301,18 @@ MeshHandle ResourceManager::CreateDynamicMesh(
   return handle;
 }
 
+MeshHandle ResourceManager::CreateDynamicSkinnedMesh(
+    const std::vector<graphics::Vertex> &initialVertices,
+    const std::vector<uint32_t> &indices) {
+  graphics::Mesh mesh;
+  if (!mesh.CreateDynamic(m_device.GetDevice(), initialVertices, indices)) {
+    LOG_ERROR("Resource", "Failed to create dynamic skinned mesh");
+    return {};
+  }
+
+  return m_meshPool.Add(std::move(mesh));
+}
+
 MeshHandle ResourceManager::FindMesh(const std::string &name) const {
   if (auto it = m_meshCache.find(name); it != m_meshCache.end()) {
     return it->second;

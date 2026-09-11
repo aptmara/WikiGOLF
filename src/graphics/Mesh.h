@@ -35,6 +35,22 @@ public:
   bool Create(ID3D11Device *device, const std::vector<Vertex> &vertices,
               const std::vector<uint32_t> &indices);
 
+  /**
+   * @brief 頂点バッファをCPUから毎フレーム更新可能な動的メッシュとして作成する
+   * @details CPUスキニング(SkeletalModel::ComputePose)の結果を書き込む用途を想定。
+   *          インデックスバッファは静的（Create()と同様）。
+  */
+  bool CreateDynamic(ID3D11Device *device,
+                     const std::vector<Vertex> &initialVertices,
+                     const std::vector<uint32_t> &indices);
+
+  /**
+   * @brief 動的頂点バッファの内容を更新する(CreateDynamic()で作成したメッシュ専用)
+   * @param vertices 頂点数はCreateDynamic()時と同じであること
+  */
+  bool UpdateVertices(ID3D11DeviceContext *context,
+                      const std::vector<Vertex> &vertices);
+
   /** @brief 描画用にバインド */
   void Bind(ID3D11DeviceContext *context) const;
 
@@ -56,6 +72,7 @@ private:
   uint32_t m_indexCount = 0;
   uint32_t m_stride = sizeof(Vertex);
   uint32_t m_offset = 0;
+  uint32_t m_vertexCapacity = 0; ///< CreateDynamic()時の頂点数（更新時の検証用）
   DirectX::BoundingSphere m_bounds;
 };
 

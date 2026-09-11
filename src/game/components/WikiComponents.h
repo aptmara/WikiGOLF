@@ -302,6 +302,13 @@ struct ShotState {
   int aimClickPressX = 0;
   int aimClickPressY = 0;
 
+  /**
+   * @brief インパクト確定後、クラブが最下点に達するまでのスイング中か。
+   * @details フェーズはImpactTimingのまま据え置き(HUD表示を維持)、この間は入力と
+   *          ゲージ進行を止める。最下点到達でExecuteShotによりExecutingへ進む。
+  */
+  bool swingCommitted = false;
+
   /** @brief 状態のリセット*/
   void Reset() {
     phase = Phase::Idle;
@@ -315,6 +322,7 @@ struct ShotState {
     judgement = ShotJudgement::None;
     resultDisplayTime = 0.0f;
     aimClickTracking = false;
+    swingCommitted = false;
   }
 };
 

@@ -32,6 +32,13 @@ public:
     /** @brief トランジションを開始する*/
     void StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap);
 
+    /**
+     * @brief 遷移演出を始める前から次ページのデータ取得を裏で開始する
+     * @details 同じページでStartTransitionされた場合はこの取得結果を引き継ぐ。
+     *          地形構築はワールドを書き換えるため、裏で行うのは取得のみ。
+    */
+    void PrefetchPage(const std::string& targetPage, scenes::WikiPageLoader* pageLoader);
+
     /** @brief トランジション中の更新。ロード完了とフェードアウトが終われば true を返す*/
     bool Update(core::GameContext& ctx);
 
@@ -71,6 +78,8 @@ private:
 
     // 非同期ロード関連
     std::future<scenes::PageDataAsyncResult> m_loadTask;
+    std::future<scenes::PageDataAsyncResult> m_prefetchTask; ///< PrefetchPageで先行開始した取得
+    std::string m_prefetchPage;                              ///< 先行取得中のページ名
     std::shared_ptr<std::atomic<float>> m_loadProgress;
     std::optional<scenes::PageDataAsyncResult> m_pendingPageData;
     scenes::WikiPageLoader* m_pageLoader = nullptr;

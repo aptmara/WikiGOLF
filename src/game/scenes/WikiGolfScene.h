@@ -97,6 +97,13 @@ private:
 */
   bool CheckCupIn(core::GameContext &ctx);
 
+  /** @brief カップイン後の喜び演出を開始します（終わり次第、遷移/リザルトへ進む）*/
+  void BeginCupInCelebration(core::GameContext &ctx,
+                             const DirectX::XMFLOAT3 &holePos);
+
+  /** @brief 喜び演出中の更新。演出が終わったら保留していた遷移を実行します。*/
+  void UpdateCupInCelebration(core::GameContext &ctx);
+
   /** @brief プロシージャル旗のなびきと旗粒子を更新します。*/
   void UpdateProceduralFlagEffects(core::GameContext &ctx, float dt);
 
@@ -141,7 +148,7 @@ private:
 
   bool m_isTutorial = false;
 
-  enum class ScenePhase { Playing, Transitioning };
+  enum class ScenePhase { Playing, Celebrating, Transitioning };
   ScenePhase m_phase = ScenePhase::Playing;
 
   /**
@@ -229,6 +236,16 @@ private:
   bool m_pendingResultTransition = false; /**< リザルト遷移待ち中かどうかです。*/
   float m_pendingResultTimer = 0.0f; /**< リザルト遷移までの演出待機時間です。*/
   ResultData m_pendingResultData{}; /**< 遅延遷移で渡すリザルト情報です。*/
+
+  /** @brief カップイン演出後に行う遷移の種類です。*/
+  enum class CelebrationNext { None, TransitionPage, Result };
+  CelebrationNext m_celebrationNext = CelebrationNext::None;
+  std::string m_celebrationTargetPage; /**< 演出後に遷移する記事名です。*/
+  float m_celebrationElapsed = 0.0f;   /**< 喜び演出の経過時間(タイムアウト用)です。*/
+  /** @brief インパクト確定からボール発射(クラブ最下点)までの残り秒数。負なら発射待ちなし。*/
+  float m_pendingLaunchTimer = -1.0f;
+  /** @brief インパクト確定時点のショット方向（スイング中にカメラが回っても変えない）です。*/
+  DirectX::XMFLOAT3 m_pendingShotDirection = {0.0f, 0.0f, 1.0f};
   bool m_prevTutorialInputLocked = false; /**< チュートリアル演出入力ロックの解除検知用です。*/
   std::vector<ecs::Entity> m_tutorialFlagSampleEntities; /**< 旗色解説用の一時旗モデルです。*/
   /**

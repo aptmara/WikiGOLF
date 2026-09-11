@@ -246,6 +246,7 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   state->shotCount = 0;
   state->canShoot = true;
   m_tutorialCupInFired = false;
+  m_pendingLaunchTimer = -1.0f;
 
   if (shot) {
     shot->Reset();

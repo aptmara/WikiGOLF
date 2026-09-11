@@ -57,10 +57,28 @@ public:
   // ------------------------------------------------------------------
 
   /**
-   * @brief ExecuteShot 呼び出し直前に呼ぶ（追従フラグ初期化、開始位置記録）
-   * @param power ショット初速。追従開始閾値の計算に使用する
-*/
-  void OnShotStart(core::GameContext &ctx, float power);
+   * @brief ゴルファー(ロボット)の立ち位置と身長を渡す（OnShotStart前に呼ぶ）
+   * @details ショット直後にロボットの三人称視点へ寄るカメラ位置の基準にする。
+  */
+  void SetGolferAnchor(const DirectX::XMFLOAT3 &position, float height);
+
+  /**
+   * @brief インパクト確定(スイング開始)時に呼ぶ
+   * @details 現在のカメラ位置から約1秒かけてロボット背後の三人称視点へ寄り、
+   *          そこから見上げる形でボールを追う。ボールが落下を始めたら追尾へ移る。
+  */
+  void OnShotStart(core::GameContext &ctx);
+
+  /**
+   * @brief カップイン演出用カメラを開始する（ポールとロボットを正面から収める）
+  */
+  void BeginCelebrationView(core::GameContext &ctx,
+                            const DirectX::XMFLOAT3 &holePos,
+                            const DirectX::XMFLOAT3 &golferSpot,
+                            float golferHeight);
+
+  /** @brief カップイン演出用カメラの更新（開始位置からイージングで寄る）*/
+  void UpdateCelebrationView(core::GameContext &ctx);
 
   /** @brief RestoringCamera フェーズでフェードアウト完了後に呼ぶ（カメラ即座再配置）*/
   void RestoreAfterFade(core::GameContext &ctx);
@@ -141,12 +159,34 @@ private:
   float m_targetCameraDistance = 60.0f;
   float m_targetCameraHeight   = 20.0f;
 
-  /** @brief ショット開始時のカメラ位置（固定注視フェーズ用）*/
+  /** @brief ショット開始時のカメラ位置（ここからロボット三人称視点へ寄る）*/
   DirectX::XMFLOAT3 m_shotStartCamPos = {0, 0, 0};
+  /** @brief ロボット背後の三人称(見上げ)カメラ位置（OnShotStartで算出）*/
+  DirectX::XMFLOAT3 m_shotTpsCamPos = {0, 0, 0};
+  /** @brief スイング開始からの経過秒（イージング用）*/
+  float m_shotCamTimer = 0.0f;
   /** @brief 追尾モードに入ったか*/
   bool m_isCameraChasing = false;
-  /** @brief 追尾開始距離閾値（初速から ExecuteShot 時に設定）*/
-  float m_cameraChaseThreshold = 60.0f;
+  /** @brief 前フレームがショット用カメラ（三人称見上げ）だったか*/
+  bool m_wasShotCamera = false;
+
+  /** @brief ゴルファーの立ち位置と身長（SetGolferAnchorで設定）*/
+  DirectX::XMFLOAT3 m_golferAnchorPos = {0, 0, 0};
+  float m_golferAnchorHeight = 2.0f;
+  bool m_hasGolferAnchor = false;
+
+  /** @brief 三人称視点からオービットへ滑らかに戻すための補間（1で完了）*/
+  float m_orbitBlend = 1.0f;
+  DirectX::XMFLOAT3 m_orbitBlendFrom = {0, 0, 0};
+
+  /** @brief カップイン演出カメラの補間状態*/
+  DirectX::XMFLOAT3 m_celebrationFromPos = {0, 0, 0};
+  DirectX::XMFLOAT3 m_celebrationToPos = {0, 0, 0};
+  DirectX::XMFLOAT3 m_celebrationFocus = {0, 0, 0};
+  float m_celebrationTimer = 0.0f;
+
+  /** @brief 現在位置からオービット位置への補間を開始する*/
+  void BeginOrbitBlend(const DirectX::XMFLOAT3 &from);
 
   /** @brief カメラ前方から算出したショット方向（水平正規化済み）*/
   DirectX::XMFLOAT3 m_shotDirection = {0.0f, 0.0f, 1.0f};

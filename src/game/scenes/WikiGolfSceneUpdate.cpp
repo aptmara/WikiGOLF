@@ -119,6 +119,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       return;
   }
 
+  // カップイン後の喜び演出中は操作・物理を止め、演出だけを進める
+  if (m_phase == ScenePhase::Celebrating) {
+      PROFILE_SCOPE("WikiGolf.CupInCelebration");
+      UpdateCupInCelebration(ctx);
+      return;
+  }
+
   auto mousePos = ctx.input.GetMousePosition();
   int mouseX = mousePos.x;
   int mouseY = mousePos.y;
@@ -340,13 +347,20 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (event.shotFired) {
           state->canShoot = false;
           if (m_aimPinController) m_aimPinController->ClearPin(ctx);
-          if (m_cameraController) m_cameraController->OnShotStart(ctx, shot->confirmedPower);
-          if (m_clubController) {
-              DirectX::XMFLOAT3 shotDir{0, 0, 1};
-              if (m_cameraController) {
-                  shotDir = m_cameraController->GetShotDirection();
+          // スイング(Hit)開始。ボールはクラブが最下点に達した時点で発射する
+          m_pendingShotDirection = {0, 0, 1};
+          if (m_cameraController) {
+              m_pendingShotDirection = m_cameraController->GetShotDirection();
+          }
+          m_pendingLaunchTimer =
+              m_clubController ? m_clubController->GetImpactDelay() : 0.0f;
+          if (m_cameraController) {
+              if (m_clubController) {
+                  m_cameraController->SetGolferAnchor(
+                      m_clubController->GetGolferPosition(),
+                      m_clubController->GetGolferHeight());
               }
-              m_shotController->ExecuteShot(ctx, m_ballEntity, shotDir, m_clubController->GetCurrentClub(), &m_timeOfDay, m_hud.get());
+              m_cameraController->OnShotStart(ctx);
           }
 
           // 打球判定の演出表示（着地地形の演出とは別エンティティ・別カーブ）
@@ -368,6 +382,19 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   m_judgeDisplayTargetH = feedback.height;
                   m_judgeDisplayJudgement = shot->judgement;
               }
+          }
+      }
+  }
+
+  // クラブが最下点に達したタイミングでボールを発射する
+  if (m_pendingLaunchTimer >= 0.0f) {
+      m_pendingLaunchTimer -= dt;
+      if (m_pendingLaunchTimer <= 0.0f) {
+          m_pendingLaunchTimer = -1.0f;
+          if (m_shotController && m_clubController && shot->swingCommitted) {
+              m_shotController->ExecuteShot(ctx, m_ballEntity, m_pendingShotDirection,
+                                            m_clubController->GetCurrentClub(),
+                                            &m_timeOfDay, m_hud.get());
           }
       }
   }

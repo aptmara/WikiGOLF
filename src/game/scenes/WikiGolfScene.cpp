@@ -264,9 +264,10 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
           data.isNewRecord = betterStrokes || betterTime;
         }
 
-        if (ctx.sceneManager) {
-          ctx.sceneManager->ChangeScene(std::make_unique<ResultScene>(data));
-        }
+        // ロボットの喜び演出が終わってからResultSceneへ遷移する
+        m_pendingResultData = data;
+        m_celebrationNext = CelebrationNext::Result;
+        BeginCupInCelebration(ctx, holeT->position);
 
         if (ctx.achievementEvents) {
           game::systems::AchievementEvent holeCleared;
@@ -306,11 +307,99 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         return true;
       }
 
-      TransitionToPage(ctx, hole->linkTarget);
+      // 喜び演出の間に次ページのデータ取得を裏で進め、演出後に遷移する
+      m_celebrationTargetPage = hole->linkTarget;
+      m_celebrationNext = CelebrationNext::TransitionPage;
+      if (m_transitionController && m_pageLoader) {
+        m_transitionController->PrefetchPage(m_celebrationTargetPage,
+                                             m_pageLoader.get());
+      }
+      BeginCupInCelebration(ctx, holeT->position);
       return true; // 1フレームに1回だけ遷移
     }
   }
   return false;
+}
+
+void WikiGolfScene::BeginCupInCelebration(core::GameContext &ctx,
+                                          const XMFLOAT3 &holePos) {
+  m_phase = ScenePhase::Celebrating;
+  m_celebrationElapsed = 0.0f;
+  m_pendingLaunchTimer = -1.0f;
+
+  // 演出を見せるためHUD類は隠す（遷移完了時/リザルトで元に戻る）
+  if (m_hud) m_hud->SetVisible(ctx, false);
+  if (m_minimapController) m_minimapController->SetVisible(ctx, false);
+  m_slopeVisualization.ForceHide(ctx);
+  for (auto segE : m_guideSegments) {
+    if (auto *mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
+  }
+
+  XMFLOAT3 cameraPos = holePos;
+  if (auto *camT = ctx.world.Get<Transform>(m_cameraEntity)) {
+    cameraPos = camT->position;
+  }
+
+  XMFLOAT3 golferSpot = holePos;
+  float golferHeight = 2.0f;
+  if (m_clubController) {
+    golferSpot = m_clubController->BeginCelebration(ctx, holePos, cameraPos);
+    golferHeight = m_clubController->GetGolferHeight();
+  }
+  if (m_cameraController) {
+    m_cameraController->BeginCelebrationView(ctx, holePos, golferSpot,
+                                             golferHeight);
+  }
+}
+
+void WikiGolfScene::UpdateCupInCelebration(core::GameContext &ctx) {
+  if (m_celebrationNext == CelebrationNext::None) {
+    return; // 遷移要求済み(シーン切替待ち)
+  }
+
+  const float dt = ctx.dt;
+  m_celebrationElapsed += dt;
+
+  if (m_cameraController) {
+    m_cameraController->UpdateCelebrationView(ctx);
+  }
+  XMFLOAT3 cameraPos{};
+  if (auto *camT = ctx.world.Get<Transform>(m_cameraEntity)) {
+    cameraPos = camT->position;
+  }
+  if (m_clubController) {
+    m_clubController->UpdateCelebration(ctx, dt, cameraPos);
+  }
+  if (m_gameJuice) {
+    m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
+  }
+  UpdateProceduralFlagEffects(ctx, dt);
+
+  // 喜びモーションが終わったら遷移（念のため一定時間で打ち切る）
+  constexpr float kCelebrationTimeoutSeconds = 12.0f;
+  const bool finished = !m_clubController ||
+                        m_clubController->IsCelebrationFinished() ||
+                        m_celebrationElapsed >= kCelebrationTimeoutSeconds;
+  if (!finished) {
+    return;
+  }
+
+  if (m_clubController) {
+    m_clubController->EndCelebration();
+  }
+
+  const CelebrationNext next = m_celebrationNext;
+  m_celebrationNext = CelebrationNext::None;
+  if (next == CelebrationNext::Result) {
+    if (ctx.sceneManager) {
+      ctx.sceneManager->ChangeScene(
+          std::make_unique<ResultScene>(m_pendingResultData));
+    }
+    return;
+  }
+
+  m_phase = ScenePhase::Playing;
+  TransitionToPage(ctx, m_celebrationTargetPage);
 }
 
 } // namespace game::scenes

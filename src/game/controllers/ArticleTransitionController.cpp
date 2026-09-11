@@ -90,6 +90,17 @@ void ArticleTransitionController::Cleanup(core::GameContext& ctx) {
              m_targetPage, ElapsedMs(m_transitionStartedAt));
 }
 
+void ArticleTransitionController::PrefetchPage(const std::string& targetPage, scenes::WikiPageLoader* pageLoader) {
+    if (!pageLoader || m_prefetchTask.valid()) {
+        return;
+    }
+    m_prefetchPage = targetPage;
+    LOG_INFO("Transition", "Background prefetch started page='{}'", targetPage);
+    m_prefetchTask = std::async(std::launch::async, [pageLoader, targetPage]() {
+        return pageLoader->FetchPageDataAsync(targetPage);
+    });
+}
+
 void ArticleTransitionController::StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap) {
     auto* state = ctx.world.GetGlobal<components::GolfGameState>();
     m_previousPage = state ? state->currentPage : "";
@@ -124,14 +135,21 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
              m_targetPage, ElapsedMs(spawnStartedAt));
 
     if (m_pageLoader) {
-        // 非同期ロード開始
-        auto pageLoaderPtr = m_pageLoader;
-        std::string page = targetPage;
         m_fetchStartedAt = std::chrono::steady_clock::now();
-        LOG_INFO("Transition", "Async fetch started page='{}'", page);
-        m_loadTask = std::async(std::launch::async, [pageLoaderPtr, page]() {
-            return pageLoaderPtr->FetchPageDataAsync(page);
-        });
+        if (m_prefetchTask.valid() && m_prefetchPage == targetPage) {
+            // カップイン演出中などに裏で開始済みの取得を引き継ぐ
+            LOG_INFO("Transition", "Using prefetched page data page='{}'", targetPage);
+            m_loadTask = std::move(m_prefetchTask);
+        } else {
+            // 非同期ロード開始
+            auto pageLoaderPtr = m_pageLoader;
+            std::string page = targetPage;
+            LOG_INFO("Transition", "Async fetch started page='{}'", page);
+            m_loadTask = std::async(std::launch::async, [pageLoaderPtr, page]() {
+                return pageLoaderPtr->FetchPageDataAsync(page);
+            });
+        }
+        m_prefetchPage.clear();
     } else {
         LOG_ERROR("Transition", "WikiPageLoader is null!");
     }

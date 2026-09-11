@@ -87,6 +87,34 @@ bool IntersectRayOBB(XMVECTOR rayOrigin, XMVECTOR rayDir, float maxDist,
   return false;
 }
 
+// --- ショット直後のロボット三人称(見上げ)カメラ ---
+constexpr float kShotCamEaseSeconds = 1.0f;   // 三人称視点へ寄るまでの秒数
+constexpr float kShotCamBackRatio = 2.2f;     // ロボット背後への距離(身長比)
+constexpr float kShotCamUpRatio = 1.1f;       // 高さ(身長比)
+constexpr float kShotCamSideRatio = 0.35f;    // ボール側への横ずらし(身長比)
+constexpr float kShotCamLookUpMaxDistance = 55.0f; // これ以上離れたら追尾へ
+constexpr float kShotCamChaseFallSpeed = 1.0f;     // 落下速度がこれを超えたら追尾へ
+constexpr float kOrbitBlendSeconds = 0.9f;    // 三人称→オービットの補間秒数
+constexpr float kOrbitMinPitchAfterShot = 0.35f;
+
+// --- カップイン演出カメラ ---
+constexpr float kCelebrationEaseSeconds = 1.2f;
+constexpr float kCelebrationDistanceRatio = 3.4f;
+constexpr float kCelebrationHeightRatio = 0.9f;
+constexpr float kCelebrationFocusHeightRatio = 0.55f;
+
+float SmoothStep01(float t) {
+  t = std::clamp(t, 0.0f, 1.0f);
+  return t * t * (3.0f - 2.0f * t);
+}
+
+/** @brief fromからtoを向くカメラ回転(クォータニオン)*/
+XMVECTOR LookRotation(FXMVECTOR from, FXMVECTOR to) {
+  const XMMATRIX view = XMMatrixLookAtLH(from, to, XMVectorSet(0, 1, 0, 0));
+  XMVECTOR det;
+  return XMQuaternionRotationMatrix(XMMatrixInverse(&det, view));
+}
+
 } // namespace
 
 // 公開インターフェース実装
@@ -106,7 +134,6 @@ void CameraController::Initialize(Config cfg) {
   m_cameraPitch = 0.5f;
   m_shotDirection = {0.0f, 0.0f, 1.0f};
   m_isCameraChasing = false;
-  m_cameraChaseThreshold = m_cameraDistance;
 }
 
 void CameraController::SetTargetDistanceAndHeight(float recommendedDistance,
@@ -131,17 +158,116 @@ void CameraController::ResetForTransition(float fieldScale) {
   m_cameraDistance = 15.0f * fieldScale;
   m_shotDirection  = {0.0f, 0.0f, 1.0f};
   m_isCameraChasing = false;
+  m_wasShotCamera = false;
+  m_orbitBlend = 1.0f;
 }
 
-void CameraController::OnShotStart(core::GameContext &ctx, float power) {
-  // ExecuteShot 直前に呼ぶ: 開始カメラ位置を記録し追尾フラグをリセット
+void CameraController::SetGolferAnchor(const DirectX::XMFLOAT3 &position,
+                                       float height) {
+  m_golferAnchorPos = position;
+  m_golferAnchorHeight = std::max(height, 0.1f);
+  m_hasGolferAnchor = true;
+}
+
+void CameraController::OnShotStart(core::GameContext &ctx) {
   using namespace game::components;
   auto *camT = ctx.world.Get<Transform>(m_cfg.cameraEntity);
   if (camT) {
     m_shotStartCamPos = camT->position;
   }
   m_isCameraChasing = false;
-  m_cameraChaseThreshold = std::max(power * 1.0f, 5.0f);
+  m_wasShotCamera = false;
+  m_orbitBlend = 1.0f;
+  m_shotCamTimer = 0.0f;
+  m_shotTpsCamPos = m_shotStartCamPos;
+
+  if (!m_hasGolferAnchor) {
+    return; // 基準が無い場合はその場から見上げる
+  }
+
+  // ロボットの背後・やや上、ボール側へ少し寄せた位置（ショット方向基準）
+  const float h = m_golferAnchorHeight;
+  const XMVECTOR fwd = XMVector3Normalize(
+      XMVectorSet(m_shotDirection.x, 0.0f, m_shotDirection.z, 0.0f));
+  const XMVECTOR right =
+      XMVectorSet(XMVectorGetZ(fwd), 0.0f, -XMVectorGetX(fwd), 0.0f);
+  const XMVECTOR golfer = XMLoadFloat3(&m_golferAnchorPos);
+
+  XMVECTOR tps =
+      XMVectorSubtract(golfer, XMVectorScale(fwd, kShotCamBackRatio * h));
+  tps = XMVectorAdd(tps, XMVectorSet(0.0f, kShotCamUpRatio * h, 0.0f, 0.0f));
+  tps = XMVectorAdd(tps, XMVectorScale(right, kShotCamSideRatio * h));
+  const XMVECTOR focus =
+      XMVectorAdd(golfer, XMVectorSet(0.0f, 0.6f * h, 0.0f, 0.0f));
+
+  XMVECTOR adjusted;
+  CheckCameraCollision(ctx, tps, focus, adjusted);
+  XMStoreFloat3(&m_shotTpsCamPos, adjusted);
+}
+
+void CameraController::BeginOrbitBlend(const DirectX::XMFLOAT3 &from) {
+  m_orbitBlend = 0.0f;
+  m_orbitBlendFrom = from;
+  // 見上げ(負ピッチ)のままオービットするとボールの下に回り込むため戻す
+  m_cameraPitch = std::max(m_cameraPitch, kOrbitMinPitchAfterShot);
+}
+
+void CameraController::BeginCelebrationView(core::GameContext &ctx,
+                                            const DirectX::XMFLOAT3 &holePos,
+                                            const DirectX::XMFLOAT3 &golferSpot,
+                                            float golferHeight) {
+  using namespace game::components;
+  auto *camT = ctx.world.Get<Transform>(m_cfg.cameraEntity);
+  if (!camT) {
+    return;
+  }
+
+  const float h = std::max(golferHeight, 0.1f);
+  m_celebrationFromPos = camT->position;
+  m_celebrationTimer = 0.0f;
+  m_isCameraChasing = false;
+  m_wasShotCamera = false;
+  m_orbitBlend = 1.0f;
+
+  // ポールとロボットの中間を注視点にする
+  const XMVECTOR focus = XMVectorAdd(
+      XMVectorScale(
+          XMVectorAdd(XMLoadFloat3(&holePos), XMLoadFloat3(&golferSpot)), 0.5f),
+      XMVectorSet(0.0f, kCelebrationFocusHeightRatio * h, 0.0f, 0.0f));
+  XMStoreFloat3(&m_celebrationFocus, focus);
+
+  // 今のカメラがある側から正面に収める
+  XMVECTOR dir = XMVectorSubtract(XMLoadFloat3(&camT->position), focus);
+  dir = XMVectorSetY(dir, 0.0f);
+  if (XMVectorGetX(XMVector3LengthSq(dir)) < 1e-4f) {
+    dir = XMVectorSet(-m_shotDirection.x, 0.0f, -m_shotDirection.z, 0.0f);
+  }
+  dir = XMVector3Normalize(dir);
+
+  XMVECTOR to =
+      XMVectorAdd(focus, XMVectorScale(dir, kCelebrationDistanceRatio * h));
+  to = XMVectorAdd(to, XMVectorSet(0.0f, kCelebrationHeightRatio * h, 0.0f, 0.0f));
+  XMVECTOR adjusted;
+  CheckCameraCollision(ctx, to, focus, adjusted);
+  XMStoreFloat3(&m_celebrationToPos, adjusted);
+}
+
+void CameraController::UpdateCelebrationView(core::GameContext &ctx) {
+  using namespace game::components;
+  auto *camT = ctx.world.Get<Transform>(m_cfg.cameraEntity);
+  if (!camT) {
+    return;
+  }
+
+  m_celebrationTimer += ctx.dt;
+  const float e = SmoothStep01(m_celebrationTimer / kCelebrationEaseSeconds);
+  const XMVECTOR pos = XMVectorLerp(XMLoadFloat3(&m_celebrationFromPos),
+                                    XMLoadFloat3(&m_celebrationToPos), e);
+  const XMVECTOR focus = XMLoadFloat3(&m_celebrationFocus);
+  XMStoreFloat3(&camT->position, pos);
+  if (XMVectorGetX(XMVector3LengthSq(XMVectorSubtract(focus, pos))) > 1e-4f) {
+    XMStoreFloat4(&camT->rotation, LookRotation(pos, focus));
+  }
 }
 
 void CameraController::ProcessInput(core::GameContext &ctx,
@@ -200,43 +326,56 @@ void CameraController::Update(core::GameContext &ctx) {
   auto *shotState = ctx.world.GetGlobal<ShotState>();
   const bool isExecuting =
       (shotState && shotState->phase == ShotState::Phase::Executing);
+  // インパクト確定(スイング開始)からショット中までをショット用カメラとする
+  const bool isShotCamera =
+      isExecuting || (shotState &&
+                      shotState->phase == ShotState::Phase::ImpactTiming &&
+                      shotState->swingCommitted);
 
-  if (isExecuting) {
-    XMVECTOR ballPos     = XMLoadFloat3(&ballT->position);
-    XMVECTOR startCamPos = XMLoadFloat3(&m_shotStartCamPos);
-
-    float distFromStart = XMVectorGetX(
-        XMVector3Length(XMVectorSubtract(ballPos, startCamPos)));
-
+  if (isShotCamera) {
     if (!m_isCameraChasing) {
-      if (distFromStart < m_cameraChaseThreshold) {
-        // 固定注視フェーズ（カメラ位置を固定しボールの方向を向く）
-        camT->position = m_shotStartCamPos;
+      // 約1秒でロボット背後の三人称視点へ寄り、そこから見上げてボールを追う
+      m_shotCamTimer += ctx.dt;
+      const float ease = SmoothStep01(m_shotCamTimer / kShotCamEaseSeconds);
+      const XMVECTOR camPos = XMVectorLerp(XMLoadFloat3(&m_shotStartCamPos),
+                                           XMLoadFloat3(&m_shotTpsCamPos), ease);
+      XMStoreFloat3(&camT->position, camPos);
 
-        XMVECTOR lookDir = XMVectorSubtract(ballPos, startCamPos);
-        lookDir = XMVectorAdd(lookDir, XMVectorSet(0, 2.0f, 0, 0));
+      const XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
+      XMVECTOR lookDir = XMVectorSubtract(
+          XMVectorAdd(ballPos, XMVectorSet(0, 0.5f, 0, 0)), camPos);
+      if (XMVectorGetX(XMVector3LengthSq(lookDir)) > 0.001f) {
+        lookDir = XMVector3Normalize(lookDir);
+        const float yaw = std::atan2(XMVectorGetX(lookDir), XMVectorGetZ(lookDir));
+        const float pitch = -std::asin(XMVectorGetY(lookDir));
 
-        if (XMVectorGetX(XMVector3LengthSq(lookDir)) > 0.001f) {
-          lookDir = XMVector3Normalize(lookDir);
+        const float lerp = std::min(1.0f, 10.0f * ctx.dt);
+        float diff = yaw - m_cameraYaw;
+        while (diff >  XM_PI) diff -= XM_2PI;
+        while (diff < -XM_PI) diff += XM_2PI;
+        m_cameraYaw   += diff * lerp;
+        m_cameraPitch += (pitch - m_cameraPitch) * lerp;
+        m_cameraPitch  = std::clamp(m_cameraPitch, -1.35f, 1.4f); // 見上げを許可
 
-          float yaw   = std::atan2(XMVectorGetX(lookDir), XMVectorGetZ(lookDir));
-          float pitch = -std::asin(XMVectorGetY(lookDir));
-
-          float lerp = 10.0f * ctx.dt;
-          float diff  = yaw - m_cameraYaw;
-          while (diff >  XM_PI) diff -= XM_2PI;
-          while (diff < -XM_PI) diff += XM_2PI;
-          m_cameraYaw   += diff * lerp;
-          m_cameraPitch += (pitch - m_cameraPitch) * lerp;
-          m_cameraPitch  = std::clamp(m_cameraPitch, -0.1f, 1.4f);
-
-          XMVECTOR q = XMQuaternionRotationRollPitchYaw(m_cameraPitch, m_cameraYaw, 0.0f);
-          XMStoreFloat4(&camT->rotation, q);
-        }
-        return;
-      } else {
-        m_isCameraChasing = true;
+        XMStoreFloat4(&camT->rotation, XMQuaternionRotationRollPitchYaw(
+                                           m_cameraPitch, m_cameraYaw, 0.0f));
       }
+
+      // 寄り切った後、ボールが落下を始めるか遠ざかったら追尾へ移る
+      bool shouldChase = false;
+      if (isExecuting && m_shotCamTimer >= kShotCamEaseSeconds) {
+        const float dx = ballT->position.x - XMVectorGetX(camPos);
+        const float dz = ballT->position.z - XMVectorGetZ(camPos);
+        const auto *ballRB = ctx.world.Get<RigidBody>(m_cfg.ballEntity);
+        shouldChase = std::sqrt(dx * dx + dz * dz) > kShotCamLookUpMaxDistance ||
+                      (ballRB && ballRB->velocity.y < -kShotCamChaseFallSpeed);
+      }
+      if (!shouldChase) {
+        m_wasShotCamera = true;
+        return;
+      }
+      m_isCameraChasing = true;
+      BeginOrbitBlend(camT->position);
     }
 
     // 追尾モードフェーズ（ボール進行方向にヨー回転を追従）
@@ -258,7 +397,11 @@ void CameraController::Update(core::GameContext &ctx) {
       float targetPitch = 0.5f;
       m_cameraPitch += (targetPitch - m_cameraPitch) * 2.0f * ctx.dt;
     }
+  } else if (m_wasShotCamera && !m_isCameraChasing) {
+    // 追尾に入る前にボールが止まった(パット等)場合も三人称視点から滑らかに戻す
+    BeginOrbitBlend(camT->position);
   }
+  m_wasShotCamera = isShotCamera;
 
   // TPSオービットの基準位置を計算
   XMVECTOR ballPos = XMLoadFloat3(&ballT->position);
@@ -270,10 +413,27 @@ void CameraController::Update(core::GameContext &ctx) {
   // 衝突補正
   XMVECTOR adjustedPos;
   bool collided = CheckCameraCollision(ctx, camPos, ballPos, adjustedPos);
-  XMStoreFloat3(&camT->position, adjustedPos);
+
+  if (m_orbitBlend < 1.0f) {
+    // 三人称(見上げ)視点の位置からオービット位置へ補間し、ボールを注視し続ける
+    m_orbitBlend = std::min(1.0f, m_orbitBlend + ctx.dt / kOrbitBlendSeconds);
+    const XMVECTOR blended = XMVectorLerp(XMLoadFloat3(&m_orbitBlendFrom),
+                                          adjustedPos, SmoothStep01(m_orbitBlend));
+    XMStoreFloat3(&camT->position, blended);
+    const XMVECTOR focus = XMVectorAdd(ballPos, XMVectorSet(0, 0.5f, 0, 0));
+    if (XMVectorGetX(XMVector3LengthSq(XMVectorSubtract(focus, blended))) > 0.001f) {
+      XMStoreFloat4(&camT->rotation, LookRotation(blended, focus));
+    } else {
+      XMStoreFloat4(&camT->rotation, camRotQ);
+    }
+  } else {
+    XMStoreFloat3(&camT->position, adjustedPos);
+  }
 
   // 回転設定
-  if (collided) {
+  if (m_orbitBlend < 1.0f) {
+    // 補間中は上で注視回転を設定済み
+  } else if (collided) {
     XMVECTOR focusPoint = XMVectorAdd(ballPos, XMVectorSet(0, 0.5f, 0, 0));
     XMVECTOR lookDir    = XMVectorSubtract(focusPoint, adjustedPos);
     if (XMVectorGetX(XMVector3LengthSq(lookDir)) > 0.001f) {
@@ -290,7 +450,8 @@ void CameraController::Update(core::GameContext &ctx) {
   }
 
   // アイドル時のみカメラ前方からショット方向を算出
-  if (!isExecuting) {
+  // （スイング中にカメラが三人称へ回っても打球方向が変わらないようにする）
+  if (!isShotCamera) {
     XMVECTOR forward = XMVectorSet(0, 0, 1, 0);
     forward          = XMVector3Rotate(forward, camRotQ);
 
@@ -328,6 +489,8 @@ void CameraController::RestoreAfterFade(core::GameContext &ctx) {
   XMStoreFloat4(&camT->rotation, camRotQ);
 
   m_isCameraChasing = false;
+  m_wasShotCamera = false;
+  m_orbitBlend = 1.0f;
   XMStoreFloat3(&m_shotStartCamPos, adjustedPos);
 }
 

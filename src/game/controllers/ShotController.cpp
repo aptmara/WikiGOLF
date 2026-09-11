@@ -125,9 +125,15 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
     }
 
     case game::components::ShotState::Phase::ImpactTiming: {
+        // スイング中(最下点でボール発射待ち)は入力もゲージ進行も受け付けない
+        if (shot->swingCommitted) {
+            break;
+        }
+
         // インパクト決定
         if (ctx.input.GetMouseButtonDown(0)) {
             shot->confirmedImpact = shot->impactGaugePos;
+            shot->swingCommitted = true;
 
             // 判定ロジック（パーフェクト中心はパワー確定位置に連動する）
             shot->judgement = game::utils::EvaluateImpactJudgement(

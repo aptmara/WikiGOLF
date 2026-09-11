@@ -248,5 +248,132 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 }
 
 
+Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
+ResourceManager::LoadTextureSRVFromMemory(const std::string &cacheKey,
+                                          const void *data,
+                                          size_t sizeBytes) {
+  if (auto it = m_textureCache.find(cacheKey); it != m_textureCache.end()) {
+    return it->second;
+  }
+  if (!data || sizeBytes == 0) {
+    return {};
+  }
+
+  static Microsoft::WRL::ComPtr<IWICImagingFactory> s_factory;
+  if (!s_factory) {
+    HRESULT hr =
+        CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                         IID_PPV_ARGS(&s_factory));
+    if (FAILED(hr)) {
+      LOG_ERROR("Resource",
+                "Failed to create WICImagingFactory (hr=0x{:08X})",
+                static_cast<uint32_t>(hr));
+      return {};
+    }
+  }
+
+  Microsoft::WRL::ComPtr<IWICStream> stream;
+  HRESULT hr = s_factory->CreateStream(&stream);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CreateStream failed for {}", cacheKey);
+    return {};
+  }
+
+  hr = stream->InitializeFromMemory(
+      reinterpret_cast<BYTE *>(const_cast<void *>(data)),
+      static_cast<DWORD>(sizeBytes));
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "InitializeFromMemory failed for {}", cacheKey);
+    return {};
+  }
+
+  Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+  hr = s_factory->CreateDecoderFromStream(
+      stream.Get(), nullptr, WICDecodeMetadataCacheOnLoad, &decoder);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "Failed to decode in-memory texture: {} (hr=0x{:08X})",
+              cacheKey, static_cast<uint32_t>(hr));
+    return {};
+  }
+
+  Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+  decoder->GetFrame(0, &frame);
+
+  Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+  hr = s_factory->CreateFormatConverter(&converter);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CreateFormatConverter failed for {}", cacheKey);
+    return {};
+  }
+
+  hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
+                             WICBitmapDitherTypeNone, nullptr, 0.0,
+                             WICBitmapPaletteTypeMedianCut);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "Format conversion failed for {}", cacheKey);
+    return {};
+  }
+
+  UINT width = 0;
+  UINT height = 0;
+  converter->GetSize(&width, &height);
+  if (width == 0 || height == 0) {
+    LOG_ERROR("Resource", "In-memory texture has invalid size: {}", cacheKey);
+    return {};
+  }
+
+  const UINT stride = width * 4;
+  const UINT bufferSize = stride * height;
+  std::vector<BYTE> pixels(bufferSize);
+  hr = converter->CopyPixels(nullptr, stride, bufferSize, pixels.data());
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CopyPixels failed for {}", cacheKey);
+    return {};
+  }
+
+  D3D11_TEXTURE2D_DESC desc = {};
+  desc.Width = width;
+  desc.Height = height;
+  desc.MipLevels = 1;
+  desc.ArraySize = 1;
+  desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  desc.SampleDesc.Count = 1;
+  desc.Usage = D3D11_USAGE_DEFAULT;
+  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+  D3D11_SUBRESOURCE_DATA initData = {};
+  initData.pSysMem = pixels.data();
+  initData.SysMemPitch = stride;
+
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+  hr = m_device.GetDevice()->CreateTexture2D(&desc, &initData, &texture);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource", "CreateTexture2D failed for {} (hr=0x{:08X})",
+              cacheKey, static_cast<uint32_t>(hr));
+    return {};
+  }
+
+  D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+  srvDesc.Format = desc.Format;
+  srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+  srvDesc.Texture2D.MostDetailedMip = 0;
+  srvDesc.Texture2D.MipLevels = 1;
+
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
+  hr = m_device.GetDevice()->CreateShaderResourceView(texture.Get(), &srvDesc,
+                                                      &srv);
+  if (FAILED(hr)) {
+    LOG_ERROR("Resource",
+              "CreateShaderResourceView failed for {} (hr=0x{:08X})",
+              cacheKey, static_cast<uint32_t>(hr));
+    return {};
+  }
+
+  m_textureCache[cacheKey] = srv;
+  LOG_INFO("Resource", "Loaded In-Memory Texture: {} ({}x{})", cacheKey, width,
+          height);
+  return srv;
+}
+
 } // namespace resources
 

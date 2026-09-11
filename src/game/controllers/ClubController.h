@@ -5,6 +5,8 @@
 
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
+#include "../../graphics/SkeletalModel.h"
+#include "../../resources/ResourceManager.h"
 #include "../utils/CarryDistanceTable.h"
 #include "TrajectoryPredictor.h"
 #include <DirectXMath.h>
@@ -89,6 +91,39 @@ public:
   /** @brief 全クラブ名リストを返す (WikiGolfHUD のクラブ選択リスト描画用)*/
   const std::vector<Club>& GetAllClubs() const { return m_availableClubs; }
 
+  /** @brief ゴルファー(ロボット)の現在の立ち位置（足元）*/
+  const DirectX::XMFLOAT3 &GetGolferPosition() const { return m_golferStandPos; }
+
+  /** @brief ゴルファーのワールド上の身長（カメラ配置の基準）*/
+  float GetGolferHeight() const;
+
+  /**
+   * @brief スイング(Hit)開始からクラブが最下点に達するまでの秒数
+   * @details シーン側はインパクト確定からこの秒数後にボールを発射する。
+  */
+  float GetImpactDelay() const;
+
+  /**
+   * @brief カップイン時の喜び演出を開始する（ポールの横まで歩いてくる）
+   * @param cameraPos 現在のカメラ位置（ポールのどちら側に立つか決めるのに使う）
+   * @return ゴルファーが喜びモーションを行う立ち位置
+  */
+  DirectX::XMFLOAT3 BeginCelebration(core::GameContext &ctx,
+                                     const DirectX::XMFLOAT3 &holePos,
+                                     const DirectX::XMFLOAT3 &cameraPos);
+
+  /** @brief 喜び演出の更新（到着後はカメラの方を向いてCelebrateを再生）*/
+  void UpdateCelebration(core::GameContext &ctx, float dt,
+                         const DirectX::XMFLOAT3 &cameraPos);
+
+  /** @brief 喜びモーションを最後まで再生し終えたか*/
+  bool IsCelebrationFinished() const {
+    return m_celebrationStage == CelebrationStage::Done;
+  }
+
+  /** @brief 喜び演出を終了し、次のコースで立ち位置を取り直す状態に戻す*/
+  void EndCelebration();
+
 private:
   enum class ClubAnimPhase {
     Idle,
@@ -105,6 +140,28 @@ private:
   void CollapseClubUI(core::GameContext &ctx);
   bool SelectClubByIndex(core::GameContext &ctx, size_t index);
 
+  /**
+   * @brief 現在のクラブ種別に応じたスイングフェーズ別クリップ名を返す
+   * @details パターは"Putt_"、それ以外は"FullSwing_"を接頭辞とし、
+   *          suffixには"Charge"(溜め)/"Hold"(維持)/"Hit"(打つ・振り抜き)を渡す。
+  */
+  std::string GetPhaseClipName(const char *suffix) const;
+
+  /**
+   * @brief 現在のクリップ（と切替元クリップとのクロスフェード）で
+   *        スキンメッシュの頂点を再計算しGPUへ送る
+  */
+  void UpdateGolferPose(core::GameContext &ctx);
+
+  /**
+   * @brief 再生クリップを切り替え/進める
+   * @details 切替時は素材の遷移仕様に合わせてクロスフェードする
+   *          (Charge→Holdは0秒、Hold→Hitは80ms、それ以外は0.2秒)。
+  */
+  void AdvanceClip(const std::string &clipName, bool loop, float dt);
+
+  float ClipDuration(const std::string &clipName) const;
+
   std::vector<Club> m_availableClubs;
   Club m_currentClub = {"Driver", 30.0f, 30.0f, "icon_driver.png", 1.0f};
   int m_currentClubIndex = 0;
@@ -117,10 +174,57 @@ private:
 
   ecs::Entity m_clubModelEntity = UINT32_MAX;
   ClubAnimPhase m_clubAnimPhase = ClubAnimPhase::Idle;
-  float m_clubSwingAngle = 0.0f;
-  float m_clubSwingSpeed = 0.0f;
   float m_clubAnimTimer = 0.0f;
   ecs::EntityOwner m_entityOwner;
+
+  // --- G01_Robot_Golfer スケルタルアニメーション ---
+  graphics::SkeletalModel m_golferModel;
+  resources::MeshHandle m_golferMeshHandle;
+  std::vector<graphics::Vertex> m_golferPoseScratch;
+  std::string m_currentClipName = "Idle";
+  float m_clipTime = 0.0f;
+  bool m_golferModelValid = false;
+
+  // ゴルファーが構えるスタンス位置（ボール基準のローカルオフセット）とヨー補正。
+  // 実機で見た目を確認しながら調整することを想定した定数。
+  static constexpr float kGolferStanceOffsetX = -0.9f;
+  static constexpr float kGolferStanceOffsetZ = -0.4f;
+  static constexpr float kGolferYawOffsetDeg = 90.0f;
+  static constexpr float kGolferScale = 10.0f;
+
+  // ボールの位置が変わったら歩いて移動する（毎フレームボールに追従しないための状態）
+  bool m_golferPositionInitialized = false;
+  DirectX::XMFLOAT3 m_golferStandPos = {0.0f, 0.0f, 0.0f};
+  DirectX::XMFLOAT3 m_golferWalkTarget = {0.0f, 0.0f, 0.0f};
+  bool m_golferWalking = false;
+  static constexpr float kGolferWalkSpeed = 2.5f; // units/sec
+  static constexpr float kGolferWalkTriggerDistance = 0.5f;
+  // これ以上の大移動（新ホール開始など、カメラに映っていない場面）は歩かず瞬間移動する
+  static constexpr float kGolferTeleportDistance = 15.0f;
+
+  // クリップ切替のクロスフェード状態
+  std::string m_prevClipName;
+  float m_prevClipTime = 0.0f;
+  float m_crossfadeTimer = 0.0f;
+  float m_crossfadeDuration = 0.0f;
+  bool m_chargeFinished = false; // 溜め(Charge)を最後まで再生し終えたか
+
+  // Hitクリップ開始からクラブ最下点までの秒数（素材仕様）
+  static constexpr float kFullSwingImpactSeconds = 0.5f;
+  static constexpr float kPuttImpactSeconds = 0.3f;
+
+  // --- カップイン喜び演出 ---
+  enum class CelebrationStage { None, Walking, Celebrating, Done };
+  CelebrationStage m_celebrationStage = CelebrationStage::None;
+  DirectX::XMFLOAT3 m_celebrationSpot = {0.0f, 0.0f, 0.0f};
+  // 立ち位置はポールからカメラ側へ/横へ、身長比でずらす（ポールと重ならないように）
+  static constexpr float kCelebrateFrontRatio = 0.5f;
+  static constexpr float kCelebrateSideRatio = 0.8f;
+  // これより遠くにいる場合は、画面外(横方向)から歩いて入ってくる位置へ瞬間移動する
+  static constexpr float kCelebrateMaxWalkRatio = 4.0f;
+  static constexpr float kCelebrateWalkInRatio = 3.0f;
+  // Celebrate再生後、遷移するまで余韻として待つ秒数
+  static constexpr float kCelebrateHoldSeconds = 0.4f;
 };
 
 } // namespace game::controllers
