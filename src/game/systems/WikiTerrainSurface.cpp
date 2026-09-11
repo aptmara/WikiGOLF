@@ -46,11 +46,24 @@ float GrassStreamingDrawDistance(core::GraphicsPreset preset) {
 void WikiTerrainSystem::CreateSurfaceGrass(core::GameContext &ctx,
                                            float fieldWidth,
                                            float fieldDepth) {
+  BeginSurfaceGrassBuild(ctx, fieldWidth, fieldDepth);
+  UpdateSurfaceGrassChunks(ctx, 0.0f, 0.0f,
+                           (std::numeric_limits<size_t>::max)());
+}
+
+void WikiTerrainSystem::BeginSurfaceGrassBuild(core::GameContext &ctx,
+                                               float fieldWidth,
+                                               float fieldDepth) {
   m_grassFieldWidth = fieldWidth;
   m_grassFieldDepth = fieldDepth;
   ClearSurfaceGrass(ctx);
+  UpdateSurfaceGrassChunks(ctx, 0.0f, 0.0f, 0);
+}
+
+bool WikiTerrainSystem::StepSurfaceGrassBuild(core::GameContext &ctx) {
   UpdateSurfaceGrassChunks(ctx, 0.0f, 0.0f,
-                           (std::numeric_limits<size_t>::max)());
+                           kGrassChunksGeneratedPerFrame);
+  return m_pendingSurfaceGrassChunks.empty();
 }
 
 void WikiTerrainSystem::GenerateSurfaceGrassChunk(core::GameContext &ctx,

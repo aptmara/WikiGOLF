@@ -170,6 +170,9 @@ private:
    */
   void CreateSurfaceGrass(core::GameContext &ctx, float fieldWidth,
                           float fieldDepth);
+  void BeginSurfaceGrassBuild(core::GameContext &ctx, float fieldWidth,
+                              float fieldDepth);
+  bool StepSurfaceGrassBuild(core::GameContext &ctx);
   void UpdateSurfaceGrassChunks(core::GameContext &ctx, float centerX,
                                 float centerZ, size_t generationBudget);
   void GenerateSurfaceGrassChunk(core::GameContext &ctx, int chunkX,
@@ -187,10 +190,15 @@ private:
     Idle,
     TerrainGenAsync,   /**< TerrainGenerator 非同期待ち*/
     CreatePhysics,     /**< 物理エンティティ作成*/
+    LoadTerrainAlbedo, /**< 地形アルベド配列をロード*/
+    LoadTerrainNormal, /**< 地形法線配列をロード*/
+    LoadTerrainShader, /**< 地形シェーダーをロード*/
+    LoadBasicShader,   /**< オーバーレイ用シェーダーをロード*/
     CreateTileMesh,    /**< ビジュアルメッシュ（1タイル/ステップ）*/
     CreateTileOverlay, /**< オーバーレイ（1タイル/ステップ）*/
     CreateWalls,       /**< 壁生成*/
     CreateDecorations, /**< 装飾生成*/
+    CreateSurfaceGrass,/**< 草チャンク生成（複数フレーム）*/
     Done
   };
 
