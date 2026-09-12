@@ -145,7 +145,8 @@ public:
   /** @brief リップルエフェクトを発火（強いバウンド時）*/
   void TriggerRippleEffect(core::GameContext &ctx,
                            const DirectX::XMFLOAT3 &position,
-                           float baseRadius, float strength);
+                           float baseRadius, float strength,
+                           game::components::TerrainMaterial material);
 
   /** @brief カップインなど祝祭時の星・紙吹雪・きらめきを発火*/
   void TriggerConfetti(core::GameContext &ctx,
@@ -224,6 +225,14 @@ private:
     SandDust,
     SandGrain,
     SandClump,
+    IceShard,
+    IceMist,
+    StoneChip,
+    StoneDust,
+    WaterDrop,
+    WaterMist,
+    Ember,
+    LavaSmoke,
     GenericDebris
   };
 
@@ -263,6 +272,9 @@ private:
     float lifetime = 0.0f;
     float maxLifetime = 1.0f;
     float startScale = 1.0f;
+    float expansion = 3.0f;
+    float thickness = 0.02f;
+    DirectX::XMFLOAT4 baseColor = {0.6f, 0.8f, 1.2f, 0.6f};
   };
   std::vector<Ripple> m_ripples;
   int m_rippleWriteIndex = 0;

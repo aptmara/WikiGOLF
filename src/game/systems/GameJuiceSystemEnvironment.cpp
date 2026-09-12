@@ -32,10 +32,31 @@ void GameJuiceSystem::TriggerMaterialEffect(
     core::GameContext &ctx, const DirectX::XMFLOAT3 &position,
     game::components::TerrainMaterial material, float strength) {
   const bool isBunker = material == TerrainMaterial::Bunker;
-  int count = std::clamp(static_cast<int>(strength * 6.0f), 1, 6);
-  if (isBunker) {
-    count = std::clamp(34 + static_cast<int>(strength * 22.0f), 34, 56);
+  int count = 8 + static_cast<int>(strength * 12.0f);
+  switch (material) {
+  case TerrainMaterial::Bunker:
+    count = 36 + static_cast<int>(strength * 24.0f);
+    break;
+  case TerrainMaterial::Rough:
+    count = 16 + static_cast<int>(strength * 16.0f);
+    break;
+  case TerrainMaterial::Water:
+    count = 24 + static_cast<int>(strength * 22.0f);
+    break;
+  case TerrainMaterial::Lava:
+    count = 22 + static_cast<int>(strength * 20.0f);
+    break;
+  case TerrainMaterial::Ice:
+  case TerrainMaterial::Stone:
+    count = 18 + static_cast<int>(strength * 18.0f);
+    break;
+  case TerrainMaterial::None:
+    count = 0;
+    break;
+  default:
+    break;
   }
+  count = std::clamp(count, 0, 60);
   const auto particleShader = ctx.resource.LoadShader(
       "Particle", L"shaders/ParticleVS.hlsl", L"shaders/ParticlePS.hlsl");
   const auto basicShader = ctx.resource.LoadShader(
@@ -167,19 +188,28 @@ void GameJuiceSystem::TriggerMaterialEffect(
         mr->customFlags.y = 0.0f;
 
         if (material == game::components::TerrainMaterial::Rough) {
-          p.baseColor = {0.12f, 0.38f, 0.10f, 1.0f}; // 濃い緑
-          float sizeJitter = 0.7f + ((float)(rand() % 100) / 100.0f) * 0.6f;
-          p.baseScale = (0.1f + strength * 0.15f) * sizeJitter;
+          const float leafTone = Rand01() * 0.10f;
+          p.baseColor = {0.08f + leafTone * 0.25f, 0.28f + leafTone,
+                         0.055f, 1.0f};
+          p.baseScale = (0.075f + strength * 0.105f) *
+                        (0.72f + Rand01() * 0.65f);
+          p.lifetime = 0.72f + Rand01() * 0.48f;
         } else if (material == game::components::TerrainMaterial::Green) {
-          p.baseColor = {0.18f, 0.78f, 0.28f, 1.0f}; // 鮮やか
-          p.baseScale = 0.05f + strength * 0.05f; // 小さい
+          p.baseColor = {0.22f, 0.72f + Rand01() * 0.12f, 0.19f, 0.88f};
+          p.baseScale = 0.026f + strength * 0.038f;
+          p.lifetime = 0.38f + Rand01() * 0.25f;
         } else {
-          p.baseColor = {0.25f, 0.58f, 0.18f, 1.0f}; // 普通
-          p.baseScale = 0.08f + strength * 0.1f;
+          p.baseColor = {0.18f + Rand01() * 0.08f,
+                         0.50f + Rand01() * 0.12f, 0.11f, 0.96f};
+          p.baseScale = 0.048f + strength * 0.072f;
+          p.lifetime = 0.50f + Rand01() * 0.34f;
         }
+        p.maxLifetime = p.lifetime;
         mr->color = p.baseColor;
 
-        t->scale = {p.baseScale * 1.5f, p.baseScale * 0.1f, p.baseScale * 1.5f};
+        const float bladeLength = material == TerrainMaterial::Rough ? 2.8f : 1.8f;
+        t->scale = {p.baseScale * bladeLength, p.baseScale * 0.10f,
+                    p.baseScale * (0.72f + Rand01() * 0.52f)};
 
         float spinScale = 45.0f;
         p.angularVelocity.x =
@@ -191,10 +221,133 @@ void GameJuiceSystem::TriggerMaterialEffect(
         break;
       }
 
+      case TerrainMaterial::Ice: {
+        const bool mist = (k % 4) == 0;
+        p.kind = mist ? EnvironmentParticleKind::IceMist
+                      : EnvironmentParticleKind::IceShard;
+        mr->mesh = ctx.resource.LoadMesh(mist ? "builtin/sphere" : "builtin/cube");
+        mr->shader = particleShader;
+        mr->isTransparent = true;
+        mr->blendMode = mist ? BlendMode::Alpha : BlendMode::Add;
+        mr->customFlags = {mist ? 1.0f : 2.0f, 0.0f, 0.0f, 0.0f};
+        p.baseColor = mist ? XMFLOAT4{0.66f, 0.93f, 1.14f, 0.42f}
+                           : XMFLOAT4{0.62f, 1.18f, 1.48f, 0.95f};
+        p.baseScale = mist ? 0.12f + strength * 0.14f
+                           : 0.025f + strength * 0.045f + Rand01() * 0.025f;
+        p.lifetime = mist ? 0.72f + Rand01() * 0.38f
+                          : 0.48f + Rand01() * 0.42f;
+        const float radial = 1.2f + strength * 5.0f + Rand01() * 2.0f;
+        p.velocity = {std::cos(angle) * radial,
+                      mist ? 0.18f + Rand01() * 0.35f
+                           : 1.5f + strength * 3.5f + Rand01() * 1.8f,
+                      std::sin(angle) * radial};
+        p.angularVelocity = {RandCentered() * 32.0f, RandCentered() * 38.0f,
+                             RandCentered() * 32.0f};
+        t->scale = mist ? XMFLOAT3{p.baseScale, p.baseScale * 0.48f, p.baseScale}
+                        : XMFLOAT3{p.baseScale * 0.35f, p.baseScale * 2.8f,
+                                   p.baseScale * 0.75f};
+        p.maxLifetime = p.lifetime;
+        mr->color = p.baseColor;
+        break;
+      }
+
+      case TerrainMaterial::Stone: {
+        const bool dust = (k % 5) == 0;
+        p.kind = dust ? EnvironmentParticleKind::StoneDust
+                      : EnvironmentParticleKind::StoneChip;
+        mr->mesh = ctx.resource.LoadMesh(dust ? "builtin/sphere" : "builtin/rock");
+        mr->shader = dust ? particleShader : basicShader;
+        mr->isTransparent = dust;
+        mr->blendMode = dust ? BlendMode::Alpha : BlendMode::Opaque;
+        mr->customFlags = {dust ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+        const float shade = Rand01() * 0.16f;
+        p.baseColor = dust ? XMFLOAT4{0.48f + shade, 0.45f + shade,
+                                      0.41f + shade, 0.58f}
+                           : XMFLOAT4{0.31f + shade, 0.30f + shade,
+                                      0.29f + shade, 1.0f};
+        p.baseScale = dust ? 0.11f + strength * 0.13f
+                           : 0.035f + strength * 0.055f + Rand01() * 0.035f;
+        p.lifetime = dust ? 0.70f + Rand01() * 0.38f
+                          : 0.62f + Rand01() * 0.48f;
+        const float radial = 1.0f + strength * 4.2f + Rand01() * 1.6f;
+        p.velocity = {std::cos(angle) * radial,
+                      dust ? 0.25f + Rand01() * 0.45f
+                           : 1.2f + strength * 3.2f + Rand01() * 1.5f,
+                      std::sin(angle) * radial};
+        p.angularVelocity = {RandCentered() * 24.0f, RandCentered() * 30.0f,
+                             RandCentered() * 24.0f};
+        t->scale = dust ? XMFLOAT3{p.baseScale, p.baseScale * 0.42f, p.baseScale}
+                        : XMFLOAT3{p.baseScale * 1.35f, p.baseScale * 0.8f,
+                                   p.baseScale};
+        p.maxLifetime = p.lifetime;
+        mr->color = p.baseColor;
+        break;
+      }
+
+      case TerrainMaterial::Water: {
+        const bool mist = (k % 4) == 0;
+        p.kind = mist ? EnvironmentParticleKind::WaterMist
+                      : EnvironmentParticleKind::WaterDrop;
+        mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+        mr->shader = particleShader;
+        mr->isTransparent = true;
+        mr->blendMode = mist ? BlendMode::Alpha : BlendMode::Add;
+        mr->customFlags = {mist ? 1.0f : 3.0f, 0.0f, 0.0f, 0.0f};
+        p.baseColor = mist ? XMFLOAT4{0.40f, 0.76f, 1.02f, 0.42f}
+                           : XMFLOAT4{0.24f, 0.82f, 1.46f, 0.90f};
+        p.baseScale = mist ? 0.13f + strength * 0.15f
+                           : 0.025f + strength * 0.035f + Rand01() * 0.022f;
+        p.lifetime = mist ? 0.55f + Rand01() * 0.30f
+                          : 0.58f + Rand01() * 0.42f;
+        const float radial = 1.7f + strength * 5.8f + Rand01() * 2.2f;
+        p.velocity = {std::cos(angle) * radial,
+                      mist ? 0.25f + Rand01() * 0.40f
+                           : 2.0f + strength * 4.0f + Rand01() * 2.2f,
+                      std::sin(angle) * radial};
+        p.angularVelocity = {0, 0, 0};
+        t->scale = mist ? XMFLOAT3{p.baseScale, p.baseScale * 0.38f, p.baseScale}
+                        : XMFLOAT3{p.baseScale * 0.60f, p.baseScale * 1.7f,
+                                   p.baseScale * 0.60f};
+        p.maxLifetime = p.lifetime;
+        mr->color = p.baseColor;
+        break;
+      }
+
+      case TerrainMaterial::Lava: {
+        const bool smoke = (k % 4) == 0;
+        p.kind = smoke ? EnvironmentParticleKind::LavaSmoke
+                       : EnvironmentParticleKind::Ember;
+        mr->mesh = ctx.resource.LoadMesh(smoke ? "builtin/sphere" : "builtin/cube");
+        mr->shader = particleShader;
+        mr->isTransparent = true;
+        mr->blendMode = smoke ? BlendMode::Alpha : BlendMode::Add;
+        mr->customFlags = {smoke ? 1.0f : 4.0f, 0.0f, 0.0f, 0.0f};
+        const float heat = Rand01() * 0.34f;
+        p.baseColor = smoke ? XMFLOAT4{0.18f, 0.11f, 0.08f, 0.66f}
+                            : XMFLOAT4{1.65f, 0.30f + heat, 0.025f, 1.0f};
+        p.baseScale = smoke ? 0.14f + strength * 0.18f
+                            : 0.022f + strength * 0.040f + Rand01() * 0.025f;
+        p.lifetime = smoke ? 0.95f + Rand01() * 0.55f
+                           : 0.64f + Rand01() * 0.55f;
+        const float radial = 1.0f + strength * 4.4f + Rand01() * 1.8f;
+        p.velocity = {std::cos(angle) * radial,
+                      smoke ? 0.65f + Rand01() * 0.75f
+                            : 1.9f + strength * 4.4f + Rand01() * 2.0f,
+                      std::sin(angle) * radial};
+        p.angularVelocity = {RandCentered() * 28.0f, RandCentered() * 36.0f,
+                             RandCentered() * 28.0f};
+        t->scale = smoke ? XMFLOAT3{p.baseScale, p.baseScale * 0.68f, p.baseScale}
+                         : XMFLOAT3{p.baseScale * 0.5f, p.baseScale * 2.2f,
+                                    p.baseScale * 0.5f};
+        p.maxLifetime = p.lifetime;
+        mr->color = p.baseColor;
+        break;
+      }
+
+      case TerrainMaterial::None:
       default:
-        // 岩など（汎用拡散）
         p.kind = EnvironmentParticleKind::GenericDebris;
-        mr->mesh = ctx.resource.LoadMesh("builtin/cube"); // 岩片
+        mr->mesh = ctx.resource.LoadMesh("builtin/cube");
         mr->shader = basicShader;
         mr->isTransparent = false;
         mr->blendMode = BlendMode::Opaque;
@@ -204,6 +357,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
         mr->customFlags.y = 0.0f;
         p.baseScale = 0.05f + strength * 0.1f;
         t->scale = {p.baseScale, p.baseScale, p.baseScale};
+        p.maxLifetime = p.lifetime;
         break;
       }
     }
@@ -272,6 +426,16 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
       } else {
         count = 0;
       }
+    } else if (state->currentMaterial == TerrainMaterial::Ice) {
+      count = 1 + static_cast<int>(speed01 * 2.0f);
+    } else if (state->currentMaterial == TerrainMaterial::Stone) {
+      count = state->currentBallSpeed > 2.0f ? 1 + static_cast<int>(speed01) : 0;
+    } else if (state->currentMaterial == TerrainMaterial::Water) {
+      count = 2 + static_cast<int>(speed01 * 4.0f);
+    } else if (state->currentMaterial == TerrainMaterial::Lava) {
+      count = 2 + static_cast<int>(speed01 * 3.0f);
+    } else {
+      count = 0;
     }
 
     for (int k = 0; k < count; ++k) {
@@ -405,12 +569,14 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
                       p.baseScale * 0.16f,
                       p.baseScale * (1.3f + Rand01() * 0.5f)};
 
-          // 四方に弾ける
+          // 進行方向の後方へ芝片を巻き上げる。
           float angle = Rand01() * XM_2PI;
-          float speed = 2.2f + Rand01() * 3.0f + speed01 * 2.0f;
-          p.velocity.x = std::cos(angle) * speed;
+          float speed = 1.1f + Rand01() * 2.0f + speed01 * 1.4f;
+          float trailX = body ? -body->velocity.x * (0.06f + speed01 * 0.05f) : 0.0f;
+          float trailZ = body ? -body->velocity.z * (0.06f + speed01 * 0.05f) : 0.0f;
+          p.velocity.x = trailX + std::cos(angle) * speed;
           p.velocity.y = 0.8f + Rand01() * 1.6f + speed01 * 0.6f;
-          p.velocity.z = std::sin(angle) * speed;
+          p.velocity.z = trailZ + std::sin(angle) * speed;
 
           float angScale = 38.0f + speed01 * 18.0f;
           p.angularVelocity.x = RandCentered() * angScale;
@@ -445,6 +611,134 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           p.angularVelocity.z = RandCentered() * angScale;
           break;
         }
+
+        case TerrainMaterial::Ice: {
+          const bool mist = (k % 3) == 0;
+          p.kind = mist ? EnvironmentParticleKind::IceMist
+                        : EnvironmentParticleKind::IceShard;
+          mr->mesh = ctx.resource.LoadMesh(mist ? "builtin/sphere" : "builtin/cube");
+          mr->shader = ctx.resource.LoadShader(
+              "Particle", L"shaders/ParticleVS.hlsl",
+              L"shaders/ParticlePS.hlsl");
+          mr->blendMode = mist ? BlendMode::Alpha : BlendMode::Add;
+          mr->customFlags = {mist ? 1.0f : 2.0f, 0.0f, 0.0f, 0.0f};
+          p.baseColor = mist ? XMFLOAT4{0.66f, 0.92f, 1.10f, 0.30f}
+                             : XMFLOAT4{0.58f, 1.06f, 1.42f, 0.82f};
+          p.baseScale = mist ? 0.075f + speed01 * 0.055f
+                             : 0.015f + speed01 * 0.018f;
+          t->scale = mist
+                         ? XMFLOAT3{p.baseScale * 1.8f, p.baseScale * 0.25f,
+                                    p.baseScale}
+                         : XMFLOAT3{p.baseScale * 0.30f, p.baseScale * 2.4f,
+                                    p.baseScale * 0.55f};
+          p.lifetime = mist ? 0.42f + Rand01() * 0.25f
+                            : 0.38f + Rand01() * 0.30f;
+          const float side = RandCentered() * (0.8f + speed01 * 1.3f);
+          p.velocity = {body ? -body->velocity.x * 0.075f + side : side,
+                        mist ? 0.08f : 0.38f + Rand01() * 0.65f,
+                        body ? -body->velocity.z * 0.075f + side : side};
+          p.angularVelocity = {RandCentered() * 30.0f, RandCentered() * 38.0f,
+                               RandCentered() * 30.0f};
+          p.maxLifetime = p.lifetime;
+          mr->color = p.baseColor;
+          break;
+        }
+
+        case TerrainMaterial::Stone: {
+          const bool dust = speed01 < 0.45f || (k % 3) == 0;
+          p.kind = dust ? EnvironmentParticleKind::StoneDust
+                        : EnvironmentParticleKind::StoneChip;
+          mr->mesh = ctx.resource.LoadMesh(dust ? "builtin/sphere" : "builtin/rock");
+          mr->shader = ctx.resource.LoadShader(
+              dust ? "Particle" : "Basic",
+              dust ? L"shaders/ParticleVS.hlsl" : L"Assets/shaders/BasicVS.hlsl",
+              dust ? L"shaders/ParticlePS.hlsl" : L"Assets/shaders/BasicPS.hlsl");
+          mr->isTransparent = dust;
+          mr->blendMode = dust ? BlendMode::Alpha : BlendMode::Opaque;
+          mr->customFlags = {dust ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+          p.baseColor = dust ? XMFLOAT4{0.48f, 0.45f, 0.41f, 0.34f}
+                             : XMFLOAT4{0.34f, 0.33f, 0.31f, 1.0f};
+          p.baseScale = dust ? 0.065f + speed01 * 0.055f
+                             : 0.020f + speed01 * 0.022f;
+          t->scale = dust ? XMFLOAT3{p.baseScale, p.baseScale * 0.30f, p.baseScale}
+                          : XMFLOAT3{p.baseScale * 1.3f, p.baseScale * 0.7f,
+                                     p.baseScale};
+          p.lifetime = dust ? 0.42f + Rand01() * 0.28f
+                            : 0.34f + Rand01() * 0.28f;
+          const float side = RandCentered() * (0.7f + speed01 * 1.6f);
+          p.velocity = {body ? -body->velocity.x * 0.045f + side : side,
+                        dust ? 0.10f : 0.42f + Rand01() * 0.55f,
+                        body ? -body->velocity.z * 0.045f - side : -side};
+          p.angularVelocity = {RandCentered() * 22.0f, RandCentered() * 28.0f,
+                               RandCentered() * 22.0f};
+          p.maxLifetime = p.lifetime;
+          mr->color = p.baseColor;
+          break;
+        }
+
+        case TerrainMaterial::Water: {
+          const bool mist = (k % 3) == 0;
+          p.kind = mist ? EnvironmentParticleKind::WaterMist
+                        : EnvironmentParticleKind::WaterDrop;
+          mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+          mr->shader = ctx.resource.LoadShader(
+              "Particle", L"shaders/ParticleVS.hlsl",
+              L"shaders/ParticlePS.hlsl");
+          mr->blendMode = mist ? BlendMode::Alpha : BlendMode::Add;
+          mr->customFlags = {mist ? 1.0f : 3.0f, 0.0f, 0.0f, 0.0f};
+          p.baseColor = mist ? XMFLOAT4{0.36f, 0.70f, 0.96f, 0.30f}
+                             : XMFLOAT4{0.22f, 0.76f, 1.38f, 0.84f};
+          p.baseScale = mist ? 0.075f + speed01 * 0.070f
+                             : 0.018f + speed01 * 0.024f;
+          t->scale = mist ? XMFLOAT3{p.baseScale * 1.7f, p.baseScale * 0.28f,
+                                     p.baseScale}
+                          : XMFLOAT3{p.baseScale * 0.55f, p.baseScale * 1.7f,
+                                     p.baseScale * 0.55f};
+          p.lifetime = mist ? 0.38f + Rand01() * 0.26f
+                            : 0.44f + Rand01() * 0.32f;
+          const float side = RandCentered() * (1.0f + speed01 * 2.0f);
+          p.velocity = {body ? -body->velocity.x * 0.085f + side : side,
+                        mist ? 0.16f : 0.70f + Rand01() * 1.2f,
+                        body ? -body->velocity.z * 0.085f - side : -side};
+          p.angularVelocity = {0, 0, 0};
+          p.maxLifetime = p.lifetime;
+          mr->color = p.baseColor;
+          break;
+        }
+
+        case TerrainMaterial::Lava: {
+          const bool smoke = (k % 3) == 0;
+          p.kind = smoke ? EnvironmentParticleKind::LavaSmoke
+                         : EnvironmentParticleKind::Ember;
+          mr->mesh = ctx.resource.LoadMesh(smoke ? "builtin/sphere" : "builtin/cube");
+          mr->shader = ctx.resource.LoadShader(
+              "Particle", L"shaders/ParticleVS.hlsl",
+              L"shaders/ParticlePS.hlsl");
+          mr->blendMode = smoke ? BlendMode::Alpha : BlendMode::Add;
+          mr->customFlags = {smoke ? 1.0f : 4.0f, 0.0f, 0.0f, 0.0f};
+          p.baseColor = smoke ? XMFLOAT4{0.15f, 0.09f, 0.065f, 0.48f}
+                              : XMFLOAT4{1.58f, 0.42f + Rand01() * 0.25f,
+                                         0.025f, 1.0f};
+          p.baseScale = smoke ? 0.085f + speed01 * 0.080f
+                              : 0.016f + speed01 * 0.022f;
+          t->scale = smoke ? XMFLOAT3{p.baseScale, p.baseScale * 0.65f,
+                                      p.baseScale}
+                           : XMFLOAT3{p.baseScale * 0.45f, p.baseScale * 2.0f,
+                                      p.baseScale * 0.45f};
+          p.lifetime = smoke ? 0.72f + Rand01() * 0.45f
+                             : 0.52f + Rand01() * 0.42f;
+          const float side = RandCentered() * (0.8f + speed01 * 1.6f);
+          p.velocity = {body ? -body->velocity.x * 0.055f + side : side,
+                        smoke ? 0.48f + Rand01() * 0.45f
+                              : 0.95f + Rand01() * 1.25f,
+                        body ? -body->velocity.z * 0.055f - side : -side};
+          p.angularVelocity = {RandCentered() * 20.0f, RandCentered() * 28.0f,
+                               RandCentered() * 20.0f};
+          p.maxLifetime = p.lifetime;
+          mr->color = p.baseColor;
+          break;
+        }
+
         default:
           mr->isVisible = false;
           p.lifetime = 0;

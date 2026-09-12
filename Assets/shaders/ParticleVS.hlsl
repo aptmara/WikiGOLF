@@ -19,7 +19,7 @@ cbuffer ConstantBuffer : register(b0) {
 struct InstanceData {
     matrix World; /**< ワールド行列 */
     float4 Color; /**< パーティクルカラー */
-    float4 Flags; /**< x: phase, y: amplitude, z,w: 未使用 */
+    float4 Flags; /**< x,y: texture flags, z: shape mode, w: variant */
 };
 
 /** @brief パーティクルインスタンスバッファ */
@@ -52,32 +52,14 @@ struct VS_OUTPUT {
 /**
  * @brief パーティクル頂点シェーダーメインエントリ
  * @param input 頂点入力情報
- * @return オービット・パルス変形後の頂点出力
+ * @return CPU側で設定した変換と透明度を保持した頂点出力
  */
 VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
     
     InstanceData inst = g_instances[input.instanceID];
     
-    float globalTime = LightDir.w;
-    float phase = inst.Flags.x;
-    float amplitude = inst.Flags.y;
-    
-    float orbit = (globalTime + phase) * (0.75f + amplitude * 0.45f);
-    float radius = 0.25f + 0.22f * amplitude;
-    
-    float3 offset = float3(0, 0, 0);
-    offset.x = cos(orbit) * radius;
-    offset.z = sin(orbit * 0.9f) * radius;
-    offset.y = 0.18f * sin(orbit * 1.7f);
-    
-    float pulse = 0.5f + 0.5f * sin((globalTime + phase) * 3.3f);
-    float scaleFactor = 0.75f + pulse * 0.55f;
-    
-    float3 localPos = input.position * scaleFactor;
-    
-    float4 worldPos = mul(float4(localPos, 1.0f), inst.World);
-    worldPos.xyz += offset;
+    float4 worldPos = mul(float4(input.position, 1.0f), inst.World);
     
     float4 viewPos = mul(worldPos, View);
     output.position = mul(viewPos, Projection);
@@ -86,8 +68,6 @@ VS_OUTPUT main(VS_INPUT input) {
     output.texCoord = input.texCoord;
     
     output.color = input.color * inst.Color;
-    output.color.a = 0.16f + 0.26f * pulse * amplitude;
-    
     output.materialFlags = inst.Flags;
     
     return output;

@@ -117,26 +117,84 @@ void GameJuiceSystem::TriggerConfetti(core::GameContext &ctx,
 
 void GameJuiceSystem::TriggerRippleEffect(core::GameContext &ctx,
                                           const DirectX::XMFLOAT3 &position,
-                                          float baseRadius, float strength) {
+                                          float baseRadius, float strength,
+                                          TerrainMaterial material) {
   if (m_ripples.empty())
     return;
 
-  auto &r = m_ripples[m_rippleWriteIndex];
-  m_rippleWriteIndex = (m_rippleWriteIndex + 1) % kRippleCount;
-
-  r.maxLifetime = 0.45f + strength * 0.4f;
-  r.lifetime = r.maxLifetime;
-  r.startScale = std::max(baseRadius, 0.1f);
-
-  if (auto *t = ctx.world.Get<Transform>(r.entity)) {
-    t->position = position;
-    t->position.y += 0.003f;
-    t->scale = {r.startScale, 0.02f, r.startScale};
+  int ringCount = 1;
+  XMFLOAT4 color = {0.52f, 0.92f, 0.42f, 0.48f};
+  float lifetime = 0.44f + strength * 0.30f;
+  float expansion = 2.4f;
+  float thickness = 0.012f;
+  switch (material) {
+  case TerrainMaterial::Rough:
+    color = {0.28f, 0.58f, 0.18f, 0.42f};
+    lifetime = 0.52f + strength * 0.34f;
+    expansion = 1.85f;
+    thickness = 0.018f;
+    break;
+  case TerrainMaterial::Green:
+    color = {0.62f, 1.08f, 0.48f, 0.40f};
+    lifetime = 0.38f + strength * 0.24f;
+    expansion = 2.8f;
+    thickness = 0.008f;
+    break;
+  case TerrainMaterial::Ice:
+    ringCount = 2;
+    color = {0.56f, 1.24f, 1.62f, 0.72f};
+    lifetime = 0.55f + strength * 0.38f;
+    expansion = 3.4f;
+    thickness = 0.007f;
+    break;
+  case TerrainMaterial::Stone:
+    color = {0.72f, 0.68f, 0.62f, 0.48f};
+    lifetime = 0.34f + strength * 0.22f;
+    expansion = 1.55f;
+    thickness = 0.024f;
+    break;
+  case TerrainMaterial::Water:
+    ringCount = 3;
+    color = {0.24f, 0.88f, 1.58f, 0.74f};
+    lifetime = 0.68f + strength * 0.42f;
+    expansion = 3.8f;
+    thickness = 0.006f;
+    break;
+  case TerrainMaterial::Lava:
+    ringCount = 2;
+    color = {1.72f, 0.31f, 0.025f, 0.78f};
+    lifetime = 0.62f + strength * 0.38f;
+    expansion = 2.45f;
+    thickness = 0.016f;
+    break;
+  default:
+    break;
   }
 
-  if (auto *mr = ctx.world.Get<MeshRenderer>(r.entity)) {
-    mr->isVisible = true;
-    mr->color.w = 0.6f;
+  for (int i = 0; i < ringCount; ++i) {
+    auto &r = m_ripples[m_rippleWriteIndex];
+    m_rippleWriteIndex = (m_rippleWriteIndex + 1) % kRippleCount;
+    const float layerRatio = static_cast<float>(i) /
+                             static_cast<float>(std::max(ringCount, 1));
+    r.maxLifetime = lifetime * (1.0f + layerRatio * 0.34f);
+    r.lifetime = r.maxLifetime;
+    r.startScale = std::max(baseRadius * (0.72f + layerRatio * 0.46f), 0.1f);
+    r.expansion = expansion * (1.0f - layerRatio * 0.18f);
+    r.thickness = thickness * (1.0f + layerRatio * 0.45f);
+    r.baseColor = color;
+    r.baseColor.w *= 1.0f - layerRatio * 0.34f;
+
+    if (auto *t = ctx.world.Get<Transform>(r.entity)) {
+      t->position = position;
+      t->position.y += 0.003f + static_cast<float>(i) * 0.0015f;
+      t->scale = {r.startScale, r.thickness, r.startScale};
+    }
+
+    if (auto *mr = ctx.world.Get<MeshRenderer>(r.entity)) {
+      mr->isVisible = true;
+      mr->color = r.baseColor;
+      mr->customFlags = {5.0f, layerRatio, 0.0f, 0.0f};
+    }
   }
 }
 
@@ -154,10 +212,11 @@ void GameJuiceSystem::UpdateRipples(core::GameContext &ctx) {
     auto *t = ctx.world.Get<Transform>(r.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(r.entity);
     if (t && mr) {
-      float scaleMul = 1.0f + ease * 3.0f;
-      t->scale = {r.startScale * scaleMul, 0.02f,
+      float scaleMul = 1.0f + ease * r.expansion;
+      t->scale = {r.startScale * scaleMul, r.thickness,
                   r.startScale * scaleMul};
-      mr->color.w = (1.0f - ease) * 0.6f;
+      mr->color = r.baseColor;
+      mr->color.w = r.baseColor.w * std::pow(1.0f - ease, 1.25f);
       if (r.lifetime <= 0.0f) {
         mr->isVisible = false;
       }

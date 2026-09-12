@@ -233,7 +233,8 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
                           TerrainMaterial::Bunker) {
                     float rippleRadius = col.radius * 8.0f;
                     (*juiceSlot)->TriggerRippleEffect(
-                        ctx, impactPosition, rippleRadius, strength);
+                        ctx, impactPosition, rippleRadius, strength,
+                        static_cast<TerrainMaterial>(mat));
                   }
                 }
 

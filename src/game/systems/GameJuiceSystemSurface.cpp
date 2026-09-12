@@ -195,7 +195,9 @@ void GameJuiceSystem::CreateRippleEntities(core::GameContext &ctx) {
                                         L"shaders/ParticlePS.hlsl");
     mr.isVisible = false;
     mr.isTransparent = true;
+    mr.blendMode = BlendMode::Add;
     mr.color = {0.6f, 0.8f, 1.2f, 0.0f};
+    mr.customFlags = {5.0f, 0.0f, 0.0f, 0.0f};
 
     m_ripples[i].entity = e;
     m_ripples[i].lifetime = 0.0f;
