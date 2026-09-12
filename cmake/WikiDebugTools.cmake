@@ -81,9 +81,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_gameplay_snapshot
         test_debug_gameplay_snapshot.cpp
-        src/game/devtools/DebugGameplaySnapshot.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_gameplay_snapshot PRIVATE src/pch.h)
+        src/game/devtools/DebugGameplaySnapshot.cpp)
+    target_precompile_headers(test_debug_gameplay_snapshot REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_gameplay_snapshot PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_gameplay_snapshot PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -92,9 +92,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_gameplay_checkpoint
         test_debug_gameplay_checkpoint.cpp
-        src/game/devtools/DebugGameplayCheckpoint.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_gameplay_checkpoint PRIVATE src/pch.h)
+        src/game/devtools/DebugGameplayCheckpoint.cpp)
+    target_precompile_headers(test_debug_gameplay_checkpoint REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_gameplay_checkpoint PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_gameplay_checkpoint PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -103,9 +103,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_entity_snapshot
         test_debug_entity_snapshot.cpp
-        src/game/devtools/DebugEntitySnapshot.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_entity_snapshot PRIVATE src/pch.h)
+        src/game/devtools/DebugEntitySnapshot.cpp)
+    target_precompile_headers(test_debug_entity_snapshot REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_entity_snapshot PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_entity_snapshot PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -117,9 +117,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_terrain_visibility
         test_debug_terrain_visibility.cpp
-        src/game/devtools/DebugTerrainVisibility.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_terrain_visibility PRIVATE src/pch.h)
+        src/game/devtools/DebugTerrainVisibility.cpp)
+    target_precompile_headers(test_debug_terrain_visibility REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_terrain_visibility PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_terrain_visibility PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -134,9 +134,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_cup_in_status
         test_debug_cup_in_status.cpp
-        src/game/devtools/DebugCupInStatus.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_cup_in_status PRIVATE src/pch.h)
+        src/game/devtools/DebugCupInStatus.cpp)
+    target_precompile_headers(test_debug_cup_in_status REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_cup_in_status PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_cup_in_status PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -150,9 +150,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_ball_telemetry
         test_debug_ball_telemetry.cpp
-        src/game/devtools/DebugBallTelemetryHistory.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_ball_telemetry PRIVATE src/pch.h)
+        src/game/devtools/DebugBallTelemetryHistory.cpp)
+    target_precompile_headers(test_debug_ball_telemetry REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_ball_telemetry PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_ball_telemetry PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -161,9 +161,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_ball_teleport
         test_debug_ball_teleport.cpp
-        src/game/devtools/DebugBallTeleport.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_ball_teleport PRIVATE src/pch.h)
+        src/game/devtools/DebugBallTeleport.cpp)
+    target_precompile_headers(test_debug_ball_teleport REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_ball_teleport PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_ball_teleport PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -172,9 +172,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_ball_impulse
         test_debug_ball_impulse.cpp
-        src/game/devtools/DebugBallImpulse.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_ball_impulse PRIVATE src/pch.h)
+        src/game/devtools/DebugBallImpulse.cpp)
+    target_precompile_headers(test_debug_ball_impulse REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_ball_impulse PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_ball_impulse PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -183,9 +183,9 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_ball_physics_tuning
         test_debug_ball_physics_tuning.cpp
-        src/game/devtools/DebugBallPhysicsTuning.cpp
-        src/core/Logger.cpp)
-    target_precompile_headers(test_debug_ball_physics_tuning PRIVATE src/pch.h)
+        src/game/devtools/DebugBallPhysicsTuning.cpp)
+    target_precompile_headers(test_debug_ball_physics_tuning REUSE_FROM wikigolf_pch)
+    target_link_libraries(test_debug_ball_physics_tuning PRIVATE wikigolf_common)
     if(MSVC)
         target_compile_definitions(test_debug_ball_physics_tuning PRIVATE
             -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -234,7 +234,7 @@ function(wikigolf_add_debug_tests)
 
     add_executable(test_debug_logger_buffer test_debug_logger_buffer.cpp
                                             src/core/Logger.cpp)
-    target_precompile_headers(test_debug_logger_buffer PRIVATE src/pch.h)
+    target_precompile_headers(test_debug_logger_buffer REUSE_FROM wikigolf_pch)
     target_compile_definitions(test_debug_logger_buffer PRIVATE WIKIGOLF_DEBUG_TOOLS=1)
     if(MSVC)
         target_compile_definitions(test_debug_logger_buffer PRIVATE

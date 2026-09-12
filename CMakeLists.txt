@@ -4,6 +4,13 @@ project(DX_GAME)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# /MP: 1ターゲット内の複数 .cpp を複数コアで並列コンパイルする。
+# 特に DX_GAME (200ファイル超) が /MP なしだと1コアで逐次コンパイルされ、
+# クリーンビルド時のクリティカルパスになっていたため全ターゲットに一括適用する。
+if(MSVC)
+    add_compile_options(/MP)
+endif()
+
 # ライブラリ (.lib, .exp) の出力先を lib/ に分離
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
@@ -52,6 +59,57 @@ endif()
 # テスト有効化
 enable_testing()
 
+# 全ターゲットで共有する PCH (src/pch.h) を1度だけコンパイルするための専用ターゲット。
+# 個々のターゲットで target_precompile_headers(... PRIVATE src/pch.h) を呼ぶと
+# クリーンビルド時に同じ内容の PCH を何十回も再生成してしまうため、
+# 以降は target_precompile_headers(... REUSE_FROM wikigolf_pch) でこの PCH を使い回す。
+add_library(wikigolf_pch OBJECT src/PchOwner.cpp)
+target_precompile_headers(wikigolf_pch PRIVATE src/pch.h)
+target_include_directories(wikigolf_pch PRIVATE src)
+if(MSVC)
+    target_compile_definitions(wikigolf_pch PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(wikigolf_pch PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+
+# Logger/StringUtils/EntityOwner は20個以上のテスト・ツール ターゲットが
+# 同じ内容のまま個別に src からコンパイルしていたため、共有 OBJECT ライブラリにまとめる。
+# (test_debug_logger_buffer だけは WIKIGOLF_DEBUG_TOOLS=1 有効時の Logger.cpp の挙動を
+#  検証するテストのため、従来どおり専用に Logger.cpp を個別コンパイルする)
+add_library(wikigolf_common OBJECT
+    src/core/Logger.cpp
+    src/core/StringUtils.cpp
+    src/ecs/EntityOwner.cpp)
+target_include_directories(wikigolf_common PRIVATE src)
+if(MSVC)
+    target_compile_definitions(wikigolf_common PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(wikigolf_common PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+
+# WikiTextureGenerator 系5ファイルは test_wiki_texture_links / test_wiki_texture_generation /
+# WikiImagePreview の3ターゲットで同一内容のまま重複コンパイルされていたため共有する。
+add_library(wiki_texture_generator_common OBJECT
+    src/graphics/WikiTextureGenerator.cpp
+    src/graphics/WikiTextureGeneratorHtml.cpp
+    src/graphics/WikiTextureGeneratorDecode.cpp
+    src/graphics/WikiTextureGeneratorLayout.cpp
+    src/graphics/WikiTextureGeneratorRendering.cpp)
+target_include_directories(wiki_texture_generator_common PRIVATE src)
+if(MSVC)
+    target_compile_definitions(wiki_texture_generator_common PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(wiki_texture_generator_common PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+
+# WikiClientJson 系2ファイルは test_wiki_client_json / test_playfab_rules / WikiImagePreview
+# の3ターゲットで同一内容のまま重複コンパイルされていたため共有する。
+add_library(wiki_client_json_common OBJECT
+    src/game/systems/WikiClientJson.cpp
+    src/game/systems/WikiClientJsonHtml.cpp)
+target_include_directories(wiki_client_json_common PRIVATE src)
+if(MSVC)
+    target_compile_definitions(wiki_client_json_common PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(wiki_client_json_common PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+
 add_executable(test_profiler_statistics test_profiler_statistics.cpp)
 target_include_directories(test_profiler_statistics PRIVATE src)
 if(MSVC)
@@ -63,11 +121,10 @@ add_executable(test_profiler_output
     test_profiler_output.cpp
     src/core/Profiler.cpp
     src/core/ProfilerMetrics.cpp
-    src/core/ProfilerReports.cpp
-    src/core/Logger.cpp)
-target_precompile_headers(test_profiler_output PRIVATE src/pch.h)
+    src/core/ProfilerReports.cpp)
+target_precompile_headers(test_profiler_output REUSE_FROM wikigolf_pch)
 target_include_directories(test_profiler_output PRIVATE src)
-target_link_libraries(test_profiler_output PRIVATE psapi)
+target_link_libraries(test_profiler_output PRIVATE psapi wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_profiler_output PRIVATE
         -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -144,7 +201,7 @@ add_custom_command(TARGET DX_GAME POST_BUILD
             "$<TARGET_FILE_DIR:DX_GAME>/licenses/assimp-LICENSE"
     COMMENT "Deploying third-party license notices (Wikipedia/Kenney/assimp)..."
     VERBATIM)
-target_precompile_headers(DX_GAME PRIVATE src/pch.h)
+target_precompile_headers(DX_GAME REUSE_FROM wikigolf_pch)
 
 # データベースの分割ファイルを自動的に結合するターゲット
 if(WIN32)
@@ -171,6 +228,7 @@ target_include_directories(DX_GAME PRIVATE
 )
 
 # SQLite3 amalgamation（ソースとして直接コンパイル）
+set_source_files_properties("${CMAKE_SOURCE_DIR}/src/thirdparty/sqlite3/sqlite3.c" PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 target_sources(DX_GAME PRIVATE src/thirdparty/sqlite3/sqlite3.c)
 
 # Assimpライブラリディレクトリ
@@ -236,7 +294,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/tools/SkyboxGen.cpp")
     add_executable(SkyboxGen tools/SkyboxGen.cpp src/graphics/SkyboxTextureGenerator.cpp)
-    target_precompile_headers(SkyboxGen PRIVATE src/pch.h)
+    target_precompile_headers(SkyboxGen REUSE_FROM wikigolf_pch)
     target_include_directories(SkyboxGen PRIVATE src)
     target_link_libraries(SkyboxGen
         d3d11
@@ -261,11 +319,6 @@ endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/tools/WikiImagePreview.cpp")
     add_executable(WikiImagePreview
         tools/WikiImagePreview.cpp
-        src/graphics/WikiTextureGenerator.cpp
-        src/graphics/WikiTextureGeneratorHtml.cpp
-        src/graphics/WikiTextureGeneratorDecode.cpp
-        src/graphics/WikiTextureGeneratorLayout.cpp
-        src/graphics/WikiTextureGeneratorRendering.cpp
         src/graphics/Shader.cpp
         src/graphics/Mesh.cpp
         src/graphics/MeshPrimitives.cpp
@@ -274,12 +327,9 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tools/WikiImagePreview.cpp")
         src/graphics/TangentGenerator.cpp
         src/game/systems/WikiClient.cpp
         src/game/systems/WikiClientContent.cpp
-        src/game/systems/WikiClientJson.cpp
-        src/game/systems/WikiClientJsonHtml.cpp
         src/game/systems/WikiClientLinks.cpp
-        src/core/Logger.cpp
-        src/core/StringUtils.cpp
     )
+    target_precompile_headers(WikiImagePreview REUSE_FROM wikigolf_pch)
     target_include_directories(WikiImagePreview PRIVATE src)
     target_link_libraries(WikiImagePreview
         d3d11
@@ -289,6 +339,9 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tools/WikiImagePreview.cpp")
         windowscodecs
         winhttp
         d3dcompiler
+        wikigolf_common
+        wiki_texture_generator_common
+        wiki_client_json_common
     )
     if(MSVC)
         target_compile_definitions(WikiImagePreview PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -299,7 +352,7 @@ endif()
 
 # シンプルなユニットテスト（CupIn判定）
 add_executable(test_cupin_utils test_cupin_utils.cpp)
-target_precompile_headers(test_cupin_utils PRIVATE src/pch.h)
+target_precompile_headers(test_cupin_utils REUSE_FROM wikigolf_pch)
 target_include_directories(test_cupin_utils PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_cupin_utils PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -310,7 +363,7 @@ add_test(NAME cupin_utils COMMAND test_cupin_utils)
 
 # ローディングシーンのフェード計算テスト
 add_executable(test_loading_scene_fade test_loading_scene_fade.cpp)
-target_precompile_headers(test_loading_scene_fade PRIVATE src/pch.h)
+target_precompile_headers(test_loading_scene_fade REUSE_FROM wikigolf_pch)
 target_include_directories(test_loading_scene_fade PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_loading_scene_fade PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -321,7 +374,7 @@ add_test(NAME loading_scene_fade COMMAND test_loading_scene_fade)
 
 # ローディングシーンの進捗合成テスト
 add_executable(test_loading_scene_progress test_loading_scene_progress.cpp)
-target_precompile_headers(test_loading_scene_progress PRIVATE src/pch.h)
+target_precompile_headers(test_loading_scene_progress REUSE_FROM wikigolf_pch)
 target_include_directories(test_loading_scene_progress PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_loading_scene_progress PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -332,7 +385,7 @@ add_test(NAME loading_scene_progress COMMAND test_loading_scene_progress)
 
 # コース紹介の概要整形・注目ホール選定テスト
 add_executable(test_course_introduction_rules test_course_introduction_rules.cpp)
-target_precompile_headers(test_course_introduction_rules PRIVATE src/pch.h)
+target_precompile_headers(test_course_introduction_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_course_introduction_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_course_introduction_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -342,10 +395,10 @@ endif()
 add_test(NAME course_introduction_rules COMMAND test_course_introduction_rules)
 
 # 文字列トリミングテスト
-add_executable(test_string_utils_trim test_string_utils_trim.cpp
-                                        src/core/StringUtils.cpp)
-target_precompile_headers(test_string_utils_trim PRIVATE src/pch.h)
+add_executable(test_string_utils_trim test_string_utils_trim.cpp)
+target_precompile_headers(test_string_utils_trim REUSE_FROM wikigolf_pch)
 target_include_directories(test_string_utils_trim PRIVATE src)
+target_link_libraries(test_string_utils_trim PRIVATE wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_string_utils_trim PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
                                                               -DWIN32_LEAN_AND_MEAN)
@@ -355,7 +408,7 @@ add_test(NAME string_utils_trim COMMAND test_string_utils_trim)
 
 # マップビューのナビゲーション純粋関数テスト
 add_executable(test_map_view_utils test_map_view_utils.cpp)
-target_precompile_headers(test_map_view_utils PRIVATE src/pch.h)
+target_precompile_headers(test_map_view_utils REUSE_FROM wikigolf_pch)
 target_include_directories(test_map_view_utils PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_map_view_utils PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -366,7 +419,7 @@ add_test(NAME map_view_utils COMMAND test_map_view_utils)
 
 # UIImage のテクスチャ有無チェック
 add_executable(test_ui_image_has_texture test_ui_image_has_texture.cpp)
-target_precompile_headers(test_ui_image_has_texture PRIVATE src/pch.h)
+target_precompile_headers(test_ui_image_has_texture REUSE_FROM wikigolf_pch)
 target_include_directories(test_ui_image_has_texture PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_ui_image_has_texture PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -376,7 +429,7 @@ endif()
 add_test(NAME ui_image_has_texture COMMAND test_ui_image_has_texture)
 
 add_executable(test_post_process_readability test_post_process_readability.cpp)
-target_precompile_headers(test_post_process_readability PRIVATE src/pch.h)
+target_precompile_headers(test_post_process_readability REUSE_FROM wikigolf_pch)
 target_include_directories(test_post_process_readability PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_post_process_readability PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -386,21 +439,16 @@ endif()
 add_test(NAME post_process_readability COMMAND test_post_process_readability)
 
 # WikiTextureGeneratorのリンク生成テスト
-add_executable(test_wiki_texture_links test_wiki_texture_links.cpp
-                                       src/graphics/WikiTextureGenerator.cpp
-                                       src/graphics/WikiTextureGeneratorHtml.cpp
-                                       src/graphics/WikiTextureGeneratorDecode.cpp
-                                       src/graphics/WikiTextureGeneratorLayout.cpp
-                                       src/graphics/WikiTextureGeneratorRendering.cpp
-                                       src/core/Logger.cpp
-                                       src/core/StringUtils.cpp)
-target_precompile_headers(test_wiki_texture_links PRIVATE src/pch.h)
+add_executable(test_wiki_texture_links test_wiki_texture_links.cpp)
+target_precompile_headers(test_wiki_texture_links REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_texture_links PRIVATE src)
 target_link_libraries(test_wiki_texture_links
     d3d11
     d2d1
     dwrite
     dxguid
+    wikigolf_common
+    wiki_texture_generator_common
 )
 if(MSVC)
     target_compile_definitions(test_wiki_texture_links PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -410,7 +458,7 @@ endif()
 add_test(NAME wiki_texture_links COMMAND test_wiki_texture_links)
 
 add_executable(test_physics_friction test_physics_friction.cpp)
-target_precompile_headers(test_physics_friction PRIVATE src/pch.h)
+target_precompile_headers(test_physics_friction REUSE_FROM wikigolf_pch)
 target_include_directories(test_physics_friction PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_physics_friction PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -420,7 +468,7 @@ endif()
 add_test(NAME physics_friction COMMAND test_physics_friction)
 
 add_executable(test_trajectory_simulation test_trajectory_simulation.cpp)
-target_precompile_headers(test_trajectory_simulation PRIVATE src/pch.h)
+target_precompile_headers(test_trajectory_simulation REUSE_FROM wikigolf_pch)
 target_include_directories(test_trajectory_simulation PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_trajectory_simulation PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -430,7 +478,7 @@ endif()
 add_test(NAME trajectory_simulation COMMAND test_trajectory_simulation)
 
 add_executable(test_shot_gauge_rules test_shot_gauge_rules.cpp)
-target_precompile_headers(test_shot_gauge_rules PRIVATE src/pch.h)
+target_precompile_headers(test_shot_gauge_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_shot_gauge_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_shot_gauge_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -440,7 +488,7 @@ endif()
 add_test(NAME shot_gauge_rules COMMAND test_shot_gauge_rules)
 
 add_executable(test_par_rules test_par_rules.cpp)
-target_precompile_headers(test_par_rules PRIVATE src/pch.h)
+target_precompile_headers(test_par_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_par_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_par_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -451,7 +499,7 @@ add_test(NAME par_rules COMMAND test_par_rules)
 
 add_executable(test_page_history_utils test_page_history_utils.cpp
                                        src/game/utils/PageHistoryUtils.cpp)
-target_precompile_headers(test_page_history_utils PRIVATE src/pch.h)
+target_precompile_headers(test_page_history_utils REUSE_FROM wikigolf_pch)
 target_include_directories(test_page_history_utils PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_page_history_utils PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -468,7 +516,7 @@ add_executable(test_terrain_generation test_terrain_generation.cpp
                                        src/game/systems/TerrainGeneratorPlatforms.cpp
                                        src/game/systems/TerrainGeneratorPostProcess.cpp
                                        src/graphics/TangentGenerator.cpp)
-target_precompile_headers(test_terrain_generation PRIVATE src/pch.h)
+target_precompile_headers(test_terrain_generation REUSE_FROM wikigolf_pch)
 target_include_directories(test_terrain_generation PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_terrain_generation PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -478,7 +526,7 @@ endif()
 add_test(NAME terrain_generation COMMAND test_terrain_generation)
 
 add_executable(test_grass_streaming_rules test_grass_streaming_rules.cpp)
-target_precompile_headers(test_grass_streaming_rules PRIVATE src/pch.h)
+target_precompile_headers(test_grass_streaming_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_grass_streaming_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_grass_streaming_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -488,7 +536,7 @@ endif()
 add_test(NAME grass_streaming_rules COMMAND test_grass_streaming_rules)
 
 add_executable(test_graphics_preset test_graphics_preset.cpp)
-target_precompile_headers(test_graphics_preset PRIVATE src/pch.h)
+target_precompile_headers(test_graphics_preset REUSE_FROM wikigolf_pch)
 target_include_directories(test_graphics_preset PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_graphics_preset PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
@@ -497,10 +545,10 @@ if(MSVC)
 endif()
 add_test(NAME graphics_preset COMMAND test_graphics_preset)
 
-add_executable(test_logger_warning_output test_logger_warning_output.cpp
-                                          src/core/Logger.cpp)
-target_precompile_headers(test_logger_warning_output PRIVATE src/pch.h)
+add_executable(test_logger_warning_output test_logger_warning_output.cpp)
+target_precompile_headers(test_logger_warning_output REUSE_FROM wikigolf_pch)
 target_include_directories(test_logger_warning_output PRIVATE src)
+target_link_libraries(test_logger_warning_output PRIVATE wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_logger_warning_output PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
                                                                   -DWIN32_LEAN_AND_MEAN)
@@ -511,16 +559,10 @@ add_test(NAME logger_warning_output COMMAND test_logger_warning_output)
 # --- Additional Refactored Unit Tests ---
 
 add_executable(test_wiki_texture_generation
-    test_wiki_texture_generation.cpp
-    src/graphics/WikiTextureGenerator.cpp
-    src/graphics/WikiTextureGeneratorHtml.cpp
-    src/graphics/WikiTextureGeneratorDecode.cpp
-    src/graphics/WikiTextureGeneratorLayout.cpp
-    src/graphics/WikiTextureGeneratorRendering.cpp
-    src/core/Logger.cpp)
-target_precompile_headers(test_wiki_texture_generation PRIVATE src/pch.h)
+    test_wiki_texture_generation.cpp)
+target_precompile_headers(test_wiki_texture_generation REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_texture_generation PRIVATE src)
-target_link_libraries(test_wiki_texture_generation d3d11 d2d1 dwrite dxguid)
+target_link_libraries(test_wiki_texture_generation d3d11 d2d1 dwrite dxguid wikigolf_common wiki_texture_generator_common)
 if(MSVC)
     target_compile_definitions(test_wiki_texture_generation PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_texture_generation PRIVATE /utf-8 /Zc:__cplusplus)
@@ -532,11 +574,10 @@ add_executable(test_text_renderer_lifecycle
     src/graphics/TextRenderer.cpp
     src/graphics/TextRendererImage.cpp
     src/graphics/TextRendererText.cpp
-    src/graphics/TextRendererRaster.cpp
-    src/core/Logger.cpp)
-target_precompile_headers(test_text_renderer_lifecycle PRIVATE src/pch.h)
+    src/graphics/TextRendererRaster.cpp)
+target_precompile_headers(test_text_renderer_lifecycle REUSE_FROM wikigolf_pch)
 target_include_directories(test_text_renderer_lifecycle PRIVATE src)
-target_link_libraries(test_text_renderer_lifecycle d3d11 d2d1 dwrite dxguid windowscodecs ole32)
+target_link_libraries(test_text_renderer_lifecycle d3d11 d2d1 dwrite dxguid windowscodecs ole32 wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_text_renderer_lifecycle PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_text_renderer_lifecycle PRIVATE /utf-8 /Zc:__cplusplus)
@@ -549,8 +590,6 @@ add_executable(test_resource_manager_rules
     src/resources/ResourceManagerTextures.cpp
     src/resources/ResourceManagerMeshes.cpp
     src/resources/ResourceManagerShaders.cpp
-    src/core/Logger.cpp
-    src/core/StringUtils.cpp
     src/graphics/FbxLoader.cpp
     src/graphics/ObjLoader.cpp
     src/graphics/Mesh.cpp
@@ -559,10 +598,10 @@ add_executable(test_resource_manager_rules
     src/graphics/MeshPrimitivesTerrain.cpp
     src/graphics/TangentGenerator.cpp
     src/graphics/Shader.cpp)
-target_precompile_headers(test_resource_manager_rules PRIVATE src/pch.h)
+target_precompile_headers(test_resource_manager_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_resource_manager_rules PRIVATE src libs/assimp-6.0.2/include)
 target_link_directories(test_resource_manager_rules PRIVATE libs/assimp-6.0.2 libs/assimp-6.0.2/static)
-target_link_libraries(test_resource_manager_rules d3d11 dxguid windowscodecs d3dcompiler ${ASSIMP_LIBRARIES})
+target_link_libraries(test_resource_manager_rules d3d11 dxguid windowscodecs d3dcompiler ${ASSIMP_LIBRARIES} wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_resource_manager_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_resource_manager_rules PRIVATE /utf-8 /Zc:__cplusplus)
@@ -576,7 +615,7 @@ add_executable(test_mesh_primitives_rules
     src/graphics/MeshPrimitivesGrass.cpp
     src/graphics/MeshPrimitivesTerrain.cpp
     src/graphics/TangentGenerator.cpp)
-target_precompile_headers(test_mesh_primitives_rules PRIVATE src/pch.h)
+target_precompile_headers(test_mesh_primitives_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_mesh_primitives_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_mesh_primitives_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -588,7 +627,7 @@ add_executable(test_terrain_layout_rules
     test_terrain_layout_rules.cpp
     src/game/systems/TerrainLayoutRules.cpp
     src/game/systems/TerrainObstacleLayout.cpp)
-target_precompile_headers(test_terrain_layout_rules PRIVATE src/pch.h)
+target_precompile_headers(test_terrain_layout_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_terrain_layout_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_terrain_layout_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -598,11 +637,10 @@ add_test(NAME terrain_layout_rules COMMAND test_terrain_layout_rules)
 
 add_executable(test_scene_entity_lifecycle
     test_scene_entity_lifecycle.cpp
-    src/core/Scene.cpp
-    src/ecs/EntityOwner.cpp
-    src/core/Logger.cpp)
-target_precompile_headers(test_scene_entity_lifecycle PRIVATE src/pch.h)
+    src/core/Scene.cpp)
+target_precompile_headers(test_scene_entity_lifecycle REUSE_FROM wikigolf_pch)
 target_include_directories(test_scene_entity_lifecycle PRIVATE src)
+target_link_libraries(test_scene_entity_lifecycle PRIVATE wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_scene_entity_lifecycle PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_scene_entity_lifecycle PRIVATE /utf-8 /Zc:__cplusplus)
@@ -622,12 +660,10 @@ add_executable(test_wiki_golf_hud_lifecycle
     src/game/controllers/hud/ShotGaugePanel.cpp
     src/game/controllers/hud/ShotGaugePanelUpdate.cpp
     src/game/controllers/hud/ShotGaugePanelVisibility.cpp
-    src/game/controllers/hud/WindPanel.cpp
-    src/core/StringUtils.cpp
-    src/ecs/EntityOwner.cpp
-    src/core/Logger.cpp)
-target_precompile_headers(test_wiki_golf_hud_lifecycle PRIVATE src/pch.h)
+    src/game/controllers/hud/WindPanel.cpp)
+target_precompile_headers(test_wiki_golf_hud_lifecycle REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_golf_hud_lifecycle PRIVATE src)
+target_link_libraries(test_wiki_golf_hud_lifecycle PRIVATE wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_wiki_golf_hud_lifecycle PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_golf_hud_lifecycle PRIVATE /utf-8 /Zc:__cplusplus)
@@ -645,11 +681,10 @@ add_executable(test_wiki_page_layout
     src/game/systems/WikiShortestPathSearch.cpp
     src/game/systems/WikiShortestPathDistances.cpp
     src/game/systems/WikiShortestPathPopular.cpp
-    src/core/Logger.cpp
-    src/core/StringUtils.cpp
     src/thirdparty/sqlite3/sqlite3.c)
-target_precompile_headers(test_wiki_page_layout PRIVATE src/pch.h)
+target_precompile_headers(test_wiki_page_layout REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_page_layout PRIVATE src src/thirdparty/sqlite3)
+target_link_libraries(test_wiki_page_layout PRIVATE wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_wiki_page_layout PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_page_layout PRIVATE /utf-8 /Zc:__cplusplus)
@@ -657,13 +692,10 @@ endif()
 add_test(NAME wiki_page_layout COMMAND test_wiki_page_layout)
 
 add_executable(test_wiki_client_json
-    test_wiki_client_json.cpp
-    src/game/systems/WikiClientJson.cpp
-    src/game/systems/WikiClientJsonHtml.cpp
-    src/core/Logger.cpp
-    src/core/StringUtils.cpp)
-target_precompile_headers(test_wiki_client_json PRIVATE src/pch.h)
+    test_wiki_client_json.cpp)
+target_precompile_headers(test_wiki_client_json REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_client_json PRIVATE src)
+target_link_libraries(test_wiki_client_json PRIVATE wikigolf_common wiki_client_json_common)
 if(MSVC)
     target_compile_definitions(test_wiki_client_json PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_client_json PRIVATE /utf-8 /Zc:__cplusplus)
@@ -677,17 +709,16 @@ add_library(game_juice_time_impl STATIC
     src/game/systems/GameJuiceSystemEnvironmentUpdate.cpp
     src/game/systems/GameJuiceSystemImpact.cpp
     src/game/systems/GameJuiceSystemSurface.cpp
-    src/game/systems/GameJuiceSystemTrail.cpp
-    src/ecs/EntityOwner.cpp
-    src/core/Logger.cpp)
+    src/game/systems/GameJuiceSystemTrail.cpp)
 target_include_directories(game_juice_time_impl PRIVATE src)
+target_link_libraries(game_juice_time_impl PRIVATE wikigolf_common)
 if(MSVC)
     target_compile_definitions(game_juice_time_impl PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(game_juice_time_impl PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 
 add_executable(test_game_juice_time test_game_juice_time.cpp)
-target_precompile_headers(test_game_juice_time PRIVATE src/pch.h)
+target_precompile_headers(test_game_juice_time REUSE_FROM wikigolf_pch)
 target_include_directories(test_game_juice_time PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_game_juice_time PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -700,7 +731,7 @@ add_executable(test_physics_system_rules
     test_physics_system_rules.cpp
     src/game/systems/PhysicsSystemCollision.cpp
     src/game/systems/PhysicsSystemSpatial.cpp)
-target_precompile_headers(test_physics_system_rules PRIVATE src/pch.h)
+target_precompile_headers(test_physics_system_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_physics_system_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_physics_system_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -709,7 +740,7 @@ endif()
 add_test(NAME physics_system_rules COMMAND test_physics_system_rules)
 
 add_executable(test_graphics_device_settings test_graphics_device_settings.cpp)
-target_precompile_headers(test_graphics_device_settings PRIVATE src/pch.h)
+target_precompile_headers(test_graphics_device_settings REUSE_FROM wikigolf_pch)
 target_include_directories(test_graphics_device_settings PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_graphics_device_settings PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -723,26 +754,24 @@ add_executable(test_display_settings_rules
     src/core/DisplaySettingsPersistence.cpp
     src/core/DisplaySettingsQuality.cpp
     src/core/DisplaySettingsWindow.cpp
-    src/core/Logger.cpp
-    src/core/StringUtils.cpp
     src/graphics/GraphicsDevice.cpp
     src/graphics/GraphicsDeviceAdapter.cpp
     src/graphics/GraphicsDeviceState.cpp
     src/graphics/GraphicsDeviceTargets.cpp
     src/graphics/Shader.cpp)
-target_precompile_headers(test_display_settings_rules PRIVATE src/pch.h)
+target_precompile_headers(test_display_settings_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_display_settings_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_display_settings_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_display_settings_rules PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
-target_link_libraries(test_display_settings_rules d3d11 d2d1 dwrite windowscodecs dxguid dinput8 user32 gdi32 ole32 shlwapi winmm)
+target_link_libraries(test_display_settings_rules d3d11 d2d1 dwrite windowscodecs dxguid dinput8 user32 gdi32 ole32 shlwapi winmm wikigolf_common)
 add_test(NAME display_settings_rules COMMAND test_display_settings_rules)
 
 add_executable(test_wiki_terrain_height
     test_wiki_terrain_height.cpp
     src/game/systems/WikiTerrainHeight.cpp)
-target_precompile_headers(test_wiki_terrain_height PRIVATE src/pch.h)
+target_precompile_headers(test_wiki_terrain_height REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_terrain_height PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_wiki_terrain_height PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -751,7 +780,7 @@ endif()
 add_test(NAME wiki_terrain_height COMMAND test_wiki_terrain_height)
 
 add_executable(test_daily_challenge_rules test_daily_challenge_rules.cpp)
-target_precompile_headers(test_daily_challenge_rules PRIVATE src/pch.h)
+target_precompile_headers(test_daily_challenge_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_daily_challenge_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_daily_challenge_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -761,11 +790,10 @@ add_test(NAME daily_challenge_rules COMMAND test_daily_challenge_rules)
 
 add_executable(test_playfab_rules
     test_playfab_rules.cpp
-    src/game/systems/PlayFabClientJson.cpp
-    src/game/systems/WikiClientJson.cpp
-    src/game/systems/WikiClientJsonHtml.cpp)
-target_precompile_headers(test_playfab_rules PRIVATE src/pch.h)
+    src/game/systems/PlayFabClientJson.cpp)
+target_precompile_headers(test_playfab_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_playfab_rules PRIVATE src)
+target_link_libraries(test_playfab_rules PRIVATE wiki_client_json_common)
 if(MSVC)
     target_compile_definitions(test_playfab_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_playfab_rules PRIVATE /utf-8 /Zc:__cplusplus)
@@ -773,7 +801,7 @@ endif()
 add_test(NAME playfab_rules COMMAND test_playfab_rules)
 
 add_executable(test_achievement_rules test_achievement_rules.cpp)
-target_precompile_headers(test_achievement_rules PRIVATE src/pch.h)
+target_precompile_headers(test_achievement_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_achievement_rules PRIVATE src)
 if(MSVC)
     target_compile_definitions(test_achievement_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
