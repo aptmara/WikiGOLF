@@ -168,7 +168,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           const float distance = m_aimPinController->PlacePin(
               ctx, m_ballEntity, holeTransform->position);
           if (distance >= 0.0f && m_clubController) {
-            m_clubController->SelectClubForDistance(ctx, distance);
+            RefreshAimPinSolution(ctx, true);
             if (m_cameraController) {
               m_cameraController->SetTargetDistanceAndHeight(
                   m_clubController->GetRecommendedCameraDistance(4.0f),
@@ -285,8 +285,8 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // エイムピン設置（マップ中クリック／三人称視点中クリック）
   // 全体マップビューも実カメラ(傾いた透視投影)による俯瞰のため、レイキャストは
-  // 両モード共通で扱える。設置されたら、ボールからの距離に最も飛距離が
-  // 近いクラブへ自動的に切り替える。
+  // 両モード共通で扱える。設置されたら、ピンとの高低差を織り込んだ実効飛距離
+  // (RefreshAimPinSolution)に最も近いクラブへ自動的に切り替える。
   if (m_aimPinController && m_clubController &&
       (!m_isTutorial || tutorialPolicy.aimPin) &&
       shot->phase == game::components::ShotState::Phase::Idle) {
@@ -300,7 +300,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       pinParams.terrainSystem = m_terrainSystem.get();
       auto pinResult = m_aimPinController->Update(ctx, pinParams);
       if (pinResult.pinPlaced) {
-          m_clubController->SelectClubForDistance(ctx, pinResult.distance);
+          RefreshAimPinSolution(ctx, true);
           if (m_cameraController) {
               m_cameraController->SetTargetDistanceAndHeight(
                   m_clubController->GetRecommendedCameraDistance(4.0f),
@@ -327,10 +327,15 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       game::controllers::ClubController::InputParams cParams;
       cParams.allowInput = state->canShoot;
       auto cResult = m_clubController->UpdateInput(ctx, cParams);
-      if (cResult.clubChanged && m_cameraController) {
-          m_cameraController->SetTargetDistanceAndHeight(
-              m_clubController->GetRecommendedCameraDistance(4.0f),
-              m_clubController->GetRecommendedCameraHeight(4.0f));
+      if (cResult.clubChanged) {
+          // クラブが変われば同じピンでも必要なパワーが変わるため、
+          // バーのピン位置表示を新しいクラブで解き直す。
+          RefreshAimPinSolution(ctx, false);
+          if (m_cameraController) {
+              m_cameraController->SetTargetDistanceAndHeight(
+                  m_clubController->GetRecommendedCameraDistance(4.0f),
+                  m_clubController->GetRecommendedCameraHeight(4.0f));
+          }
       }
   }
 

@@ -387,9 +387,12 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     auto *distTxt = ctx.world.Get<UIText>(m_mapDistanceText);
 
     DirectX::XMFLOAT3 hoverWorld{0.0f, 0.0f, 0.0f};
+    // 探索距離はレイの進行距離（水平距離ではない）。マップを引いて見ている
+    // ときほどカメラが高くなり、画面奥（浅い角度）では地表に届くまでの進行
+    // 距離が長くなるため、フィールド全体を覆える余裕を持たせる。
     const bool hasHit = inMap && game::utils::RaycastScreenToTerrain(
         ctx, m_cfg.cameraEntity, static_cast<float>(mouseX),
-        static_cast<float>(mouseY), m_cfg.terrain, 400.0f, hoverWorld);
+        static_cast<float>(mouseY), m_cfg.terrain, 5000.0f, hoverWorld);
 
     if (hasHit && coordTxt && distTxt) {
       // 座標表示（ミニマップ内固定位置）

@@ -10,6 +10,7 @@
 #include "../components/Camera.h"
 #include "../components/Transform.h"
 #include "../systems/MapSys.h"
+#include "../utils/CameraProjection.h"
 #include "../utils/UIConstants.h"
 #include <DirectXMath.h>
 #include <algorithm>
@@ -98,41 +99,18 @@ inline bool ProjectToMinimap(float worldX, float worldZ,
  *          必要がある。これを使わずにProjectToMinimapを流用すると、傾いた
  *          カメラの遠近感が無視され、ボールやアイコンの表示位置がクリック
  *          位置や実際の見た目とズレる。
+ * @note 投影はエイムピンのレイキャスト(ScreenRaycast)と同じ変換規則
+ *       （実クライアント解像度のビューポート＋実描画と同じアスペクト比）で
+ *       行う。どちらかが仮想解像度のまま投影していると、16:9以外のウィンドウ
+ *       では中クリックした位置とマップ上のマーカーが横方向にずれる。
  * @return カメラ後方や投影範囲外の場合はfalse
 */
 inline bool ProjectWorldToMapViewScreen(core::GameContext &ctx,
                                         ecs::Entity cameraEntity,
                                         const DirectX::XMFLOAT3 &worldPos,
                                         float &outScreenX, float &outScreenY) {
-  using namespace DirectX;
-
-  auto *camTransform =
-      ctx.world.Get<game::components::Transform>(cameraEntity);
-  auto *camComp = ctx.world.Get<game::components::Camera>(cameraEntity);
-  if (!camTransform || !camComp) {
-    return false;
-  }
-
-  constexpr float kVirtualWidth = 1280.0f;
-  constexpr float kVirtualHeight = 720.0f;
-
-  const XMMATRIX view = camComp->GetViewMatrix(*camTransform);
-  const XMMATRIX proj = camComp->GetProjectionMatrix();
-  const XMMATRIX world = XMMatrixIdentity();
-
-  const XMVECTOR worldV = XMLoadFloat3(&worldPos);
-  const XMVECTOR screenV =
-      XMVector3Project(worldV, 0.0f, 0.0f, kVirtualWidth, kVirtualHeight,
-                       0.0f, 1.0f, proj, view, world);
-
-  XMFLOAT3 screen;
-  XMStoreFloat3(&screen, screenV);
-  if (screen.z < 0.0f || screen.z > 1.0f) {
-    return false; // カメラの後方、またはFar超え
-  }
-  outScreenX = screen.x;
-  outScreenY = screen.y;
-  return true;
+  return game::utils::ProjectWorldToVirtualScreen(ctx, cameraEntity, worldPos,
+                                                  outScreenX, outScreenY);
 }
 
 /**

@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <string>
 
 namespace game::controllers::hud {
 
@@ -119,7 +120,7 @@ void AimDistancePanel::Initialize(core::GameContext &ctx) {
 
   m_entities.pinLabel = m_entityOwner.Create(ctx.world);
   auto &pinLabel = ctx.world.Add<game::components::UIText>(m_entities.pinLabel);
-  pinLabel.width = 80.0f;
+  pinLabel.width = 170.0f; // 距離に加えて高低差・射程外の注記まで入る幅
   pinLabel.height = 16.0f;
   pinLabel.style = graphics::TextStyle::CardLabel();
   pinLabel.style.color = game::ui::kColorSpecial;
@@ -198,19 +199,36 @@ void AimDistancePanel::Update(core::GameContext &ctx,
   valueLabel->y = fill->y - 20.0f;
   valueLabel->style.color = FillColorForRatio(ratio);
 
-  const float pinRatio =
-      std::clamp(aimPin->distanceFromBall / currentClub.baseCarryDistance,
-                0.0f, 1.0f);
+  // ピン位置は「水平距離 ÷ 最大飛距離」ではなく、高低差と風を織り込んで
+  // 求めた必要パワー比の高さに出す。打ち上げならバーの上、打ち下ろしなら
+  // 下へずれ、その高さでゲージを止めればピンに届く。
+  const float pinRatio = std::clamp(aimPin->requiredPowerRatio, 0.0f, 1.0f);
   const float pinY = y + h - 2.0f - innerH * pinRatio;
+  const bool outOfRange = !aimPin->reachable;
+  const DirectX::XMFLOAT4 pinColor =
+      outOfRange ? game::ui::kColorError : game::ui::kColorSpecial;
 
   pinLine->y = pinY - pinLine->height * 0.5f;
+  pinLine->style.bgColor = pinColor;
 
   pinMarker->x = x + w + 6.0f;
   pinMarker->y = pinY - game::ui::kAimGraphMarkerSize * 0.5f;
 
   const int pinYards = std::clamp(
       static_cast<int>(std::round(aimPin->distanceFromBall)), 0, 9999);
-  pinLabel->text = std::format(L"ピン {}y", pinYards);
+  const int heightDiff =
+      static_cast<int>(std::round(std::abs(aimPin->heightFromBall)));
+  std::wstring pinText = std::format(L"ピン {}y", pinYards);
+  if (heightDiff >= 1) {
+    // 打ち上げ/打ち下ろしの量。必要パワーが動いた理由を読み取れるようにする。
+    pinText += std::format(L" {}{}m", aimPin->heightFromBall > 0.0f ? L"↑" : L"↓",
+                           heightDiff);
+  }
+  if (outOfRange) {
+    pinText += L" 届かない";
+  }
+  pinLabel->text = pinText;
+  pinLabel->style.color = pinColor;
   pinLabel->x = x + w + 6.0f + game::ui::kAimGraphMarkerSize + 4.0f;
   pinLabel->y = pinY - 8.0f;
 }

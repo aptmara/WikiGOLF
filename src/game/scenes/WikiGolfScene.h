@@ -113,6 +113,14 @@ private:
 */
   void RefreshLandingPreview(core::GameContext &ctx);
 
+  /**
+   * @brief エイムピンまでの高低差・風を織り込んだ必要パワーを解き直します。
+   * @param selectClub trueなら実効飛距離に最も近いクラブへ自動で切り替えます
+   *        （ピン設置時）。falseならクラブはそのままで必要パワーだけ更新します
+   *        （プレイヤーが手動でクラブを変えたとき）。
+  */
+  void RefreshAimPinSolution(core::GameContext &ctx, bool selectClub);
+
   /** @brief 着地地形とショット判定の結果画像を更新します。*/
   void UpdateResultVisuals(core::GameContext &ctx, float dt);
 

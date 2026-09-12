@@ -20,6 +20,8 @@
 #include "../systems/GameJuiceSystem.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
+#include "../utils/AimPinSolver.h"
+#include "../utils/CarryDistanceTable.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/PageHistoryUtils.h"
 #include "../utils/ProceduralFlag.h"
@@ -87,6 +89,97 @@ void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
   const float dispersionRadius = club.baseCarryDistance * 0.06f;
   m_minimapController->SetLandingPreview(ctx, result.landingPosition,
                                          dispersionRadius, true);
+}
+
+/**
+ * @brief エイムピンまでの高低差・風を織り込んだ必要パワーを解き直します。
+ * @details 平坦基準のクラブ飛距離だけで選ぶと、打ち上げでは大きく手前に、
+ *          打ち下ろしでは大きく奥へ外れる。実際の地形上での弾道
+ *          シミュレーション(TrajectoryPredictor・着弾点プレビューと同じ物理)
+ *          からピンへ届く比率を逆算し、その実効飛距離でクラブを選ぶ。
+*/
+void WikiGolfScene::RefreshAimPinSolution(core::GameContext &ctx,
+                                          bool selectClub) {
+  auto *pin = ctx.world.GetGlobal<game::components::AimPinState>();
+  if (!pin || !pin->active || !m_clubController) return;
+
+  auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
+  if (!ballT) return;
+
+  const DirectX::XMFLOAT3 ballPos = ballT->position;
+  const float toPinX = pin->worldPosition.x - ballPos.x;
+  const float toPinZ = pin->worldPosition.z - ballPos.z;
+  const float horizontalDistance =
+      std::sqrt(toPinX * toPinX + toPinZ * toPinZ);
+  pin->distanceFromBall = horizontalDistance;
+  pin->heightFromBall = pin->worldPosition.y - ballPos.y;
+
+  if (horizontalDistance < 0.01f) {
+    pin->requiredPowerRatio = 0.0f;
+    pin->playsLikeDistance = 0.0f;
+    pin->reachable = true;
+    return;
+  }
+
+  const DirectX::XMFLOAT3 shotDirection{toPinX / horizontalDistance, 0.0f,
+                                        toPinZ / horizontalDistance};
+
+  game::physics::WindParams wind;
+  if (auto *golfState =
+          ctx.world.GetGlobal<game::components::GolfGameState>()) {
+    wind.windSpeed = golfState->windSpeed;
+    wind.windDirection = golfState->windDirection;
+  }
+  const game::physics::FlatGroundParams flatGroundUnused; // enabled=false: 実地形を使う
+
+  const auto solveForClub =
+      [&](const game::controllers::ClubController::Club &club) {
+        game::physics::BallPhysicsParams ballParams;
+        ballParams.rollingFrictionScale = club.rollingFrictionScale;
+
+        return game::utils::SolveAimPinPower(
+            horizontalDistance, club.baseCarryDistance, [&](float ratio) {
+              const float targetDistance = club.baseCarryDistance * ratio;
+              const float speed = game::utils::LookupSpeedForDistance(
+                  club.carryTable, targetDistance);
+              const auto result = game::physics::SimulateCarryDistance(
+                  speed, club.launchAngle, shotDirection, ballPos,
+                  m_terrainSystem.get(), flatGroundUnused, ballParams, wind);
+              // 横風で流された分は「届いたか」に関係しないため、狙った方向
+              // への到達距離（射線への射影）で測る。
+              return (result.landingPosition.x - ballPos.x) * shotDirection.x +
+                     (result.landingPosition.z - ballPos.z) * shotDirection.z;
+            });
+      };
+
+  // 実効飛距離の見積もりは最も飛ぶクラブを基準にする。短いクラブを握った
+  // まま遠くへピンを刺したとき、そのクラブの射程で頭打ちになった実効飛距離
+  // からクラブを選ぶと、一度では適正なクラブまで上がれないため。
+  const auto *referenceClub = &m_clubController->GetCurrentClub();
+  if (selectClub) {
+    for (const auto &club : m_clubController->GetAllClubs()) {
+      if (club.baseCarryDistance > referenceClub->baseCarryDistance) {
+        referenceClub = &club;
+      }
+    }
+  }
+
+  auto solution = solveForClub(*referenceClub);
+
+  // 選んだクラブでは必要パワーが変わり、選択がもう一段動くことがある
+  // (例: 打ち上げで一本上のクラブになる)。収束するまで、最大2回まで見直す。
+  for (int attempt = 0; selectClub && attempt < 2; ++attempt) {
+    if (solution.playsLikeDistance <= 0.0f) break;
+    const int previousIndex = m_clubController->GetCurrentClubIndex();
+    m_clubController->SelectClubForDistance(ctx, solution.playsLikeDistance);
+    const int selectedIndex = m_clubController->GetCurrentClubIndex();
+    solution = solveForClub(m_clubController->GetCurrentClub());
+    if (selectedIndex == previousIndex) break;
+  }
+
+  pin->requiredPowerRatio = solution.requiredPowerRatio;
+  pin->playsLikeDistance = solution.playsLikeDistance;
+  pin->reachable = solution.reachable;
 }
 
 /**

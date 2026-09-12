@@ -482,6 +482,30 @@ if(MSVC)
 endif()
 add_test(NAME trajectory_simulation COMMAND test_trajectory_simulation)
 
+# エイムピンの必要パワー逆算（高低差の織り込み）
+add_executable(test_aim_pin_solver test_aim_pin_solver.cpp)
+target_precompile_headers(test_aim_pin_solver REUSE_FROM wikigolf_pch)
+target_include_directories(test_aim_pin_solver PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_aim_pin_solver PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                              -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_aim_pin_solver PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME aim_pin_solver COMMAND test_aim_pin_solver)
+
+# 画面座標→ワールドのレイ構築と地形レイマーチング
+add_executable(test_screen_raycast
+    test_screen_raycast.cpp
+    src/game/systems/WikiTerrainHeight.cpp)
+target_precompile_headers(test_screen_raycast REUSE_FROM wikigolf_pch)
+target_include_directories(test_screen_raycast PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_screen_raycast PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                              -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_screen_raycast PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME screen_raycast COMMAND test_screen_raycast)
+
 add_executable(test_shot_gauge_rules test_shot_gauge_rules.cpp)
 target_precompile_headers(test_shot_gauge_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_shot_gauge_rules PRIVATE src)

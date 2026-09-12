@@ -329,13 +329,27 @@ struct ShotState {
 /**
  * @brief プレイヤーが中クリックで指定した狙い所（エイムピン）
  * @details マップビューまたは三人称視点での中クリックで設置される。設置される
- *          たびにClubControllerが飛距離の近いクラブへ自動的に切り替える。
+ *          たびに、ボールとの高低差を織り込んだ実効飛距離(playsLikeDistance)に
+ *          最も近いクラブへClubControllerが自動的に切り替える。
  *          ショットが実行されると無効化され、次のショットでは再設置が必要になる。
 */
 struct AimPinState {
   bool active = false;                        ///< ピンが設置済みか
   DirectX::XMFLOAT3 worldPosition{0, 0, 0};   ///< ピンのワールド座標
   float distanceFromBall = 0.0f;              ///< 設置時点のボールからの水平距離
+  /** @brief ボールから見たピンの高低差（正=打ち上げ、負=打ち下ろし）*/
+  float heightFromBall = 0.0f;
+  /**
+   * @brief 現在のクラブでピンへ届かせるのに必要なパワーゲージ比率。
+   * @details 高低差と風を織り込んだ弾道シミュレーションから逆算した値で、
+   *          パワーバーのピン位置表示はこの比率の高さに出す。クラブを
+   *          切り替えると必要な比率も変わるため、その都度計算し直す。
+  */
+  float requiredPowerRatio = 0.0f;
+  /** @brief 高低差込みの実効飛距離（平坦換算）。クラブ自動選択の基準。*/
+  float playsLikeDistance = 0.0f;
+  /** @brief 現在のクラブのフルスイングで届くか*/
+  bool reachable = false;
 };
 
 /**

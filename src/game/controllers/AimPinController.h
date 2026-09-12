@@ -43,8 +43,7 @@ public:
   };
 
   struct UpdateResult {
-    bool pinPlaced = false;  ///< このフレームで新しくピンを設置したか
-    float distance = 0.0f;   ///< 設置した場合のボールからの水平距離
+    bool pinPlaced = false; ///< このフレームで新しくピンを設置したか
   };
 
   /** @brief 中クリック入力を処理し、必要ならAimPinStateを更新します。*/

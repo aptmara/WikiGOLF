@@ -100,11 +100,11 @@ AimPinController::Update(core::GameContext &ctx, const UpdateParams &params) {
     return result;
   }
 
-  const float distance = PlacePin(ctx, params.ballEntity, worldPos);
-  if (distance < 0.0f) return result;
+  if (PlacePin(ctx, params.ballEntity, worldPos) < 0.0f) {
+    return result;
+  }
 
   result.pinPlaced = true;
-  result.distance = distance;
   return result;
 }
 
@@ -121,6 +121,12 @@ float AimPinController::PlacePin(core::GameContext& ctx,
   pin->active = true;
   pin->worldPosition = worldPos;
   pin->distanceFromBall = distance;
+  pin->heightFromBall = worldPos.y - ball->position.y;
+  // 高低差を織り込んだ必要パワーはクラブが決まらないと出せないため、
+  // ここでは平坦想定の暫定値を入れておき、シーン側で解き直す。
+  pin->requiredPowerRatio = 0.0f;
+  pin->playsLikeDistance = distance;
+  pin->reachable = false;
   RebuildWorldMarker(ctx, worldPos);
   return distance;
 }
