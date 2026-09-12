@@ -28,6 +28,10 @@
 !*.h
 !*.rc
 !*.ico
+!build.bat
+!build-debugtools.bat
+!build-static-release.bat
+!build-vs2026.bat
 
 # --- Blacklist: Specific exclusions (override whitelist) ---
 # Build & Temp directories (just in case they matched above patterns)
