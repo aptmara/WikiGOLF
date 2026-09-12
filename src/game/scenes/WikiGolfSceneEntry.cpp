@@ -491,7 +491,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_hud->Initialize(ctx);
 
   m_clubController = std::make_unique<game::controllers::ClubController>();
-  m_clubController->Initialize(ctx);
+  m_clubController->Initialize(ctx, m_terrainSystem.get());
   if (auto *state = ctx.world.GetGlobal<GolfGameState>()) {
       state->rollingFrictionScale =
           m_clubController->GetCurrentClub().rollingFrictionScale;

@@ -392,6 +392,9 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (m_pendingLaunchTimer <= 0.0f) {
           m_pendingLaunchTimer = -1.0f;
           if (m_shotController && m_clubController && shot->swingCommitted) {
+              // スタートティーピンによる固定は、実際にボールへ初速が加わる
+              // この瞬間まで維持する。
+              if (m_pageLoader) m_pageLoader->ClearStartPin(ctx, m_ballEntity);
               m_shotController->ExecuteShot(ctx, m_ballEntity, m_pendingShotDirection,
                                             m_clubController->GetCurrentClub(),
                                             &m_timeOfDay, m_hud.get());

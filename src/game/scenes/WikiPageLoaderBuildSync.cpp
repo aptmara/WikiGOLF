@@ -251,26 +251,12 @@ PageLoadResult WikiPageLoader::BuildPageSync(
                  ElapsedMs(terrainStartedAt));
     }
 
-    // ボールをティーグラウンド位置に再配置します。
-    auto* ballT  = ctx.world.Get<Transform>(ballEntity);
-    auto* ballRB = ctx.world.Get<RigidBody>(ballEntity);
-    if (ballT) {
-        float terrainHeight = 0.0f;
-        if (m_terrainSystem) {
-            terrainHeight =
-                m_terrainSystem->GetHeight(0.0f, -fieldDepth * 0.4f);
-        }
-        ballT->position = {
-            0.0f,
-            game::physics::ToVisualSurfaceHeight(terrainHeight) +
-                game::physics::kBallRadius,
-            -fieldDepth * 0.4f};
+    // ボールをティーグラウンド位置に再配置し、スタートティーピンで固定します。
+    PlaceBallAtStartTee(ctx, ballEntity, -fieldDepth * 0.4f, minimapController,
+                        m_fieldWidth, m_fieldDepth);
+    if (auto* ballT = ctx.world.Get<Transform>(ballEntity)) {
         LOG_DEBUG("WikiPageLoader", "Ball repositioned to ({}, {}, {})",
                   ballT->position.x, ballT->position.y, ballT->position.z);
-        if (ballRB) ballRB->velocity = {0.0f, 0.0f, 0.0f};
-        if (minimapController)
-            minimapController->SyncMapCenterToBall(
-                ctx, 0.0f, m_fieldWidth, m_fieldDepth, true);
     }
 
     const auto holesStartedAt = std::chrono::steady_clock::now();

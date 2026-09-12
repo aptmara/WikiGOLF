@@ -318,23 +318,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::RepositionBall:
     {
-        auto* ballT  = ctx.world.Get<Transform>(m_buildBall);
-        auto* ballRB = ctx.world.Get<RigidBody>(m_buildBall);
-        if (ballT) {
-            const float ballZ = -m_buildFieldDepth * 0.4f;
-            float terrainHeight = 0.0f;
-            if (m_terrainSystem) {
-                terrainHeight = m_terrainSystem->GetHeight(0.0f, ballZ);
-            }
-            ballT->position = {
-                0.0f,
-                game::physics::ToVisualSurfaceHeight(terrainHeight) +
-                    game::physics::kBallRadius,
-                ballZ};
-            if (ballRB) ballRB->velocity = {0.0f, 0.0f, 0.0f};
-            if (m_buildMinimap)
-                m_buildMinimap->SyncMapCenterToBall(ctx, 0.0f, m_buildFieldWidth, m_buildFieldDepth, true);
-        }
+        const float ballZ = -m_buildFieldDepth * 0.4f;
+        PlaceBallAtStartTee(ctx, m_buildBall, ballZ, m_buildMinimap,
+                           m_buildFieldWidth, m_buildFieldDepth);
 
         m_nextHoleIndex = 0;
         m_nextMapIconIndex = 0;
