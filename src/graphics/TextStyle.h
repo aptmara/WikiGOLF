@@ -250,7 +250,7 @@ struct TextStyle {
   /** @brief ショットパネルラベル: POWER/ACCURACY等の見出し */
   static TextStyle ShotPanelLabel() {
     TextStyle s;
-    s.fontFamily = "Barlow Condensed SemiBold";
+    s.fontFamily = "Kiwi Maru Medium";
     s.fontSize = 12.0f;
     s.color = {0.329f, 0.349f, 0.365f, 1.0f}; // #54595d
     s.align = TextAlign::Left;
@@ -261,7 +261,7 @@ struct TextStyle {
   /** @brief ショットパネル値: パーセント等の主要数値 */
   static TextStyle ShotPanelValue() {
     TextStyle s;
-    s.fontFamily = "Consolas";
+    s.fontFamily = "Share Tech Mono";
     s.fontSize = 22.0f;
     s.color = {0.125f, 0.129f, 0.133f, 1.0f}; // #202122
     s.align = TextAlign::Right;
@@ -272,7 +272,7 @@ struct TextStyle {
   /** @brief クラブ名テキスト（カード内・紙面上の本文色・中央揃え） */
   static TextStyle ClubName() {
     TextStyle s;
-    s.fontFamily = "Meiryo";
+    s.fontFamily = "Mamelon 5 Hi";
     s.fontSize = 16.0f;
     s.color = {0.125f, 0.129f, 0.133f, 1.0f}; // #202122
     s.align = TextAlign::Center;

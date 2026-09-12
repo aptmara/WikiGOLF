@@ -40,6 +40,7 @@ void ShotGaugePanel::Initialize(core::GameContext &ctx) {
   step.width = game::ui::kShotStepWidth;
   step.height = 24.0f;
   step.style = graphics::TextStyle::ShotPanelLabel();
+  step.style.fontFamily = "Barlow Condensed Black";
   step.style.align = graphics::TextAlign::Center;
   step.style.fontSize = game::ui::kShotLabelFontSize;
   step.style.color = game::ui::kColorTextPrimary;

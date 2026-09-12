@@ -140,6 +140,9 @@ public:
   /** @brief ミニマップUI全体の表示/非表示切り替え（ロード中は非表示にするため）*/
   void SetVisible(core::GameContext& ctx, bool visible);
 
+  /** @brief 通常HUDミニマップへフェード透明度を適用します。*/
+  void SetHudOpacity(core::GameContext& ctx, float opacity);
+
   /** @brief チュートリアルで許可する操作だけをマップ内ヘルプへ表示します。*/
   void SetTutorialHelpMode(core::GameContext& ctx, bool enabled);
 

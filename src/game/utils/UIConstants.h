@@ -9,6 +9,8 @@
 
 namespace game::ui {
 
+constexpr float kNormalHudFadeDuration = 0.35f;
+
 // =========================================================
 // 共通カラーパレット（Wikipedia/MediaWikiのVectorスキンに準拠）
 // すべてのパネルはここで定義した色だけを共有する。
@@ -62,10 +64,10 @@ constexpr int kLayerJudge       = 130;
 constexpr int kLayerOverlay     = 200;
 
 // =========================================================
-// ブラウザHUD (左上)
+// 記事HUD (右上) - 参考HUDの残距離表示位置をCURRENT/TARGETへ転用
 // =========================================================
-constexpr float kBrowserHudX         = 20.0f;
-constexpr float kBrowserHudY         = 20.0f;
+constexpr float kBrowserHudX         = 800.0f;
+constexpr float kBrowserHudY         = 24.0f;
 constexpr float kBrowserIconWidth    = 48.0f;
 constexpr float kBrowserUrlWidth     = 280.0f;
 constexpr float kBrowserFontSize     = 18.0f;
@@ -74,11 +76,11 @@ constexpr float kBrowserSubFontSize  = 12.0f;
 constexpr float kBrowserLineSpacing  = 28.0f;
 
 // =========================================================
-// 風情報カード (右上)
+// 風・地形情報 (左上)
 // =========================================================
-constexpr float kWindCardX          = 884.0f;
-constexpr float kWindCardY          = 20.0f;
-constexpr float kWindCardWidth      = 146.0f;
+constexpr float kWindCardX          = 48.0f;
+constexpr float kWindCardY          = 28.0f;
+constexpr float kWindCardWidth      = 330.0f;
 constexpr float kWindValueFontSize  = 27.0f;
 constexpr float kWindLabelFontSize  = 11.0f;
 
@@ -117,24 +119,15 @@ constexpr float kGaugeMarkerPulseScale     = 0.35f; // 確定パルス時のマ�
 constexpr float kShotValuePunchFontDelta   = 6.0f;  // パーセント数値のパンチ演出量（pt）
 
 // =========================================================
-// クラブ選択パネル (左側) - 1280x720固定
+// クラブ選択パネル (左下) - 1280x720固定
 // =========================================================
 constexpr float kClubPanelX         = 20.0f;
-constexpr float kClubPanelY         = 468.0f;
-constexpr float kClubItemW          = 236.0f;
-constexpr float kClubItemH          = 56.0f;
+constexpr float kClubPanelY         = 566.0f;
+constexpr float kClubItemW          = 420.0f;
+constexpr float kClubItemH          = 82.0f;
 constexpr float kClubItemSpacing    = 8.0f;
 constexpr float kClubNameFontSize   = 17.0f;
 constexpr float kClubIconSize       = 44.0f;
-
-// =========================================================
-// 着弾点プレビューボタン (クラブ選択パネルの右横) - 1280x720固定
-// =========================================================
-constexpr float kLandingPreviewBtnX      = kClubPanelX + kClubItemW + 10.0f;
-constexpr float kLandingPreviewBtnY      = kClubPanelY;
-constexpr float kLandingPreviewBtnW      = 120.0f;
-constexpr float kLandingPreviewBtnH      = kClubItemH;
-constexpr float kLandingPreviewBtnFontSize = 13.0f;
 
 // =========================================================
 // ショットボタン (右下) - 1280x720固定
@@ -155,12 +148,12 @@ constexpr float kControlHintH       = 24.0f;
 constexpr float kControlHintFont    = 12.0f;
 
 // =========================================================
-// ミニマップ (右上) - 1280x720固定
+// ミニマップ (右下・縦長) - 1280x720固定
 // =========================================================
-constexpr float kMinimapX           = 1050.0f;
-constexpr float kMinimapY           = 20.0f;
-constexpr float kMinimapWidth       = 180.0f;
-constexpr float kMinimapHeight      = 180.0f;  // SRVは正方形(720x720)なので同一に
+constexpr float kMinimapX           = 930.0f;
+constexpr float kMinimapY           = 274.0f;
+constexpr float kMinimapWidth       = 300.0f;
+constexpr float kMinimapHeight      = 370.0f;
 constexpr float kMinimapMarkerSize  = 18.0f;
 
 // =========================================================

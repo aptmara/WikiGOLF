@@ -95,7 +95,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (m_isTutorial && !m_tutorialOverlay) {
               m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
               m_tutorialOverlay->Initialize(ctx);
-              if (m_hud) m_hud->SetTutorialMode(ctx, true);
               if (m_minimapController) {
                   m_minimapController->SetTutorialHelpMode(ctx, true);
               }
@@ -288,30 +287,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           }
       }
       isMapView = m_minimapController->IsMapView();
-  }
-
-  // クラブ選択パネル横: 着弾点プレビュー(トップビュー)トグルボタン
-  if (m_hud && m_minimapController && !m_isTutorial) {
-      PROFILE_SCOPE("WikiGolf.LandingPreviewButton");
-      const bool btnEnabled = !isMapView && state->canShoot &&
-          shot->phase == game::components::ShotState::Phase::Idle;
-      const bool hovered =
-          mouseX >= game::ui::kLandingPreviewBtnX &&
-          mouseX <= game::ui::kLandingPreviewBtnX + game::ui::kLandingPreviewBtnW &&
-          mouseY >= game::ui::kLandingPreviewBtnY &&
-          mouseY <= game::ui::kLandingPreviewBtnY + game::ui::kLandingPreviewBtnH;
-
-      if ((btnEnabled || isMapView) && hovered && ctx.input.GetMouseButtonDown(0)) {
-          m_minimapController->ToggleMapView(ctx, m_skyboxEntity);
-          isMapView = m_minimapController->IsMapView();
-          if (isMapView) {
-              RefreshLandingPreview(ctx);
-          } else {
-              m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
-          }
-      }
-
-      m_hud->UpdateLandingPreviewButton(ctx, hovered, isMapView, btnEnabled || isMapView);
   }
 
   const bool escapeHandledByMapView =

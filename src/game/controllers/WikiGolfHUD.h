@@ -11,9 +11,7 @@
 #include "hud/ClubSelectionPanel.h"
 #include "hud/WindPanel.h"
 #include "hud/MinimapDecorationPanel.h"
-#include "hud/LiePanel.h"
 #include "hud/ShotGaugePanel.h"
-#include "hud/GameplayControlsPanel.h"
 #include "hud/AimDistancePanel.h"
 #include <DirectXMath.h>
 #include <vector>
@@ -87,29 +85,28 @@ public:
 */
     void SetVisible(core::GameContext& ctx, bool visible);
 
-    /** @brief 通常操作ヒントを隠し、チュートリアルガイドとの競合を防ぎます。*/
-    void SetTutorialMode(core::GameContext& ctx, bool enabled);
-
-    /**
-     * @brief 着弾点プレビュー(トップビュー)トグルボタンの見た目を更新します。
-     * @param hovered マウスがボタン上にあるか
-     * @param active トップビュー(マップビュー)が現在有効か
-     * @param enabled ボタンを操作可能な状態か(ショット中などは無効化)
-*/
-    void UpdateLandingPreviewButton(core::GameContext& ctx, bool hovered,
-                                    bool active, bool enabled);
+    /** @brief 通常HUDの現在のフェード透明度を返します。*/
+    float GetNormalHudOpacity() const {
+        return m_isVisible ? m_normalHudOpacity : 0.0f;
+    }
 
 private:
+    void UpdateNormalHudTransition(
+        core::GameContext& ctx, float dt,
+        game::components::ShotState::Phase shotPhase);
+    void ApplyNormalHudOpacity(core::GameContext& ctx);
+
     hud::CourseInfoPanel m_courseInfoPanel;
     hud::ClubSelectionPanel m_clubSelectionPanel;
-    hud::GameplayControlsPanel m_gameplayControlsPanel;
-    hud::LiePanel m_liePanel;
     hud::MinimapDecorationPanel m_minimapDecorationPanel;
     hud::ShotGaugePanel m_shotGaugePanel;
     hud::WindPanel m_windPanel;
     hud::AimDistancePanel m_aimDistancePanel;
 
     float m_elapsedTime = 0.0f;
+    float m_normalHudOpacity = 1.0f;
+    bool m_shotSequenceActive = false;
+    bool m_isVisible = true;
 };
 
 } // namespace game::controllers

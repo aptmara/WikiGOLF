@@ -131,4 +131,17 @@ void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
     }
 }
 
+void MinimapController::SetHudOpacity(core::GameContext& ctx, float opacity) {
+    const float effectiveOpacity =
+        m_isMapView ? 1.0f : std::clamp(opacity, 0.0f, 1.0f);
+    ctx.world.Query<components::UIImage>().Each(
+        [&](ecs::Entity entity, components::UIImage& image) {
+          if (m_entityOwner.Owns(entity)) image.opacity = effectiveOpacity;
+        });
+    ctx.world.Query<components::UIText>().Each(
+        [&](ecs::Entity entity, components::UIText& text) {
+          if (m_entityOwner.Owns(entity)) text.opacity = effectiveOpacity;
+        });
+}
+
 } // namespace game::controllers

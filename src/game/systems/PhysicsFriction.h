@@ -105,14 +105,14 @@ inline bool CanStaticFrictionHold(float speed, float frictionCoeff,
  * ベース係数と速度に応じたブーストをまとめて管理する。
 */
 struct SurfaceFrictionSettings {
-  float baseRollingFriction = 0.14f;
+  float baseRollingFriction = 0.22f;
   float slowSpeedReference = 4.0f;
   float slowFrictionExponent = 0.8f;
   float slowFrictionMinMultiplier = 0.2f;
   float highSpeedBoostStart = 22.0f;
   float highSpeedBoostScale = 0.25f;
   float slopeFrictionFloor = 0.35f;
-  float constantBrake = 0.08f;
+  float constantBrake = 0.12f;
   float greenMultiplier = 1.45f;
   float roughMultiplier = 2.5f;
   float bunkerMultiplier = 7.5f;

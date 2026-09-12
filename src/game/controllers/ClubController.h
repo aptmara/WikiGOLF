@@ -132,8 +132,6 @@ private:
   void InitializeClubs(core::GameContext &ctx);
   void InitializeClubModel(core::GameContext &ctx);
   bool SwitchClub(core::GameContext &ctx, int direction);
-  void ExpandClubUI(core::GameContext &ctx);
-  void CollapseClubUI(core::GameContext &ctx);
   bool SelectClubByIndex(core::GameContext &ctx, size_t index);
 
   /**
@@ -159,14 +157,10 @@ private:
   float ClipDuration(const std::string &clipName) const;
 
   std::vector<Club> m_availableClubs;
-  Club m_currentClub = {"Driver", 30.0f, 30.0f, "icon_driver.png", 1.0f};
+  Club m_currentClub = {"ドライバー", 119.0f, 10.5f,
+                        "Assets/textures/Clubs/1W_driver.png", 1.0f,
+                        "1W", "Driver"};
   int m_currentClubIndex = 0;
-
-  std::vector<ecs::Entity> m_clubUIEntities;
-  std::vector<ecs::Entity> m_clubNameEntities;
-  bool m_clubUIExpanded = false;
-  float m_clubExpandTimer = 0.0f;
-  static constexpr float kClubAutoCollapseTime = 3.5f;
 
   ecs::Entity m_clubModelEntity = UINT32_MAX;
   ClubAnimPhase m_clubAnimPhase = ClubAnimPhase::Idle;

@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file ClubSelectionPanel.h
- * @brief クラブ選択一覧と着弾予測ボタンを管理するHUDパネル
+ * @brief 選択中クラブと操作キーを表示するHUDパネル
 */
 
 #include "../../../ecs/Entity.h"
@@ -28,8 +28,7 @@ struct ClubUIData {
 namespace hud {
 
 /**
- * @brief クラブ一覧の生成、3行窓、選択表示を一括管理します。
- * @details 表示中の行は常に「前・選択中・次」の最大3行です。
+ * @brief Q/E操作と選択中クラブ1本の表示を管理します。
 */
 class ClubSelectionPanel {
 public:
@@ -43,42 +42,32 @@ public:
   void Update(core::GameContext &ctx, float elapsedTime,
               const std::vector<ClubUIData> &clubs, int currentClubIndex);
 
-  /** @brief 着弾予測ボタンの状態を表示へ反映します。*/
-  void UpdateLandingPreviewButton(core::GameContext &ctx, bool hovered,
-                                  bool active, bool enabled);
-
   /** @brief ショット中のクラブ選択UIの表示状態を切り替えます。*/
   void SetShotPhaseVisible(core::GameContext &ctx, bool shotPhase);
 
   /** @brief パネル全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
+  /** @brief パネル全体へフェード透明度を適用します。*/
+  void SetOpacity(core::GameContext &ctx, float opacity);
+
   /** @brief パネルが生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 
 private:
-  struct ClubRowEntities {
-    ecs::Entity background = UINT32_MAX;
-    ecs::Entity icon = UINT32_MAX;
-    ecs::Entity name = UINT32_MAX;
-    ecs::Entity subName = UINT32_MAX;
-    bool visibleInWindow = false;
-    bool selected = false;
-  };
+  void RebuildSelectedClub(core::GameContext &ctx, const ClubUIData &club);
 
-  void RebuildRows(core::GameContext &ctx,
-                   const std::vector<ClubUIData> &clubs);
-  void UpdateRow(core::GameContext &ctx, ClubRowEntities &row, int slot,
-                 bool selected, float elapsedTime);
-
-  ecs::Entity m_header = UINT32_MAX;
-  ecs::Entity m_scrollUp = UINT32_MAX;
-  ecs::Entity m_scrollDown = UINT32_MAX;
-  ecs::Entity m_landingPreviewBackground = UINT32_MAX;
-  ecs::Entity m_landingPreviewText = UINT32_MAX;
-  std::vector<ClubRowEntities> m_rows;
+  ecs::Entity m_background = UINT32_MAX;
+  ecs::Entity m_qKey = UINT32_MAX;
+  ecs::Entity m_eKey = UINT32_MAX;
+  ecs::Entity m_pinIcon = UINT32_MAX;
+  ecs::Entity m_pinHint = UINT32_MAX;
+  ecs::Entity m_clubIcon = UINT32_MAX;
+  ecs::Entity m_clubName = UINT32_MAX;
+  ecs::Entity m_clubSubName = UINT32_MAX;
+  int m_selectedIndex = -1;
   ecs::EntityOwner m_staticEntityOwner;
-  ecs::EntityOwner m_rowEntityOwner;
+  ecs::EntityOwner m_selectedEntityOwner;
 };
 
 } // namespace hud

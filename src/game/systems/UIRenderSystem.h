@@ -57,10 +57,19 @@ public:
     size_t directDraws = 0;
 
     for (const auto &[entity, ui] : uiTexts) {
+      graphics::TextStyle effectiveStyle = ui->style;
+      const float opacity = std::clamp(ui->opacity, 0.0f, 1.0f);
+      effectiveStyle.color.w *= opacity;
+      effectiveStyle.shadowColor.w *= opacity;
+      effectiveStyle.bgColor.w *= opacity;
+      effectiveStyle.bgGradientEnd.w *= opacity;
+      effectiveStyle.borderColor.w *= opacity;
+      effectiveStyle.outlineColor.w *= opacity;
+
       if (ui->fullScreenCover) {
         // 仮想解像度のレターボックスを無視し、物理画面全体を塗りつぶす
         // （フェード/暗転オーバーレイ）。テキストやキャッシュ追跡は行わない。
-        m_renderer.FillFullScreenRect(ui->style.bgColor);
+        m_renderer.FillFullScreenRect(effectiveStyle.bgColor);
         seen.insert(entity);
         continue;
       }
@@ -77,13 +86,14 @@ public:
       D2D1_RECT_F rect = D2D1::RectF(ui->x, ui->y, ui->x + w, ui->y + h);
 
       seen.insert(entity);
-      const bool stable = UpdateStability(entity, ui->text, ui->style, w, h);
+      const bool stable =
+          UpdateStability(entity, ui->text, effectiveStyle, w, h);
 
       if (stable) {
-        m_renderer.RenderTextCached(ui->text, rect, ui->style);
+        m_renderer.RenderTextCached(ui->text, rect, effectiveStyle);
         ++rasterHits;
       } else {
-        m_renderer.RenderText(ui->text, rect, ui->style);
+        m_renderer.RenderText(ui->text, rect, effectiveStyle);
         ++directDraws;
       }
     }

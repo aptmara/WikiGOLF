@@ -38,7 +38,9 @@ void WikiGolfScene::UpdateHudAndEffects(
                                   shot.phase != game::components::ShotState::Phase::ShowResult &&
                                   shot.phase != game::components::ShotState::Phase::RestoringCamera);
         m_hudUpdateTimer += dt;
-        const bool shouldRefreshHud = isShotPhase || m_hudUpdateTimer >= 0.1f;
+        const bool hudFading = m_hud->GetNormalHudOpacity() < 1.0f;
+        const bool shouldRefreshHud =
+            isShotPhase || hudFading || m_hudUpdateTimer >= 0.1f;
 
         if (shouldRefreshHud) {
             // 間引き中に経過した実時間を渡す。ここで単フレームの dt を渡すと、
@@ -102,6 +104,11 @@ void WikiGolfScene::UpdateHudAndEffects(
 
         // 通常時 <-> ショット時 UI 切り替え
         m_hud->SetShotPhaseUIVisible(ctx, isShotPhase);
+        if (m_minimapController) {
+            const float opacity = m_hud->GetNormalHudOpacity();
+            m_minimapController->SetVisible(ctx, opacity > 0.001f);
+            m_minimapController->SetHudOpacity(ctx, opacity);
+        }
     }
 
     if (m_gameJuice) {

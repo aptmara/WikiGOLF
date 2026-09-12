@@ -23,6 +23,7 @@ struct UIText {
 
     graphics::TextStyle style;  ///< テキストスタイル（色、サイズ、影など）
 
+    float opacity = 1.0f;       ///< スタイル全体へ適用する透明度（0.0-1.0）
     bool visible = true;        ///< 可視性（false なら描画スキップ）
     int layer = 0;              ///< レイヤー（大きいほど前面に描画）
 

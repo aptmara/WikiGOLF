@@ -42,6 +42,7 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   ui.height = game::ui::kMinimapHeight;
   ui.x = game::ui::kMinimapX;
   ui.y = game::ui::kMinimapY;
+  ui.alpha = 0.82f;
   ui.visible = true;
   ui.layer = game::ui::kLayerMinimap;
 
@@ -105,20 +106,20 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   // ターゲットホールの赤"P"と混同しないよう、色とグリフを変えている。
   m_aimPinMarkerEntity = m_entityOwner.Create(ctx.world);
   auto &aimPinMarker = ctx.world.Add<UIText>(m_aimPinMarkerEntity);
-  aimPinMarker.text = L"📍";
+  aimPinMarker.text = L"◆";
   aimPinMarker.x = 0.0f;
   aimPinMarker.y = 0.0f;
   aimPinMarker.width = game::ui::kMinimapMarkerSize;
   aimPinMarker.height = game::ui::kMinimapMarkerSize;
   aimPinMarker.style = graphics::TextStyle::Guide();
   aimPinMarker.style.fontSize = game::ui::kMinimapMarkerSize;
-  aimPinMarker.style.color = {1.0f, 0.2f, 0.9f, 1.0f}; // マゼンタ
+  aimPinMarker.style.color = {1.0f, 0.78f, 0.05f, 1.0f};
   aimPinMarker.layer = game::ui::kLayerMarker + 3;
   aimPinMarker.visible = false;
 
   // ショット方向案内用のガイドドット配列 (·)
   m_minimapGuideDotEntities.clear();
-  for (int i = 0; i < 3; ++i) {
+  for (int i = 0; i < 7; ++i) {
     auto dotEntity = m_entityOwner.Create(ctx.world);
     auto &dot = ctx.world.Add<UIText>(dotEntity);
     dot.text = L"·";
@@ -408,5 +409,4 @@ void MinimapController::UpdateHoleIconEvaluation(
 }
 
 } // namespace game::controllers
-
 

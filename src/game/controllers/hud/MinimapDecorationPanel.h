@@ -21,6 +21,9 @@ public:
   /** @brief 装飾全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
+  /** @brief 装飾全体へフェード透明度を適用します。*/
+  void SetOpacity(core::GameContext &ctx, float opacity);
+
   /** @brief 生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 

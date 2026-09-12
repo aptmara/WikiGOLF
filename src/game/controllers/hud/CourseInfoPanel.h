@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file CourseInfoPanel.h
- * @brief 現在記事、目的記事、スコアを表示するHUDパネル
+ * @brief 現在記事と目的記事を右上へ表示するHUDパネル
 */
 
 #include "../../../ecs/Entity.h"
@@ -43,6 +43,9 @@ public:
 */
   void SetVisible(core::GameContext &ctx, bool visible);
 
+  /** @brief パネル全体へフェード透明度を適用します。*/
+  void SetOpacity(core::GameContext &ctx, float opacity);
+
   /**
    * @brief パネルが生成したすべてのEntityを破棄します。
    * @param ctx ゲーム全体の共有コンテキストです。
@@ -51,14 +54,12 @@ public:
 
 private:
   struct Entities {
-    ecs::Entity background = UINT32_MAX;
-    ecs::Entity wikiBadge = UINT32_MAX;
+    ecs::Entity currentRule = UINT32_MAX;
     ecs::Entity currentLabel = UINT32_MAX;
     ecs::Entity currentPage = UINT32_MAX;
     ecs::Entity targetLabel = UINT32_MAX;
     ecs::Entity targetPage = UINT32_MAX;
-    ecs::Entity scoreBackground = UINT32_MAX;
-    ecs::Entity scoreText = UINT32_MAX;
+    ecs::Entity targetRule = UINT32_MAX;
   };
 
   Entities m_entities;

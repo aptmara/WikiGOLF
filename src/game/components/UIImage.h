@@ -22,7 +22,8 @@ struct UIImage {
   float height = 0.0f; ///< 高さ（0 = 自動サイズ）
 
   float rotation = 0.0f; ///< 回転角（ラジアン）
-  float alpha = 1.0f;    ///< 透明度（0.0-1.0）
+  float alpha = 1.0f;    ///< 画像固有の透明度（0.0-1.0）
+  float opacity = 1.0f;  ///< 親UI演出から乗算する透明度（0.0-1.0）
 
   bool visible = true; ///< 表示可否
   int layer = 0;       ///< レイヤー（大きいほど前面）

@@ -8,15 +8,12 @@
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
-#include "../../core/StringUtils.h"
 #include "../../ecs/World.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../resources/ResourceManager.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
-#include "../components/UIImage.h"
-#include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../utils/AimPinClubSelection.h"
 #include "../utils/TrajectorySimulation.h"
@@ -35,10 +32,7 @@ void ClubController::Initialize(core::GameContext &ctx) {
 
 void ClubController::Shutdown(core::GameContext &ctx) {
   m_entityOwner.DestroyAll(ctx.world);
-  m_clubUIEntities.clear();
-  m_clubNameEntities.clear();
   m_clubModelEntity = UINT32_MAX;
-  m_clubUIExpanded = false;
 }
 
 ClubController::InputResult
@@ -54,10 +48,6 @@ ClubController::UpdateInput(core::GameContext &ctx, const InputParams &params) {
   } else if (ctx.input.GetKeyUp('Q')) {
     result.clubChanged = SwitchClub(ctx, -1);
   }
-
-  // 古い UIImage クリック選択は無効化 (HUD の常時リストに移管)
-
-  // 古い UIImage クリック選択は無効化 (HUD の常時リストに移管)
 
   return result;
 }
@@ -438,18 +428,23 @@ float ClubController::GetRecommendedCameraHeight(float fieldScale) const {
 
 void ClubController::InitializeClubs(core::GameContext &ctx) {
   m_availableClubs.clear();
-  m_clubUIEntities.clear();
-  m_clubNameEntities.clear();
 
-  m_availableClubs.push_back({"ドライバー", 130.0f, 12.0f, "Assets/textures/Club_01_1W_Driver.png", 3.0f, "1W", "Driver"});
-  m_availableClubs.push_back({"3W", 115.0f, 14.0f, "Assets/textures/Club_02_3W_Wood.png", 2.5f, "3W", "Wood"});
-  m_availableClubs.push_back({"5W", 100.0f, 16.0f, "Assets/textures/Club_03_5W_Wood.png", 2.0f, "5W", "Wood"});
-  m_availableClubs.push_back({"5I", 85.0f, 20.0f, "Assets/textures/Club_04_5I_Iron.png", 1.5f, "5I", "Iron"});
-  m_availableClubs.push_back({"7I", 70.0f, 24.0f, "Assets/textures/Club_05_7I_Iron.png", 1.2f, "7I", "Iron"});
-  m_availableClubs.push_back({"9I", 55.0f, 28.0f, "Assets/textures/Club_06_9I_Iron.png", 1.0f, "9I", "Iron"});
-  m_availableClubs.push_back({"PW", 40.0f, 32.0f, "Assets/textures/Club_07_PW_PitchingWedge.png", 1.5f, "PW", "Wedge"});
-  m_availableClubs.push_back({"SW", 25.0f, 38.0f, "Assets/textures/Club_08_SW_SandWedge.png", 2.5f, "SW", "Wedge"});
-  m_availableClubs.push_back({"パター", 10.0f, 0.0f, "Assets/textures/Club_09_PT_Putter.png", 1.0f, "PT", "Putter"});
+  m_availableClubs = {
+      {"ドライバー", 119.0f, 10.5f, "Assets/textures/Clubs/1W_driver.png", 1.0f, "1W", "Driver"},
+      {"3番ウッド", 92.0f, 15.0f, "Assets/textures/Clubs/3W_fairway_wood.png", 1.0f, "3W", "Wood"},
+      {"5番ウッド", 79.0f, 18.0f, "Assets/textures/Clubs/5W_fairway_wood.png", 1.0f, "5W", "Wood"},
+      {"4番ユーティリティ", 68.0f, 22.0f, "Assets/textures/Clubs/4U_utility.png", 1.0f, "4U", "Utility"},
+      {"5番アイアン", 66.0f, 25.0f, "Assets/textures/Clubs/5I_iron.png", 1.0f, "5I", "Iron"},
+      {"6番アイアン", 61.0f, 28.0f, "Assets/textures/Clubs/6I_iron.png", 1.0f, "6I", "Iron"},
+      {"7番アイアン", 55.0f, 31.0f, "Assets/textures/Clubs/7I_iron.png", 1.0f, "7I", "Iron"},
+      {"8番アイアン", 49.0f, 35.0f, "Assets/textures/Clubs/8I_iron.png", 1.0f, "8I", "Iron"},
+      {"9番アイアン", 46.0f, 40.0f, "Assets/textures/Clubs/9I_iron.png", 1.0f, "9I", "Iron"},
+      {"ピッチングウェッジ", 41.0f, 45.0f, "Assets/textures/Clubs/PW_pitching_wedge.png", 1.0f, "PW", "Wedge"},
+      {"アプローチウェッジ", 37.0f, 50.0f, "Assets/textures/Clubs/AW_approach_wedge.png", 1.0f, "AW", "Wedge"},
+      {"サンドウェッジ", 32.0f, 56.0f, "Assets/textures/Clubs/SW_sand_wedge.png", 1.0f, "SW", "Wedge"},
+      {"ロブウェッジ", 27.0f, 60.0f, "Assets/textures/Clubs/LW_lob_wedge.png", 1.0f, "LW", "Wedge"},
+      {"パター", 10.0f, 0.0f, "Assets/textures/Clubs/PT_putter.png", 1.0f, "PT", "Putter"},
+  };
 
   // 各クラブの基準飛距離(平坦・無風フェアウェイ基準)を動的に算出する。
   // ExecuteShotとTrajectoryPredictorはこの表を通じて「目標飛距離→初速」を
@@ -466,43 +461,7 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
 
   m_currentClubIndex = 0;
   m_currentClub = m_availableClubs[0];
-  m_clubUIExpanded = false;
-  m_clubExpandTimer = 0.0f;
 
-  constexpr float kClubX = 14.0f;
-  constexpr float kClubStartY = 120.0f;
-  constexpr float kClubSpacing = 88.0f;
-  constexpr float kClubSize = 72.0f;
-
-  // 古いUIエンティティは非表示のまま残し、描画はHUD側の新規リストに委譲
-  for (size_t i = 0; i < m_availableClubs.size(); ++i) {
-    auto e = m_entityOwner.Create(ctx.world);
-    auto &img = ctx.world.Add<UIImage>(e);
-    img = UIImage::Create(m_availableClubs[i].iconTexture, 0, 0);
-    img.visible = false; // HUD に移管したため非表示
-    img.layer = 20;
-    m_clubUIEntities.push_back(e);
-
-    auto nameE = m_entityOwner.Create(ctx.world);
-    auto &nameT = ctx.world.Add<UIText>(nameE);
-    nameT.text = core::ToWString(m_availableClubs[i].name);
-    nameT.visible = false; // HUD に移管したため非表示
-    nameT.layer = 21;
-    m_clubNameEntities.push_back(nameE);
-  }
-
-  // Q/E キーアイコンも非表示 (操作ヘルプを HUD の ControlHint に移管)
-
-  // Q/E キーアイコン: 非表示で生成 (ControlHint バーに移管)
-  auto qIconE = m_entityOwner.Create(ctx.world);
-  auto &qImg = ctx.world.Add<UIImage>(qIconE);
-  qImg = UIImage::Create("Assets/ui/keyboard_q.png", 0, 0);
-  qImg.visible = false;
-
-  auto eIconE = m_entityOwner.Create(ctx.world);
-  auto &eImg = ctx.world.Add<UIImage>(eIconE);
-  eImg = UIImage::Create("Assets/ui/keyboard_e.png", 0, 0);
-  eImg.visible = false;
 }
 
 void ClubController::InitializeClubModel(core::GameContext &ctx) {
@@ -573,46 +532,8 @@ bool ClubController::SwitchClub(core::GameContext &ctx, int direction) {
     state->rollingFrictionScale = m_currentClub.rollingFrictionScale;
   }
 
-  for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
-    auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i]);
-    if (ui) {
-      ui->alpha = (static_cast<int>(i) == m_currentClubIndex) ? 1.0f : 0.5f;
-    }
-  }
-
   LOG_INFO("WikiGolf", "Switched Club: {}", m_currentClub.name);
   return true;
-}
-
-void ClubController::ExpandClubUI(core::GameContext &ctx) {
-  m_clubUIExpanded = true;
-  m_clubExpandTimer = kClubAutoCollapseTime;
-
-  for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
-    if (auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i])) {
-      ui->visible = true;
-    }
-    if (i < m_clubNameEntities.size()) {
-      if (auto *name = ctx.world.Get<UIText>(m_clubNameEntities[i])) {
-        name->visible = true;
-      }
-    }
-  }
-}
-
-void ClubController::CollapseClubUI(core::GameContext &ctx) {
-  m_clubUIExpanded = false;
-
-  for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
-    if (auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i])) {
-      ui->visible = (static_cast<int>(i) == m_currentClubIndex);
-    }
-    if (i < m_clubNameEntities.size()) {
-      if (auto *name = ctx.world.Get<UIText>(m_clubNameEntities[i])) {
-        name->visible = false;
-      }
-    }
-  }
 }
 
 bool ClubController::SelectClubForAimPin(
@@ -649,13 +570,6 @@ bool ClubController::SelectClubByIndex(core::GameContext &ctx, size_t index) {
   m_currentClub = m_availableClubs[index];
   if (auto *state = ctx.world.GetGlobal<GolfGameState>()) {
     state->rollingFrictionScale = m_currentClub.rollingFrictionScale;
-  }
-
-  for (size_t i = 0; i < m_clubUIEntities.size(); ++i) {
-    auto *ui = ctx.world.Get<UIImage>(m_clubUIEntities[i]);
-    if (ui) {
-      ui->alpha = (i == index) ? 1.0f : 0.5f;
-    }
   }
 
   LOG_INFO("WikiGolf", "Switched to club: {}", m_currentClub.name);

@@ -6,6 +6,7 @@
 
 #include "../../../ecs/Entity.h"
 #include "../../../ecs/EntityOwner.h"
+#include "../../components/WikiComponents.h"
 #include <DirectXMath.h>
 
 namespace core {
@@ -31,19 +32,25 @@ public:
    * @param cameraYaw カメラのヨー角です。
 */
   void Update(core::GameContext &ctx, float elapsedTime, float windSpeed,
-              const DirectX::XMFLOAT2 &windDirection, float cameraYaw);
+              const DirectX::XMFLOAT2 &windDirection, float cameraYaw,
+              game::components::TerrainMaterial terrain);
 
   /** @brief パネル全体の表示状態を変更します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
+
+  /** @brief パネル全体へフェード透明度を適用します。*/
+  void SetOpacity(core::GameContext &ctx, float opacity);
 
   /** @brief パネルが生成したすべてのEntityを破棄します。*/
   void Shutdown(core::GameContext &ctx);
 
 private:
   ecs::Entity m_background = UINT32_MAX;
+  ecs::Entity m_surfaceTexture = UINT32_MAX;
   ecs::Entity m_label = UINT32_MAX;
   ecs::Entity m_value = UINT32_MAX;
   ecs::Entity m_directionAndUnit = UINT32_MAX;
+  ecs::Entity m_rule = UINT32_MAX;
   ecs::EntityOwner m_entityOwner;
 };
 
