@@ -26,5 +26,5 @@ if errorlevel 1 (
 )
 
 echo [WikiGOLF] Build finished successfully.
-echo Output: %BUILD_DIR%\%CONFIG%\DX_GAME.exe
+echo Output: %BUILD_DIR%\%CONFIG%\WikiGolf.exe
 pause

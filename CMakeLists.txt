@@ -110,40 +110,44 @@ if(MSVC)
     target_compile_options(wiki_client_json_common PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 
-add_executable(test_profiler_statistics test_profiler_statistics.cpp)
-target_include_directories(test_profiler_statistics PRIVATE src)
-if(MSVC)
-    target_compile_options(test_profiler_statistics PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
-add_test(NAME profiler_statistics COMMAND test_profiler_statistics)
-
-add_executable(test_profiler_output
-    test_profiler_output.cpp
-    src/core/Profiler.cpp
-    src/core/ProfilerMetrics.cpp
-    src/core/ProfilerReports.cpp)
-target_precompile_headers(test_profiler_output REUSE_FROM wikigolf_pch)
-target_include_directories(test_profiler_output PRIVATE src)
-target_link_libraries(test_profiler_output PRIVATE psapi wikigolf_common)
-if(MSVC)
-    target_compile_definitions(test_profiler_output PRIVATE
-        -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
-    target_compile_options(test_profiler_output PRIVATE /utf-8 /Zc:__cplusplus)
-endif()
-add_test(NAME profiler_output COMMAND test_profiler_output)
-
-option(WIKIGOLF_HTML_COURSES "Render course articles with litehtml" ON)
-option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
-option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
-option(WIKIGOLF_PROFILING "Enable CPU/GPU profiling and report output" OFF)
-include(cmake/WikiDebugTools.cmake)
-
 if(CMAKE_BINARY_DIR MATCHES "static" OR CMAKE_MSVC_RUNTIME_LIBRARY MATCHES "MultiThreaded$")
     set(WIKIGOLF_STATIC_BUILD_DEFAULT ON)
 else()
     set(WIKIGOLF_STATIC_BUILD_DEFAULT OFF)
 endif()
 option(WIKIGOLF_STATIC_BUILD "Link static libraries instead of dynamic libraries" ${WIKIGOLF_STATIC_BUILD_DEFAULT})
+
+# プロファイラ計測用のテストターゲット。STビルド (静的リンク版パッケージ) の
+# 出力フォルダには含めたくないため、通常ビルドのみで生成する。
+if(NOT WIKIGOLF_STATIC_BUILD)
+    add_executable(test_profiler_statistics test_profiler_statistics.cpp)
+    target_include_directories(test_profiler_statistics PRIVATE src)
+    if(MSVC)
+        target_compile_options(test_profiler_statistics PRIVATE /utf-8 /Zc:__cplusplus)
+    endif()
+    add_test(NAME profiler_statistics COMMAND test_profiler_statistics)
+
+    add_executable(test_profiler_output
+        test_profiler_output.cpp
+        src/core/Profiler.cpp
+        src/core/ProfilerMetrics.cpp
+        src/core/ProfilerReports.cpp)
+    target_precompile_headers(test_profiler_output REUSE_FROM wikigolf_pch)
+    target_include_directories(test_profiler_output PRIVATE src)
+    target_link_libraries(test_profiler_output PRIVATE psapi wikigolf_common)
+    if(MSVC)
+        target_compile_definitions(test_profiler_output PRIVATE
+            -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+        target_compile_options(test_profiler_output PRIVATE /utf-8 /Zc:__cplusplus)
+    endif()
+    add_test(NAME profiler_output COMMAND test_profiler_output)
+endif()
+
+option(WIKIGOLF_HTML_COURSES "Render course articles with litehtml" ON)
+option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
+option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
+option(WIKIGOLF_PROFILING "Enable CPU/GPU profiling and report output" OFF)
+include(cmake/WikiDebugTools.cmake)
 
 if(WIKIGOLF_STATIC_BUILD)
     set(ASSIMP_LIBRARIES 
@@ -169,12 +173,13 @@ wikigolf_filter_debug_sources(SOURCES)
 # ゲーム本体は Release/ 直下に出力
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 list(FILTER SOURCES EXCLUDE REGEX "/graphics/html/.*")
-add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp")
+add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp" "DX_GAME.rc")
 wikigolf_enable_debug_target(DX_GAME)
 if(WIKIGOLF_PROFILING)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_PROFILING=1)
 endif()
 set_target_properties(DX_GAME PROPERTIES
+    OUTPUT_NAME "WikiGolf"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 if(WIKIGOLF_HTML_COURSES)

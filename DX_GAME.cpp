@@ -31,6 +31,7 @@
 #include "src/game/devtools/DebugUiLayer.h"
 #endif
 #include <Windows.h>
+#include "Resource.h"
 #include <chrono>
 #include <filesystem>
 #include <thread>
@@ -154,6 +155,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   wc.lpfnWndProc = WndProc;
   wc.hInstance = hInstance;
   wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+  wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_DXGAME));
+  wc.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SMALL));
   wc.lpszClassName = L"DX_GAME_WINDOW";
   RegisterClassEx(&wc);
 
