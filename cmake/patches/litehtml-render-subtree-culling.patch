@@ -14,10 +14,10 @@ index 9575298c..cf1bfe4e 100644
 @@ -560,0 +561 @@ namespace litehtml
 +                m_root_render->cache_redraw_box();
 diff --git a/src/render_item.cpp b/src/render_item.cpp
-index 4f4976d6..33abddbf 100644
+index 4f4976d6..68aadc98 100644
 --- a/src/render_item.cpp
 +++ b/src/render_item.cpp
-@@ -797,0 +798,36 @@ void litehtml::render_item::add_positioned(const std::shared_ptr<litehtml::rende
+@@ -797,0 +798,68 @@ void litehtml::render_item::add_positioned(const std::shared_ptr<litehtml::rende
 +void litehtml::render_item::cache_redraw_box()
 +{
 +    m_redraw_box_valid = false;
@@ -26,11 +26,43 @@ index 4f4976d6..33abddbf 100644
 +        return;
 +    }
 +
-+    const pixel_t left = m_pos.left() - m_padding.left - m_borders.left;
-+    const pixel_t top = m_pos.top() - m_padding.top - m_borders.top;
-+    const pixel_t right = m_pos.right() + m_padding.right + m_borders.right;
-+    const pixel_t bottom = m_pos.bottom() + m_padding.bottom + m_borders.bottom;
-+    m_redraw_box = position(left, top, right - left, bottom - top);
++    // 折り返しで複数行に分割されるインライン要素(a/span等)は、m_posが
++    // 最後に配置された1行分の位置しか表さない。for_inline_boxesが
++    // 使える場合はそちらで実際に描画される全ての行のボックスを合算する
++    // (通常のテキスト単語やブロック要素はfor_inline_boxesがfalseを
++    // 返すため、従来通りm_pos基準のまま扱われる)。
++    bool hasInlineBox = false;
++    position ownBox;
++    for_inline_boxes([&](const position& box, bool, bool) {
++        if(!hasInlineBox)
++        {
++            ownBox = box;
++            hasInlineBox = true;
++        }
++        else
++        {
++            const pixel_t box_right = std::max(ownBox.right(), box.right());
++            const pixel_t box_bottom = std::max(ownBox.bottom(), box.bottom());
++            ownBox.x = std::min(ownBox.left(), box.left());
++            ownBox.y = std::min(ownBox.top(), box.top());
++            ownBox.width = box_right - ownBox.x;
++            ownBox.height = box_bottom - ownBox.y;
++        }
++        return true;
++    });
++
++    if(hasInlineBox)
++    {
++        m_redraw_box = ownBox;
++    }
++    else
++    {
++        const pixel_t left = m_pos.left() - m_padding.left - m_borders.left;
++        const pixel_t top = m_pos.top() - m_padding.top - m_borders.top;
++        const pixel_t right = m_pos.right() + m_padding.right + m_borders.right;
++        const pixel_t bottom = m_pos.bottom() + m_padding.bottom + m_borders.bottom;
++        m_redraw_box = position(left, top, right - left, bottom - top);
++    }
 +    m_redraw_box_valid = true;
 +
 +    for(auto& child : m_children)
@@ -54,13 +86,16 @@ index 4f4976d6..33abddbf 100644
 +    }
 +}
 +
-@@ -961,0 +998,10 @@ void litehtml::render_item::draw_children(uint_ptr hdc, pixel_t x, pixel_t y, co
+@@ -961,0 +1030,13 @@ void litehtml::render_item::draw_children(uint_ptr hdc, pixel_t x, pixel_t y, co
 +            if(flag != draw_positioned && clip && el->m_redraw_box_valid)
 +            {
 +                position redraw_box = el->m_redraw_box;
 +                redraw_box.x += pos.x;
 +                redraw_box.y += pos.y;
-+                if(!redraw_box.does_intersect(clip, true))
++                // can_touch=falseにして境界が完全に一致するケースも
++                // 交差扱いにする（タイル境界とちょうど重なる要素が
++                // 誤って除外され描画が消えるのを防ぐ）
++                if(!redraw_box.does_intersect(clip))
 +                {
 +                    continue;
 +                }
