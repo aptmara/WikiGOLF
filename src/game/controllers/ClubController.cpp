@@ -18,6 +18,7 @@
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../utils/AimPinClubSelection.h"
 #include "../utils/TrajectorySimulation.h"
 #include <algorithm>
 #include <cmath>
@@ -614,23 +615,24 @@ void ClubController::CollapseClubUI(core::GameContext &ctx) {
   }
 }
 
-bool ClubController::SelectClubForDistance(core::GameContext &ctx,
-                                           float targetDistance) {
-  if (m_availableClubs.empty()) {
+bool ClubController::SelectClubForAimPin(
+    core::GameContext &ctx, const std::vector<float> &requiredPowerRatios,
+    bool pathHasAbnormalSlope) {
+  if (m_availableClubs.empty() ||
+      requiredPowerRatios.size() != m_availableClubs.size()) {
     return false;
   }
 
-  size_t bestIndex = 0;
-  float bestDiff = std::abs(m_availableClubs[0].baseCarryDistance - targetDistance);
-  for (size_t i = 1; i < m_availableClubs.size(); ++i) {
-    const float diff =
-        std::abs(m_availableClubs[i].baseCarryDistance - targetDistance);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      bestIndex = i;
-    }
+  std::vector<game::utils::AimPinClubCandidate> candidates;
+  candidates.reserve(m_availableClubs.size());
+  for (size_t i = 0; i < m_availableClubs.size(); ++i) {
+    const auto &club = m_availableClubs[i];
+    candidates.push_back({requiredPowerRatios[i], club.baseCarryDistance,
+                          club.categoryEN == "Putter"});
   }
 
+  const size_t bestIndex =
+      game::utils::SelectAimPinClubIndex(candidates, pathHasAbnormalSlope);
   return SelectClubByIndex(ctx, bestIndex);
 }
 

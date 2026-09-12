@@ -13,6 +13,8 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags_unused;
     float4 LightDir; // w: 経過時間（秒）
     float4 CameraPos;
+    matrix ShadowViewProjection;
+    float4 ShadowParams;
 };
 
 struct InstanceData {
@@ -42,6 +44,7 @@ struct VS_OUTPUT {
     float3 worldPos : TEXCOORD1;
     float distanceFade : TEXCOORD2;
     float materialClass : TEXCOORD3;
+    float4 shadowPosition : TEXCOORD4;
 };
 
 /**
@@ -149,5 +152,6 @@ VS_OUTPUT main(VS_INPUT input) {
     overheadFade = lerp(overheadFade, roughOverheadFade, roughClass);
     output.distanceFade = distanceFade * overheadFade;
     output.materialClass = materialClass;
+    output.shadowPosition = mul(worldPos, ShadowViewProjection);
     return output;
 }

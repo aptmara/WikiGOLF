@@ -7,9 +7,11 @@
 
 #include "DisplaySettings.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <string>
+#include <utility>
 
 namespace core::display_settings_detail {
 
@@ -26,6 +28,21 @@ inline constexpr int kFpsLimitPresets[] = {0, 30, 60, 120, 144};
 inline constexpr int kMsaaPresets[] = {1, 2, 4, 8};
 inline constexpr float kRenderScalePresets[] = {0.5f, 0.6f, 0.7f,
                                                  0.8f, 0.9f, 1.0f};
+
+inline std::pair<int, int> FitResolutionWithinBounds(int width, int height,
+                                                      int maxWidth,
+                                                      int maxHeight) {
+  if (width <= 0 || height <= 0 || maxWidth <= 0 || maxHeight <= 0 ||
+      (width <= maxWidth && height <= maxHeight)) {
+    return {width, height};
+  }
+
+  const double scale = (std::min)(
+      static_cast<double>(maxWidth) / static_cast<double>(width),
+      static_cast<double>(maxHeight) / static_cast<double>(height));
+  return {(std::max)(1, static_cast<int>(std::floor(width * scale))),
+          (std::max)(1, static_cast<int>(std::floor(height * scale)))};
+}
 
 std::string WideToUtf8(const std::wstring &value);
 std::wstring Utf8ToWide(const std::string &value);

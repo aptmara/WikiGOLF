@@ -493,6 +493,17 @@ if(MSVC)
 endif()
 add_test(NAME aim_pin_solver COMMAND test_aim_pin_solver)
 
+# エイムピン設置時の自動クラブ候補とパター経路傾斜判定
+add_executable(test_aim_pin_club_selection test_aim_pin_club_selection.cpp)
+target_precompile_headers(test_aim_pin_club_selection REUSE_FROM wikigolf_pch)
+target_include_directories(test_aim_pin_club_selection PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_aim_pin_club_selection PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                        -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_aim_pin_club_selection PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME aim_pin_club_selection COMMAND test_aim_pin_club_selection)
+
 # 画面座標→ワールドのレイ構築と地形レイマーチング
 add_executable(test_screen_raycast
     test_screen_raycast.cpp

@@ -15,6 +15,7 @@ struct PS_INPUT {
     float4 Color : COLOR0;       /**< 頂点カラー（マテリアルパレット色） */
     float3 Tangent : TANGENT;    /**< ワールド接線 */
     float3 Bitangent : BINORMAL; /**< ワールド従法線 */
+    float4 ShadowPos : TEXCOORD4; /**< 光源空間座標 */
 };
 
 cbuffer ConstantBuffer : register(b0) {
@@ -25,11 +26,15 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags;  /**< x: hasTexture, y: hasNormalMap, z: uvScale */
     float4 LightDir;       /**< 光源方向 */
     float4 CameraPos;      /**< カメラワールド座標 */
+    matrix ShadowViewProjection; /**< 光源ビュー射影行列 */
+    float4 ShadowParams;   /**< x: シャドウ有効 */
 };
 
 Texture2DArray g_AlbedoArray : register(t0); /**< アルベドテクスチャ配列（8層） */
 Texture2DArray g_NormalArray : register(t1); /**< ノーマルマップ配列（8層） */
 SamplerState g_Sampler : register(s0);       /**< サンプラーステート */
+
+#include "ShadowSampling.hlsli"
 
 /**
  * @brief 2Dワールド座標から砂粒・ノイズ用ハッシュ値を算出します。
@@ -252,7 +257,9 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float3 V = normalize(CameraPos.xyz - input.WorldPos);
     float3 H = normalize(L + V);
     
-    float3 lighting = ambient + lightColor * diff;
+    float shadow = SampleShadow(input.ShadowPos, N, LightDir.xyz,
+                                ShadowParams.x);
+    float3 lighting = ambient + lightColor * diff * shadow;
     
     float dist = distance(CameraPos.xyz, input.WorldPos);
 

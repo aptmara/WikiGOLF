@@ -122,50 +122,50 @@ void GameJuiceSystem::TriggerRippleEffect(core::GameContext &ctx,
   if (m_ripples.empty())
     return;
 
-  int ringCount = 1;
-  XMFLOAT4 color = {0.52f, 0.92f, 0.42f, 0.48f};
-  float lifetime = 0.44f + strength * 0.30f;
-  float expansion = 2.4f;
-  float thickness = 0.012f;
+  int ringCount = 2;
+  XMFLOAT4 color = {0.62f, 1.14f, 0.48f, 0.66f};
+  float lifetime = 0.58f + strength * 0.42f;
+  float expansion = 3.1f;
+  float thickness = 0.016f;
   switch (material) {
   case TerrainMaterial::Rough:
-    color = {0.28f, 0.58f, 0.18f, 0.42f};
-    lifetime = 0.52f + strength * 0.34f;
-    expansion = 1.85f;
-    thickness = 0.018f;
-    break;
-  case TerrainMaterial::Green:
-    color = {0.62f, 1.08f, 0.48f, 0.40f};
-    lifetime = 0.38f + strength * 0.24f;
-    expansion = 2.8f;
-    thickness = 0.008f;
-    break;
-  case TerrainMaterial::Ice:
-    ringCount = 2;
-    color = {0.56f, 1.24f, 1.62f, 0.72f};
-    lifetime = 0.55f + strength * 0.38f;
-    expansion = 3.4f;
-    thickness = 0.007f;
-    break;
-  case TerrainMaterial::Stone:
-    color = {0.72f, 0.68f, 0.62f, 0.48f};
-    lifetime = 0.34f + strength * 0.22f;
-    expansion = 1.55f;
+    color = {0.34f, 0.82f, 0.22f, 0.62f};
+    lifetime = 0.68f + strength * 0.44f;
+    expansion = 2.55f;
     thickness = 0.024f;
     break;
-  case TerrainMaterial::Water:
+  case TerrainMaterial::Green:
+    color = {0.72f, 1.42f, 0.58f, 0.60f};
+    lifetime = 0.52f + strength * 0.36f;
+    expansion = 3.5f;
+    thickness = 0.012f;
+    break;
+  case TerrainMaterial::Ice:
     ringCount = 3;
-    color = {0.24f, 0.88f, 1.58f, 0.74f};
-    lifetime = 0.68f + strength * 0.42f;
-    expansion = 3.8f;
-    thickness = 0.006f;
+    color = {0.68f, 1.52f, 1.94f, 0.88f};
+    lifetime = 0.72f + strength * 0.48f;
+    expansion = 4.2f;
+    thickness = 0.010f;
+    break;
+  case TerrainMaterial::Stone:
+    color = {0.94f, 0.88f, 0.80f, 0.68f};
+    lifetime = 0.52f + strength * 0.34f;
+    expansion = 2.35f;
+    thickness = 0.032f;
+    break;
+  case TerrainMaterial::Water:
+    ringCount = 4;
+    color = {0.30f, 1.08f, 1.92f, 0.90f};
+    lifetime = 0.86f + strength * 0.54f;
+    expansion = 4.8f;
+    thickness = 0.009f;
     break;
   case TerrainMaterial::Lava:
-    ringCount = 2;
-    color = {1.72f, 0.31f, 0.025f, 0.78f};
-    lifetime = 0.62f + strength * 0.38f;
-    expansion = 2.45f;
-    thickness = 0.016f;
+    ringCount = 3;
+    color = {2.10f, 0.42f, 0.035f, 0.94f};
+    lifetime = 0.82f + strength * 0.52f;
+    expansion = 3.25f;
+    thickness = 0.022f;
     break;
   default:
     break;

@@ -9,6 +9,10 @@ cbuffer ConstantBuffer : register(b0) {
     matrix Projection;
     float4 MaterialColor_unused;
     float4 MaterialFlags_unused;
+    float4 LightDir;
+    float4 CameraPos;
+    matrix ShadowViewProjection;
+    float4 ShadowParams;
 };
 
 /**
@@ -51,6 +55,7 @@ struct VS_OUTPUT {
     float3 bitangent : BINORMAL;     /**< ワールド従法線 */
     float2 worldXZ : TEXCOORD1;      /**< ワールドXZ座標 */
     float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
+    float4 shadowPosition : TEXCOORD5;/**< 光源空間座標 */
 };
 
 /**
@@ -80,6 +85,7 @@ VS_OUTPUT main(VS_INPUT input) {
     output.worldXZ = worldPos.xz;
     output.materialFlags = inst.Flags;
     output.materialFlags.w = inst.Color.a;
+    output.shadowPosition = mul(worldPos, ShadowViewProjection);
     
     return output;
 }

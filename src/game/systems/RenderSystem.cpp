@@ -4,6 +4,7 @@
 */
 
 #include "RenderSystem.h"
+#include "ShadowRenderSystem.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
 #include "../../ecs/World.h"
@@ -35,6 +36,8 @@ struct VSConstants {
       materialFlags; // マテリアルフラグ。x:テクスチャ有無、y:法線マップ有無、z:カスタムフラグx、w:カスタムフラグy
   XMFLOAT4 lightDir;
   XMFLOAT4 cameraPos;
+  XMMATRIX shadowViewProjection;
+  XMFLOAT4 shadowParams;
 };
 
 struct RenderState {
@@ -213,6 +216,13 @@ void RenderSystem(core::GameContext &ctx) {
   // Basic と同じくインスタンス化対応として扱う必要がある（含めないと
   // g_instances がバインドされない非インスタンス経路に落ち、実質描画されない）。
   auto golfBallHandle = ctx.resource.FindShader("GolfBall");
+  auto *shadowState = world.GetGlobal<ShadowRenderState>();
+  const bool shadowEnabled =
+      shadowState && shadowState->validThisFrame &&
+      shadowState->shaderResourceView && shadowState->comparisonSampler;
+  const XMMATRIX shadowViewProjection =
+      shadowEnabled ? XMMatrixTranspose(shadowState->lightViewProjection)
+                    : XMMatrixIdentity();
 
   // インスタンス構造体の定義
   struct InstanceData {
@@ -636,6 +646,16 @@ void RenderSystem(core::GameContext &ctx) {
     }
 
     context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
+    if (shadowEnabled) {
+      ID3D11ShaderResourceView *shadowResource =
+          shadowState->shaderResourceView.Get();
+      context->PSSetShaderResources(14, 1, &shadowResource);
+      context->PSSetSamplers(1, 1,
+                             shadowState->comparisonSampler.GetAddressOf());
+    } else {
+      ID3D11ShaderResourceView *nullShadowResource = nullptr;
+      context->PSSetShaderResources(14, 1, &nullShadowResource);
+    }
     mesh->Bind(context);
 
     const bool supportsInstancing =
@@ -665,6 +685,9 @@ void RenderSystem(core::GameContext &ctx) {
         constants->projection = proj;
         constants->lightDir = XMFLOAT4(0.5f, -1.0f, 0.5f, ctx.time);
         constants->cameraPos = camPos;
+        constants->shadowViewProjection = shadowViewProjection;
+        constants->shadowParams =
+            XMFLOAT4(shadowEnabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
         constants->world = XMMatrixIdentity();
         constants->materialColor = XMFLOAT4(1, 1, 1, 1);
         if (key.shader == grassHandle && golfState) {
@@ -717,6 +740,9 @@ void RenderSystem(core::GameContext &ctx) {
           constants->materialFlags = inst.flags;
           constants->lightDir = XMFLOAT4(0.5f, -1.0f, 0.5f, ctx.time);
           constants->cameraPos = camPos;
+          constants->shadowViewProjection = shadowViewProjection;
+          constants->shadowParams =
+              XMFLOAT4(shadowEnabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
           context->Unmap(state->cBuffer.Get(), 0);
         }
 
@@ -750,6 +776,8 @@ void RenderSystem(core::GameContext &ctx) {
 
   context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
   context->RSSetState(nullptr);
+  ID3D11ShaderResourceView *nullShadowResource = nullptr;
+  context->PSSetShaderResources(14, 1, &nullShadowResource);
 
   auto &profiler = core::Profiler::Instance();
   profiler.SetCounter("Render.Candidates", static_cast<double>(stats.candidates));

@@ -12,7 +12,11 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags_unused;
     float4 LightDir;
     float4 CameraPos;
+    matrix ShadowViewProjection;
+    float4 ShadowParams;
 };
+
+#include "ShadowSampling.hlsli"
 
 struct PS_INPUT {
     float4 position : SV_POSITION;
@@ -22,6 +26,7 @@ struct PS_INPUT {
     float3 worldPos : TEXCOORD1;
     float distanceFade : TEXCOORD2;
     float materialClass : TEXCOORD3;
+    float4 shadowPosition : TEXCOORD4;
 };
 
 /**
@@ -65,7 +70,10 @@ float4 main(PS_INPUT input) : SV_TARGET {
 
     float3 ambient = float3(0.27f, 0.31f, 0.24f) * ao;
     float3 lightColor = float3(1.0f, 0.97f, 0.88f);
-    float3 lit = ambient + lightColor * lerp(wrap, diffuse, 0.58f) * ao;
+    float shadow = SampleShadow(input.shadowPosition, N, LightDir.xyz,
+                                ShadowParams.x);
+    float3 lit = ambient +
+                 lightColor * lerp(wrap, diffuse, 0.58f) * ao * shadow;
 
     float3 baseColor = input.color.rgb;
     float3 finalColor = baseColor * lit + lightColor * backlight * baseColor;

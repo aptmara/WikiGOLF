@@ -20,6 +20,7 @@
 #include "../systems/GameJuiceSystem.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
+#include "../utils/AimPinClubSelection.h"
 #include "../utils/AimPinSolver.h"
 #include "../utils/CarryDistanceTable.h"
 #include "../utils/GameplayPhysicsConstants.h"
@@ -152,29 +153,30 @@ void WikiGolfScene::RefreshAimPinSolution(core::GameContext &ctx,
             });
       };
 
-  // 実効飛距離の見積もりは最も飛ぶクラブを基準にする。短いクラブを握った
-  // まま遠くへピンを刺したとき、そのクラブの射程で頭打ちになった実効飛距離
-  // からクラブを選ぶと、一度では適正なクラブまで上がれないため。
-  const auto *referenceClub = &m_clubController->GetCurrentClub();
+  game::utils::AimPinSolution solution;
   if (selectClub) {
-    for (const auto &club : m_clubController->GetAllClubs()) {
-      if (club.baseCarryDistance > referenceClub->baseCarryDistance) {
-        referenceClub = &club;
-      }
+    const auto &clubs = m_clubController->GetAllClubs();
+    std::vector<game::utils::AimPinSolution> solutions;
+    std::vector<float> requiredPowerRatios;
+    solutions.reserve(clubs.size());
+    requiredPowerRatios.reserve(clubs.size());
+    for (const auto &club : clubs) {
+      solutions.push_back(solveForClub(club));
+      requiredPowerRatios.push_back(solutions.back().requiredPowerRatio);
     }
-  }
 
-  auto solution = solveForClub(*referenceClub);
-
-  // 選んだクラブでは必要パワーが変わり、選択がもう一段動くことがある
-  // (例: 打ち上げで一本上のクラブになる)。収束するまで、最大2回まで見直す。
-  for (int attempt = 0; selectClub && attempt < 2; ++attempt) {
-    if (solution.playsLikeDistance <= 0.0f) break;
-    const int previousIndex = m_clubController->GetCurrentClubIndex();
-    m_clubController->SelectClubForDistance(ctx, solution.playsLikeDistance);
-    const int selectedIndex = m_clubController->GetCurrentClubIndex();
+    const bool pathHasAbnormalSlope =
+        !m_terrainSystem || game::utils::HasAbnormalSlopeBetween(
+                                ballPos, pin->worldPosition,
+                                [&](float x, float z) {
+                                  return m_terrainSystem->GetHeight(x, z);
+                                });
+    m_clubController->SelectClubForAimPin(
+        ctx, requiredPowerRatios, pathHasAbnormalSlope);
+    solution = solutions[static_cast<size_t>(
+        m_clubController->GetCurrentClubIndex())];
+  } else {
     solution = solveForClub(m_clubController->GetCurrentClub());
-    if (selectedIndex == previousIndex) break;
   }
 
   pin->requiredPowerRatio = solution.requiredPowerRatio;

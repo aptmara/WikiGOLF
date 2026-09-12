@@ -203,11 +203,20 @@ void DisplaySettings::LoadFromFile(const std::string &path) {
 
   const int screenWidth = GetSystemMetrics(SM_CXSCREEN);
   const int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-  if (screenWidth > 0) {
-    m_data.windowedWidth = std::min(m_data.windowedWidth, screenWidth);
-  }
-  if (screenHeight > 0) {
-    m_data.windowedHeight = std::min(m_data.windowedHeight, screenHeight);
+  if (m_data.mode == WindowMode::Windowed) {
+    const auto fittedResolution =
+        display_settings_detail::FitResolutionWithinBounds(
+            m_data.windowedWidth, m_data.windowedHeight, screenWidth,
+            screenHeight);
+    m_data.windowedWidth = fittedResolution.first;
+    m_data.windowedHeight = fittedResolution.second;
+  } else {
+    if (screenWidth > 0) {
+      m_data.windowedWidth = std::min(m_data.windowedWidth, screenWidth);
+    }
+    if (screenHeight > 0) {
+      m_data.windowedHeight = std::min(m_data.windowedHeight, screenHeight);
+    }
   }
 
   LOG_INFO("DisplaySettings",

@@ -96,6 +96,8 @@ constexpr float kShotCamLookUpMaxDistance = 55.0f; // これ以上離れたら�
 constexpr float kShotCamChaseFallSpeed = 1.0f;     // 落下速度がこれを超えたら追尾へ
 constexpr float kOrbitBlendSeconds = 0.9f;    // 三人称→オービットの補間秒数
 constexpr float kOrbitMinPitchAfterShot = 0.35f;
+constexpr float kTargetDistanceEaseSeconds = 0.9f;
+constexpr float kTargetYawEaseSeconds = 0.9f;
 
 // --- カップイン演出カメラ ---
 constexpr float kCelebrationEaseSeconds = 1.2f;
@@ -130,8 +132,15 @@ void CameraController::Initialize(Config cfg) {
   m_cameraDistance = 15.0f * cfg.fieldScale;
   m_targetCameraDistance = m_cameraDistance;
   m_targetCameraHeight   = 20.0f;
+  m_distanceEaseFrom = m_cameraDistance;
+  m_distanceEaseTimer = 0.0f;
+  m_isDistanceEasing = false;
   m_cameraYaw   = 0.0f;
   m_cameraPitch = 0.5f;
+  m_yawEaseFrom = m_cameraYaw;
+  m_yawEaseDelta = 0.0f;
+  m_yawEaseTimer = 0.0f;
+  m_isYawEasing = false;
   m_shotDirection = {0.0f, 0.0f, 1.0f};
   m_isCameraChasing = false;
 }
@@ -142,6 +151,12 @@ void CameraController::SetTargetDistanceAndHeight(float recommendedDistance,
   m_targetCameraHeight   = recommendedHeight;
 }
 
+void CameraController::BeginTargetDistanceEase() {
+  m_distanceEaseFrom = m_cameraDistance;
+  m_distanceEaseTimer = 0.0f;
+  m_isDistanceEasing = true;
+}
+
 void CameraController::AimYawTowards(const DirectX::XMFLOAT3 &fromPos,
                                      const DirectX::XMFLOAT3 &toPos) {
   const float dx = toPos.x - fromPos.x;
@@ -149,13 +164,29 @@ void CameraController::AimYawTowards(const DirectX::XMFLOAT3 &fromPos,
   if (dx * dx + dz * dz < 0.0001f) {
     return; // 距離ゼロに近い場合は向きを変えない
   }
-  m_cameraYaw = std::atan2(dx, dz);
+  const float targetYaw = std::atan2(dx, dz);
+  float delta = targetYaw - m_cameraYaw;
+  while (delta > XM_PI) delta -= XM_2PI;
+  while (delta < -XM_PI) delta += XM_2PI;
+
+  m_yawEaseFrom = m_cameraYaw;
+  m_yawEaseDelta = delta;
+  m_yawEaseTimer = 0.0f;
+  m_isYawEasing = true;
 }
 
 void CameraController::ResetForTransition(float fieldScale) {
   m_cameraYaw      = 0.0f;
   m_cameraPitch    = 0.5f;
+  m_yawEaseFrom = m_cameraYaw;
+  m_yawEaseDelta = 0.0f;
+  m_yawEaseTimer = 0.0f;
+  m_isYawEasing = false;
   m_cameraDistance = 15.0f * fieldScale;
+  m_targetCameraDistance = m_cameraDistance;
+  m_distanceEaseFrom = m_cameraDistance;
+  m_distanceEaseTimer = 0.0f;
+  m_isDistanceEasing = false;
   m_shotDirection  = {0.0f, 0.0f, 1.0f};
   m_isCameraChasing = false;
   m_wasShotCamera = false;
@@ -180,6 +211,9 @@ void CameraController::OnShotStart(core::GameContext &ctx) {
   m_orbitBlend = 1.0f;
   m_shotCamTimer = 0.0f;
   m_shotTpsCamPos = m_shotStartCamPos;
+  m_targetCameraDistance = m_cameraDistance;
+  m_isDistanceEasing = false;
+  m_isYawEasing = false;
 
   if (!m_hasGolferAnchor) {
     return; // 基準が無い場合はその場から見上げる
@@ -287,6 +321,7 @@ void CameraController::ProcessInput(core::GameContext &ctx,
     int deltaY = mouseY - m_prevMouseY;
 
     if (deltaX != 0 || deltaY != 0) {
+      m_isYawEasing = false;
       float sensitivity = 0.005f;
       if (ctx.input.GetKey(VK_SHIFT)) {
         sensitivity *= 0.33f; // 精密モード
@@ -304,6 +339,8 @@ void CameraController::ProcessInput(core::GameContext &ctx,
     m_cameraDistance -= wheel * 2.0f * fieldScale;
     m_cameraDistance  = std::clamp(m_cameraDistance,
                                    1.2f * fieldScale, 35.0f * fieldScale);
+    m_targetCameraDistance = m_cameraDistance;
+    m_isDistanceEasing = false;
   }
 
   m_prevMouseX = mouseX;
@@ -402,6 +439,31 @@ void CameraController::Update(core::GameContext &ctx) {
     BeginOrbitBlend(camT->position);
   }
   m_wasShotCamera = isShotCamera;
+
+  if (!isShotCamera && m_isYawEasing) {
+    m_yawEaseTimer += ctx.dt;
+    const float progress = m_yawEaseTimer / kTargetYawEaseSeconds;
+    m_cameraYaw =
+        m_yawEaseFrom + m_yawEaseDelta * SmoothStep01(progress);
+    if (progress >= 1.0f) {
+      m_cameraYaw = m_yawEaseFrom + m_yawEaseDelta;
+      m_isYawEasing = false;
+    }
+  }
+
+  if (!isShotCamera && m_isDistanceEasing) {
+    m_distanceEaseTimer += ctx.dt;
+    const float progress =
+        m_distanceEaseTimer / kTargetDistanceEaseSeconds;
+    const float ease = SmoothStep01(progress);
+    m_cameraDistance =
+        m_distanceEaseFrom +
+        (m_targetCameraDistance - m_distanceEaseFrom) * ease;
+    if (progress >= 1.0f) {
+      m_cameraDistance = m_targetCameraDistance;
+      m_isDistanceEasing = false;
+    }
+  }
 
   // TPSオービットの基準位置を計算
   XMVECTOR ballPos = XMLoadFloat3(&ballT->position);

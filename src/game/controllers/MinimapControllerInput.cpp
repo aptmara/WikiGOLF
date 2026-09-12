@@ -30,20 +30,40 @@ using namespace DirectX;
 using namespace game::components;
 
 /**
+ * @brief 入力によるマップビューの終了処理をまとめて行います。
+*/
+void MinimapController::CloseMapViewByInput(core::GameContext &ctx,
+                                            ecs::Entity skyboxEntity,
+                                            const char *reason) {
+  if (!m_isMapView) return;
+  ToggleMapView(ctx, skyboxEntity);
+  LOG_INFO("MinimapController", "Map view closed ({})", reason);
+  ++m_inputActivity.closed;
+}
+
+/**
  * @brief ユーザー入力を処理しマップビュー操作に反映します。
 */
 void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mouseY,
                                      float fieldWidth, float fieldDepth,
                                      ecs::Entity skyboxEntity,
                                      const InputPermissions& permissions) {
-  if (permissions.openWithM && !m_isMapView && ctx.input.GetKeyDown('M')) {
-    ToggleMapView(ctx, skyboxEntity);
-    ++m_inputActivity.opened;
-    const char *mapViewState = "OFF";
-    if (m_isMapView) {
-      mapViewState = "ON";
+  if (ctx.input.GetKeyDown('M')) {
+    if (!m_isMapView) {
+      if (permissions.openWithM) {
+        ToggleMapView(ctx, skyboxEntity);
+        ++m_inputActivity.opened;
+        const char *mapViewState = "OFF";
+        if (m_isMapView) {
+          mapViewState = "ON";
+        }
+        LOG_INFO("MinimapController", "Map view: {}", mapViewState);
+      }
+    } else if (permissions.closeWithM) {
+      // Mは開閉のトグル。閉じた直後のマップ操作は行わない。
+      CloseMapViewByInput(ctx, skyboxEntity, "M");
+      return;
     }
-    LOG_INFO("MinimapController", "Map view: {}", mapViewState);
   }
 
   if (!m_isMapView) return;
@@ -54,22 +74,7 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
 
   // マップビューの操作処理
   if (permissions.closeWithEscape && ctx.input.GetKeyDown(VK_ESCAPE)) {
-    m_isMapView = false;
-    if (auto *golfState = ctx.world.GetGlobal<GolfGameState>()) {
-      golfState->isMapView = false;
-    }
-    m_mapOpenHintTimer = 0.0f;
-    if (auto* openBg = ctx.world.Get<UIText>(m_mapOpenHintBg)) openBg->visible = false;
-    if (auto* openTxt = ctx.world.Get<UIText>(m_mapOpenHintText)) openTxt->visible = false;
-
-    if (ctx.world.IsAlive(skyboxEntity)) {
-      auto* skybox = ctx.world.Get<components::Skybox>(skyboxEntity);
-      if (skybox) {
-        m_mapViewSkyboxState.Sync(m_isMapView, *skybox);
-      }
-    }
-    LOG_INFO("MinimapController", "Map view closed (ESC)");
-    ++m_inputActivity.closed;
+    CloseMapViewByInput(ctx, skyboxEntity, "ESC");
   }
 
   if (permissions.recenter &&

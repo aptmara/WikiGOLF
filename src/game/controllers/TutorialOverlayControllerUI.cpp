@@ -14,7 +14,7 @@
 namespace game::controllers {
 
 void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
-    const bool visible = m_visible && m_step != TutorialStep::Done;
+    const bool visible = m_visible;
     if (auto* bg = ctx.world.Get<components::UIText>(m_overlayBgEntity))
         bg->visible = visible;
     if (auto* txt = ctx.world.Get<components::UIText>(m_overlayTextEntity))
@@ -112,7 +112,7 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
         break;
     case TutorialStep::MapClose:
         text = L"マップ  8 / 9 — 戻る\n俯瞰を終えてショット画面へ戻ります。";
-        action = L"[ Esc ] マップを閉じる";
+        action = L"[ M / Esc ] マップを閉じる";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::LinkCup:
@@ -133,6 +133,9 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
         }
         break;
     case TutorialStep::Done:
+        text = L"TUTORIAL COMPLETE\nリンクを読み、狙い、打ってゴールへ到達しました。";
+        action = L"Wikiへの接続を確認中です";
+        hint = L"接続成功後、通常プレイを開始します…";
         break;
     }
 

@@ -4,6 +4,7 @@
  */
 
 #include "src/core/DisplaySettings.h"
+#include "src/core/DisplaySettingsInternals.h"
 
 #include <cassert>
 #include <cstdio>
@@ -19,7 +20,7 @@ void WriteInputFile() {
   assert(file.is_open());
   file << "WindowMode=Borderless\n";
   file << "Width=640\n";
-  file << "Height=9999\n";
+  file << "Height=720\n";
   file << "GraphicsPreset=HIGH\n";
   file << "RenderScale=2.0\n";
   file << "VSync=0\n";
@@ -40,7 +41,7 @@ void VerifyLoadedValues() {
 
   assert(data.mode == core::WindowMode::Borderless);
   assert(data.windowedWidth == 1024);
-  assert(data.windowedHeight == 9999);
+  assert(data.windowedHeight == 720);
   assert(data.graphicsPreset == core::GraphicsPreset::High);
   assert(data.renderScale == 1.0f);
   assert(!data.vsync);
@@ -83,12 +84,27 @@ void VerifyCyclesWithoutInitialization() {
   assert(settings.GetData().fpsLimit == 30);
 }
 
+void VerifyResolutionFitKeepsAspectRatio() {
+  const auto fitted =
+      core::display_settings_detail::FitResolutionWithinBounds(1920, 1080,
+                                                                1440, 1080);
+  assert(fitted.first == 1440);
+  assert(fitted.second == 810);
+
+  const auto unchanged =
+      core::display_settings_detail::FitResolutionWithinBounds(1280, 720,
+                                                                1440, 1080);
+  assert(unchanged.first == 1280);
+  assert(unchanged.second == 720);
+}
+
 } // namespace
 
 int main() {
   VerifyLoadedValues();
   VerifyRoundTrip();
   VerifyCyclesWithoutInitialization();
+  VerifyResolutionFitKeepsAspectRatio();
   std::remove(kSettingsPath.c_str());
   return 0;
 }

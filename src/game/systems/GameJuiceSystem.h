@@ -250,21 +250,21 @@ private:
   std::vector<EnvironmentParticle> m_envParticles;
   int m_envWriteIndex = 0;
   float m_envEmitTimer = 0.0f;
-  static constexpr int kEnvParticleCount = 256;
+  static constexpr int kEnvParticleCount = 512;
 
-  // --- バンカー表面の窪み・ボール周囲の砂の盛り上がり ---
-  struct SandImprint {
+  // --- マテリアル別の接地跡・ボール周囲の表面反応 ---
+  struct SurfaceMark {
     ecs::Entity entity = UINT32_MAX;
     float lifetime = 0.0f;
     float maxLifetime = 1.0f;
     float startScale = 0.1f;
     DirectX::XMFLOAT4 baseColor = {1, 1, 1, 1};
   };
-  std::vector<SandImprint> m_sandImprints;
-  int m_sandImprintWriteIndex = 0;
-  float m_sandTrackTimer = 0.0f;
-  ecs::Entity m_sandCollarEntity = UINT32_MAX;
-  static constexpr int kSandImprintCount = 28;
+  std::vector<SurfaceMark> m_surfaceMarks;
+  int m_surfaceMarkWriteIndex = 0;
+  float m_surfaceTrackTimer = 0.0f;
+  ecs::Entity m_surfaceCollarEntity = UINT32_MAX;
+  static constexpr int kSurfaceMarkCount = 64;
 
   // --- リップルエフェクト ---
   struct Ripple {
@@ -278,7 +278,7 @@ private:
   };
   std::vector<Ripple> m_ripples;
   int m_rippleWriteIndex = 0;
-  static constexpr int kRippleCount = 12; /**< リップル同時数です。*/
+  static constexpr int kRippleCount = 24; /**< リップル同時数です。*/
 
   /** @brief カメラシェイクを更新します。 */
   void UpdateCameraShake(core::GameContext &ctx, ecs::Entity cameraEntity);
@@ -296,9 +296,9 @@ private:
   void UpdateEnvironmentParticles(core::GameContext &ctx,
                                   ecs::Entity targetEntity);
 
-  /** @brief 砂面エフェクトを更新します。 */
-  void UpdateSandSurfaceEffects(core::GameContext &ctx,
-                                ecs::Entity targetEntity);
+  /** @brief マテリアル別の接地面エフェクトを更新します。 */
+  void UpdateSurfaceEffects(core::GameContext &ctx,
+                            ecs::Entity targetEntity);
 
   /** @brief 水面波紋（リップル）を更新します。 */
   void UpdateRipples(core::GameContext &ctx);
@@ -323,20 +323,22 @@ private:
   /** @brief 環境パーティクル用エンティティ群を生成します。 */
   void CreateEnvironmentParticleEntities(core::GameContext &ctx);
 
-  /** @brief 砂面用エンティティ群を生成します。 */
-  void CreateSandSurfaceEntities(core::GameContext &ctx);
+  /** @brief 接地面エフェクト用エンティティ群を生成します。 */
+  void CreateSurfaceEffectEntities(core::GameContext &ctx);
 
   /**
-   * @brief 砂面に足跡・弾痕を配置します。
+   * @brief マテリアルに応じた接地跡を配置します。
    * @param ctx ゲームコンテキスト
    * @param position 配置座標
    * @param scale スケール
    * @param lifetime 生存時間[秒]
    * @param color カラー値
    */
-  void SpawnSandImprint(core::GameContext &ctx,
-                        const DirectX::XMFLOAT3 &position, float scale,
-                        float lifetime, const DirectX::XMFLOAT4 &color);
+  void SpawnSurfaceMark(core::GameContext &ctx,
+                        const DirectX::XMFLOAT3 &position,
+                        game::components::TerrainMaterial material,
+                        float scale, float lifetime,
+                        const DirectX::XMFLOAT4 &color);
 
   /** @brief リップル用エンティティ群を生成します。 */
   void CreateRippleEntities(core::GameContext &ctx);

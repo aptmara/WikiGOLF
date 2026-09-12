@@ -32,23 +32,23 @@ void GameJuiceSystem::TriggerMaterialEffect(
     core::GameContext &ctx, const DirectX::XMFLOAT3 &position,
     game::components::TerrainMaterial material, float strength) {
   const bool isBunker = material == TerrainMaterial::Bunker;
-  int count = 8 + static_cast<int>(strength * 12.0f);
+  int count = 34 + static_cast<int>(strength * 24.0f);
   switch (material) {
   case TerrainMaterial::Bunker:
     count = 36 + static_cast<int>(strength * 24.0f);
     break;
   case TerrainMaterial::Rough:
-    count = 16 + static_cast<int>(strength * 16.0f);
+    count = 36 + static_cast<int>(strength * 24.0f);
     break;
   case TerrainMaterial::Water:
-    count = 24 + static_cast<int>(strength * 22.0f);
+    count = 38 + static_cast<int>(strength * 24.0f);
     break;
   case TerrainMaterial::Lava:
-    count = 22 + static_cast<int>(strength * 20.0f);
+    count = 38 + static_cast<int>(strength * 24.0f);
     break;
   case TerrainMaterial::Ice:
   case TerrainMaterial::Stone:
-    count = 18 + static_cast<int>(strength * 18.0f);
+    count = 36 + static_cast<int>(strength * 24.0f);
     break;
   case TerrainMaterial::None:
     count = 0;
@@ -63,12 +63,87 @@ void GameJuiceSystem::TriggerMaterialEffect(
       "Basic", L"Assets/shaders/BasicVS.hlsl",
       L"Assets/shaders/BasicPS.hlsl");
 
+  if (material != TerrainMaterial::None) {
+    float markScale = 0.20f + strength * 0.24f;
+    float markLifetime = 1.35f + strength * 0.95f;
+    XMFLOAT4 markColor = {0.12f, 0.42f, 0.07f, 0.38f};
+    switch (material) {
+    case TerrainMaterial::Rough:
+      markScale *= 1.24f;
+      markLifetime += 0.40f;
+      markColor = {0.06f, 0.24f, 0.035f, 0.46f};
+      break;
+    case TerrainMaterial::Bunker:
+      markScale = 0.17f + strength * 0.18f;
+      markLifetime = 1.15f + strength * 0.80f;
+      markColor = {1.02f, 0.89f, 0.62f, 0.24f};
+      break;
+    case TerrainMaterial::Green:
+      markScale *= 0.92f;
+      markColor = {0.18f, 0.64f, 0.11f, 0.34f};
+      break;
+    case TerrainMaterial::Ice:
+      markScale *= 1.35f;
+      markLifetime += 0.55f;
+      markColor = {0.56f, 1.30f, 1.72f, 0.72f};
+      break;
+    case TerrainMaterial::Stone:
+      markScale *= 1.18f;
+      markLifetime += 0.70f;
+      markColor = {0.28f, 0.26f, 0.24f, 0.48f};
+      break;
+    case TerrainMaterial::Water:
+      markScale *= 1.62f;
+      markLifetime *= 0.72f;
+      markColor = {0.22f, 0.90f, 1.62f, 0.76f};
+      break;
+    case TerrainMaterial::Lava:
+      markScale *= 1.48f;
+      markLifetime += 1.10f;
+      markColor = {1.72f, 0.28f, 0.018f, 0.78f};
+      break;
+    default:
+      break;
+    }
+    SpawnSurfaceMark(ctx, position, material, markScale, markLifetime,
+                     markColor);
+  }
+
   if (isBunker) {
-    SpawnSandImprint(ctx, position, 0.17f + strength * 0.18f,
-                     1.15f + strength * 0.80f,
-                     {1.02f, 0.89f, 0.62f, 0.24f});
     TriggerCameraShake(0.035f + strength * 0.065f,
                        0.12f + strength * 0.12f);
+  } else {
+    float shakeIntensity = 0.035f + strength * 0.060f;
+    float shakeDuration = 0.12f + strength * 0.12f;
+    switch (material) {
+    case TerrainMaterial::Rough:
+      shakeIntensity = 0.045f + strength * 0.075f;
+      break;
+    case TerrainMaterial::Ice:
+      shakeIntensity = 0.060f + strength * 0.090f;
+      shakeDuration += 0.04f;
+      break;
+    case TerrainMaterial::Stone:
+      shakeIntensity = 0.075f + strength * 0.115f;
+      shakeDuration += 0.05f;
+      break;
+    case TerrainMaterial::Water:
+      shakeIntensity = 0.050f + strength * 0.080f;
+      shakeDuration += 0.03f;
+      break;
+    case TerrainMaterial::Lava:
+      shakeIntensity = 0.070f + strength * 0.105f;
+      shakeDuration += 0.06f;
+      break;
+    case TerrainMaterial::None:
+      shakeIntensity = 0.0f;
+      break;
+    default:
+      break;
+    }
+    if (shakeIntensity > 0.0f) {
+      TriggerCameraShake(shakeIntensity, shakeDuration);
+    }
   }
 
   for (int k = 0; k < count; ++k) {
@@ -360,6 +435,22 @@ void GameJuiceSystem::TriggerMaterialEffect(
         p.maxLifetime = p.lifetime;
         break;
       }
+
+      if (!isBunker && material != TerrainMaterial::None) {
+        t->scale.x *= 1.30f;
+        t->scale.y *= 1.30f;
+        t->scale.z *= 1.30f;
+        p.baseScale *= 1.30f;
+        p.velocity.x *= 1.16f;
+        p.velocity.y *= 1.24f;
+        p.velocity.z *= 1.16f;
+        p.lifetime *= 1.18f;
+        p.maxLifetime = p.lifetime;
+        p.baseColor.x *= 1.12f;
+        p.baseColor.y *= 1.12f;
+        p.baseColor.z *= 1.12f;
+        mr->color = p.baseColor;
+      }
     }
   }
 }
@@ -419,21 +510,23 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
       count = 6 + static_cast<int>(speed01 * 8.0f);
     } else if (state->currentMaterial == TerrainMaterial::Rough ||
                state->currentMaterial == TerrainMaterial::Fairway) {
-      count = 1 + static_cast<int>(speed01 * 1.8f);
+      count = 5 + static_cast<int>(speed01 * 8.0f);
     } else if (state->currentMaterial == TerrainMaterial::Green) {
-      if (state->currentBallSpeed > 2.5f) {
-        count = 1;
+      if (state->currentBallSpeed > 0.75f) {
+        count = 5 + static_cast<int>(speed01 * 7.0f);
       } else {
         count = 0;
       }
     } else if (state->currentMaterial == TerrainMaterial::Ice) {
-      count = 1 + static_cast<int>(speed01 * 2.0f);
+      count = 6 + static_cast<int>(speed01 * 8.0f);
     } else if (state->currentMaterial == TerrainMaterial::Stone) {
-      count = state->currentBallSpeed > 2.0f ? 1 + static_cast<int>(speed01) : 0;
+      count = state->currentBallSpeed > 0.75f
+                  ? 5 + static_cast<int>(speed01 * 7.0f)
+                  : 0;
     } else if (state->currentMaterial == TerrainMaterial::Water) {
-      count = 2 + static_cast<int>(speed01 * 4.0f);
+      count = 7 + static_cast<int>(speed01 * 8.0f);
     } else if (state->currentMaterial == TerrainMaterial::Lava) {
-      count = 2 + static_cast<int>(speed01 * 3.0f);
+      count = 7 + static_cast<int>(speed01 * 8.0f);
     } else {
       count = 0;
     }
@@ -743,6 +836,24 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           mr->isVisible = false;
           p.lifetime = 0;
           break;
+        }
+
+        if (state->currentMaterial != TerrainMaterial::Bunker &&
+            state->currentMaterial != TerrainMaterial::None &&
+            p.lifetime > 0.0f) {
+          t->scale.x *= 1.22f;
+          t->scale.y *= 1.22f;
+          t->scale.z *= 1.22f;
+          p.baseScale *= 1.22f;
+          p.velocity.x *= 1.12f;
+          p.velocity.y *= 1.16f;
+          p.velocity.z *= 1.12f;
+          p.lifetime *= 1.15f;
+          p.maxLifetime = p.lifetime;
+          p.baseColor.x *= 1.10f;
+          p.baseColor.y *= 1.10f;
+          p.baseColor.z *= 1.10f;
+          mr->color = p.baseColor;
         }
       }
     }

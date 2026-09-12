@@ -27,6 +27,7 @@ class MinimapController {
 public:
   struct InputPermissions {
     bool openWithM = true;
+    bool closeWithM = true;
     bool closeWithEscape = true;
     bool panWithLeftDrag = true;
     bool panWithRightDrag = true;
@@ -150,6 +151,13 @@ public:
   void SetMapZoom(float zoom) { m_mapZoom = zoom; m_targetMapZoom = zoom; }
 
 private:
+  /**
+   * @brief 入力によるマップビューの終了処理をまとめて行います。
+   * @param reason ログに出す終了理由(押されたキー名など)
+  */
+  void CloseMapViewByInput(core::GameContext &ctx, ecs::Entity skyboxEntity,
+                           const char *reason);
+
   Config m_cfg;
 
   // 俯瞰マップビュー

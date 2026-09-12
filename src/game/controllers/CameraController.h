@@ -94,11 +94,13 @@ public:
   void SetTargetDistanceAndHeight(float recommendedDistance,
                                   float recommendedHeight);
 
+  /** @brief 現在距離から設定済みの目標距離へのイージングを開始する。*/
+  void BeginTargetDistanceEase();
+
   /**
    * @brief 視線(ショット)の水平方向を、fromPosからtoPosへの向きに合わせます。
    * @details エイムピン設置時など、狙った方向へ自動で向き直したい場合に呼ぶ。
-   *          Yawを即座に切り替えるが、実際のカメラ位置は毎フレームのオービット
-   *          追従補間により滑らかに旋回する。
+   *          現在のYawから目標Yawまで最短方向へ滑らかに旋回する。
 */
   void AimYawTowards(const DirectX::XMFLOAT3 &fromPos,
                      const DirectX::XMFLOAT3 &toPos);
@@ -156,8 +158,15 @@ private:
   float m_cameraYaw      = 0.0f;
   float m_cameraPitch    = 0.5f;
   float m_cameraDistance = 60.0f;
+  float m_yawEaseFrom = 0.0f;
+  float m_yawEaseDelta = 0.0f;
+  float m_yawEaseTimer = 0.0f;
+  bool m_isYawEasing = false;
   float m_targetCameraDistance = 60.0f;
   float m_targetCameraHeight   = 20.0f;
+  float m_distanceEaseFrom = 60.0f;
+  float m_distanceEaseTimer = 0.0f;
+  bool m_isDistanceEasing = false;
 
   /** @brief ショット開始時のカメラ位置（ここからロボット三人称視点へ寄る）*/
   DirectX::XMFLOAT3 m_shotStartCamPos = {0, 0, 0};

@@ -41,8 +41,8 @@ void GameJuiceSystem::Initialize(core::GameContext &ctx) {
   // 環境パーティクルエンティティ作成
   CreateEnvironmentParticleEntities(ctx);
 
-  // バンカーの窪みとボール周囲の砂
-  CreateSandSurfaceEntities(ctx);
+  // マテリアル別の接地跡とボール周囲の表面反応
+  CreateSurfaceEffectEntities(ctx);
 
   // リップルエフェクト
   CreateRippleEntities(ctx);
@@ -62,9 +62,9 @@ void GameJuiceSystem::Shutdown(core::GameContext &ctx) {
   m_trailBaseColors.clear();
   m_impactParticles.clear();
   m_envParticles.clear();
-  m_sandImprints.clear();
+  m_surfaceMarks.clear();
   m_ripples.clear();
-  m_sandCollarEntity = UINT32_MAX;
+  m_surfaceCollarEntity = UINT32_MAX;
   m_hasLastTrailTargetPosition = false;
 }
 
@@ -85,7 +85,7 @@ void GameJuiceSystem::Update(core::GameContext &ctx, ecs::Entity cameraEntity,
   // 環境パーティクル更新
   EmitEnvironmentParticles(ctx, targetEntity);
   UpdateEnvironmentParticles(ctx, targetEntity);
-  UpdateSandSurfaceEffects(ctx, targetEntity);
+  UpdateSurfaceEffects(ctx, targetEntity);
 
   // リップル更新
   UpdateRipples(ctx);

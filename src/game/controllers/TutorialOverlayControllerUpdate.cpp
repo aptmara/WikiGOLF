@@ -81,6 +81,7 @@ MinimapController::InputPermissions
 TutorialOverlayController::GetMapInputPermissions() const {
     MinimapController::InputPermissions p;
     p.openWithM = false;
+    p.closeWithM = false;
     p.closeWithEscape = false;
     p.panWithLeftDrag = false;
     p.panWithRightDrag = false;
@@ -96,6 +97,7 @@ TutorialOverlayController::GetMapInputPermissions() const {
     p.toggleHelp = m_step == TutorialStep::MapHelpOpen ||
                    m_step == TutorialStep::MapHelpClose;
     p.closeWithEscape = m_step == TutorialStep::MapClose;
+    p.closeWithM = m_step == TutorialStep::MapClose;
     return p;
 }
 

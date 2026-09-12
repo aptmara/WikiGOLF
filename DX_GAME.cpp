@@ -12,6 +12,7 @@
 #include "src/game/systems/AchievementManager.h"
 #include "src/game/systems/PostProcessSystem.h"
 #include "src/game/systems/RenderSystem.h"
+#include "src/game/systems/ShadowRenderSystem.h"
 #include "src/game/systems/SkyboxRenderSystem.h"
 #include "src/game/systems/UIBarGaugeRenderSystem.h" // 追加
 #include "src/game/systems/UIButtonRenderSystem.h"
@@ -79,6 +80,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
     if (newWidth == 0 || newHeight == 0) {
       break;
     }
+    if (g_Input) {
+      g_Input->SetResolution(static_cast<int>(newWidth),
+                             static_cast<int>(newHeight));
+    }
     // graphics/textRenderer/inputの初期化前（ウィンドウ作成直後）に届くWM_SIZEは無視する
     if (g_Graphics && (newWidth != g_Graphics->GetWidth() ||
                        newHeight != g_Graphics->GetHeight())) {
@@ -89,10 +94,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
       if (g_Graphics->Resize(newWidth, newHeight)) {
         if (g_TextRenderer) {
           g_TextRenderer->RecreateTargetAfterResize();
-        }
-        if (g_Input) {
-          g_Input->SetResolution(static_cast<int>(newWidth),
-                                static_cast<int>(newHeight));
         }
       } else if (g_TextRenderer) {
         // Resize失敗時も、旧バックバッファへの参照を持ち続けないよう最低限復旧を試みる
@@ -183,6 +184,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ShowWindow(hWnd, nCmdShow);
   UpdateWindow(hWnd);
 
+  RECT initialClientRect = {};
+  int clientWidth = initialWidth;
+  int clientHeight = initialHeight;
+  if (GetClientRect(hWnd, &initialClientRect)) {
+    const int measuredWidth = initialClientRect.right - initialClientRect.left;
+    const int measuredHeight = initialClientRect.bottom - initialClientRect.top;
+    if (measuredWidth > 0 && measuredHeight > 0) {
+      clientWidth = measuredWidth;
+      clientHeight = measuredHeight;
+    }
+  }
+
   // COM初期化
   HRESULT hrCom = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   if (FAILED(hrCom)) {
@@ -196,7 +209,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // システム初期化（保存済みの利用GPU設定があれば優先的に使う。GPU切り替えは
   // デバイス再生成が必要なため、設定変更自体は次回起動時に反映される）
   graphics::GraphicsDevice graphics;
-  if (!graphics.Initialize(hWnd, initialWidth, initialHeight,
+  if (!graphics.Initialize(hWnd, clientWidth, clientHeight,
                            displaySettings.GetGpuAdapterNameWide())) {
     return -1;
   }
@@ -205,7 +218,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   ecs::World world;
   core::Input input;
   input.Initialize();
-  input.SetResolution(initialWidth, initialHeight);
+  input.SetResolution(clientWidth, clientHeight);
   g_Input = &input;
 
   // ログシステム初期化
@@ -440,6 +453,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
           {
               PROFILE_SCOPE("Render_3D");
+              {
+                  PROFILE_SCOPE("Render.ShadowMap");
+                  graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.ShadowMap");
+                  game::systems::ShadowRenderSystem(ctx);
+              }
               {
                   PROFILE_SCOPE("Render.Skybox");
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.Skybox");

@@ -36,6 +36,7 @@
 #include "../utils/ScreenFade.h"
 #include "ResultScene.h"
 #include <DirectXMath.h>
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -264,6 +265,14 @@ private:
   bool m_tutorialCupInFired = false;
   bool m_tutorialFairwayGuidanceApplied = false;
   bool m_tutorialGoalGuidanceApplied = false;
+
+  struct TutorialConnectionState {
+    std::atomic_bool completed = false;
+    std::string title;
+  };
+  std::shared_ptr<TutorialConnectionState> m_tutorialConnectionState;
+  bool m_tutorialConnectionChecking = false;
+  float m_tutorialConnectionElapsed = 0.0f;
 
   /** @brief ページ読み込み（WikiPageLoader へ委譲）*/
 

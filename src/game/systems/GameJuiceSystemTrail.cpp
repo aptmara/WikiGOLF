@@ -59,8 +59,8 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
     r += (0.50f - r) * tailBlend;
     g += (0.36f - g) * tailBlend;
     b += (1.45f - b) * tailBlend;
-    const float alpha = 0.92f * std::pow(1.0f - ratio, 0.72f);
-    mr.color = {r, g, b, alpha};
+    const float alpha = 1.0f * std::pow(1.0f - ratio, 0.66f);
+    mr.color = {r * 1.18f, g * 1.18f, b * 1.18f, alpha};
     m_trailBaseColors[i] = mr.color;
     mr.isVisible = false;
 
@@ -198,7 +198,7 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
       float fade = std::pow(1.0f - ratio, 1.35f);
       float sizeEase = 0.32f + 0.86f * std::pow(1.0f - ratio, 2.1f);
       float pulse = 0.96f + std::sin(ratio * 17.0f + speed * 0.08f) * 0.04f;
-      float scaleBase = (0.055f + speedNormalized * 0.045f) * sizeEase * pulse;
+      float scaleBase = (0.068f + speedNormalized * 0.058f) * sizeEase * pulse;
       const float segmentX = pos.x - olderPos.x;
       const float segmentY = pos.y - olderPos.y;
       const float segmentZ = pos.z - olderPos.z;
@@ -223,7 +223,7 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
       }
 
       DirectX::XMFLOAT4 baseColor = m_trailBaseColors[i];
-      const float brightness = 0.82f + speedNormalized * 0.34f;
+      const float brightness = 0.96f + speedNormalized * 0.44f;
       mr->color.x = baseColor.x * brightness;
       mr->color.y = baseColor.y * brightness;
       mr->color.z = baseColor.z * brightness;

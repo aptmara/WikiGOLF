@@ -32,12 +32,14 @@
 #include "../utils/UIConstants.h"
 #include "LoadingScene.h"
 #include "TitleScene.h"
+#include "TitleSceneSupport.h"
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <thread>
 
 #undef min
 #undef max
@@ -138,15 +140,62 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                               m_shotController.get(), m_minimapController.get(),
                               m_skyboxEntity);
     if (m_tutorialOverlay->IsDone()) {
-      // チュートリアル終了後、タイトルへ戻る処理など
-      // （フラグの保存はTitleScene側か、ここで行う）
-      std::string path = "save_tutorial_done.flag";
-      std::ofstream ofs(path);
-      ofs << "done";
-      ofs.close();
+      if (!m_tutorialConnectionChecking) {
+        std::ofstream ofs("save_tutorial_done.flag");
+        ofs << "done";
 
-      auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<TitleScene>(); });
-      ctx.sceneManager->ChangeScene(std::move(loadingScene));
+        LOG_INFO("WikiGolf", "Tutorial completed. Testing Wikipedia connection...");
+        m_tutorialConnectionChecking = true;
+        m_tutorialConnectionElapsed = 0.0f;
+        m_tutorialConnectionState =
+            std::make_shared<TutorialConnectionState>();
+        auto connectionState = m_tutorialConnectionState;
+        std::thread([connectionState]() {
+          game::systems::WikiClient client;
+          connectionState->title = client.FetchRandomPageTitle();
+          connectionState->completed.store(true, std::memory_order_release);
+        }).detach();
+      }
+
+      m_tutorialConnectionElapsed += ctx.dt;
+      const bool connectionCompleted =
+          m_tutorialConnectionState &&
+          m_tutorialConnectionState->completed.load(std::memory_order_acquire);
+      const bool connectionTimedOut =
+          m_tutorialConnectionElapsed >=
+          title_scene_detail::kStartConnectionTimeoutSeconds;
+
+      if (!connectionCompleted && !connectionTimedOut) return;
+
+      std::string connectedTitle;
+      if (connectionCompleted) {
+        connectedTitle = m_tutorialConnectionState->title;
+      }
+      m_tutorialConnectionState.reset();
+      m_tutorialConnectionChecking = false;
+      m_tutorialConnectionElapsed = 0.0f;
+
+      if (connectionCompleted && connectedTitle != "Error" &&
+          !connectedTitle.empty()) {
+        LOG_INFO("WikiGolf",
+                 "Wikipedia connection test passed after tutorial. Title: {}",
+                 connectedTitle);
+        title_scene_detail::ResetStandardStartData(ctx);
+        auto loadingScene = std::make_unique<LoadingScene>(
+            []() { return std::make_unique<WikiGolfScene>(false); });
+        ctx.sceneManager->ChangeScene(std::move(loadingScene));
+      } else {
+        if (connectionTimedOut) {
+          LOG_WARN("WikiGolf",
+                   "Wikipedia connection test timed out after tutorial.");
+        } else {
+          LOG_WARN("WikiGolf",
+                   "Wikipedia connection test failed after tutorial.");
+        }
+        auto loadingScene = std::make_unique<LoadingScene>(
+            []() { return std::make_unique<TitleScene>(); });
+        ctx.sceneManager->ChangeScene(std::move(loadingScene));
+      }
       return;
     }
 
@@ -305,6 +354,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
               m_cameraController->SetTargetDistanceAndHeight(
                   m_clubController->GetRecommendedCameraDistance(4.0f),
                   m_clubController->GetRecommendedCameraHeight(4.0f));
+              m_cameraController->BeginTargetDistanceEase();
 
               // ピンを狙った方向へ視線(ショット方向)も合わせる。
               const auto *aimPin =
@@ -315,6 +365,15 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   m_cameraController->AimYawTowards(ballTransform->position,
                                                     aimPin->worldPosition);
               }
+          }
+
+          // マップ上でピンを設置したら、狙いを確認できたのでマップビューを
+          // 自動的に閉じてショット画面へ戻す。チュートリアルのマップ説明中
+          // (ピン設置後もヘルプ表示等の案内を続ける)は対象外とする。
+          if (!m_isTutorial && isMapView && m_minimapController) {
+              m_minimapController->ToggleMapView(ctx, m_skyboxEntity);
+              isMapView = m_minimapController->IsMapView();
+              m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
           }
       }
   }

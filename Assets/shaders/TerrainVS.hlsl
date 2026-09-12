@@ -11,6 +11,8 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags;  /**< x: hasTexture, y: hasNormalMap, z: uvScale */
     float4 LightDir;       /**< 光源方向 */
     float4 CameraPos;      /**< カメラワールド座標 */
+    matrix ShadowViewProjection; /**< 光源ビュー射影行列 */
+    float4 ShadowParams;   /**< x: シャドウ有効 */
 };
 
 /**
@@ -38,6 +40,7 @@ struct PS_INPUT {
     float4 Color : COLOR0;       /**< 頂点カラー（マテリアルブレンド用） */
     float3 Tangent : TANGENT;    /**< ワールド接線 */
     float3 Bitangent : BINORMAL; /**< ワールド従法線 */
+    float4 ShadowPos : TEXCOORD4; /**< 光源空間座標 */
 };
 
 /**
@@ -62,6 +65,7 @@ PS_INPUT main(VS_INPUT input) {
     
     output.Tex = input.Tex;
     output.Color = input.Color * Color;
+    output.ShadowPos = mul(worldPos, ShadowViewProjection);
     
     return output;
 }

@@ -13,7 +13,13 @@ cbuffer ConstantBuffer : register(b0) {
     matrix Projection_unused;
     float4 MaterialColor_unused;
     float4 MaterialFlags_unused;
+    float4 LightDir;
+    float4 CameraPos;
+    matrix ShadowViewProjection;
+    float4 ShadowParams;
 };
+
+#include "ShadowSampling.hlsli"
 
 /**
  * @brief 2D座標から擬似乱数ハッシュ値を生成します。
@@ -72,6 +78,7 @@ struct PS_INPUT {
     float3 bitangent : BINORMAL;     /**< ワールド従法線 */
     float2 worldXZ : TEXCOORD1;      /**< ワールドXZ座標 */
     float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
+    float4 shadowPosition : TEXCOORD5;/**< 光源空間座標 */
 };
 
 /**
@@ -145,11 +152,13 @@ float4 main(PS_INPUT input) : SV_TARGET {
     }
 
     // シンプルなディレクショナルライティング
-    float3 lightDir = normalize(float3(0.5f, -1.0f, 0.5f));
+    float3 lightDir = normalize(LightDir.xyz);
     
     float diffuse = max(dot(normal, -lightDir), 0.0f);
     float ambient = 0.3f;
-    float lighting = saturate(diffuse + ambient);
+    float shadow = SampleShadow(input.shadowPosition, normal, lightDir,
+                                ShadowParams.x);
+    float lighting = saturate(diffuse * shadow + ambient);
     
     return float4(baseColor.rgb * lighting, baseColor.a);
 }
