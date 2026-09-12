@@ -21,6 +21,10 @@ namespace game::components {
 struct ShotState;
 }
 
+namespace game::systems {
+class WikiTerrainSystem;
+}
+
 namespace game::controllers {
 
 /**
@@ -55,7 +59,13 @@ public:
     bool clubChanged = false;
   };
 
-  void Initialize(core::GameContext &ctx);
+  /**
+   * @brief クラブ定義・モデルを初期化します。
+   * @param ctx ゲームコンテキスト
+   * @param terrainSystem ゴルファーの立ち位置を地面の高さへ追従させるための地形システム（null 許容）
+  */
+  void Initialize(core::GameContext &ctx,
+                  game::systems::WikiTerrainSystem *terrainSystem = nullptr);
 
   /**
    * @brief クラブ表示が生成したEntityを破棄します。
@@ -155,6 +165,9 @@ private:
   void AdvanceClip(const std::string &clipName, bool loop, float dt);
 
   float ClipDuration(const std::string &clipName) const;
+
+  /** @brief ゴルファーの立ち位置を地面の高さへ追従させるための地形システム（借用、null 許容）。*/
+  game::systems::WikiTerrainSystem *m_terrainSystem = nullptr;
 
   std::vector<Club> m_availableClubs;
   Club m_currentClub = {"ドライバー", 119.0f, 10.5f,

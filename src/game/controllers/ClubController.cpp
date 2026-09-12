@@ -15,7 +15,9 @@
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
+#include "../systems/WikiTerrainSystem.h"
 #include "../utils/AimPinClubSelection.h"
+#include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/TrajectorySimulation.h"
 #include <algorithm>
 #include <cmath>
@@ -25,7 +27,9 @@ namespace game::controllers {
 using namespace DirectX;
 using namespace game::components;
 
-void ClubController::Initialize(core::GameContext &ctx) {
+void ClubController::Initialize(core::GameContext &ctx,
+                                game::systems::WikiTerrainSystem *terrainSystem) {
+  m_terrainSystem = terrainSystem;
   InitializeClubs(ctx);
   InitializeClubModel(ctx);
 }
@@ -175,7 +179,16 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   XMFLOAT3 targetStandPos;
   XMStoreFloat3(&targetStandPos,
                XMVectorAdd(XMLoadFloat3(&ballTr->position), worldOffset));
-  targetStandPos.y = ballTr->position.y;
+  // ゴルファーの足元はボールのY座標ではなく地面の高さに合わせる。
+  // ボールがティーやスタートピンの上に乗って浮いている場合でも、
+  // ゴルファーが宙に浮いて見えないようにするため。
+  if (m_terrainSystem) {
+    const float terrainHeight =
+        m_terrainSystem->GetHeight(targetStandPos.x, targetStandPos.z);
+    targetStandPos.y = game::physics::ToVisualSurfaceHeight(terrainHeight);
+  } else {
+    targetStandPos.y = ballTr->position.y;
+  }
 
   if (!m_golferPositionInitialized) {
     // 初回は歩かずその場に配置する

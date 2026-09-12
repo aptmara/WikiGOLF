@@ -27,6 +27,7 @@
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../utils/ProceduralFlag.h"
+#include "../utils/StartTeePin.h"
 #include "../controllers/MinimapController.h"
 #include "../systems/ParticleSystem.h"
 #include "../utils/ParRules.h"
@@ -126,7 +127,64 @@ void WikiPageLoader::ClearGeneratedPageObjects(
         m_terrainSystem->Clear(ctx);
     }
 
+    if (ctx.world.IsAlive(m_startPinEntity)) {
+        ctx.world.DestroyEntity(m_startPinEntity);
+    }
+    m_startPinEntity = UINT32_MAX;
+
     LOG_DEBUG("WikiPageLoader", "Generated page objects cleared");
+}
+
+void WikiPageLoader::ClearStartPin(core::GameContext& ctx, ecs::Entity ballEntity)
+{
+    if (ctx.world.IsAlive(m_startPinEntity)) {
+        ctx.world.DestroyEntity(m_startPinEntity);
+    }
+    m_startPinEntity = UINT32_MAX;
+
+    if (auto* rb = ctx.world.Get<RigidBody>(ballEntity)) {
+        rb->isStatic = false;
+    }
+}
+
+void WikiPageLoader::PlaceBallAtStartTee(
+    core::GameContext& ctx, ecs::Entity ballEntity, float groundZ,
+    controllers::MinimapController* minimapController,
+    float fieldWidth, float fieldDepth)
+{
+    auto* ballT  = ctx.world.Get<Transform>(ballEntity);
+    auto* ballRB = ctx.world.Get<RigidBody>(ballEntity);
+    if (!ballT) return;
+
+    float terrainHeight = 0.0f;
+    if (m_terrainSystem) {
+        terrainHeight = m_terrainSystem->GetHeight(0.0f, groundZ);
+    }
+    const float groundY = game::physics::ToVisualSurfaceHeight(terrainHeight);
+
+    // タイトル画面でWikipediaパズル地球儀を支えるティーと同じ意匠のピンを立て、
+    // 最初のショットを打つまでボールをその上へ固定表示する。
+    // （ゴルファーの立ち位置はClubController側で地面の高さへ追従させているため、
+    //   ボールがここで浮いてもゴルファーが宙に浮くことはない）
+    if (ctx.world.IsAlive(m_startPinEntity)) {
+        ctx.world.DestroyEntity(m_startPinEntity);
+    }
+    const auto pin = game::utils::CreateStartTeePin(ctx, {0.0f, groundY, groundZ});
+    m_startPinEntity = pin.entity;
+
+    ballT->position = {
+        0.0f,
+        groundY + game::utils::kStartTeePinHeight + game::physics::kBallRadius,
+        groundZ};
+
+    if (ballRB) {
+        ballRB->velocity = {0.0f, 0.0f, 0.0f};
+        ballRB->isStatic = true; // 最初のショットを打つまでピンの上へ固定する
+    }
+
+    if (minimapController) {
+        minimapController->SyncMapCenterToBall(ctx, 0.0f, fieldWidth, fieldDepth, true);
+    }
 }
 
 // ============================================================

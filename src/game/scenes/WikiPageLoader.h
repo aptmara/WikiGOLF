@@ -111,6 +111,14 @@ public:
                     game::systems::WikiShortestPath* shortestPath);
 
     /**
+     * @brief ステージ開始時にスタート地点へ立てたティーピンを破棄し、
+     *        ボールの物理固定を解除します（最初のショットを打った瞬間に呼ぶ）。
+     * @param ctx ゲーム全体の共有コンテキストです。
+     * @param ballEntity 固定を解除するボールのEntityです。
+*/
+    void ClearStartPin(core::GameContext& ctx, ecs::Entity ballEntity);
+
+    /**
      * @brief チュートリアル専用の固定教材コースを使うか設定します。
 */
     void SetTutorialMode(bool enabled);
@@ -272,6 +280,21 @@ private:
         bool isTargetHole, int hopsToTarget, ID3D11ShaderResourceView* srv,
         float aspect);
 
+    /**
+     * @brief ボールをスタートのティー位置へ配置し、タイトル画面と同じ意匠の
+     *        ティーピンを立てて、最初のショットを打つまで物理的に固定します。
+     * @param ctx ゲームコンテキスト
+     * @param ballEntity 配置対象のボールEntity
+     * @param groundZ ティー位置のワールドZ座標（地形高さのサンプル位置にも使う）
+     * @param minimapController ミニマップ中心をボールへ同期させる対象（null 許容）
+     * @param fieldWidth ミニマップ同期に使うフィールド幅
+     * @param fieldDepth ミニマップ同期に使うフィールド奥行き
+*/
+    void PlaceBallAtStartTee(core::GameContext& ctx, ecs::Entity ballEntity,
+                            float groundZ,
+                            game::controllers::MinimapController* minimapController,
+                            float fieldWidth, float fieldDepth);
+
     // ---- 借用ポインタ（非所有） ----
     graphics::WikiTextureGenerator*    m_textureGenerator = nullptr;
     game::systems::WikiTerrainSystem*  m_terrainSystem    = nullptr;
@@ -282,6 +305,9 @@ private:
     // ---- 所有リソース ----
     std::unique_ptr<graphics::WikiTextureResult> m_wikiTexture;
     ecs::EntityOwner m_pageEntityOwner;
+
+    /** @brief スタートティーピン（最初のショットを打つまでボールを固定表示するためのもの）。*/
+    ecs::Entity m_startPinEntity = UINT32_MAX;
 
     // ---- 目的記事サムネイル（ゲーム開始時に1回だけ生成し使い回す） ----
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_targetThumbnailSRV;
