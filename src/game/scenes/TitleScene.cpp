@@ -84,29 +84,37 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
 
         LOG_INFO("TitleScene", "Step 2: LoadShader Basic");
         ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
-        LOG_INFO("TitleScene", "Step 3: LoadShader Skybox");
+        LOG_INFO("TitleScene", "Step 3: LoadShader Grass");
+        ctx.resource.LoadShader("Grass", L"Assets/shaders/GrassVS.hlsl", L"Assets/shaders/GrassPS.hlsl");
+        LOG_INFO("TitleScene", "Step 4: LoadShader Skybox");
         ctx.resource.LoadShader("Skybox", L"Assets/shaders/SkyboxVS.hlsl", L"Assets/shaders/SkyboxPS.hlsl");
 
-        LOG_INFO("TitleScene", "Step 4: LoadMesh sphere");
+        LOG_INFO("TitleScene", "Step 5: LoadMesh sphere");
         ctx.resource.LoadMesh("builtin/sphere");
 
-        LOG_INFO("TitleScene", "Step 5: LoadMesh globe");
+        LOG_INFO("TitleScene", "Step 6: LoadMesh globe");
         ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
 
-        LOG_INFO("TitleScene", "Step 6: LoadTextureSRV");
+        LOG_INFO("TitleScene", "Step 7: LoadMesh ultra grass variants");
+        for (int variant = 0; variant < 4; ++variant) {
+          ctx.resource.LoadMesh("builtin/grass_patch_ultra_" +
+                                std::to_string(variant));
+        }
+
+        LOG_INFO("TitleScene", "Step 8: LoadTextureSRV");
         ctx.resource.LoadTextureSRV("Assets/textures/GRASS_BASE.png");
 
-        LOG_INFO("TitleScene", "Step 7: GenerateTerrain");
+        LOG_INFO("TitleScene", "Step 9: GenerateTerrain");
         game::systems::TerrainConfig tconf;
         tconf.worldWidth = 150.0f; tconf.worldDepth = 150.0f;
         tconf.resolutionX = 64; tconf.resolutionZ = 64;
         tconf.baseHeight = 0.0f; tconf.heightScale = 2.5f; tconf.biome = 0;
         auto tdata = game::systems::TerrainGenerator::GenerateTerrain("TitleSeed", {}, tconf);
 
-        LOG_INFO("TitleScene", "Step 8: CreateDynamicMesh");
+        LOG_INFO("TitleScene", "Step 10: CreateDynamicMesh");
         ctx.resource.CreateDynamicMesh("TitleTerrain", tdata.vertices, tdata.indices);
 
-        LOG_INFO("TitleScene", "Step 9: LoadCubemapFromSingleFile");
+        LOG_INFO("TitleScene", "Step 11: LoadCubemapFromSingleFile");
         graphics::SkyboxTextureGenerator gen;
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> cubemapSRV;
         gen.LoadCubemapFromSingleFile(ctx.graphics.GetDevice(), L"Assets/textures/skybox_default_px_1767953230432.png", cubemapSRV);

@@ -16,6 +16,7 @@
 #include "../../graphics/TextRenderer.h"
 #include "../../graphics/SkyboxTextureGenerator.h"
 #include "../components/Camera.h"
+#include "../components/GrassRenderBatch.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Skybox.h"
@@ -103,6 +104,121 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   floorMr.textureSRV = ctx.resource.LoadTextureSRV("Assets/textures/GRASS_BASE.png");
   floorMr.hasTexture = true;
   floorMr.customFlags.x = 30.0f; // UV Scale
+
+  // タイトルの固定カメラから見える前景～中景へ、ULTRA用メッシュを
+  // 重ねて配置する。150m四方すべてを埋めず、見えない領域の頂点負荷は
+  // 増やさない。
+  auto grassShader = ctx.resource.LoadShader(
+      "Grass", L"Assets/shaders/GrassVS.hlsl",
+      L"Assets/shaders/GrassPS.hlsl");
+  resources::MeshHandle grassMeshes[4] = {
+      ctx.resource.LoadMesh("builtin/grass_patch_ultra_0"),
+      ctx.resource.LoadMesh("builtin/grass_patch_ultra_1"),
+      ctx.resource.LoadMesh("builtin/grass_patch_ultra_2"),
+      ctx.resource.LoadMesh("builtin/grass_patch_ultra_3"),
+  };
+  ecs::Entity grassBatchEntities[4] = {};
+  for (int variant = 0; variant < 4; ++variant) {
+    grassBatchEntities[variant] = CreateEntity(ctx.world);
+    auto &batch = ctx.world.Add<components::GrassRenderBatch>(
+        grassBatchEntities[variant]);
+    batch.mesh = grassMeshes[variant];
+    batch.shader = grassShader;
+    batch.maxDrawDistance = 70.0f;
+  }
+
+  auto sampleTerrainHeight = [&](float x, float z) {
+    const int resolutionX = tdata.config.resolutionX;
+    const int resolutionZ = tdata.config.resolutionZ;
+    if (resolutionX < 2 || resolutionZ < 2 || tdata.heightMap.empty()) {
+      return tdata.config.baseHeight;
+    }
+
+    const float u = std::clamp(x / tdata.config.worldWidth + 0.5f,
+                               0.0f, 1.0f);
+    const float v = std::clamp(0.5f - z / tdata.config.worldDepth,
+                               0.0f, 1.0f);
+    const float sampleX = u * static_cast<float>(resolutionX - 1);
+    const float sampleZ = v * static_cast<float>(resolutionZ - 1);
+    const int x0 = std::min(static_cast<int>(sampleX), resolutionX - 2);
+    const int z0 = std::min(static_cast<int>(sampleZ), resolutionZ - 2);
+    const float tx = sampleX - static_cast<float>(x0);
+    const float tz = sampleZ - static_cast<float>(z0);
+    const size_t row0 = static_cast<size_t>(z0) * resolutionX;
+    const size_t row1 = static_cast<size_t>(z0 + 1) * resolutionX;
+    const float height0 =
+        tdata.heightMap[row0 + x0] * (1.0f - tx) +
+        tdata.heightMap[row0 + x0 + 1] * tx;
+    const float height1 =
+        tdata.heightMap[row1 + x0] * (1.0f - tx) +
+        tdata.heightMap[row1 + x0 + 1] * tx;
+    return height0 * (1.0f - tz) + height1 * tz;
+  };
+
+  constexpr float grassSpacing = 0.85f;
+  constexpr float grassHorizontalScale = 1.42f;
+  constexpr float grassMinX = -23.0f;
+  constexpr float grassMaxX = 23.0f;
+  constexpr float grassMinZ = -10.0f;
+  constexpr float grassMaxZ = 31.0f;
+  int grassRow = 0;
+  for (float z = grassMinZ; z <= grassMaxZ;
+       z += grassSpacing, ++grassRow) {
+    const float rowOffset = (grassRow % 2 == 0) ? 0.0f
+                                                : grassSpacing * 0.5f;
+    int grassColumn = 0;
+    for (float x = grassMinX + rowOffset; x <= grassMaxX;
+         x += grassSpacing, ++grassColumn) {
+      unsigned seed = static_cast<unsigned>(grassRow + 1) * 73856093u ^
+                      static_cast<unsigned>(grassColumn + 1) * 19349663u;
+      seed ^= seed >> 13;
+      seed *= 1274126177u;
+      const int variant = static_cast<int>((seed >> 9) & 3u);
+      const float variation =
+          static_cast<float>(seed & 0xffffu) / 65535.0f;
+      const float yaw =
+          static_cast<float>((seed >> 16) & 0xffffu) / 65535.0f * XM_2PI;
+
+      components::Transform grassTransform;
+      grassTransform.position = {
+          x, sampleTerrainHeight(x, z) + floorTr.position.y + 0.003f, z};
+      grassTransform.scale = {
+          grassHorizontalScale, 0.16f + variation * 0.045f,
+          grassHorizontalScale};
+      XMStoreFloat4(
+          &grassTransform.rotation,
+          XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f));
+
+      auto *batch = ctx.world.Get<components::GrassRenderBatch>(
+          grassBatchEntities[variant]);
+      components::GrassRenderInstance instance;
+      XMStoreFloat4x4(&instance.world, grassTransform.GetWorldMatrix());
+      instance.color = {
+          0.36f + variation * 0.055f,
+          0.56f + variation * 0.065f,
+          0.19f + variation * 0.035f,
+          0.88f};
+      instance.position = grassTransform.position;
+      batch->instances.push_back(instance);
+      batch->boundsMin.x = std::min(
+          batch->boundsMin.x, grassTransform.position.x - grassHorizontalScale);
+      batch->boundsMin.y = std::min(batch->boundsMin.y,
+                                    grassTransform.position.y - 0.01f);
+      batch->boundsMin.z = std::min(
+          batch->boundsMin.z, grassTransform.position.z - grassHorizontalScale);
+      batch->boundsMax.x = std::max(
+          batch->boundsMax.x, grassTransform.position.x + grassHorizontalScale);
+      batch->boundsMax.y = std::max(
+          batch->boundsMax.y, grassTransform.position.y + 0.30f);
+      batch->boundsMax.z = std::max(
+          batch->boundsMax.z, grassTransform.position.z + grassHorizontalScale);
+    }
+  }
+
+  components::GolfGameState titleWind;
+  titleWind.windDirection = {0.93f, 0.37f};
+  titleWind.windSpeed = 2.4f;
+  ctx.world.SetGlobal(titleWind);
 
   // 地球儀とティー台の生成
   m_globeEntity = CreateEntity(ctx.world);

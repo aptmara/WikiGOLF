@@ -88,25 +88,104 @@ VS_OUTPUT main(VS_INPUT input) {
     worldPos.xz += bendDirection * displacement;
     worldPos.y -= lerp(0.01f, 0.16f, flexibility) * bend * bend;
 
-    // ゲーム内の風向・風速へ連動する。無風時は葉先が完全に静止して見える
-    // 不自然さだけを避ける、ごく弱い揺れに留める。
+    // ゲーム内の風向・風速へ連動する。遠くまで伝わる風の帯、局所的な
+    // 突風、葉ごとの細かな揺れを異なる周期で重ね、芝面全体が同時に
+    // 左右へ往復して見えないようにする。
     float time = LightDir.w;
     float2 windVector = MaterialFlags_unused.xy;
     float windLength = length(windVector);
     float2 windDir = windLength > 0.0001f
         ? windVector / windLength
         : float2(0.62f, 0.78f);
+    float2 crossWindDir = float2(-windDir.y, windDir.x);
     float windStrength = saturate(MaterialFlags_unused.z / 12.0f);
     float travel = dot(worldPos.xz, windDir);
-    float gust = sin(travel * 0.42f + time * (0.65f + windStrength * 1.4f) +
-                     windPhase) * 0.72f +
-                 sin(travel * 1.35f - time * (1.1f + windStrength * 1.8f) +
-                     windPhase * 1.3f) * 0.28f;
-    float windAmplitude = lerp(0.006f, 0.065f, windStrength);
+
+    // 低周波の帯は近くの葉をまとまって傾け、高周波成分は一枚ごとの
+    // ばらつきを作る。gustEnvelopeは0～1に保ち、強風時だけ風下への
+    // 平均的な傾きを加える。
+    float broadWave = sin(travel * 0.16f - time *
+                          (0.72f + windStrength * 1.05f));
+    float gustWave = sin(travel * 0.43f - time *
+                         (1.18f + windStrength * 1.85f) + windPhase * 0.22f);
+    float gustEnvelope = saturate(0.52f + broadWave * 0.30f +
+                                   gustWave * 0.18f);
+    gustEnvelope = gustEnvelope * gustEnvelope *
+                   (3.0f - 2.0f * gustEnvelope);
+
+    float bladeFlutter =
+        sin(travel * 1.55f + time * (1.70f + windStrength * 3.10f) +
+            windPhase) * 0.68f +
+        sin(travel * 2.85f - time * (2.35f + windStrength * 4.20f) +
+            windPhase * 1.73f) * 0.32f;
+    float crossFlutter =
+        sin(travel * 1.10f + time * (1.25f + windStrength * 2.40f) +
+            windPhase * 1.31f);
+
+    float windActivity = smoothstep(0.015f, 0.12f, windStrength);
+    float windAmplitude = lerp(0.004f, 0.115f, windStrength);
     float surfaceFlex = 0.08f + materialClass * 0.92f;
-    float windSway = gust * windAmplitude * surfaceFlex * tipWeight;
-    worldPos.xz += windDir * windSway;
-    worldPos.y -= abs(windSway) * 0.12f;
+    float windTipWeight = tipWeight * tipWeight * (3.0f - 2.0f * tipWeight);
+    float downwindLean = windAmplitude * windActivity *
+                         (0.18f + gustEnvelope * 0.48f);
+    float alongWindSway =
+        downwindLean + bladeFlutter * windAmplitude *
+        lerp(0.42f, 0.62f, gustEnvelope);
+    float crossWindSway = crossFlutter * windAmplitude * 0.18f *
+                          (0.35f + gustEnvelope * 0.65f);
+    float2 windOffset =
+        (windDir * alongWindSway + crossWindDir * crossWindSway) *
+        surfaceFlex * windTipWeight;
+
+    // 疎な局所風を風下へ流す。同じ横帯に次の塊が来るまで十分な距離を
+    // 空け、packetRandomで一部を間引くことで、同じ地点では時折だけ
+    // つむじ風が通過する。帯の境界では影響半径が届かないため継ぎ目は
+    // 表面に現れない。
+    float alongPosition = dot(worldPos.xz, windDir);
+    float crossPosition = dot(worldPos.xz, crossWindDir);
+    const float vortexBandSpacing = 24.0f;
+    const float vortexPacketSpacing = 78.0f;
+    float vortexBand = floor(crossPosition / vortexBandSpacing);
+    float bandRandom = Hash21(float2(vortexBand, 37.19f));
+    float vortexCrossCenter =
+        (vortexBand + 0.5f) * vortexBandSpacing +
+        (bandRandom - 0.5f) * 5.0f;
+    float vortexTravel = time * lerp(2.2f, 5.2f, windStrength);
+    float packetCoordinate =
+        alongPosition - vortexTravel + bandRandom * vortexPacketSpacing;
+    float vortexPacket = floor(packetCoordinate / vortexPacketSpacing);
+    float localAlong =
+        (frac(packetCoordinate / vortexPacketSpacing) - 0.5f) *
+        vortexPacketSpacing;
+    float localCross = crossPosition - vortexCrossCenter;
+    float packetRandom = Hash21(float2(vortexBand + 83.7f,
+                                       vortexPacket - 19.4f));
+    float packetExists = smoothstep(0.28f, 0.38f, packetRandom);
+
+    float vortexAlongRadius = lerp(5.5f, 8.0f, windStrength);
+    float vortexCrossRadius = lerp(3.2f, 4.8f, windStrength);
+    float vortexDistance = length(float2(localAlong / vortexAlongRadius,
+                                         localCross / vortexCrossRadius));
+    float vortexMask = saturate(1.0f - vortexDistance);
+    vortexMask = vortexMask * vortexMask *
+                 (3.0f - 2.0f * vortexMask) * packetExists * windActivity;
+
+    float2 fromVortex =
+        windDir * localAlong + crossWindDir * localCross;
+    float fromVortexLength = max(length(fromVortex), 0.001f);
+    float2 radialDirection = fromVortex / fromVortexLength;
+    float spinDirection = bandRandom < 0.5f ? -1.0f : 1.0f;
+    float2 vortexTangent =
+        float2(-radialDirection.y, radialDirection.x) * spinDirection;
+    float vortexRing = saturate(vortexDistance * 2.4f);
+    float vortexAmplitude = lerp(0.035f, 0.155f, windStrength);
+    float2 vortexOffset =
+        (vortexTangent * lerp(0.35f, 1.0f, vortexRing) + windDir * 0.42f) *
+        vortexAmplitude * vortexMask * surfaceFlex * windTipWeight;
+    windOffset += vortexOffset;
+
+    worldPos.xz += windOffset;
+    worldPos.y -= length(windOffset) * lerp(0.08f, 0.22f, windStrength);
 
     output.position = mul(mul(worldPos, View), Projection);
 
@@ -117,9 +196,9 @@ VS_OUTPUT main(VS_INPUT input) {
                                      normalize(world3x3[1]),
                                      normalize(world3x3[2]));
     float3 normal = normalize(mul(input.normal, rotationOnly));
-    float2 leanTotal = bendDirection * bend * 0.85f + windDir * windSway * 3.6f;
+    float2 leanTotal = bendDirection * bend * 0.85f + windOffset * 3.6f;
     normal = normalize(normal + float3(-leanTotal.x,
-                                       (bend + abs(windSway)) * 0.3f,
+                                       (bend + length(windOffset)) * 0.3f,
                                        -leanTotal.y));
     output.normal = normal;
     output.texCoord = input.texCoord;
