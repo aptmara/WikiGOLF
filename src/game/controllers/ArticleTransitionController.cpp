@@ -29,7 +29,7 @@ namespace game::controllers {
 
 namespace {
 
-constexpr float kIntroductionCameraMoveDuration = 1.5f;
+constexpr float kIntroductionGroundClearance = 2.0f;
 constexpr float kIntroductionSkipX = 990.0f;
 constexpr float kIntroductionSkipY = 646.0f;
 constexpr float kIntroductionSkipWidth = 240.0f;
@@ -51,6 +51,10 @@ long long ElapsedMs(const std::chrono::steady_clock::time_point& startedAt) {
 
 ArticleTransitionController::ArticleTransitionController() = default;
 ArticleTransitionController::~ArticleTransitionController() = default;
+
+bool ArticleTransitionController::IsCourseIntroductionActive() const {
+    return m_phase == Phase::CourseIntroduction;
+}
 
 void ArticleTransitionController::Initialize(core::GameContext& ctx) {
     // UIスタイルの構築
@@ -573,6 +577,8 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     const scenes::CourseIntroductionData& data =
         m_pageLoader->GetCourseIntroductionData();
     const float teeZ = -data.fieldDepth * 0.4f;
+    const DirectX::XMFLOAT3 teeCameraPosition = {0.0f, 18.0f, teeZ - 22.0f};
+    const DirectX::XMFLOAT3 teeFocusPosition = {0.0f, 1.0f, teeZ + 12.0f};
     const auto featured = game::utils::SelectFeaturedCourseHoles(
         data.holes, 0.0f, teeZ, 5);
     LOG_INFO("Transition",
@@ -674,8 +680,8 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
 
     IntroductionShot ready;
     ready.kind = IntroductionShotKind::ReturnToTee;
-    ready.cameraPosition = {0.0f, 18.0f, teeZ - 22.0f};
-    ready.focusPosition = {0.0f, 1.0f, teeZ + 12.0f};
+    ready.cameraPosition = teeCameraPosition;
+    ready.focusPosition = teeFocusPosition;
     ready.label = L"READY";
     ready.title = L"TEE OFF";
     ready.body = L"価値の高いホールを狙って、目的記事を目指しましょう。";
@@ -689,6 +695,24 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     if (auto* background = ctx.world.Get<components::MeshRenderer>(m_bgEntity)) {
         background->isVisible = false;
     }
+    m_introductionShotIndex = 0;
+    m_introductionShotTimer = 0.0f;
+    m_introductionCameraStart = teeCameraPosition;
+    m_introductionFocusStart = teeFocusPosition;
+    if (auto* transform = ctx.world.Get<components::Transform>(m_targetCam)) {
+        transform->position = m_introductionCameraStart;
+        const DirectX::XMVECTOR eye =
+            DirectX::XMLoadFloat3(&m_introductionCameraStart);
+        const DirectX::XMVECTOR focus =
+            DirectX::XMLoadFloat3(&m_introductionFocusStart);
+        const DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
+            eye, focus, DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+        DirectX::XMStoreFloat4(
+            &transform->rotation,
+            DirectX::XMQuaternionRotationMatrix(
+                DirectX::XMMatrixInverse(nullptr, view)));
+    }
+
     if (auto* transitionCamera = ctx.world.Get<components::Camera>(m_cameraEntity)) {
         transitionCamera->isMainCamera = false;
     }
@@ -700,11 +724,6 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     ctx.input.SetMouseCursorLocked(false);
 
     m_phase = Phase::CourseIntroduction;
-    m_introductionShotIndex = 0;
-    m_introductionShotTimer = 0.0f;
-    if (auto* transform = ctx.world.Get<components::Transform>(m_targetCam)) {
-        m_introductionCameraFrom = transform->position;
-    }
     ApplyCourseIntroductionShot(ctx);
 }
 
@@ -737,20 +756,75 @@ void ArticleTransitionController::UpdateCourseIntroduction(
 
     m_introductionShotTimer += dt;
     const IntroductionShot& shot = m_introductionShots[m_introductionShotIndex];
-    const float rawT = std::clamp(
-        m_introductionShotTimer / kIntroductionCameraMoveDuration, 0.0f, 1.0f);
-    const float easedT = rawT * rawT * (3.0f - 2.0f * rawT);
+    const float pathT = std::clamp(
+        m_introductionShotTimer / std::max(shot.duration, 0.001f), 0.0f, 1.0f);
+
+    const auto cameraWaypoint = [&](std::size_t waypointIndex) {
+        if (waypointIndex == 0) {
+            return m_introductionCameraStart;
+        }
+        return m_introductionShots[waypointIndex - 1].cameraPosition;
+    };
+    const auto focusWaypoint = [&](std::size_t waypointIndex) {
+        if (waypointIndex == 0) {
+            return m_introductionFocusStart;
+        }
+        return m_introductionShots[waypointIndex - 1].focusPosition;
+    };
+
+    const std::size_t segmentStart = m_introductionShotIndex;
+    const std::size_t lastWaypoint = m_introductionShots.size();
+    const std::size_t previousWaypoint =
+        segmentStart > 0 ? segmentStart - 1 : 0;
+    const std::size_t nextWaypoint =
+        std::min(segmentStart + 2, lastWaypoint);
+
+    const DirectX::XMFLOAT3 cameraP0 = cameraWaypoint(previousWaypoint);
+    const DirectX::XMFLOAT3 cameraP1 = cameraWaypoint(segmentStart);
+    const DirectX::XMFLOAT3 cameraP2 = cameraWaypoint(segmentStart + 1);
+    const DirectX::XMFLOAT3 cameraP3 = cameraWaypoint(nextWaypoint);
+    const DirectX::XMVECTOR curvedCameraPosition = DirectX::XMVectorCatmullRom(
+        DirectX::XMLoadFloat3(&cameraP0), DirectX::XMLoadFloat3(&cameraP1),
+        DirectX::XMLoadFloat3(&cameraP2), DirectX::XMLoadFloat3(&cameraP3),
+        pathT);
+
+    const DirectX::XMFLOAT3 focusP0 = focusWaypoint(previousWaypoint);
+    const DirectX::XMFLOAT3 focusP1 = focusWaypoint(segmentStart);
+    const DirectX::XMFLOAT3 focusP2 = focusWaypoint(segmentStart + 1);
+    const DirectX::XMFLOAT3 focusP3 = focusWaypoint(nextWaypoint);
+    const DirectX::XMVECTOR curvedFocus = DirectX::XMVectorCatmullRom(
+        DirectX::XMLoadFloat3(&focusP0), DirectX::XMLoadFloat3(&focusP1),
+        DirectX::XMLoadFloat3(&focusP2), DirectX::XMLoadFloat3(&focusP3),
+        pathT);
+
+    const float heightT = pathT * pathT * (3.0f - 2.0f * pathT);
+    DirectX::XMFLOAT3 safeCameraPosition;
+    DirectX::XMStoreFloat3(&safeCameraPosition, curvedCameraPosition);
+    safeCameraPosition.y = cameraP1.y +
+        (cameraP2.y - cameraP1.y) * heightT;
+    safeCameraPosition.y = std::max(
+        safeCameraPosition.y,
+        m_pageLoader->GetTerrainVisualHeight(safeCameraPosition.x,
+                                             safeCameraPosition.z) +
+            kIntroductionGroundClearance);
+
+    DirectX::XMFLOAT3 safeFocusPosition;
+    DirectX::XMStoreFloat3(&safeFocusPosition, curvedFocus);
+    safeFocusPosition.y = focusP1.y + (focusP2.y - focusP1.y) * heightT;
+    safeFocusPosition.y = std::max(
+        safeFocusPosition.y,
+        m_pageLoader->GetTerrainVisualHeight(safeFocusPosition.x,
+                                             safeFocusPosition.z));
+
+    const DirectX::XMVECTOR cameraPosition =
+        DirectX::XMLoadFloat3(&safeCameraPosition);
+    const DirectX::XMVECTOR focus =
+        DirectX::XMLoadFloat3(&safeFocusPosition);
+
     if (auto* transform = ctx.world.Get<components::Transform>(m_targetCam)) {
-        transform->position.x = m_introductionCameraFrom.x +
-            (shot.cameraPosition.x - m_introductionCameraFrom.x) * easedT;
-        transform->position.y = m_introductionCameraFrom.y +
-            (shot.cameraPosition.y - m_introductionCameraFrom.y) * easedT;
-        transform->position.z = m_introductionCameraFrom.z +
-            (shot.cameraPosition.z - m_introductionCameraFrom.z) * easedT;
+        DirectX::XMStoreFloat3(&transform->position, cameraPosition);
 
         const DirectX::XMVECTOR eye = DirectX::XMLoadFloat3(&transform->position);
-        const DirectX::XMVECTOR focus =
-            DirectX::XMLoadFloat3(&shot.focusPosition);
         const DirectX::XMVECTOR direction = DirectX::XMVectorSubtract(focus, eye);
         if (DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(direction)) > 0.001f) {
             const DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH(
@@ -772,9 +846,6 @@ void ArticleTransitionController::UpdateCourseIntroduction(
         return;
     }
     m_introductionShotTimer = 0.0f;
-    if (auto* transform = ctx.world.Get<components::Transform>(m_targetCam)) {
-        m_introductionCameraFrom = transform->position;
-    }
     ApplyCourseIntroductionShot(ctx);
 }
 

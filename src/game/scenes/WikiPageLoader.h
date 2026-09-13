@@ -256,6 +256,9 @@ public:
         return m_courseIntroductionData;
     }
 
+    /** @brief 指定したワールド座標の描画上の地表高を取得します。*/
+    float GetTerrainVisualHeight(float x, float z) const;
+
 private:
     /**
      * @brief 生成済みのページ関連エンティティを破棄します。

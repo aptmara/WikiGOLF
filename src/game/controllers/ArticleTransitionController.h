@@ -45,6 +45,9 @@ public:
     /** @brief 現在トランジション中かどうか*/
     bool IsActive() const { return m_isActive; }
 
+    /** @brief コース紹介カメラの再生中かどうか*/
+    bool IsCourseIntroductionActive() const;
+
 private:
     void SpawnEntities(core::GameContext& ctx);
     void DestroyEntities(core::GameContext& ctx);
@@ -127,7 +130,8 @@ private:
     std::vector<IntroductionShot> m_introductionShots;
     size_t m_introductionShotIndex = 0;
     float m_introductionShotTimer = 0.0f;
-    DirectX::XMFLOAT3 m_introductionCameraFrom{};
+    DirectX::XMFLOAT3 m_introductionCameraStart{};
+    DirectX::XMFLOAT3 m_introductionFocusStart{};
 
     // エンティティ
     ecs::Entity m_globeEntity = UINT32_MAX;

@@ -147,6 +147,14 @@ void WikiPageLoader::ClearStartPin(core::GameContext& ctx, ecs::Entity ballEntit
     }
 }
 
+float WikiPageLoader::GetTerrainVisualHeight(float x, float z) const
+{
+    const float terrainHeight = m_terrainSystem
+        ? m_terrainSystem->GetHeight(x, z)
+        : 0.0f;
+    return game::physics::ToVisualSurfaceHeight(terrainHeight);
+}
+
 void WikiPageLoader::PlaceBallAtStartTee(
     core::GameContext& ctx, ecs::Entity ballEntity, float groundZ,
     controllers::MinimapController* minimapController,
