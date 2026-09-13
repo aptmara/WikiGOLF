@@ -62,6 +62,7 @@ constexpr int kLayerShotButton  = 120; // ショットボタン
 constexpr int kLayerControlHint = 125; // 操作ヘルプ
 constexpr int kLayerJudge       = 130;
 constexpr int kLayerOverlay     = 200;
+constexpr int kLayerMinimapHover = kLayerOverlay + 20;
 
 // =========================================================
 // 記事HUD (右上) - 参考HUDの残距離表示位置をCURRENT/TARGETへ転用
@@ -150,10 +151,11 @@ constexpr float kControlHintFont    = 12.0f;
 // =========================================================
 // ミニマップ (右下・縦長) - 1280x720固定
 // =========================================================
-constexpr float kMinimapX           = 930.0f;
-constexpr float kMinimapY           = 274.0f;
-constexpr float kMinimapWidth       = 300.0f;
-constexpr float kMinimapHeight      = 370.0f;
+constexpr float kMinimapX           = 922.0f;
+constexpr float kMinimapY           = 266.0f;
+constexpr float kMinimapWidth       = 316.0f;
+constexpr float kMinimapHeight      = 386.0f;
+constexpr float kMinimapFrameInset  = 6.0f;
 constexpr float kMinimapMarkerSize  = 18.0f;
 
 // =========================================================

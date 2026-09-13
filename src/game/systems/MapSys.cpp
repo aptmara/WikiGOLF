@@ -163,7 +163,8 @@ XMMATRIX MapSys::GetViewMatrix(float cx, float cz, float h) {
 }
 
 XMMATRIX MapSys::GetProjMatrix(float w, float d) {
-  return XMMatrixOrthographicLH(w * 1.2f, d * 1.2f, 0.1f, 1000.0f);
+  return XMMatrixOrthographicLH(w * 1.2f, d * 1.2f, 0.1f,
+                                ComputeMinimapFarPlane(w, d));
 }
 
 struct MapVSConst {
@@ -223,12 +224,24 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
   float viewSpan = extent / zoom;
   viewSpan = std::clamp(viewSpan, 5.0f, extent * 6.0f);
 
-  float height = (std::max)(viewSpan * heightScale, 5.0f);
   float orthoWidth = (std::max)(viewSpan * orthoPadding, viewSpan * 0.5f);
+  float orthoDepth = orthoWidth;
+  if (params.visibleWidth > 0.0f && params.visibleDepth > 0.0f) {
+    orthoWidth = params.visibleWidth;
+    orthoDepth = params.visibleDepth;
+  }
+  float height = (std::max)(std::max(orthoWidth, orthoDepth) * heightScale,
+                            5.0f);
 
   XMMATRIX v = XMMatrixTranspose(
       GetViewMatrix(params.center.x, params.center.z, height));
-  XMMATRIX p = XMMatrixTranspose(GetProjMatrix(orthoWidth, orthoWidth));
+  float projWidth = orthoWidth;
+  float projDepth = orthoDepth;
+  if (params.visibleWidth > 0.0f && params.visibleDepth > 0.0f) {
+    projWidth /= 1.2f;
+    projDepth /= 1.2f;
+  }
+  XMMATRIX p = XMMatrixTranspose(GetProjMatrix(projWidth, projDepth));
 
   auto shaderHandle = ctx.resource.LoadShader(
       "Minimap", L"Assets/shaders/MinimapVS.hlsl", L"Assets/shaders/MinimapPS.hlsl");
@@ -264,6 +277,8 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
           return;
         if (r.minimapMode == components::MinimapRenderMode::None)
           return;
+        if (r.minimapMode != components::MinimapRenderMode::VertexColor)
+          return;
         // 専用のミニマップメッシュ（間引き済み）が設定されていないエンティティは、
         // 本描画用フル解像度メッシュを誤って使わないよう安全に除外する。
         if (!r.minimapMesh.IsValid())
@@ -271,7 +286,7 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
 
         const float cullMargin = 12.0f;
         if (std::abs(t.position.x - params.center.x) > orthoWidth * 0.5f + cullMargin ||
-            std::abs(t.position.z - params.center.z) > orthoWidth * 0.5f + cullMargin) {
+            std::abs(t.position.z - params.center.z) > orthoDepth * 0.5f + cullMargin) {
           return;
         }
 

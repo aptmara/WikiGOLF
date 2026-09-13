@@ -10,6 +10,7 @@
 #include "../systems/MapSys.h"
 #include "../utils/MapViewState.h"
 #include <DirectXMath.h>
+#include <array>
 #include <memory>
 #include <vector>
 #include <string>
@@ -72,7 +73,15 @@ public:
   // ------------------------------------------------------------------
 
   /** @brief 右上ミニマップの更新（マーカー等のUI更新と描画リクエストの発行のみ行う）*/
-  void UpdateMinimap(core::GameContext &ctx, float fieldWidth, float fieldDepth, const DirectX::XMFLOAT3& shotDirection);
+  void UpdateMinimap(core::GameContext &ctx, float fieldWidth,
+                     float fieldDepth,
+                     const std::vector<ecs::Entity> &trajectoryEntities);
+
+  /** @brief 右下固定マップ内のスクリーン座標を地表ワールド座標へ変換します。*/
+  bool TryGetHudMapWorldPosition(core::GameContext &ctx, int mouseX,
+                                 int mouseY, float fieldWidth,
+                                 float fieldDepth,
+                                 DirectX::XMFLOAT3 &outWorldPosition) const;
 
   /**
    * @brief レンダーフェーズ内で呼び出し、保留中のミニマップGPU描画を実行する
@@ -89,6 +98,9 @@ public:
                     float fieldWidth, float fieldDepth,
                     ecs::Entity skyboxEntity,
                     const InputPermissions& permissions = {});
+
+  /** @brief ポインターが旗表示トグル上にあるかを返します。*/
+  bool IsPointerOverFlagFilters(int mouseX, int mouseY) const;
 
   // ------------------------------------------------------------------
   // イベント・状態操作
@@ -215,10 +227,35 @@ private:
   ecs::Entity m_minimapMarkerEntity = UINT32_MAX;      ///< 自ボール用内側ドットマーカー（●）
   ecs::Entity m_minimapBallIconEntity = UINT32_MAX;    ///< 自ボール用画像アイコンです。
   ecs::Entity m_minimapPulseMarkerEntity = UINT32_MAX; ///< 自ボール用外側パルスサークル（○）
-  ecs::Entity m_minimapFlagMarkerEntity = UINT32_MAX;  ///< ターゲットピン用パルスマーカー（）
   ecs::Entity m_aimPinMarkerEntity = UINT32_MAX;       ///< エイムピン(中クリック設置)用マーカー
   std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）
   ecs::Entity m_minimapHelpEntity = UINT32_MAX;
+  ecs::Entity m_holeHoverLabelEntity = UINT32_MAX;
+
+  static constexpr size_t kFlagFilterCount = 6;
+  struct FlagFilterToggle {
+    ecs::Entity entity = UINT32_MAX;
+    float x = 0.0f;
+    float y = 0.0f;
+    float width = 0.0f;
+    float height = 0.0f;
+    size_t filterIndex = 0;
+    std::wstring label;
+  };
+  ecs::Entity m_flagFilterDropdownEntity = UINT32_MAX;
+  float m_flagFilterDropdownX = 0.0f;
+  float m_flagFilterDropdownY = 0.0f;
+  float m_flagFilterDropdownWidth = 0.0f;
+  float m_flagFilterDropdownHeight = 0.0f;
+  bool m_flagFilterDropdownOpen = false;
+  std::vector<FlagFilterToggle> m_flagFilterToggles;
+  // ページ移動では維持し、ゲームシーン再生成時だけこの初期値へ戻す。
+  std::array<bool, kFlagFilterCount> m_flagFilterEnabled = {
+      true, true, false, false, false, false};
+  std::array<bool, kFlagFilterCount> m_flagFilterAvailable = {};
+
+  /** @brief 旗の存在数・選択状態をトグル表示へ反映します。*/
+  void UpdateFlagFilterToggles(core::GameContext &ctx);
 
   // 着弾点プレビュー(トップビュー専用)
   ecs::Entity m_landingPreviewRangeEntity = UINT32_MAX;  ///< ばらつき範囲円（大きな○）

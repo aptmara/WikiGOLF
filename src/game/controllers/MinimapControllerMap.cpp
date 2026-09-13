@@ -9,14 +9,18 @@
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include "../components/Camera.h"
+#include "../components/MeshRenderer.h"
 #include "../components/Skybox.h"
 #include "../components/WikiComponents.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
+#include "../../core/StringUtils.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../ecs/World.h"
 #include "../utils/ScreenRaycast.h"
+#include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/UIConstants.h"
+#include "../scenes/HoleVisualRules.h"
 #include <algorithm>
 #include <cmath>
 #include <format>
@@ -38,10 +42,72 @@ namespace {
 constexpr float kGlyphOpticalCenterCorrection = 0.12f; // グリフサイズに対する比率
 } // namespace
 
+bool MinimapController::TryGetHudMapWorldPosition(
+    core::GameContext &ctx, int mouseX, int mouseY, float fieldWidth,
+    float fieldDepth, DirectX::XMFLOAT3 &outWorldPosition) const {
+  if (m_isMapView || !m_isVisible || !m_cfg.terrain) {
+    return false;
+  }
+  const auto *mapImage = ctx.world.Get<UIImage>(m_minimapEntity);
+  if (!mapImage || !mapImage->visible) {
+    return false;
+  }
+
+  const MapHoleIcon *hoveredHole = nullptr;
+  for (const auto &icon : m_mapHoleIcons) {
+    const auto *iconImage = ctx.world.Get<UIImage>(icon.iconEntity);
+    if (!iconImage || !iconImage->visible) {
+      continue;
+    }
+    const minimap_detail::MarkerBounds iconBounds{
+        iconImage->x, iconImage->y, iconImage->width, iconImage->height};
+    if (minimap_detail::ContainsScreenPoint(
+            iconBounds, static_cast<float>(mouseX),
+            static_cast<float>(mouseY), 3.0f)) {
+      hoveredHole = &icon;
+    }
+  }
+  if (hoveredHole) {
+    const float worldX = hoveredHole->worldPos.x;
+    const float worldZ = hoveredHole->worldPos.y;
+    outWorldPosition = {
+        worldX,
+        game::physics::ToVisualSurfaceHeight(
+            m_cfg.terrain->GetHeight(worldX, worldZ)),
+        worldZ};
+    return true;
+  }
+
+  minimap_detail::MarkerBounds bounds{mapImage->x, mapImage->y,
+                                       mapImage->width, mapImage->height};
+  const auto params =
+      minimap_detail::BuildHudMinimapParams(fieldWidth, fieldDepth);
+  float worldX = 0.0f;
+  float worldZ = 0.0f;
+  if (!minimap_detail::UnprojectHudMinimap(
+          static_cast<float>(mouseX), static_cast<float>(mouseY), bounds,
+          params, worldX, worldZ)) {
+    return false;
+  }
+  constexpr float edgeInset = 0.01f;
+  if (std::abs(worldX) > fieldWidth * 0.5f - edgeInset ||
+      std::abs(worldZ) > fieldDepth * 0.5f - edgeInset) {
+    return false;
+  }
+  outWorldPosition = {
+      worldX,
+      game::physics::ToVisualSurfaceHeight(m_cfg.terrain->GetHeight(worldX,
+                                                                    worldZ)),
+      worldZ};
+  return true;
+}
+
 /**
  * @brief ミニマップおよびインジケーターの表示を更新します。
 */
-void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, float fieldDepth, const DirectX::XMFLOAT3& shotDirection) {
+void MinimapController::UpdateMinimap(
+    core::GameContext &ctx, float fieldWidth, float fieldDepth,
+    const std::vector<ecs::Entity> &trajectoryEntities) {
   if (!m_minimapRenderer)
     return;
 
@@ -66,8 +132,7 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     params = minimap_detail::BuildMapViewParams(
         m_mapCenter, m_mapZoom, fieldWidth, fieldDepth);
   } else {
-    params = minimap_detail::BuildHudMinimapParams(
-        ctx, m_cfg.ballEntity, fieldWidth, fieldDepth);
+    params = minimap_detail::BuildHudMinimapParams(fieldWidth, fieldDepth);
   }
 
   // マップビュー中はメインカメラが俯瞰映像を描画するため、オフスクリーン描画は不要
@@ -108,7 +173,6 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     m_minimapRenderPending = false;
   }
 
-  const float clipWidth = minimap_detail::ComputeMinimapWorldSpan(params);
   minimap_detail::MarkerBounds mapBounds;
   if (m_isMapView) {
     mapBounds = minimap_detail::GetMapViewMarkerBounds();
@@ -193,14 +257,30 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     }
   }
 
-  // ホール（カップ）アイコンのミニマップ投影座標更新およびフラッグアニメーション
+  std::string hoveredLink;
+  float hoveredIconX = 0.0f;
+  float hoveredIconY = 0.0f;
+  const auto mousePosition = ctx.input.GetMousePosition();
+  UpdateFlagFilterToggles(ctx);
+  const auto visibleFlagKinds = minimap_detail::ResolveFlagVisibility(
+      m_flagFilterEnabled, m_flagFilterAvailable);
+
+  // 全ホールの投影と、右下マップ上でのリンク名ホバー判定。
   for (auto &icon : m_mapHoleIcons) {
     if (auto *iconUI = ctx.world.Get<UIImage>(icon.iconEntity)) {
+      const size_t filterIndex = static_cast<size_t>(
+          minimap_detail::ClassifyFlag(icon.isTarget, icon.hopsToTarget));
+      const bool filterEnabled =
+          filterIndex < visibleFlagKinds.size() &&
+          visibleFlagKinds[filterIndex];
+      iconUI->grayscaleTint = true;
+      iconUI->tintColor = game::scenes::HoleVisualRules::GetColor(
+          icon.isTarget, icon.hopsToTarget);
       if (markerSurfaceVisible) {
         float u = 0.0f;
         float v = 0.0f;
         if (minimap_detail::ProjectToMinimap(icon.worldPos.x, icon.worldPos.y, params, u, v)) {
-          float normalSize = 12.0f;
+          float normalSize = 14.0f;
           if (icon.isPlayable) {
             normalSize = 20.0f;
           }
@@ -229,29 +309,21 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
           } else {
             iconUI->alpha = 0.18f;
           }
-          iconUI->visible = markerSurfaceVisible && !m_isMapView && icon.isPlayable;
-
-          if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {
-            if (auto *flagTxt = ctx.world.Get<UIText>(m_minimapFlagMarkerEntity)) {
-              flagTxt->x = mapBounds.x + u * mapBounds.width - 8.0f;
-              flagTxt->y = mapBounds.y + v * mapBounds.height - 12.0f;
-              flagTxt->visible = !m_isMapView && markerSurfaceVisible;
-
-              float flagPulse = 1.0f + 0.16f * std::sin(m_markerPulseTimer * 2.8f);
-              const float flagSize = game::ui::kMinimapMarkerSize * flagPulse;
-              flagTxt->width = flagSize;
-              flagTxt->height = flagSize;
-              flagTxt->style.fontSize = flagSize;
-              flagTxt->style.color = {1.0f, 0.2f, 0.2f, 1.0f};
-            }
+          iconUI->visible =
+              markerSurfaceVisible && !m_isMapView && filterEnabled;
+          const minimap_detail::MarkerBounds iconBounds{
+              iconUI->x, iconUI->y, iconUI->width, iconUI->height};
+          if (iconUI->visible && minimap_detail::ContainsScreenPoint(
+                                     iconBounds,
+                                     static_cast<float>(mousePosition.x),
+                                     static_cast<float>(mousePosition.y),
+                                     3.0f)) {
+            hoveredLink = icon.linkTarget;
+            hoveredIconX = iconUI->x + iconUI->width * 0.5f;
+            hoveredIconY = iconUI->y;
           }
         } else {
           iconUI->visible = false;
-          if (icon.isTarget && m_minimapFlagMarkerEntity != UINT32_MAX) {
-            if (auto *flagTxt = ctx.world.Get<UIText>(m_minimapFlagMarkerEntity)) {
-              flagTxt->visible = false;
-            }
-          }
         }
       } else {
         iconUI->visible = false;
@@ -259,29 +331,52 @@ void MinimapController::UpdateMinimap(core::GameContext &ctx, float fieldWidth, 
     }
   }
 
-  // ショット方向案内用のガイドドットの投影座標更新
-  if (!m_isMapView && ui && ballT) { // 通常のHUDミニマップ時のみガイドを描画
-    XMVECTOR dirVec = XMVector3Normalize(XMLoadFloat3(&shotDirection));
-    float step = clipWidth * 0.075f; // ミニマップのズームスケールに応じたドット間隔
+  if (auto *hoverLabel = ctx.world.Get<UIText>(m_holeHoverLabelEntity)) {
+    hoverLabel->visible = !hoveredLink.empty() && !m_isMapView && m_isVisible;
+    if (hoverLabel->visible) {
+      hoverLabel->text = core::ToWString(hoveredLink);
+      hoverLabel->width = std::clamp(
+          36.0f + static_cast<float>(hoverLabel->text.size()) * 13.0f,
+          110.0f, 286.0f);
+      hoverLabel->x = std::clamp(
+          hoveredIconX - hoverLabel->width * 0.5f, mapBounds.x + 4.0f,
+          mapBounds.x + mapBounds.width - hoverLabel->width - 4.0f);
+      hoverLabel->y = std::max(mapBounds.y + 4.0f,
+                               hoveredIconY - hoverLabel->height - 6.0f);
+    }
+  }
 
+  // TrajectoryPredictorの実軌道点を、地形・ホールより前面へ投影する。
+  if (!m_isMapView && ui) {
     for (size_t i = 0; i < m_minimapGuideDotEntities.size(); ++i) {
-      if (auto *dot = ctx.world.Get<UIText>(m_minimapGuideDotEntities[i])) {
-        float offsetDist = step * (i + 1);
-        XMVECTOR dotPosVec = XMVectorAdd(XMLoadFloat3(&ballT->position), XMVectorScale(dirVec, offsetDist));
-        XMFLOAT3 dotPos;
-        XMStoreFloat3(&dotPos, dotPosVec);
-
-        float u = 0.0f;
-        float v = 0.0f;
-        if (minimap_detail::ProjectToMinimap(dotPos.x, dotPos.z, params, u, v) &&
-            u >= 0.02f && u <= 0.98f && v >= 0.02f && v <= 0.98f) {
-          dot->x = mapBounds.x + u * mapBounds.width - 5.0f;
-          dot->y = mapBounds.y + v * mapBounds.height - 5.0f;
-          dot->visible = ui->visible;
-        } else {
-          dot->visible = false;
-        }
+      auto *dot = ctx.world.Get<UIText>(m_minimapGuideDotEntities[i]);
+      if (!dot) continue;
+      dot->visible = false;
+      if (i >= trajectoryEntities.size()) continue;
+      const auto *trajectoryTransform =
+          ctx.world.Get<Transform>(trajectoryEntities[i]);
+      const auto *trajectoryRenderer =
+          ctx.world.Get<MeshRenderer>(trajectoryEntities[i]);
+      if (!trajectoryTransform || !trajectoryRenderer ||
+          !trajectoryRenderer->isVisible) {
+        continue;
       }
+      float u = 0.0f;
+      float v = 0.0f;
+      if (!minimap_detail::ProjectToMinimap(
+              trajectoryTransform->position.x, trajectoryTransform->position.z,
+              params, u, v)) {
+        continue;
+      }
+      const float size = std::max(4.0f, 8.0f - static_cast<float>(i) * 0.12f);
+      dot->width = size;
+      dot->height = size;
+      dot->style.fontSize = size;
+      dot->style.color.w =
+          std::max(0.28f, 0.95f - static_cast<float>(i) * 0.022f);
+      dot->x = mapBounds.x + u * mapBounds.width - size * 0.5f;
+      dot->y = mapBounds.y + v * mapBounds.height - size * 0.5f;
+      dot->visible = ui->visible;
     }
   } else {
     for (auto dotEntity : m_minimapGuideDotEntities) {

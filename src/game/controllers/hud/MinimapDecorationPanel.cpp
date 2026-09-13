@@ -19,10 +19,10 @@ void MinimapDecorationPanel::Initialize(core::GameContext &ctx) {
 
   ecs::Entity entity = m_entityOwner.Create(ctx.world);
   auto &panel = ctx.world.Add<game::components::UIText>(entity);
-  panel.x = x - 14.0f;
-  panel.y = y - 14.0f;
-  panel.width = width + 28.0f;
-  panel.height = height + 28.0f;
+  panel.x = x - game::ui::kMinimapFrameInset;
+  panel.y = y - game::ui::kMinimapFrameInset;
+  panel.width = width + game::ui::kMinimapFrameInset * 2.0f;
+  panel.height = height + game::ui::kMinimapFrameInset * 2.0f;
   panel.style.bgColor = {0.84f, 0.91f, 0.82f, 0.30f};
   panel.style.borderWidth = 5.0f;
   panel.style.borderColor = {1.0f, 1.0f, 1.0f, 0.95f};
@@ -35,7 +35,7 @@ void MinimapDecorationPanel::Initialize(core::GameContext &ctx) {
   entity = m_entityOwner.Create(ctx.world);
   auto &north = ctx.world.Add<game::components::UIText>(entity);
   north.text = L"N\n▲";
-  north.x = x + width - 34.0f;
+  north.x = x + 10.0f;
   north.y = y + 10.0f;
   north.width = 24.0f;
   north.height = 34.0f;

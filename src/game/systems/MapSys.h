@@ -5,6 +5,7 @@
 */
 
 #include <DirectXMath.h>
+#include <algorithm>
 #include <d3d11.h>
 #include <wrl/client.h>
 
@@ -18,12 +19,18 @@ struct GameContext;
 
 namespace game::systems {
 
+inline float ComputeMinimapFarPlane(float width, float depth) {
+  return std::max(1000.0f, std::max(width, depth) * 4.0f + 100.0f);
+}
+
 struct MapRenderParams {
   DirectX::XMFLOAT3 center = {0.0f, 0.0f, 0.0f};
   float extent = 50.0f;          /**< フィールドの代表的な広さ（幅・奥行の最大）*/
   float zoom = 1.0f;             /**< ズーム倍率（1.0が基準）*/
   float heightScale = 2.0f;      /**< 俯瞰高さの倍率（extent * zoom * heightScale）*/
   float orthoPadding = 1.2f;     /**< 正射影の幅/高さに掛ける余裕倍率*/
+  float visibleWidth = 0.0f;     /**< 0より大きければ固定投影のワールド横幅*/
+  float visibleDepth = 0.0f;     /**< 0より大きければ固定投影のワールド奥行き*/
   bool highlightBall = true;     /**< ボールを強調表示するか*/
   bool cullSkybox = true;        /**< スカイボックスを描画対象から除外するか*/
 };

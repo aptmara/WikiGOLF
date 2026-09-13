@@ -4,6 +4,7 @@
 */
 
 #include "TerrainLayoutRules.h"
+#include "TerrainMaterialAssets.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -12,7 +13,7 @@ namespace game::systems {
 namespace {
 
 constexpr float kTerrainVertexSpacing = 0.8f;
-constexpr int kMinimapTileGridRes = 8;
+constexpr int kMinimapTileGridRes = 32;
 
 float LerpValue(float left, float right, float amount) {
     return left + (right - left) * amount;
@@ -86,6 +87,11 @@ std::vector<graphics::Vertex> TerrainLayoutRules::BuildMinimapTerrainGrid(
             sourceX = std::clamp(sourceX, 0, sourceResolutionX - 1);
             graphics::Vertex vertex =
                 source[sourceZ * sourceResolutionX + sourceX];
+            const auto materialId = static_cast<std::uint8_t>(std::clamp(
+                static_cast<int>(vertex.color.w * 255.0f), 0, 7));
+            const auto materialColor = TerrainMaterialMapColor(materialId);
+            vertex.color = {materialColor.x, materialColor.y,
+                            materialColor.z, 1.0f};
             vertex.normal = {0.0f, 1.0f, 0.0f};
             vertex.tangent = {1.0f, 0.0f, 0.0f};
             vertex.bitangent = {0.0f, 0.0f, 1.0f};

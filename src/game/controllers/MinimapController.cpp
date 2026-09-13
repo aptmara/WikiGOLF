@@ -32,7 +32,9 @@ using namespace game::components;
 void MinimapController::Initialize(Config cfg, core::GameContext &ctx) {
   m_cfg = cfg;
   m_minimapRenderer = std::make_unique<game::systems::MapSys>();
-  m_minimapRenderer->Initialize(ctx.graphics.GetDevice(), 256, 256);
+  m_minimapRenderer->Initialize(
+      ctx.graphics.GetDevice(), static_cast<int>(game::ui::kMinimapWidth),
+      static_cast<int>(game::ui::kMinimapHeight));
 
   // 変化駆動レンダリングの状態をリセット（初回は必ず1回描画させる）
   m_minimapHasRenderedOnce = false;
@@ -57,9 +59,9 @@ void MinimapController::Shutdown(core::GameContext &ctx) {
   m_minimapMarkerEntity = UINT32_MAX;
   m_minimapBallIconEntity = UINT32_MAX;
   m_minimapPulseMarkerEntity = UINT32_MAX;
-  m_minimapFlagMarkerEntity = UINT32_MAX;
   m_aimPinMarkerEntity = UINT32_MAX;
   m_minimapHelpEntity = UINT32_MAX;
+  m_holeHoverLabelEntity = UINT32_MAX;
   m_landingPreviewRangeEntity = UINT32_MAX;
   m_landingPreviewCenterEntity = UINT32_MAX;
   m_mapZoomIndicatorBg = UINT32_MAX;
@@ -70,6 +72,9 @@ void MinimapController::Shutdown(core::GameContext &ctx) {
   m_mapHelpTitle = UINT32_MAX;
   m_mapOpenHintBg = UINT32_MAX;
   m_mapOpenHintText = UINT32_MAX;
+  m_flagFilterDropdownEntity = UINT32_MAX;
+  m_flagFilterDropdownOpen = false;
+  m_flagFilterToggles.clear();
 }
 
 /**
@@ -96,17 +101,28 @@ void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
         if (auto* t = ctx.world.Get<components::UIText>(e)) t->visible = v;
     };
 
-    // ミニマップ本体とマーカー類
-    setUIImg(m_minimapEntity,            visible);
+    // 表示中のマーカー・ホール・軌道はUpdateMinimapが個別に管理する。
+    // 毎フレームのSetVisible(true)で消すと、更新間引き中に点滅する。
+    setUIImg(m_minimapEntity,            visible && !m_isMapView);
+    setUITxt(m_minimapHelpEntity,        visible && !m_isMapView);
+    if (visible) {
+      UpdateFlagFilterToggles(ctx);
+      return;
+    }
+
+    // 非表示要求時だけ動的要素をすべて確実に隠す。
     setUITxt(m_minimapMarkerEntity,      false);
-    setUIImg(m_minimapBallIconEntity,    visible);
-    setUITxt(m_minimapPulseMarkerEntity, visible);
-    setUITxt(m_minimapFlagMarkerEntity,  false);
+    setUIImg(m_minimapBallIconEntity,    false);
+    setUITxt(m_minimapPulseMarkerEntity, false);
     setUITxt(m_aimPinMarkerEntity,       false);
     for (auto dotEntity : m_minimapGuideDotEntities) {
       setUITxt(dotEntity, false);
     }
-    setUITxt(m_minimapHelpEntity,        visible);
+    setUITxt(m_holeHoverLabelEntity,     false);
+    setUITxt(m_flagFilterDropdownEntity, false);
+    for (const auto& toggle : m_flagFilterToggles) {
+      setUITxt(toggle.entity, false);
+    }
 
     // ズームインジケーター
     setUITxt(m_mapZoomIndicatorBg,   false); // マップビュー時のみ表示のため常にfalse

@@ -48,6 +48,38 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
                                      float fieldWidth, float fieldDepth,
                                      ecs::Entity skyboxEntity,
                                      const InputPermissions& permissions) {
+  if (!m_isMapView && m_isVisible && ctx.input.GetMouseButtonDown(0)) {
+    const minimap_detail::MarkerBounds dropdownBounds{
+        m_flagFilterDropdownX, m_flagFilterDropdownY,
+        m_flagFilterDropdownWidth, m_flagFilterDropdownHeight};
+    if (m_flagFilterDropdownEntity != UINT32_MAX &&
+        minimap_detail::ContainsScreenPoint(
+            dropdownBounds, static_cast<float>(mouseX),
+            static_cast<float>(mouseY))) {
+      m_flagFilterDropdownOpen = !m_flagFilterDropdownOpen;
+      UpdateFlagFilterToggles(ctx);
+      return;
+    }
+
+    if (m_flagFilterDropdownOpen) {
+      for (const auto &toggle : m_flagFilterToggles) {
+        const minimap_detail::MarkerBounds bounds{
+            toggle.x, toggle.y, toggle.width, toggle.height};
+        if (!minimap_detail::ContainsScreenPoint(
+                bounds, static_cast<float>(mouseX),
+                static_cast<float>(mouseY))) {
+          continue;
+        }
+        if (m_flagFilterAvailable[toggle.filterIndex]) {
+          m_flagFilterEnabled[toggle.filterIndex] =
+              !m_flagFilterEnabled[toggle.filterIndex];
+          UpdateFlagFilterToggles(ctx);
+        }
+        return;
+      }
+    }
+  }
+
   if (ctx.input.GetKeyDown('M')) {
     if (!m_isMapView) {
       if (permissions.openWithM) {
@@ -150,6 +182,33 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
   m_prevMouseY = mouseY;
 }
 
+bool MinimapController::IsPointerOverFlagFilters(int mouseX,
+                                                 int mouseY) const {
+  if (m_isMapView || !m_isVisible) {
+    return false;
+  }
+  const minimap_detail::MarkerBounds dropdownBounds{
+      m_flagFilterDropdownX, m_flagFilterDropdownY,
+      m_flagFilterDropdownWidth, m_flagFilterDropdownHeight};
+  if (m_flagFilterDropdownEntity != UINT32_MAX &&
+      minimap_detail::ContainsScreenPoint(
+          dropdownBounds, static_cast<float>(mouseX),
+          static_cast<float>(mouseY))) {
+    return true;
+  }
+  if (!m_flagFilterDropdownOpen) {
+    return false;
+  }
+  for (const auto &toggle : m_flagFilterToggles) {
+    const minimap_detail::MarkerBounds bounds{
+        toggle.x, toggle.y, toggle.width, toggle.height};
+    if (minimap_detail::ContainsScreenPoint(
+            bounds, static_cast<float>(mouseX),
+            static_cast<float>(mouseY))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace game::controllers
-
-

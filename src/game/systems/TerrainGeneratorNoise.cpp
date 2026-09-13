@@ -4,6 +4,7 @@
 */
 
 #include "TerrainGeneratorInternals.h"
+#include "TerrainMaterialAssets.h"
 #include "TerrainGenerator.h"
 #include "../../core/Logger.h"
 #include "../../graphics/TangentGenerator.h"
@@ -81,26 +82,7 @@ float FractalNoise(float x, float z, uint32_t seed) {
 }
 
 XMFLOAT3 TerrainMaterialColor(uint8_t material) {
-  switch (material) {
-  case 0:
-    return {0.25f, 0.43f, 0.16f};
-  case 1:
-    return {0.18f, 0.32f, 0.11f};
-  case 2:
-    return {0.90f, 0.85f, 0.70f};
-  case 3:
-    return {0.30f, 0.52f, 0.19f};
-  case 4:
-    return {0.70f, 0.88f, 0.98f};
-  case 5:
-    return {0.20f, 0.45f, 0.85f};
-  case 6:
-    return {0.95f, 0.35f, 0.12f};
-  case 7:
-    return {0.50f, 0.48f, 0.52f};
-  default:
-    return {1.0f, 1.0f, 1.0f};
-  }
+  return TerrainMaterialMapColor(material);
 }
 
 float DistanceToSegment(float px, float pz, float ax, float az, float bx,

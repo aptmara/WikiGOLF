@@ -1,4 +1,5 @@
 #include "src/game/utils/MapViewState.h"
+#include "src/game/controllers/MinimapControllerInternals.h"
 #include <cmath>
 #include <iostream>
 
@@ -42,6 +43,77 @@ int main() {
   CHECK(std::abs(game::utils::CalculateMaxMapZoom(500.0f, 5.0f, 15.0f) -
                  expectedZoom) < 1e-4f,
         "CalculateMaxMapZoom scales with field extent for deep zoom");
+
+  const auto fixedMap =
+      game::controllers::minimap_detail::BuildHudMinimapParams(80.0f, 120.0f);
+  CHECK(fixedMap.center.x == 0.0f && fixedMap.center.z == 0.0f &&
+            fixedMap.visibleWidth >= 80.0f && fixedMap.visibleDepth >= 120.0f,
+        "HUD minimap keeps the whole course in a fixed centered view");
+  CHECK(game::systems::ComputeMinimapFarPlane(1200.0f, 2000.0f) > 4400.0f,
+        "minimap far plane expands beyond a large course camera height");
+  game::controllers::minimap_detail::MarkerBounds bounds{922.0f, 266.0f,
+                                                          316.0f, 386.0f};
+  CHECK(game::controllers::minimap_detail::ContainsScreenPoint(
+            {100.0f, 200.0f, 20.0f, 20.0f}, 97.0f, 210.0f, 3.0f),
+        "hole icon hit test includes hover padding");
+  CHECK(!game::controllers::minimap_detail::ContainsScreenPoint(
+             {100.0f, 200.0f, 20.0f, 20.0f}, 96.9f, 210.0f, 3.0f),
+        "hole icon hit test rejects points outside hover padding");
+  float worldX = 0.0f;
+  float worldZ = 0.0f;
+  CHECK(game::controllers::minimap_detail::UnprojectHudMinimap(
+            bounds.x + bounds.width * 0.5f,
+            bounds.y + bounds.height * 0.5f, bounds, fixedMap, worldX,
+            worldZ) &&
+            std::abs(worldX) < 1e-4f && std::abs(worldZ) < 1e-4f,
+        "HUD minimap center unprojects to the course origin");
+
+  using game::controllers::minimap_detail::ClassifyFlag;
+  using game::controllers::minimap_detail::FlagKind;
+  CHECK(ClassifyFlag(true, 0) == FlagKind::Target,
+        "target hole uses the red flag filter");
+  CHECK(ClassifyFlag(false, 1) == FlagKind::OneHop,
+        "one-hop hole uses the yellow flag filter");
+  CHECK(ClassifyFlag(false, 2) == FlagKind::TwoHops,
+        "two-hop hole uses the orange flag filter");
+  CHECK(ClassifyFlag(false, 3) == FlagKind::ThreeToFiveHops &&
+            ClassifyFlag(false, 5) == FlagKind::ThreeToFiveHops,
+        "three-to-five-hop holes use the white flag filter");
+  CHECK(ClassifyFlag(false, 6) == FlagKind::SixOrMoreHops,
+        "six-or-more-hop holes use the gray flag filter");
+  CHECK(ClassifyFlag(false, -1) == FlagKind::Unknown,
+        "unevaluated holes use the blue flag filter");
+  CHECK(game::controllers::minimap_detail::kFlagKindCount == 6,
+        "all six flag colors have a filter");
+
+  using game::controllers::minimap_detail::ResolveFlagVisibility;
+  constexpr size_t flagCount =
+      game::controllers::minimap_detail::kFlagKindCount;
+  std::array<bool, flagCount> selected = {true, true, false,
+                                          false, false, false};
+  std::array<bool, flagCount> available = {false, false, true,
+                                           true, false, true};
+  auto visible = ResolveFlagVisibility(selected, available);
+  CHECK(!visible[0] && !visible[1] && visible[2] && !visible[3] &&
+            !visible[4] && !visible[5],
+        "best available flag kind is shown when selected kinds are absent");
+  CHECK(selected[0] && selected[1] && !selected[2],
+        "temporary fallback does not alter the user selection");
+
+  selected = {false, true, false, false, false, false};
+  available = {true, true, true, true, true, true};
+  visible = ResolveFlagVisibility(selected, available);
+  CHECK(!visible[0] && visible[1] && !visible[2],
+        "an available selected kind prevents a better unselected fallback");
+
+  selected.fill(false);
+  available.fill(false);
+  visible = ResolveFlagVisibility(selected, available);
+  bool anyVisible = false;
+  for (bool flagVisible : visible) {
+    anyVisible = anyVisible || flagVisible;
+  }
+  CHECK(!anyVisible, "no fallback is shown when the course has no flags");
 
   std::cout << "All MapView utils tests passed.\n";
   return 0;
