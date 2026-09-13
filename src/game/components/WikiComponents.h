@@ -263,12 +263,12 @@ struct ShotState {
   // パワーゲージ（0.0〜1.0を往復）
   float powerGaugePos = 0.0f;   ///< ゲージ現在位置
   float powerGaugeDir = 1.0f;   ///< ゲージ移動方向（1.0 or -1.0）
-  float powerGaugeSpeed = 1.5f; ///< ゲージ速度（1秒で1.5往復）
+  float powerGaugeSpeed = 1.0f; ///< ゲージ速度（従来比2/3）
 
   // インパクトゲージ（0.0〜1.0、0.5が中央）
   float impactGaugePos = 0.0f;
   float impactGaugeDir = 1.0f;
-  float impactGaugeSpeed = 2.0f * (2.0f / 3.0f); ///< インパクトは速い（従来比2/3）
+  float impactGaugeSpeed = 1.0f; ///< 通常時はパワーゲージと同じ速度
 
   // 確定値
   float confirmedPower = 0.0f;  ///< 確定パワー（0.0〜1.0）
@@ -355,11 +355,16 @@ struct AimPinState {
 /**
  * @brief ゴルフホール（リンク用）
 */
+inline constexpr float kGolfHoleVisualDiameter = 0.5f;
+inline constexpr float kGolfHoleCaptureRadius = 0.55f;
+inline constexpr float kGolfHoleSuctionStrength = 0.0f;
+inline constexpr float kGolfHoleSuctionRangeMultiplier = 1.1f;
+
 struct GolfHole {
   std::string linkTarget;    ///< リンク先記事
-  float radius = 0.7f;       ///< 判定半径（吸い込み範囲も兼ねる）
+  float radius = kGolfHoleCaptureRadius; ///< 判定半径（吸い込み範囲も兼ねる）
   bool isTarget = false;     ///< 目的記事へのリンクか
-  float gravity = 5.0f;      ///< 吸引力
+  float gravity = kGolfHoleSuctionStrength; ///< 通常時は吸引しない
   int hopsToTarget = -1;     ///< ターゲットまでのリンク数 (-1=未計算)
   uint32_t labelEntity = 0;  ///< ★ラベルUIエンティティ
   uint32_t pillarEntity = 0; ///< 光柱エンティティ
@@ -429,6 +434,10 @@ struct UIBarGauge {
   bool showConfirmedMarker = false; ///< 確定済みの強さなどを固定マーカーで表示するか
   float confirmedValue = 0.0f;      ///< 確定済みマーカー値 (0.0 - 1.0)
   DirectX::XMFLOAT4 confirmedMarkerColor = {1.0f, 0.76f, 0.16f, 1.0f};
+
+  bool showAimPinMarker = false; ///< 照準ピンの必要パワー位置を表示するか
+  float aimPinValue = 0.0f;      ///< 照準ピン位置 (0.0 - 1.0)
+  DirectX::XMFLOAT4 aimPinMarkerColor = {1.0f, 0.76f, 0.16f, 1.0f};
 
   float confirmPulse = 0.0f; ///< 確定直後のスナップ演出強度 (1.0=直後, 0.0=平常)
   float opacity = 1.0f; ///< ゲージ全体の不透明度倍率 (フェードアウト演出用)

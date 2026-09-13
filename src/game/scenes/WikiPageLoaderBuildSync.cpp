@@ -6,7 +6,6 @@
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
 #include "HtmlCourseSizing.h"
-#include "HtmlHoleSpacing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
@@ -175,10 +174,6 @@ PageLoadResult WikiPageLoader::BuildPageSync(
             m_tutorialCourseLayout.BuildGameplayLinks(*m_wikiTexture,
                                                      state->targetPage);
     }
-
-    if (m_wikiTexture->layoutWidth > 0)
-        m_buildGameplayLinks = SelectSpacedHtmlLinks(m_wikiTexture->links,
-            static_cast<float>(m_wikiTexture->width),static_cast<float>(m_wikiTexture->height),fieldWidth,fieldDepth);
 
     // 記事のテーマに応じたスカイボックスを適用します。
     auto* skyboxComp = ctx.world.Get<components::Skybox>(skyboxEntity);

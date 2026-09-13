@@ -5,8 +5,21 @@
 */
 
 #include <DirectXMath.h>
+#include <cmath>
 
 namespace game::scenes::cupin {
+
+inline constexpr float kCupApproachEffectRadius = 1.25f;
+
+inline bool IsBallWithinCupApproachRange(
+    const DirectX::XMFLOAT3 &ballPos, const DirectX::XMFLOAT3 &holePos) {
+  const float dx = ballPos.x - holePos.x;
+  const float dz = ballPos.z - holePos.z;
+  const float dy = ballPos.y - holePos.y;
+  return dx * dx + dz * dz <=
+             kCupApproachEffectRadius * kCupApproachEffectRadius &&
+         std::abs(dy) <= 2.0f;
+}
 
 // ホール判定をまとめたヘルパー（テスト可能な純粋関数）
 inline bool IsBallReadyForCupIn(const DirectX::XMFLOAT3 &ballPos,
@@ -16,8 +29,7 @@ inline bool IsBallReadyForCupIn(const DirectX::XMFLOAT3 &ballPos,
   float dz = ballPos.z - holePos.z;
   float distSq = dx * dx + dz * dz;
 
-  float captureRadius = holeRadius * 0.9f;
-  if (distSq > captureRadius * captureRadius)
+  if (distSq > holeRadius * holeRadius)
     return false;
 
   // 高さチェック：ホールより下かつ一定の深さ内にいる

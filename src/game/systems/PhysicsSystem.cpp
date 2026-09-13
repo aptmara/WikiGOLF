@@ -135,7 +135,8 @@ void PhysicsSystem(core::GameContext &ctx, float dt) {
         info.positionFloat = t.position;
         info.radius = h.radius;
         info.gravity = h.gravity;
-        info.suctionRange = h.radius * 2.5f;
+        info.suctionRange =
+            h.radius * game::components::kGolfHoleSuctionRangeMultiplier;
         maxHoleQueryRange = std::max(maxHoleQueryRange, info.suctionRange);
         holes.push_back(info);
       };

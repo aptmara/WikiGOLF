@@ -24,9 +24,7 @@ struct HolePlacementCandidate {
 };
 
 /**
- * @brief リンク座標変換とミニマップ用候補選抜を担当します。
- * @details 同じ記事上の近接リンクを間引きつつ、目的地リンクを必ず残し、
- *          最後に記事内の元順序へ戻します。
+ * @brief リンク座標変換とミニマップ用候補作成を担当します。
 */
 class HolePlacementPlanner {
 public:
@@ -36,15 +34,9 @@ public:
       std::uint32_t textureWidth, std::uint32_t textureHeight,
       float fieldWidth, float fieldDepth) const;
 
-  /** @brief ミニマップへ表示する候補を間隔と上限に従って選抜します。*/
+  /** @brief 全候補を元の順序のままミニマップ表示へ渡します。*/
   std::vector<HolePlacementCandidate> SelectMapCandidates(
       const std::vector<HolePlacementCandidate> &candidates) const;
-
-private:
-  /** @brief 選抜済み候補すべてから指定距離以上離れているか判定します。*/
-  bool IsFarEnoughFromSelected(
-      const std::vector<HolePlacementCandidate> &selected,
-      const HolePlacementCandidate &candidate, float minDistance) const;
 };
 
 } // namespace game::scenes

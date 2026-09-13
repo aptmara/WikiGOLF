@@ -149,12 +149,21 @@ int main() {
   candidates.push_back(distantCandidate);
 
   const auto selected = planner.SelectMapCandidates(candidates);
-  CHECK_TRUE(selected.size() == 3,
-             "近接する通常候補を除外して目的地候補を必ず残す");
+  CHECK_TRUE(selected.size() == candidates.size(),
+             "近接候補を含む全リンクをマップ候補として残す");
   CHECK_TRUE(selected[0].originalIndex == 0 &&
-                 selected[1].originalIndex == 2 &&
-                 selected[2].originalIndex == 3,
-             "選抜後の候補を記事内の元順序へ戻す");
+                 selected[1].originalIndex == 1 &&
+                 selected[2].originalIndex == 2 &&
+                 selected[3].originalIndex == 3,
+             "全候補の記事内順序を維持する");
+
+  std::vector<Candidate> numerousCandidates(200);
+  for (std::size_t i = 0; i < numerousCandidates.size(); ++i) {
+    numerousCandidates[i].originalIndex = i;
+  }
+  CHECK_TRUE(planner.SelectMapCandidates(numerousCandidates).size() ==
+                 numerousCandidates.size(),
+             "160件を超える全候補をマップ候補として残す");
 
   std::vector<game::scenes::HolePlacementCandidate> asyncCandidates =
       selected;

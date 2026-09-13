@@ -45,7 +45,8 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     auto e  = m_pageEntityOwner.Create(ctx.world);
     auto& t = ctx.world.Add<Transform>(e);
     t.position = {x, terrainH + 0.05f, z};
-    t.scale    = {0.5f, 0.08f, 0.5f};
+    t.scale    = {kGolfHoleVisualDiameter, 0.08f,
+                  kGolfHoleVisualDiameter};
 
     auto& mr = ctx.world.Add<MeshRenderer>(e);
     mr.mesh   = ctx.resource.LoadMesh("builtin/cylinder");
@@ -59,8 +60,8 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     }
 
     auto& h      = ctx.world.Add<GolfHole>(e);
-    h.radius     = 2.0f;
-    h.gravity    = 0.0f;
+    h.radius     = kGolfHoleCaptureRadius;
+    h.gravity    = kGolfHoleSuctionStrength;
     h.linkTarget  = linkTarget;
     h.isTarget   = isTargetHole;
     h.hopsToTarget = hopsToTarget;

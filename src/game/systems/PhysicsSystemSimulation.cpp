@@ -122,23 +122,6 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
               std::abs(posY - XMVectorGetY(hole.position)) < 2.0f) {
             insideHole = true;
             carveDepth = 0.6f; // 穴の深さ
-
-            // ホール内からの脱出防止：縁に向かう速度をカット
-            float dist = std::sqrt(distSq);
-            if (dist > 0.01f) {
-              // ボールからホール中心への方向
-              XMVECTOR toCenter = XMVectorSubtract(hole.position, pos);
-              toCenter = XMVectorSetY(toCenter, 0.0f); // XZ平面のみ
-              toCenter = XMVector3Normalize(toCenter);
-
-              // 現在の速度のうち、縁に向かう成分（中心から離れる方向）
-              float velOutward = -XMVectorGetX(XMVector3Dot(vel, toCenter));
-              if (velOutward > 0.0f) {
-                // 縁に向かう速度を大幅カット（脱出防止）
-                vel = XMVectorAdd(vel,
-                                  XMVectorScale(toCenter, velOutward * 0.9f));
-              }
-            }
           }
         });
 
@@ -297,6 +280,9 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
         holeGrid.Query(posX, posZ, maxHoleQueryRange,
                        [&](const HoleInfo &hole) {
           ++perfStats.holeCandidates;
+          if (hole.gravity <= 0.0f) {
+            return;
+          }
           float holeY = XMVectorGetY(hole.position);
           if (std::abs(ballY - holeY) > 1.0f)
             return;

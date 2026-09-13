@@ -6,7 +6,6 @@
 #include "../../graphics/GraphicsDevice.h"
 #include "WikiPageLoader.h"
 #include "HtmlCourseSizing.h"
-#include "HtmlHoleSpacing.h"
 #include "../../core/GameContext.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -210,10 +209,6 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
                         m_tutorialCourseLayout.BuildGameplayLinks(
                             *m_wikiTexture, state->targetPage);
                 }
-                if (m_wikiTexture->layoutWidth > 0)
-                    m_buildGameplayLinks = SelectSpacedHtmlLinks(m_wikiTexture->links,
-                        static_cast<float>(m_wikiTexture->width),static_cast<float>(m_wikiTexture->height),
-                        m_buildFieldWidth,m_buildFieldDepth);
                 size_t gameplayLinkCount = m_wikiTexture->links.size();
                 if (!m_buildGameplayLinks.empty()) {
                     gameplayLinkCount = m_buildGameplayLinks.size();
