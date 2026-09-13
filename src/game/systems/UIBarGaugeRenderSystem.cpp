@@ -76,6 +76,48 @@ void FillMarker(graphics::TextRenderer &renderer,
       headRadius, body);
 }
 
+void FillAimPinMarker(graphics::TextRenderer &renderer,
+                      const game::components::UIBarGauge &gauge,
+                      float opacity) {
+  const float markerX = gauge.x +
+      gauge.width * NormalizeGaugeValue(gauge, gauge.aimPinValue);
+  const auto outline =
+      WithOpacity({0.0f, 0.0f, 0.0f, 0.96f}, opacity);
+  const auto body = WithOpacity(gauge.aimPinMarkerColor, opacity);
+
+  renderer.FillRoundedRect(
+      D2D1::RectF(markerX - 3.0f, gauge.y - 10.0f,
+                  markerX + 3.0f, gauge.y + gauge.height + 6.0f),
+      3.0f, outline);
+  renderer.FillRoundedRect(
+      D2D1::RectF(markerX - 1.5f, gauge.y - 9.0f,
+                  markerX + 1.5f, gauge.y + gauge.height + 5.0f),
+      1.5f, body);
+
+  constexpr float flagWidth = 36.0f;
+  constexpr float flagHeight = 19.0f;
+  const float flagLeft = std::clamp(markerX - flagWidth * 0.5f, gauge.x,
+                                    gauge.x + gauge.width - flagWidth);
+  const auto flagRect = D2D1::RectF(flagLeft, gauge.y - 29.0f,
+                                    flagLeft + flagWidth,
+                                    gauge.y - 29.0f + flagHeight);
+  renderer.FillRoundedRect(flagRect, 4.0f, outline);
+  const auto innerRect = D2D1::RectF(flagRect.left + 1.5f,
+                                     flagRect.top + 1.5f,
+                                     flagRect.right - 1.5f,
+                                     flagRect.bottom - 1.5f);
+  renderer.FillRoundedRect(innerRect, 3.0f, body);
+
+  auto labelStyle = graphics::TextStyle::Guide();
+  labelStyle.fontFamily = "Barlow Condensed Black";
+  labelStyle.fontSize = 10.0f;
+  labelStyle.align = graphics::TextAlign::Center;
+  labelStyle.color = WithOpacity(game::ui::kColorWhite, opacity);
+  labelStyle.hasOutline = false;
+  labelStyle.hasShadow = false;
+  renderer.RenderText(L"PIN", innerRect, labelStyle);
+}
+
 // パワー閾値の目盛り線: 40%/75%の境界だけを細い1pxラインで示す。
 // 半透明の帯のような装飾は持たせない。
 void FillPowerTicks(graphics::TextRenderer &renderer,
@@ -192,6 +234,10 @@ void UIBarGaugeRenderSystem::operator()(core::GameContext &ctx) {
 
         FillBorder(*ctx.textRenderer, bgRect, gauge.borderWidth,
                    gauge.confirmPulse, opacity, gauge.borderColor);
+        if (gauge.mode == game::components::UIBarGaugeMode::Power &&
+            gauge.showAimPinMarker) {
+          FillAimPinMarker(*ctx.textRenderer, gauge, opacity);
+        }
       });
 
   ctx.textRenderer->EndDraw();

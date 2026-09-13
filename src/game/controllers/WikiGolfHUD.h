@@ -12,7 +12,6 @@
 #include "hud/WindPanel.h"
 #include "hud/MinimapDecorationPanel.h"
 #include "hud/ShotGaugePanel.h"
-#include "hud/AimDistancePanel.h"
 #include <DirectXMath.h>
 #include <vector>
 #include <string>
@@ -101,7 +100,6 @@ private:
     hud::MinimapDecorationPanel m_minimapDecorationPanel;
     hud::ShotGaugePanel m_shotGaugePanel;
     hud::WindPanel m_windPanel;
-    hud::AimDistancePanel m_aimDistancePanel;
 
     float m_elapsedTime = 0.0f;
     float m_normalHudOpacity = 1.0f;

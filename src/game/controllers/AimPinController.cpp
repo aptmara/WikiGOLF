@@ -66,7 +66,8 @@ AimPinController::Update(core::GameContext &ctx, const UpdateParams &params) {
   // (透視投影)なので、三人称視点と同じレイキャストがそのまま使える。
   // 探索距離の上限(maxDistance)は呼び出し側が視点モードに応じて決める
   // （三人称は近距離のみ、マップビューはフィールド全体をカバーする等）。
-  DirectX::XMFLOAT3 worldPos{0.0f, 0.0f, 0.0f};
+  DirectX::XMFLOAT3 worldPos = params.mappedWorldPosition;
+  bool hit = params.hasMappedWorldPosition;
 #ifdef WIKIGOLF_DEBUG_TOOLS
   // デバッグツールビルドのみ: レイの始点/方向も取得し、デバッグオーバーレイ
   // (WikiGOLF デバッグ [F1] > 衝突 タブ)でこのレイを可視化できるように
@@ -74,14 +75,16 @@ AimPinController::Update(core::GameContext &ctx, const UpdateParams &params) {
   // ボックスで行うため、ここでは常に最新の結果を残すだけでよい。
   DirectX::XMFLOAT3 debugRayOrigin{0.0f, 0.0f, 0.0f};
   DirectX::XMFLOAT3 debugRayDirection{0.0f, 0.0f, 0.0f};
-  const bool hit = game::utils::RaycastScreenToTerrain(
-      ctx, params.cameraEntity, static_cast<float>(params.mouseX),
-      static_cast<float>(params.mouseY), params.terrainSystem,
-      params.maxDistance, worldPos, &debugRayOrigin, &debugRayDirection);
+  if (!hit) {
+    hit = game::utils::RaycastScreenToTerrain(
+        ctx, params.cameraEntity, static_cast<float>(params.mouseX),
+        static_cast<float>(params.mouseY), params.terrainSystem,
+        params.maxDistance, worldPos, &debugRayOrigin, &debugRayDirection);
+  }
 
   {
     game::debug::DebugRaycastState debugState;
-    debugState.hasRay = true;
+    debugState.hasRay = !params.hasMappedWorldPosition;
     debugState.origin = debugRayOrigin;
     debugState.direction = debugRayDirection;
     debugState.hit = hit;
@@ -90,10 +93,12 @@ AimPinController::Update(core::GameContext &ctx, const UpdateParams &params) {
     ctx.world.SetGlobal(std::move(debugState));
   }
 #else
-  const bool hit = game::utils::RaycastScreenToTerrain(
-      ctx, params.cameraEntity, static_cast<float>(params.mouseX),
-      static_cast<float>(params.mouseY), params.terrainSystem,
-      params.maxDistance, worldPos);
+  if (!hit) {
+    hit = game::utils::RaycastScreenToTerrain(
+        ctx, params.cameraEntity, static_cast<float>(params.mouseX),
+        static_cast<float>(params.mouseY), params.terrainSystem,
+        params.maxDistance, worldPos);
+  }
 #endif
 
   if (!hit) {

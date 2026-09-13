@@ -31,6 +31,8 @@ public:
     ecs::Entity ballEntity = UINT32_MAX;
     ecs::Entity cameraEntity = UINT32_MAX;
     game::systems::WikiTerrainSystem *terrainSystem = nullptr;
+    bool hasMappedWorldPosition = false;
+    DirectX::XMFLOAT3 mappedWorldPosition = {0.0f, 0.0f, 0.0f};
     /**
      * @brief レイキャストでピンを探索する最大距離(ワールド単位、レイの
      * 進行距離であって水平距離ではない)。

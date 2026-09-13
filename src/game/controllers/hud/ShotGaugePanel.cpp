@@ -156,6 +156,7 @@ void ShotGaugePanel::Initialize(core::GameContext &ctx) {
   judge.width = 200.0f;
   judge.height = 80.0f;
   judge.style = graphics::TextStyle::Guide();
+  judge.style.fontFamily = "Barlow Condensed Black";
   judge.style.fontSize = 34.0f;
   judge.style.align = graphics::TextAlign::Center;
   judge.visible = true;

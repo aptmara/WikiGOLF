@@ -23,7 +23,8 @@ void ShotGaugePanel::Update(core::GameContext &ctx, float deltaTime,
                             float currentPower, float confirmedPower,
                             float currentImpact, float confirmedImpact,
                             float impactCenter,
-                            const ClubUIData &currentClub) {
+                            const ClubUIData &currentClub,
+                            const game::components::AimPinState *aimPin) {
   m_dismissRemaining =
       std::max(0.0f, m_dismissRemaining - deltaTime);
   const auto previousPhase = m_previousPhase;
@@ -39,14 +40,15 @@ void ShotGaugePanel::Update(core::GameContext &ctx, float deltaTime,
   m_phaseTransition =
       std::min(1.0f, m_phaseTransition + deltaTime * 7.5f);
   UpdatePanelContent(ctx, phase, currentPower, confirmedPower, currentImpact,
-                     confirmedImpact, impactCenter, currentClub);
+                     confirmedImpact, impactCenter, currentClub, aimPin);
 }
 
 void ShotGaugePanel::UpdatePanelContent(
     core::GameContext &ctx, game::components::ShotState::Phase phase,
     float currentPower, float confirmedPower, float currentImpact,
     float confirmedImpact, float impactCenter,
-    const ClubUIData &currentClub) {
+    const ClubUIData &currentClub,
+    const game::components::AimPinState *aimPin) {
   const bool powerPhase =
       phase == game::components::ShotState::Phase::PowerCharging;
   const bool impactPhase =
@@ -166,6 +168,18 @@ void ShotGaugePanel::UpdatePanelContent(
     gauge->showImpactZones = impactPhase || dismissing;
     gauge->showMarker = powerPhase || impactPhase;
     gauge->showConfirmedMarker = dismissing;
+    if (powerPhase) {
+      gauge->showAimPinMarker = aimPin && aimPin->active;
+      if (gauge->showAimPinMarker) {
+        gauge->aimPinValue =
+            std::clamp(aimPin->requiredPowerRatio, 0.0f, 1.0f);
+        gauge->aimPinMarkerColor = aimPin->reachable
+                                       ? game::ui::kColorSpecial
+                                       : game::ui::kColorError;
+      }
+    } else {
+      gauge->showAimPinMarker = false;
+    }
     gauge->confirmPulse = pulse;
     gauge->opacity = 1.0f;
     // インパクトゾーンの表示中心も判定と同じ基準(impactCenter)に合わせる。

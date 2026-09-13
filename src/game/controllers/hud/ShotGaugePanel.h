@@ -31,12 +31,14 @@ public:
    * @brief 現在のショットフェーズを表示へ反映します。
    * @param impactCenter インパクトゲージの「パーフェクト」中心位置 (0.0〜1.0)。
    *        通常は0.5だが、エイムピン設置時はパワー確定位置に連動して動く。
+   * @param aimPin 設置中の照準ピン。必要パワー位置をインパクトゲージへ表示する。
 */
   void Update(core::GameContext &ctx, float deltaTime,
               game::components::ShotState::Phase phase, float currentPower,
               float confirmedPower, float currentImpact,
               float confirmedImpact, float impactCenter,
-              const ClubUIData &currentClub);
+              const ClubUIData &currentClub,
+              const game::components::AimPinState *aimPin);
 
   /** @brief 外部で計算されたゲージ位置を0～1へ正規化します。*/
   void UpdatePowerGauge(core::GameContext &ctx, float fillValue,
@@ -83,7 +85,8 @@ private:
                           game::components::ShotState::Phase phase,
                           float currentPower, float confirmedPower,
                           float currentImpact, float confirmedImpact,
-                          float impactCenter, const ClubUIData &currentClub);
+                          float impactCenter, const ClubUIData &currentClub,
+                          const game::components::AimPinState *aimPin);
 
   Entities m_entities;
   ecs::EntityOwner m_entityOwner;

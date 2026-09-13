@@ -32,6 +32,8 @@ void ShotGaugePanel::Reset(core::GameContext &ctx) {
     gauge->mode = game::components::UIBarGaugeMode::Power;
     gauge->showImpactZones = false;
     gauge->showConfirmedMarker = false;
+    gauge->showAimPinMarker = false;
+    gauge->aimPinValue = 0.0f;
     gauge->confirmPulse = 0.0f;
     gauge->opacity = 1.0f;
   }

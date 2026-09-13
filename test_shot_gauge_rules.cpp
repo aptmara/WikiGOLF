@@ -27,6 +27,12 @@ int main() {
   using game::utils::EvaluateImpactJudgement;
   using game::utils::GetImpactZoneVisualWidth;
 
+  const game::components::ShotState shotState;
+  CHECK_CLOSE(shotState.powerGaugeSpeed, 1.0f, 0.0001f,
+              "normal power gauge speed is 1.0");
+  CHECK_CLOSE(shotState.impactGaugeSpeed, 1.0f, 0.0001f,
+              "normal impact gauge speed is 1.0");
+
   CHECK_TRUE(EvaluateImpactJudgement(0.5f) == ShotJudgement::Special,
              "center impact is Special");
   CHECK_TRUE(EvaluateImpactJudgement(0.5f + game::ui::kThresholdSpecial +

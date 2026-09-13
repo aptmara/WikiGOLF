@@ -254,14 +254,22 @@ int main() {
              "フェード時間経過後に通常HUDを完全表示する");
 
   hud.SetShotPhaseUIVisible(context, true);
+  game::components::AimPinState aimPin;
+  aimPin.active = true;
+  aimPin.requiredPowerRatio = 0.72f;
+  aimPin.reachable = true;
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::PowerCharging, 0.5f, 0.5f,
              0.0f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
-             0.0f, 0.0f, nullptr);
+             0.0f, 0.0f, &aimPin);
   auto *gauge = FindGauge(world);
   CHECK_TRUE(gauge && gauge->isVisible &&
                  gauge->mode == game::components::UIBarGaugeMode::Power,
              "パワー調整中はパワーゲージを表示する");
+  CHECK_TRUE(gauge->showAimPinMarker && gauge->aimPinValue == 0.72f &&
+                 SameColor(gauge->aimPinMarkerColor,
+                           game::ui::kColorSpecial),
+             "パワーゲージへ到達可能な照準ピン位置を黄色で表示する");
   CHECK_TRUE(ContainsText(world, L"01 / 02") &&
                  ContainsText(world, L"パワー調整") &&
                  ContainsText(world, L"60y"),
@@ -274,11 +282,13 @@ int main() {
   hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::ImpactTiming, 0.4f, 0.5f,
              0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
-             0.0f, 0.0f, nullptr);
+             0.0f, 0.0f, &aimPin);
   hud.UpdatePowerGauge(context, 50.0f, 40.0f, 0.0f, 100.0f);
   CHECK_TRUE(gauge->mode == game::components::UIBarGaugeMode::Impact &&
                  gauge->showImpactZones && gauge->markerValue == 0.4f,
              "インパクト調整中は中央合わせゲージと判定帯を表示する");
+  CHECK_TRUE(!gauge->showAimPinMarker,
+             "インパクトゲージには照準ピン位置を表示しない");
   CHECK_TRUE(ContainsText(world, L"02 / 02") &&
                  ContainsText(world, L"インパクトタイミング") &&
                  ContainsText(world, L"60y 確定") &&
@@ -286,18 +296,44 @@ int main() {
              "インパクト調整中の確定距離と左右誤差を表示する");
 
   hud.Update(context, 0.016f, state,
+             game::components::ShotState::Phase::ImpactTiming, 0.4f, 0.5f,
+             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, nullptr);
+  CHECK_TRUE(!gauge->showAimPinMarker,
+             "照準ピン未設置ならインパクトゲージへピン位置を表示しない");
+
+  aimPin.requiredPowerRatio = 1.2f;
+  aimPin.reachable = false;
+  hud.Update(context, 0.016f, state,
+             game::components::ShotState::Phase::PowerCharging, 0.4f, 0.5f,
+             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, &aimPin);
+  CHECK_TRUE(gauge->showAimPinMarker && gauge->aimPinValue == 1.0f &&
+                 SameColor(gauge->aimPinMarkerColor, game::ui::kColorError),
+             "到達不能な照準ピン位置はパワーゲージ右端へ収めて赤色で表示する");
+
+  hud.Update(context, 0.016f, state,
+             game::components::ShotState::Phase::ImpactTiming, 0.4f, 0.5f,
+             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, &aimPin);
+  CHECK_TRUE(!gauge->showAimPinMarker,
+             "パワーからインパクトへ移ると照準ピン位置を消す");
+
+  hud.Update(context, 0.016f, state,
              game::components::ShotState::Phase::Executing, 0.4f, 0.5f,
              0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, nullptr);
-  CHECK_TRUE(gauge->isVisible && gauge->showConfirmedMarker,
-             "インパクト確定直後は確定マーカーを保持表示する");
+  CHECK_TRUE(gauge->isVisible && gauge->showConfirmedMarker &&
+                 !gauge->showAimPinMarker,
+             "インパクト確定直後は照準ピン位置を表示しない");
   hud.Update(context,
              game::ui::kGaugeHoldDuration + game::ui::kGaugeFadeDuration +
                  0.1f,
              state, game::components::ShotState::Phase::Executing, 0.4f,
              0.5f, 0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, nullptr);
-  CHECK_TRUE(!gauge->isVisible && gauge->opacity == 1.0f,
+  CHECK_TRUE(!gauge->isVisible && gauge->opacity == 1.0f &&
+                 !gauge->showAimPinMarker,
              "保持時間とフェード時間の経過後にゲージを隠す");
 
   hud.UpdateJudge(context, L"GREAT", game::ui::kColorSuccess);
@@ -306,7 +342,8 @@ int main() {
   hud.ResetShotUI(context);
   CHECK_TRUE(!gauge->isVisible && gauge->value == 0.0f &&
                  gauge->mode == game::components::UIBarGaugeMode::Power &&
-                 !gauge->showImpactZones && !gauge->showConfirmedMarker,
+                 !gauge->showImpactZones && !gauge->showConfirmedMarker &&
+                 !gauge->showAimPinMarker && gauge->aimPinValue == 0.0f,
              "ショットUIのリセットでゲージを初期状態へ戻す");
 
   hud.SetVisible(context, false);

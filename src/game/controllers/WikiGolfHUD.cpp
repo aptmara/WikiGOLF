@@ -35,7 +35,6 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
     m_clubSelectionPanel.Initialize(ctx);
     m_shotGaugePanel.Initialize(ctx);
     m_minimapDecorationPanel.Initialize(ctx);
-    m_aimDistancePanel.Initialize(ctx);
     m_normalHudOpacity = 1.0f;
     m_shotSequenceActive = false;
     m_isVisible = true;
@@ -47,7 +46,6 @@ void WikiGolfHUD::Shutdown(core::GameContext& ctx) {
     m_minimapDecorationPanel.Shutdown(ctx);
     m_shotGaugePanel.Shutdown(ctx);
     m_windPanel.Shutdown(ctx);
-    m_aimDistancePanel.Shutdown(ctx);
     m_elapsedTime = 0.0f;
     m_normalHudOpacity = 1.0f;
     m_shotSequenceActive = false;
@@ -83,9 +81,7 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
     }
     m_shotGaugePanel.Update(ctx, dt, shotPhase, currentPower, confirmedPower,
                             currentImpact, confirmedImpact, impactCenter,
-                            currentClubData);
-    m_aimDistancePanel.Update(ctx, shotPhase, currentPower, confirmedPower,
-                              aimPin, currentClubData);
+                            currentClubData, aimPin);
     UpdateNormalHudTransition(ctx, dt, shotPhase);
 }
 
@@ -175,7 +171,6 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
     m_isVisible = visible;
     ApplyNormalHudOpacity(ctx);
     m_shotGaugePanel.SetVisible(ctx, visible);
-    m_aimDistancePanel.SetVisible(ctx, visible);
 
 }
 
