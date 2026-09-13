@@ -204,6 +204,7 @@ void TextRenderer::Shutdown() {
   m_rasterCache.clear();
   m_rasterCacheBytes = 0;
   m_fontManager.Shutdown();
+  m_imageColorMatrixEffect.Reset();
   m_d2dContext.Reset();
   m_dwriteFactory.Reset();
   m_wicFactory.Reset();

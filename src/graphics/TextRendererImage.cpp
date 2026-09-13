@@ -5,7 +5,9 @@
 
 #include "TextRenderer.h"
 #include "TextRendererInternals.h"
+#include <algorithm>
 #include <d2d1_1.h>
+#include <d2d1effects.h>
 #include <wincodec.h>
 
 #pragma comment(lib, "d2d1.lib")
@@ -82,9 +84,80 @@ bool TextRenderer::LoadBitmapFromFile(const std::string &filePath) {
   return true;
 }
 
+void TextRenderer::DrawImageBitmap(
+    ID2D1Bitmap1 *bitmap, const D2D1_RECT_F &destRect, float alpha,
+    float rotation, bool grayscaleTint,
+    const DirectX::XMFLOAT4 &tintColor) {
+  if (!bitmap) {
+    return;
+  }
+
+  const auto virtualToScreen = ComputeVirtualToScreenTransform();
+  if (!grayscaleTint) {
+    if (rotation != 0.0f) {
+      const float centerX = (destRect.left + destRect.right) * 0.5f;
+      const float centerY = (destRect.top + destRect.bottom) * 0.5f;
+      const auto rotate = D2D1::Matrix3x2F::Rotation(
+          rotation, D2D1::Point2F(centerX, centerY));
+      m_d2dContext->SetTransform(rotate * virtualToScreen);
+    }
+    m_d2dContext->DrawBitmap(bitmap, destRect, alpha,
+                             D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    if (rotation != 0.0f) {
+      m_d2dContext->SetTransform(virtualToScreen);
+    }
+    return;
+  }
+
+  if (!m_imageColorMatrixEffect &&
+      FAILED(m_d2dContext->CreateEffect(
+          CLSID_D2D1ColorMatrix, &m_imageColorMatrixEffect))) {
+    return;
+  }
+
+  const float opacity = std::clamp(alpha, 0.0f, 1.0f);
+  const float tintR = std::clamp(tintColor.x, 0.0f, 1.0f) * opacity;
+  const float tintG = std::clamp(tintColor.y, 0.0f, 1.0f) * opacity;
+  const float tintB = std::clamp(tintColor.z, 0.0f, 1.0f) * opacity;
+  D2D1_MATRIX_5X4_F matrix{};
+  matrix._11 = 0.2126f * tintR;
+  matrix._21 = 0.7152f * tintR;
+  matrix._31 = 0.0722f * tintR;
+  matrix._12 = 0.2126f * tintG;
+  matrix._22 = 0.7152f * tintG;
+  matrix._32 = 0.0722f * tintG;
+  matrix._13 = 0.2126f * tintB;
+  matrix._23 = 0.7152f * tintB;
+  matrix._33 = 0.0722f * tintB;
+  matrix._44 = opacity * std::clamp(tintColor.w, 0.0f, 1.0f);
+  m_imageColorMatrixEffect->SetInput(0, bitmap);
+  m_imageColorMatrixEffect->SetValue(
+      D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
+  m_imageColorMatrixEffect->SetValue(
+      D2D1_COLORMATRIX_PROP_ALPHA_MODE,
+      D2D1_COLORMATRIX_ALPHA_MODE_PREMULTIPLIED);
+
+  const auto bitmapSize = bitmap->GetSize();
+  const float destWidth = destRect.right - destRect.left;
+  const float destHeight = destRect.bottom - destRect.top;
+  const auto sourceToDest =
+      D2D1::Matrix3x2F::Scale(destWidth / bitmapSize.width,
+                              destHeight / bitmapSize.height) *
+      D2D1::Matrix3x2F::Translation(destRect.left, destRect.top);
+  const float centerX = (destRect.left + destRect.right) * 0.5f;
+  const float centerY = (destRect.top + destRect.bottom) * 0.5f;
+  const auto rotate = D2D1::Matrix3x2F::Rotation(
+      rotation, D2D1::Point2F(centerX, centerY));
+  m_d2dContext->SetTransform(sourceToDest * rotate * virtualToScreen);
+  m_d2dContext->DrawImage(m_imageColorMatrixEffect.Get());
+  m_imageColorMatrixEffect->SetInput(0, nullptr);
+  m_d2dContext->SetTransform(virtualToScreen);
+}
+
 void TextRenderer::RenderImage(const std::string &filePath,
                                const D2D1_RECT_F &destRect, float alpha,
-                               float rotation) {
+                               float rotation, bool grayscaleTint,
+                               const DirectX::XMFLOAT4 &tintColor) {
   if (!m_d2dContext) {
     LOG_ERROR("TextRenderer", "D2D Context is null in RenderImage");
     return;
@@ -106,29 +179,13 @@ void TextRenderer::RenderImage(const std::string &filePath,
     return;
   }
 
-  // 回転変換
-  D2D1::Matrix3x2F scaleMatrix = ComputeVirtualToScreenTransform();
-  if (rotation != 0.0f) {
-    float centerX = destRect.left + (destRect.right - destRect.left) * 0.5f;
-    float centerY = destRect.top + (destRect.bottom - destRect.top) * 0.5f;
-    D2D1::Matrix3x2F rotMatrix =
-        D2D1::Matrix3x2F::Rotation(rotation, D2D1::Point2F(centerX, centerY));
-    m_d2dContext->SetTransform(rotMatrix * scaleMatrix);
-  }
-
-  // 描画
-  m_d2dContext->DrawBitmap(bitmap, destRect, alpha,
-                           D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
-
-  // 変換リセット
-  if (rotation != 0.0f) {
-    m_d2dContext->SetTransform(scaleMatrix);
-  }
+  DrawImageBitmap(bitmap, destRect, alpha, rotation, grayscaleTint, tintColor);
 }
 
 void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
                                const D2D1_RECT_F &destRect, float alpha,
-                               float rotation) {
+                               float rotation, bool grayscaleTint,
+                               const DirectX::XMFLOAT4 &tintColor) {
   if (!m_d2dContext || !srv)
     return;
 
@@ -168,24 +225,7 @@ void TextRenderer::RenderImage(ID3D11ShaderResourceView *srv,
     m_srvBitmapCache.emplace(res.Get(), std::move(entry));
   }
 
-  // 回転変換
-  D2D1::Matrix3x2F scaleMatrix = ComputeVirtualToScreenTransform();
-  if (rotation != 0.0f) {
-    float centerX = destRect.left + (destRect.right - destRect.left) * 0.5f;
-    float centerY = destRect.top + (destRect.bottom - destRect.top) * 0.5f;
-    D2D1::Matrix3x2F rotMatrix =
-        D2D1::Matrix3x2F::Rotation(rotation, D2D1::Point2F(centerX, centerY));
-    m_d2dContext->SetTransform(rotMatrix * scaleMatrix);
-  }
-
-  // 描画
-  m_d2dContext->DrawBitmap(bitmap, destRect, alpha,
-                           D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
-
-  // 変換リセット
-  if (rotation != 0.0f) {
-    m_d2dContext->SetTransform(scaleMatrix);
-  }
+  DrawImageBitmap(bitmap, destRect, alpha, rotation, grayscaleTint, tintColor);
 }
 
 

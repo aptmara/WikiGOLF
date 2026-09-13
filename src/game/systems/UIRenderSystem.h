@@ -1,14 +1,16 @@
 #pragma once
 /**
  * @file UIRenderSystem.h
- * @brief UIテキスト描画システム
+ * @brief UIテキスト・画像統合描画システム
  */
 
 #include "../../core/GameContext.h"
 #include "../../core/Profiler.h"
 #include "../../graphics/TextRenderer.h"
+#include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include <algorithm>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -17,8 +19,8 @@
 namespace game::systems {
 
 /**
- * @brief UIテキスト描画システム
- * @details TextRenderer を使用して UIText コンポーネントを描画
+ * @brief UIテキスト・画像統合描画システム
+ * @details コンポーネント種別をまたいでlayer順に描画します。
 */
 class UIRenderSystem {
 public:
@@ -34,29 +36,68 @@ public:
     if (!m_renderer.IsValid())
       return;
 
-    // 可視状態のUIテキストを収集
-    std::vector<std::pair<ecs::Entity, const components::UIText *>> uiTexts;
+    struct RenderItem {
+      int layer = 0;
+      int typeOrder = 0;
+      ecs::Entity entity = 0;
+      const components::UIText *text = nullptr;
+      const components::UIImage *image = nullptr;
+    };
+    std::vector<RenderItem> items;
     ctx.world.Query<components::UIText>().Each(
         [&](ecs::Entity e, const components::UIText &ui) {
           if (ui.visible) {
-            uiTexts.push_back({e, &ui});
+            items.push_back({ui.layer, 1, e, &ui, nullptr});
+          }
+        });
+    ctx.world.Query<components::UIImage>().Each(
+        [&](ecs::Entity e, const components::UIImage &ui) {
+          if (ui.visible && ui.HasTexture()) {
+            items.push_back({ui.layer, 0, e, nullptr, &ui});
           }
         });
 
-    // レイヤーごとにソート（背面から順に描画するため）
-    std::sort(uiTexts.begin(), uiTexts.end(), [](const auto &a, const auto &b) {
-      return a.second->layer < b.second->layer;
+    // 同じレイヤーでは画像を先に描き、その上へ文字を重ねる。
+    std::sort(items.begin(), items.end(), [](const auto &a, const auto &b) {
+      if (a.layer != b.layer) {
+        return a.layer < b.layer;
+      }
+      return a.typeOrder < b.typeOrder;
     });
 
 
     m_renderer.BeginDraw();
 
     std::unordered_set<ecs::Entity> seen;
-    seen.reserve(uiTexts.size());
+    seen.reserve(items.size());
     size_t rasterHits = 0;
     size_t directDraws = 0;
 
-    for (const auto &[entity, ui] : uiTexts) {
+    for (const auto &item : items) {
+      if (item.image) {
+        const auto *image = item.image;
+        const float width = image->width > 0.0f ? image->width : 100.0f;
+        const float height = image->height > 0.0f ? image->height : 100.0f;
+        const auto rect = D2D1::RectF(image->x, image->y,
+                                      image->x + width, image->y + height);
+        const float opacity = image->alpha * image->opacity;
+        if (image->textureSRV) {
+          m_renderer.RenderImage(image->textureSRV, rect, opacity,
+                                 image->rotation, image->grayscaleTint,
+                                 image->tintColor);
+        } else {
+          std::string path = image->texturePath;
+          if (path.find("Assets/") != 0) {
+            path = "Assets/textures/" + path;
+          }
+          m_renderer.RenderImage(path, rect, opacity, image->rotation,
+                                 image->grayscaleTint, image->tintColor);
+        }
+        continue;
+      }
+
+      const auto entity = item.entity;
+      const auto *ui = item.text;
       graphics::TextStyle effectiveStyle = ui->style;
       const float opacity = std::clamp(ui->opacity, 0.0f, 1.0f);
       effectiveStyle.color.w *= opacity;

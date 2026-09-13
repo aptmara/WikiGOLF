@@ -62,7 +62,7 @@ public:
       if (ui->textureSRV) {
         // 既存テクスチャで描画
         m_renderer.RenderImage(ui->textureSRV, rect, ui->alpha * ui->opacity,
-                               ui->rotation);
+                               ui->rotation, ui->grayscaleTint, ui->tintColor);
       } else {
         // ファイルテクスチャで描画
         std::string path;
@@ -72,7 +72,7 @@ public:
           path = "Assets/textures/" + ui->texturePath;
         }
         m_renderer.RenderImage(path, rect, ui->alpha * ui->opacity,
-                               ui->rotation);
+                               ui->rotation, ui->grayscaleTint, ui->tintColor);
       }
     }
 

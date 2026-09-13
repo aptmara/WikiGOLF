@@ -17,6 +17,14 @@ int main() {
   UIImage ui{};
   CHECK(!ui.HasTexture(),
         "HasTexture is false when both texturePath and textureSRV are empty");
+  CHECK(!ui.grayscaleTint && ui.tintColor.x == 1.0f &&
+            ui.tintColor.y == 1.0f && ui.tintColor.z == 1.0f,
+        "UIImage color processing is disabled by default");
+
+  ui.grayscaleTint = true;
+  ui.tintColor = {1.0f, 0.2f, 0.2f, 1.0f};
+  CHECK(ui.grayscaleTint && ui.tintColor.y == 0.2f,
+        "UIImage stores grayscale tint settings");
 
   ui.texturePath = "icon.png";
   CHECK(ui.HasTexture(), "HasTexture is true when texturePath is set");

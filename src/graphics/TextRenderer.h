@@ -87,11 +87,17 @@ public:
 
   /** @brief 画像を描画 */
   void RenderImage(const std::string &filePath, const D2D1_RECT_F &destRect,
-                   float alpha = 1.0f, float rotation = 0.0f);
+                   float alpha = 1.0f, float rotation = 0.0f,
+                   bool grayscaleTint = false,
+                   const DirectX::XMFLOAT4 &tintColor =
+                       {1.0f, 1.0f, 1.0f, 1.0f});
 
   /** @brief 画像を描画 (Raw SRV) */
   void RenderImage(ID3D11ShaderResourceView *srv, const D2D1_RECT_F &destRect,
-                   float alpha = 1.0f, float rotation = 0.0f);
+                   float alpha = 1.0f, float rotation = 0.0f,
+                   bool grayscaleTint = false,
+                   const DirectX::XMFLOAT4 &tintColor =
+                       {1.0f, 1.0f, 1.0f, 1.0f});
 
   /** @brief テキスト描画（詳細スタイル指定・直接描画パス） */
   void RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
@@ -135,6 +141,9 @@ public:
 private:
   /** @brief バックバッファを D2D ターゲットとして設定 */
   HRESULT CreateTargetBitmap(IDXGISwapChain *swapChain);
+  void DrawImageBitmap(ID2D1Bitmap1 *bitmap, const D2D1_RECT_F &destRect,
+                       float alpha, float rotation, bool grayscaleTint,
+                       const DirectX::XMFLOAT4 &tintColor);
 
   /**
    * @brief 仮想解像度(kVirtualWidth x kVirtualHeight)から実バックバッファへの変換行列。
@@ -166,6 +175,7 @@ private:
   // D2D 1.1 オブジェクト
   ComPtr<ID2D1Factory1> m_d2dFactory;
   ComPtr<ID2D1DeviceContext> m_d2dContext;
+  ComPtr<ID2D1Effect> m_imageColorMatrixEffect;
   ComPtr<IDWriteFactory> m_dwriteFactory;
   ComPtr<IWICImagingFactory> m_wicFactory; // WIC
 

@@ -17,7 +17,6 @@
 #include "src/game/systems/UIBarGaugeRenderSystem.h" // 追加
 #include "src/game/systems/UIButtonRenderSystem.h"
 #include "src/game/systems/UIButtonSystem.h"
-#include "src/game/systems/UIImageRenderSystem.h"
 #include "src/game/systems/UIRenderSystem.h"
 #include "src/game/systems/WikiShortestPath.h"
 #include "src/graphics/GraphicsDevice.h"
@@ -337,7 +336,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   game::systems::UIRenderSystem uiRenderSystem(textRenderer);
   game::systems::UIButtonRenderSystem uiButtonRenderSystem(textRenderer);
-  game::systems::UIImageRenderSystem uiImageRenderSystem(textRenderer);
   game::systems::UIBarGaugeRenderSystem uiBarGaugeRenderSystem; // 追加
 
   // シーンマネージャ初期化
@@ -526,12 +524,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.UI2D");
                   textRenderer.BeginDraw();
                   {
-                      PROFILE_SCOPE("Render.UIText");
+                      PROFILE_SCOPE("Render.UITextAndImage");
                       uiRenderSystem(ctx);
-                  }
-                  {
-                      PROFILE_SCOPE("Render.UIImage");
-                      uiImageRenderSystem(ctx);
                   }
                   {
                       PROFILE_SCOPE("Render.UIBarGauge");
