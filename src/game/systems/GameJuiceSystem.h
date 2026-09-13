@@ -157,6 +157,9 @@ public:
   /** @brief トレイルをリセット（ページ遷移時などに呼ぶ）*/
   void ResetTrail();
 
+  /** @brief カップ接近時の高密度な二層トレイルを一定時間有効化します。*/
+  void TriggerCupApproachTrail(float duration);
+
 private:
   // --- カメラシェイク ---
   float m_shakeIntensity = 0.0f;
@@ -183,12 +186,14 @@ private:
 
   // --- トレイル ---
   std::vector<ecs::Entity> m_trailEntities;
+  std::vector<ecs::Entity> m_trailCoreEntities;
   std::vector<DirectX::XMFLOAT3> m_trailPositions;
   std::vector<DirectX::XMFLOAT4> m_trailBaseColors;
   int m_trailWriteIndex = 0;
   float m_trailUpdateTimer = 0.0f;
   DirectX::XMFLOAT3 m_lastTrailTargetPosition = {0.0f, 0.0f, 0.0f};
   bool m_hasLastTrailTargetPosition = false;
+  float m_cupApproachTrailTimer = 0.0f;
   static constexpr int kTrailCount = 24;                /**< 軌跡プール数です。*/
   static constexpr float kTrailUpdateInterval = 0.025f; /**< 軌跡更新間隔です。*/
   static constexpr float kTrailMaxSpacing = 0.10f;

@@ -32,6 +32,9 @@ public:
   /** @brief 内部状態をリセットします（エンティティ自体の破棄はシーン側の責任）。*/
   void Shutdown();
 
+  /** @brief 倍速表示を即座に通常状態へ戻して非表示にします。*/
+  void Reset(core::GameContext &ctx);
+
   /**
    * @brief 現在の倍速段階に応じてインジケーターの見た目を更新します。
    * @param ctx ゲームコンテキスト

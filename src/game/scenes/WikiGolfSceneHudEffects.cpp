@@ -4,10 +4,12 @@
 */
 
 #include "WikiGolfScene.h"
+#include "CupInUtils.h"
 #include "../../core/GameContext.h"
 #include "../../core/Profiler.h"
 #include "../../ecs/World.h"
 #include "../components/Transform.h"
+#include "../components/PhysicsComponents.h"
 #include "../components/WikiComponents.h"
 #include "../controllers/CameraController.h"
 #include "../controllers/ClubController.h"
@@ -20,6 +22,54 @@
 namespace game::scenes {
 
 using namespace game::components;
+
+void WikiGolfScene::UpdateCupApproachEffects(
+    core::GameContext &ctx, const GolfGameState &state,
+    const ShotState &shot, float dt) {
+  if (!m_gameJuice) {
+    return;
+  }
+
+  if (m_cupApproachZoomTimer > 0.0f) {
+    m_cupApproachZoomTimer = std::max(0.0f, m_cupApproachZoomTimer - dt);
+    if (m_cupApproachZoomTimer <= 0.0f) {
+      m_gameJuice->ResetFov();
+    }
+  }
+
+  if (m_cupApproachEffectTriggered ||
+      shot.phase != ShotState::Phase::Executing) {
+    return;
+  }
+
+  const auto *ball = ctx.world.Get<Transform>(m_ballEntity);
+  const auto *ballBody = ctx.world.Get<RigidBody>(m_ballEntity);
+  if (!ball || !ballBody) {
+    return;
+  }
+  const float speedSquared =
+      ballBody->velocity.x * ballBody->velocity.x +
+      ballBody->velocity.y * ballBody->velocity.y +
+      ballBody->velocity.z * ballBody->velocity.z;
+  if (speedSquared <= 0.000001f) {
+    return;
+  }
+  for (const auto holeEntity : state.holes) {
+    const auto *hole = ctx.world.Get<Transform>(holeEntity);
+    if (!hole || !cupin::IsBallWithinCupApproachRange(
+                     ball->position, hole->position)) {
+      continue;
+    }
+
+    constexpr float kApproachDuration = 1.1f;
+    m_gameJuice->TriggerSlowMotion(kApproachDuration, 0.30f);
+    m_gameJuice->TriggerCupApproachTrail(1.4f);
+    m_gameJuice->SetTargetFov(34.0f);
+    m_cupApproachZoomTimer = kApproachDuration;
+    m_cupApproachEffectTriggered = true;
+    return;
+  }
+}
 
 void WikiGolfScene::UpdateHudAndEffects(
     core::GameContext &ctx, GolfGameState &state, ShotState &shot, float dt) {

@@ -143,6 +143,10 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       // ちらつく（出入りで再判定される）のを防ぐため速度を即座に停止する。
       rb->velocity = {0.0f, 0.0f, 0.0f};
       rb->angularVelocity = {0.0f, 0.0f, 0.0f};
+      rb->acceleration = {0.0f, 0.0f, 0.0f};
+      rb->isStatic = true;
+      m_fastForwardTimer.Reset();
+      m_fastForwardIndicator.Reset(ctx);
 
       // 遷移前に地形判定UI/スイング判定UIを非表示にする（次のコースに持ち越さない）
       if (m_terrainImageEntity != UINT32_MAX) {
@@ -386,6 +390,9 @@ void WikiGolfScene::UpdateCupInCelebration(core::GameContext &ctx) {
 
   if (m_clubController) {
     m_clubController->EndCelebration();
+  }
+  if (m_gameJuice) {
+    m_gameJuice->ResetFov();
   }
 
   const CelebrationNext next = m_celebrationNext;

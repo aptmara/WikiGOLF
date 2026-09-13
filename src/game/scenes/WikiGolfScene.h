@@ -102,6 +102,11 @@ private:
   void BeginCupInCelebration(core::GameContext &ctx,
                              const DirectX::XMFLOAT3 &holePos);
 
+  /** @brief 吸引を伴わないカップ接近時のスロー・ズーム演出を更新します。*/
+  void UpdateCupApproachEffects(
+      core::GameContext &ctx, const game::components::GolfGameState &state,
+      const game::components::ShotState &shot, float dt);
+
   /** @brief 喜び演出中の更新。演出が終わったら保留していた遷移を実行します。*/
   void UpdateCupInCelebration(core::GameContext &ctx);
 
@@ -251,6 +256,8 @@ private:
   CelebrationNext m_celebrationNext = CelebrationNext::None;
   std::string m_celebrationTargetPage; /**< 演出後に遷移する記事名です。*/
   float m_celebrationElapsed = 0.0f;   /**< 喜び演出の経過時間(タイムアウト用)です。*/
+  bool m_cupApproachEffectTriggered = false; /**< 現在のショットで接近演出を再生済みか。*/
+  float m_cupApproachZoomTimer = 0.0f; /**< 接近ズームを維持する残り時間です。*/
   /** @brief インパクト確定からボール発射(クラブ最下点)までの残り秒数。負なら発射待ちなし。*/
   float m_pendingLaunchTimer = -1.0f;
   /** @brief インパクト確定時点のショット方向（スイング中にカメラが回っても変えない）です。*/

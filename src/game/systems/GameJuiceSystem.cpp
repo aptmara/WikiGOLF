@@ -58,6 +58,7 @@ void GameJuiceSystem::Initialize(core::GameContext &ctx) {
 void GameJuiceSystem::Shutdown(core::GameContext &ctx) {
   m_entityOwner.DestroyAll(ctx.world);
   m_trailEntities.clear();
+  m_trailCoreEntities.clear();
   m_trailPositions.clear();
   m_trailBaseColors.clear();
   m_impactParticles.clear();

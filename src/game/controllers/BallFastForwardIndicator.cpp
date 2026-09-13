@@ -74,6 +74,23 @@ void BallFastForwardIndicator::Shutdown() {
   m_currentAlpha = 0.0f;
 }
 
+void BallFastForwardIndicator::Reset(core::GameContext &ctx) {
+  m_displayedTier = FastForwardTier::Normal;
+  m_visibleSeconds = 0.0f;
+  m_currentAlpha = 0.0f;
+  if (m_entity == UINT32_MAX) return;
+
+  auto *ui = ctx.world.Get<UIImage>(m_entity);
+  if (!ui) return;
+  ui->texturePath.clear();
+  ui->alpha = 0.0f;
+  ui->visible = false;
+  ui->width = game::ui::kFastForwardIndicatorW;
+  ui->height = game::ui::kFastForwardIndicatorH;
+  ui->x = game::ui::kFastForwardIndicatorX - ui->width * 0.5f;
+  ui->y = game::ui::kFastForwardIndicatorY;
+}
+
 void BallFastForwardIndicator::Update(core::GameContext &ctx, float dt, FastForwardTier tier) {
   if (m_entity == UINT32_MAX) return;
   auto *ui = ctx.world.Get<UIImage>(m_entity);

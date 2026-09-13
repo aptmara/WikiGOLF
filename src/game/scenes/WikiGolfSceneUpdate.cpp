@@ -79,6 +79,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   if (m_phase == ScenePhase::Transitioning && m_transitionController) {
       PROFILE_SCOPE("WikiGolf.Transition");
       bool finished = m_transitionController->Update(ctx);
+      if (!finished && m_transitionController->IsCourseIntroductionActive() &&
+          m_clubController) {
+          const DirectX::XMFLOAT3 introductionShotDirection = {0.0f, 0.0f, 1.0f};
+          m_clubController->UpdateAnimation(
+              ctx, dt, m_ballEntity, introductionShotDirection);
+      }
       if (finished) {
           m_phase = ScenePhase::Playing;
           m_prevTutorialInputLocked = false;
@@ -248,15 +254,16 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // マップビュー更新
   bool isMapView = false;
+  bool pointerOverFlagFilters = false;
   bool wasMapView = m_minimapController && m_minimapController->IsMapView();
+  float fieldW = 80.0f;
+  float fieldD = 120.0f;
+  if (m_pageLoader) {
+      fieldW = m_pageLoader->GetFieldWidth();
+      fieldD = m_pageLoader->GetFieldDepth();
+  }
   if (m_minimapController && (!m_isTutorial || tutorialPolicy.map)) {
       PROFILE_SCOPE("WikiGolf.Minimap");
-      float fieldW = 80.0f;
-      float fieldD = 120.0f;
-      if (m_pageLoader) {
-          fieldW = m_pageLoader->GetFieldWidth();
-          fieldD = m_pageLoader->GetFieldDepth();
-      }
       if (m_isTutorial && m_tutorialOverlay) {
           m_minimapController->ProcessInput(
               ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity,
@@ -265,10 +272,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           m_minimapController->ProcessInput(
               ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
       }
-      DirectX::XMFLOAT3 shotDir{0, 0, 1};
-      if (m_cameraController) {
-          shotDir = m_cameraController->GetShotDirection();
-      }
+      static const std::vector<ecs::Entity> noTrajectory;
+      const auto &trajectoryEntities = m_trajectoryPredictor
+                                           ? m_trajectoryPredictor->GetDots()
+                                           : noTrajectory;
       const bool mapViewNow = m_minimapController->IsMapView();
       if (mapViewNow) {
           // 全体マップビューは実カメラの透視投影でマーカーを再計算するため、
@@ -277,16 +284,20 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           // 投影してしまい、動かすほどズレが目立つ。間引きも行わず毎フレーム
           // 追従させる。
           m_minimapController->UpdateMapCamera(ctx, fieldW, fieldD);
-          m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, shotDir);
+          m_minimapController->UpdateMinimap(ctx, fieldW, fieldD,
+                                              trajectoryEntities);
       } else {
           constexpr float kMinimapInterval = 1.0f / 30.0f;
           m_minimapUpdateTimer += dt;
           if (m_minimapUpdateTimer >= kMinimapInterval) {
-              m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, shotDir);
+              m_minimapController->UpdateMinimap(ctx, fieldW, fieldD,
+                                                  trajectoryEntities);
               m_minimapUpdateTimer = 0.0f;
           }
       }
       isMapView = m_minimapController->IsMapView();
+      pointerOverFlagFilters =
+          m_minimapController->IsPointerOverFlagFilters(mouseX, mouseY);
   }
 
   const bool escapeHandledByMapView =
@@ -313,6 +324,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // (RefreshAimPinSolution)に最も近いクラブへ自動的に切り替える。
   if (m_aimPinController && m_clubController &&
       (!m_isTutorial || tutorialPolicy.aimPin) &&
+      !pointerOverFlagFilters &&
       shot->phase == game::components::ShotState::Phase::Idle) {
       PROFILE_SCOPE("WikiGolf.AimPin");
       game::controllers::AimPinController::UpdateParams pinParams;
@@ -322,6 +334,12 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       pinParams.ballEntity = m_ballEntity;
       pinParams.cameraEntity = m_cameraEntity;
       pinParams.terrainSystem = m_terrainSystem.get();
+      if (!isMapView && m_minimapController) {
+          pinParams.hasMappedWorldPosition =
+              m_minimapController->TryGetHudMapWorldPosition(
+                  ctx, mouseX, mouseY, fieldW, fieldD,
+                  pinParams.mappedWorldPosition);
+      }
       auto pinResult = m_aimPinController->Update(ctx, pinParams);
       if (pinResult.pinPlaced) {
           RefreshAimPinSolution(ctx, true);
@@ -374,17 +392,22 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   }
 
   // カメラ更新
-  if (m_cameraController && (!m_isTutorial || tutorialPolicy.camera) && !isMapView) {
+  if (m_cameraController && (!m_isTutorial || tutorialPolicy.camera) &&
+      !isMapView && !pointerOverFlagFilters) {
       PROFILE_SCOPE("WikiGolf.Camera");
       m_cameraController->ProcessInput(ctx, mouseX, mouseY);
   }
 
   // ショット処理
-  if (m_shotController && (!m_isTutorial || tutorialPolicy.shot) && !isMapView) {
+  if (m_shotController && (!m_isTutorial || tutorialPolicy.shot) &&
+      !isMapView && !pointerOverFlagFilters) {
       PROFILE_SCOPE("WikiGolf.Shot");
       auto event = m_shotController->ProcessShot(ctx, state->canShoot, m_hud.get(), m_clubController.get());
       if (event.shotFired) {
           state->canShoot = false;
+          m_cupApproachEffectTriggered = false;
+          m_cupApproachZoomTimer = 0.0f;
+          if (m_gameJuice) m_gameJuice->ResetFov();
           if (m_aimPinController) m_aimPinController->ClearPin(ctx);
           // スイング(Hit)開始。ボールはクラブが最下点に達した時点で発射する
           m_pendingShotDirection = {0, 0, 1};
@@ -454,8 +477,18 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // 物理更新
   // ショット実行中、ボール着地後に規定秒数が経過すると待機時間短縮のため
   // 物理シミュレーションを倍速で進める（詳細: BallFastForwardTimer）。
+  UpdateCupApproachEffects(ctx, *state, *shot, dt);
   const float fastForwardMultiplier = m_fastForwardTimer.Update(ctx, dt);
-  game::systems::PhysicsSystem(ctx, dt * fastForwardMultiplier);
+  float simulationTimeScale = 1.0f;
+  if (m_gameJuice) {
+    simulationTimeScale = m_gameJuice->ConsumeTimeScale(dt);
+  }
+  float physicsTimeMultiplier = fastForwardMultiplier;
+  if (simulationTimeScale < 1.0f) {
+    physicsTimeMultiplier = simulationTimeScale;
+  }
+  game::systems::PhysicsSystem(
+      ctx, dt * physicsTimeMultiplier);
   m_fastForwardIndicator.Update(ctx, dt, m_fastForwardTimer.GetCurrentTier());
 
   // 物理後のボール位置を使い、追従カメラの1フレーム遅延を防ぐ。
