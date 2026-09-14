@@ -22,6 +22,81 @@ namespace game::systems {
 using namespace DirectX;
 using namespace game::components;
 
+namespace {
+
+/**
+ * @brief 球の中心が開口部の真上にあるカップを探します（無ければ nullptr）。
+*/
+const HoleInfo *FindCupUnderSphere(const HoleSpatialGrid &holeGrid, float x,
+                                   float y, float z) {
+  const HoleInfo *found = nullptr;
+  float nearestDistance = std::numeric_limits<float>::max();
+  holeGrid.Query(x, z, game::physics::kGolfCupRadius,
+                 [&](const HoleInfo &hole) {
+    if (!game::physics::IsOverCupOpening(hole.cup, x, y, z)) {
+      return;
+    }
+    const float distance =
+        game::physics::HorizontalDistanceToCup(hole.cup, x, z);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      found = &hole;
+    }
+  });
+  return found;
+}
+
+/**
+ * @brief カップ内部の接触（底・内壁・縁・ピン）を解決します。
+ * @param isGrounded 底に接している場合 true にします
+ * @param groundNormal 接地時の法線
+ * @return 何らかの接触を解決したら true
+*/
+bool ResolveCupContacts(const game::physics::GolfCupShape &cup, XMVECTOR &pos,
+                        XMVECTOR &vel, float radius, bool &isGrounded,
+                        XMVECTOR &groundNormal) {
+  using game::physics::GolfCupContactKind;
+  XMFLOAT3 center;
+  XMStoreFloat3(&center, pos);
+  game::physics::GolfCupContact contacts[4];
+  const int count =
+      game::physics::ComputeCupInteriorContacts(cup, center, radius, contacts);
+
+  for (int i = 0; i < count; ++i) {
+    const auto &contact = contacts[i];
+    const XMVECTOR normal = XMLoadFloat3(&contact.normal);
+    pos = XMVectorAdd(pos, XMVectorScale(normal, contact.penetration));
+
+    const float vn = XMVectorGetX(XMVector3Dot(vel, normal));
+    if (vn < 0.0f) {
+      if (contact.kind == GolfCupContactKind::Floor) {
+        vel = XMVectorSubtract(
+            vel, XMVectorScale(normal,
+                               vn * (1.0f + game::physics::kGolfCupFloorRestitution)));
+      } else {
+        // 壁・縁・ピンは反射させつつ接線方向の勢いも削り、跳ね出しを防ぐ。
+        const XMVECTOR normalVelocity = XMVectorScale(normal, vn);
+        const XMVECTOR tangentialVelocity =
+            XMVectorSubtract(vel, normalVelocity);
+        vel = XMVectorAdd(
+            XMVectorScale(normalVelocity,
+                          -game::physics::kGolfCupWallRestitution),
+            XMVectorScale(tangentialVelocity,
+                          game::physics::kGolfCupWallTangentialRetention));
+      }
+    }
+  }
+
+  XMStoreFloat3(&center, pos);
+  if (game::physics::IsRestingOnCupFloor(cup, center, radius)) {
+    isGrounded = true;
+    groundNormal = XMVectorSet(0, 1, 0, 0);
+  }
+  return count > 0;
+}
+
+} // namespace
+
 void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
   auto &ctx = frame.gameContext;
   const float subDt = frame.subDt;
@@ -104,35 +179,23 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
       // 地形衝突判定
       bool isGrounded = false;
       XMVECTOR groundNormal = XMVectorSet(0, 1, 0, 0);
+      const HoleInfo *cupUnderBall = nullptr;
 
       if (terrainData && col.type == ColliderType::Sphere) {
         float terrainH = 0.0f;
         XMVECTOR terrainN;
 
-        bool insideHole = false;
-        float carveDepth = 0.0f;
-        holeGrid.Query(posX, posZ, 0.5f, [&](const HoleInfo &hole) {
-          ++perfStats.holeCandidates;
-          float dx = posX - XMVectorGetX(hole.position);
-          float dz = posZ - XMVectorGetZ(hole.position);
-          float distSq = dx * dx + dz * dz;
-          // ホール視覚サイズに合わせた判定（scale 0.5 = 半径0.5）
-          float holeVisualRadius = 0.5f; // ビジュアルと統一
-          if (distSq < holeVisualRadius * holeVisualRadius &&
-              std::abs(posY - XMVectorGetY(hole.position)) < 2.0f) {
-            insideHole = true;
-            carveDepth = 0.6f; // 穴の深さ
-          }
-        });
+        // 開口部の真上では地形の支えが無い。カップの底・壁・縁で受け止める。
+        cupUnderBall = FindCupUnderSphere(holeGrid, posX, posY, posZ);
 
-        if (terrainSample.valid) {
+        if (cupUnderBall) {
+          ResolveCupContacts(cupUnderBall->cup, pos, vel, col.radius,
+                             isGrounded, groundNormal);
+        } else if (terrainSample.valid) {
           terrainH = game::physics::ToVisualSurfaceHeight(terrainSample.height);
           const float visualSurfaceHeight = terrainH;
           terrainN = terrainSample.normal;
-          if (insideHole) {
-            terrainH -= carveDepth;
-            terrainN = XMVectorSet(0, 1, 0, 0);
-          } else {
+          {
             const float verticalImpactSpeed =
                 std::max(0.0f, -XMVectorGetY(vel));
             terrainH -= ComputeSurfaceSinkDepth(
@@ -144,9 +207,6 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
           float penetration = terrainH - ballBottom;
 
           if (penetration > 0.0f) {
-            if (insideHole) {
-              penetration = std::min(penetration, 0.01f);
-            }
             if (step == subSteps - 1 &&
                 terrainEntity != ecs::NULL_ENTITY) {
               XMFLOAT3 centerValue;
@@ -436,6 +496,15 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
       // オイラー積分 (復活)
       vel = XMVectorAdd(vel, XMVectorScale(acc, subDt));
       pos = XMVectorAdd(pos, XMVectorScale(vel, subDt));
+
+      // カップ内にいた球は積分後にも壁・底を解決し、1サブステップで
+      // 壁をすり抜けて地表へ押し上げられる（勢いを保ったまま出てくる）のを防ぐ。
+      if (cupUnderBall) {
+        bool unusedGrounded = false;
+        XMVECTOR unusedNormal = groundNormal;
+        ResolveCupContacts(cupUnderBall->cup, pos, vel, col.radius,
+                           unusedGrounded, unusedNormal);
+      }
       // 最終NaNチェック
       if (IsVectorNaN(pos) || IsVectorNaN(vel)) {
         LOG_DEBUG("Physics", "Post-integration NaN detected, resetting");

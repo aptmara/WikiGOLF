@@ -23,6 +23,7 @@ struct ProceduralFlagOptions {
   bool createParticles = false;     ///< 旗周辺の低密度粒子を生成するか。
   bool large = false;               ///< 目的地用にやや大きくするか。
   float animationWeight = 0.7f;      ///< なびきと粒子の強さ。
+  float poleSinkDepth = 0.0f;        ///< 根元より下へ竿を伸ばす長さ（カップの底まで差し込む用）。
 };
 
 /**
@@ -31,6 +32,8 @@ struct ProceduralFlagOptions {
 struct ProceduralFlagResult {
   ecs::Entity poleEntity = UINT32_MAX;
   ecs::Entity firstClothEntity = UINT32_MAX;
+  float poleRadius = 0.0f;  ///< 竿の見た目半径（断面の半幅）
+  float poleHeight = 0.0f;  ///< 根元から上の竿の高さ
   std::vector<ecs::Entity> allEntities;
   std::vector<ecs::Entity> particleEntities;
 };

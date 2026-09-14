@@ -49,7 +49,7 @@ void DrawCupInInspector(core::GameContext &ctx,
                               ImGuiTreeNodeFlags_DefaultOpen)) {
     DrawResult("判定内", status.withinHorizontalRange);
     ImGui::Text("水平距離: %.3f", status.horizontalDistance);
-    ImGui::Text("判定半径: %.3f（ホール半径の90%%）",
+    ImGui::Text("判定半径: %.3f（カップ内壁の当たり判定半径）",
                 status.captureRadius);
     const float ratio = SafeRatio(status.horizontalDistance,
                                   status.captureRadius);
@@ -60,15 +60,15 @@ void DrawCupInInspector(core::GameContext &ctx,
   if (ImGui::CollapsingHeader("2. 高さ条件",
                               ImGuiTreeNodeFlags_DefaultOpen)) {
     DrawResult("判定内", status.withinVerticalRange);
-    ImGui::Text("ボールY - ホールY: %.3f", status.verticalOffset);
-    ImGui::TextDisabled("条件: -1.000 < 相対Y < 0.000");
+    ImGui::Text("ボールY - 縁Y: %.3f", status.verticalOffset);
+    ImGui::TextDisabled("条件: ボール下端がカップ底に達している");
   }
 
-  if (ImGui::CollapsingHeader("3. 速度条件",
+  if (ImGui::CollapsingHeader("3. 速度（参考）",
                               ImGuiTreeNodeFlags_DefaultOpen)) {
-    DrawResult("十分に低速", status.slowEnough);
+    DrawResult("低速", status.slowEnough);
     ImGui::Text("速度: %.3f", status.speed);
-    ImGui::TextDisabled("条件: 速度 < 0.100");
+    ImGui::TextDisabled("判定条件ではありません（壁と底でボールは止まります）");
     ImGui::ProgressBar(SafeRatio(status.speed, 0.1f), {-1.0f, 0.0f},
                        status.slowEnough ? "低速" : "速すぎる");
   }

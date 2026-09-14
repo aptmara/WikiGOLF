@@ -212,6 +212,81 @@ Mesh MeshPrimitives::CreateCylinder(ID3D11Device *device, int segments) {
   return mesh;
 }
 
+Mesh MeshPrimitives::CreateGolfCup(ID3D11Device *device, int segments) {
+  segments = (std::max)(segments, 8);
+  const float radius = 0.5f;
+  const float pi = 3.14159265358979f;
+
+  // 上端から底までの段。上部の白い帯と、奥へ行くほど暗い内壁を表す。
+  struct Ring {
+    float y;
+    float shade;
+  };
+  const Ring rings[] = {
+      {0.0f, 0.96f}, {-0.22f, 0.92f}, {-0.25f, 0.34f}, {-1.0f, 0.18f}};
+  const int ringCount = static_cast<int>(sizeof(rings) / sizeof(rings[0]));
+
+  std::vector<Vertex> vertices;
+  std::vector<uint32_t> indices;
+  vertices.reserve((segments + 1) * (ringCount + 1) + 1);
+  indices.reserve(segments * ((ringCount - 1) * 6 + 3));
+
+  for (int ring = 0; ring < ringCount; ++ring) {
+    const float shade = rings[ring].shade;
+    for (int i = 0; i <= segments; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(segments);
+      const float angle = t * pi * 2.0f;
+      const float nx = std::cos(angle);
+      const float nz = std::sin(angle);
+      vertices.push_back({{nx * radius, rings[ring].y, nz * radius},
+                          {-nx, 0.0f, -nz},
+                          {t, -rings[ring].y},
+                          {shade, shade, shade, 1.0f}});
+    }
+  }
+
+  const uint32_t stride = static_cast<uint32_t>(segments + 1);
+  for (int ring = 0; ring + 1 < ringCount; ++ring) {
+    for (int i = 0; i < segments; ++i) {
+      const uint32_t top = static_cast<uint32_t>(ring) * stride + i;
+      const uint32_t nextTop = top + 1;
+      const uint32_t bottom = top + stride;
+      const uint32_t nextBottom = bottom + 1;
+      // 内側から見て時計回り（表面）になる順序
+      indices.insert(indices.end(), {bottom, nextBottom, top, nextBottom,
+                                     nextTop, top});
+    }
+  }
+
+  const float floorShade = 0.14f;
+  const uint32_t floorCenter = static_cast<uint32_t>(vertices.size());
+  vertices.push_back({{0.0f, -1.0f, 0.0f},
+                      {0.0f, 1.0f, 0.0f},
+                      {0.5f, 0.5f},
+                      {floorShade, floorShade, floorShade, 1.0f}});
+  const uint32_t floorRing = static_cast<uint32_t>(vertices.size());
+  for (int i = 0; i <= segments; ++i) {
+    const float angle =
+        static_cast<float>(i) / static_cast<float>(segments) * pi * 2.0f;
+    const float x = std::cos(angle);
+    const float z = std::sin(angle);
+    vertices.push_back({{x * radius, -1.0f, z * radius},
+                        {0.0f, 1.0f, 0.0f},
+                        {x * 0.5f + 0.5f, z * 0.5f + 0.5f},
+                        {floorShade, floorShade, floorShade, 1.0f}});
+  }
+  for (int i = 0; i < segments; ++i) {
+    const uint32_t current = static_cast<uint32_t>(i);
+    indices.insert(indices.end(), {floorCenter, floorRing + current + 1,
+                                   floorRing + current});
+  }
+
+  ComputeTangents(vertices, indices);
+  Mesh mesh;
+  mesh.Create(device, vertices, indices);
+  return mesh;
+}
+
 Mesh MeshPrimitives::CreateRock(ID3D11Device *device, int rings, int sectors) {
   rings = (std::max)(rings, 4);
   sectors = (std::max)(sectors, 6);

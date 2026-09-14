@@ -53,6 +53,7 @@ struct HoleInfo {
   float radius = 0.0f;
   float gravity = 0.0f;
   float suctionRange = 0.0f;
+  game::physics::GolfCupShape cup; ///< カップ形状（position.y が縁の高さ）
 };
 
 /**

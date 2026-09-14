@@ -35,6 +35,7 @@ Texture2DArray g_NormalArray : register(t1); /**< ノーマルマップ配列（
 SamplerState g_Sampler : register(s0);       /**< サンプラーステート */
 
 #include "ShadowSampling.hlsli"
+#include "GolfCupClip.hlsli"
 
 /**
  * @brief 2Dワールド座標から砂粒・ノイズ用ハッシュ値を算出します。
@@ -126,6 +127,9 @@ void FindMaterialBlend(float3 color, out float layerA, out float layerB,
  * @return 陰影・マテリアル合成済みピクセルカラー
  */
 float4 main(PS_INPUT input) : SV_TARGET {
+    // カップの開口部は描かず、下のカップ内壁を見せる
+    ClipGolfCupOpening(input.WorldPos);
+
     // UVスケール適用
     float uvScale = max(MaterialFlags.z, 1.0f);
     float materialLayerA;

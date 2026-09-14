@@ -26,17 +26,24 @@ DebugCupInStatus EvaluateCupInStatus(const DirectX::XMFLOAT3 &ballPosition,
   result.ballPosition = ballPosition;
   result.holePosition = holePosition;
   result.targetHole = targetHole;
+  const game::physics::GolfCupShape cup =
+      game::scenes::cupin::MakeCupShape(holePosition, holeRadius);
+  const float ballRadius = game::physics::kBallRadius;
   result.horizontalDistance = std::sqrt(distanceSquared);
-  result.captureRadius = holeRadius;
+  result.captureRadius = game::physics::PhysicsCupRadius(cup);
   result.verticalOffset = ballPosition.y - holePosition.y;
   result.speed = std::sqrt(speedSquared);
   result.withinHorizontalRange =
-      distanceSquared <= result.captureRadius * result.captureRadius;
+      distanceSquared < result.captureRadius * result.captureRadius;
+  const float bottom = ballPosition.y - ballRadius;
+  const float floorY = game::physics::PhysicsCupFloorY(cup);
   result.withinVerticalRange =
-      result.verticalOffset < 0.0f && result.verticalOffset > -1.0f;
+      bottom >= floorY - 0.05f &&
+      bottom <= floorY + game::physics::kGolfCupInFloorTolerance;
+  // 速度は判定条件ではない（壁と底で止まるため）。参考値として残す。
   result.slowEnough = speedSquared < 0.01f;
   result.readyForCupIn = game::scenes::cupin::IsBallReadyForCupIn(
-      ballPosition, holePosition, holeRadius, speedSquared);
+      ballPosition, holePosition, holeRadius, ballRadius);
   result.holeInOne = result.readyForCupIn && targetHole && shotCount == 1;
   return result;
 }

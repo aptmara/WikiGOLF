@@ -11,6 +11,7 @@
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
 #include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/GolfCupPhysics.h"
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
@@ -324,10 +325,11 @@ void DebugColliderRenderer::Draw(core::GameContext &ctx,
     const DebugCupInStatus status = CaptureCupInStatus(ctx.world);
     if (status.available) {
       std::vector<DebugLine3D> guideLines;
+      const float cupDepth = game::physics::kGolfCupDepth;
       const XMFLOAT3 center = {status.holePosition.x,
-                               status.holePosition.y - 0.5f,
+                               status.holePosition.y - cupDepth * 0.5f,
                                status.holePosition.z};
-      AppendCylinderLines(guideLines, center, status.captureRadius, 1.0f,
+      AppendCylinderLines(guideLines, center, status.captureRadius, cupDepth,
                           {0.0f, 0.0f, 0.0f, 1.0f});
       guideLines.push_back({status.ballPosition, status.holePosition});
       const ImU32 color = status.readyForCupIn

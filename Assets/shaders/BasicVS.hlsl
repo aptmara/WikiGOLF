@@ -56,6 +56,8 @@ struct VS_OUTPUT {
     float2 worldXZ : TEXCOORD1;      /**< ワールドXZ座標 */
     float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
     float4 shadowPosition : TEXCOORD5;/**< 光源空間座標 */
+    float3 worldPosition : TEXCOORD6;/**< ワールド座標 */
+    float cupClip : TEXCOORD7;       /**< 1ならカップ開口部をくり抜く */
 };
 
 /**
@@ -85,6 +87,9 @@ VS_OUTPUT main(VS_INPUT input) {
     output.worldXZ = worldPos.xz;
     output.materialFlags = inst.Flags;
     output.materialFlags.w = inst.Color.a;
+    // Basic の Flags.w は RenderSystem がカップくり抜き指定に使う
+    output.worldPosition = worldPos.xyz;
+    output.cupClip = inst.Flags.w;
     output.shadowPosition = mul(worldPos, ShadowViewProjection);
     
     return output;

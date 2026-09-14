@@ -60,6 +60,9 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   } else if (path == "builtin/cylinder_smooth") {
     mesh = graphics::MeshPrimitives::CreateCylinder(m_device.GetDevice(), 24);
     success = true;
+  } else if (path == "builtin/golf_cup") {
+    mesh = graphics::MeshPrimitives::CreateGolfCup(m_device.GetDevice());
+    success = true;
   } else if (path == "builtin/rock" || path == "rock") {
     mesh = graphics::MeshPrimitives::CreateRock(m_device.GetDevice());
     success = true;

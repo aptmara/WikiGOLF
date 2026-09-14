@@ -17,6 +17,7 @@ cbuffer ConstantBuffer : register(b0) {
 };
 
 #include "ShadowSampling.hlsli"
+#include "GolfCupClip.hlsli"
 
 struct PS_INPUT {
     float4 position : SV_POSITION;
@@ -46,6 +47,8 @@ float InterleavedGradientNoise(float2 pixelPosition) {
  */
 float4 main(PS_INPUT input) : SV_TARGET {
     clip(input.distanceFade - InterleavedGradientNoise(input.position.xy));
+    // カップの開口部に芝の葉を描かない
+    ClipGolfCupOpening(input.worldPos);
 
     float tipWeight = saturate(1.0f - input.texCoord.y); // 根本=0, 穂先=1
 

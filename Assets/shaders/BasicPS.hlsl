@@ -20,6 +20,7 @@ cbuffer ConstantBuffer : register(b0) {
 };
 
 #include "ShadowSampling.hlsli"
+#include "GolfCupClip.hlsli"
 
 /**
  * @brief 2D座標から擬似乱数ハッシュ値を生成します。
@@ -79,6 +80,8 @@ struct PS_INPUT {
     float2 worldXZ : TEXCOORD1;      /**< ワールドXZ座標 */
     float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
     float4 shadowPosition : TEXCOORD5;/**< 光源空間座標 */
+    float3 worldPosition : TEXCOORD6;/**< ワールド座標 */
+    float cupClip : TEXCOORD7;       /**< 1ならカップ開口部をくり抜く */
 };
 
 /**
@@ -87,6 +90,11 @@ struct PS_INPUT {
  * @return 陰影計算済みピクセルカラー
  */
 float4 main(PS_INPUT input) : SV_TARGET {
+    // 地表を覆う記事オーバーレイはカップの開口部を描かない
+    if (input.cupClip > 0.5f) {
+        ClipGolfCupOpening(input.worldPosition);
+    }
+
     float hasDiffuse = input.materialFlags.x;
     float hasNormalMap = input.materialFlags.y;
 

@@ -21,6 +21,8 @@ int main() {
         "Sphere creation rejects a null device");
   CHECK(!graphics::MeshPrimitives::CreateCylinder(device).IsValid(),
         "Cylinder creation rejects a null device");
+  CHECK(!graphics::MeshPrimitives::CreateGolfCup(device).IsValid(),
+        "Golf cup creation rejects a null device");
   CHECK(!graphics::MeshPrimitives::CreateRock(device).IsValid(),
         "Rock creation rejects a null device");
   CHECK(!graphics::MeshPrimitives::CreateGrassClump(device).IsValid(),

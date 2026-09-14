@@ -27,6 +27,13 @@ public:
   /** @brief 円柱を生成 */
   static Mesh CreateCylinder(ID3D11Device *device, int segments = 16);
 
+  /**
+   * @brief ゴルフカップの内壁と底を生成
+   * @details 半径0.5、上端 y=0・底 y=-1。面は内側（上から覗き込む方向）を向き、
+   *          上端付近は白いカップ、奥ほど暗くなる頂点カラーを持つ。
+   */
+  static Mesh CreateGolfCup(ID3D11Device *device, int segments = 40);
+
   /** @brief 装飾用の不規則な岩形状を生成 */
   static Mesh CreateRock(ID3D11Device *device, int rings = 12,
                          int sectors = 18);

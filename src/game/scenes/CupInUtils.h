@@ -4,6 +4,7 @@
  * @brief CupInUtils クラスおよび関連インターフェース
 */
 
+#include "../utils/GolfCupPhysics.h"
 #include <DirectXMath.h>
 #include <cmath>
 
@@ -21,25 +22,26 @@ inline bool IsBallWithinCupApproachRange(
          std::abs(dy) <= 2.0f;
 }
 
+/**
+ * @brief ホール位置（縁の中心）と開口半径からカップ形状を作ります。
+*/
+inline game::physics::GolfCupShape MakeCupShape(
+    const DirectX::XMFLOAT3 &holePos, float holeRadius) {
+  game::physics::GolfCupShape cup;
+  cup.centerX = holePos.x;
+  cup.centerZ = holePos.z;
+  cup.rimY = holePos.y;
+  cup.radius = holeRadius;
+  return cup;
+}
+
 // ホール判定をまとめたヘルパー（テスト可能な純粋関数）
+// カップは壁と底を持つ実際の穴なので、ボールが底まで落ち切った時点で成立する。
 inline bool IsBallReadyForCupIn(const DirectX::XMFLOAT3 &ballPos,
                                 const DirectX::XMFLOAT3 &holePos,
-                                float holeRadius, float speedSq) {
-  float dx = ballPos.x - holePos.x;
-  float dz = ballPos.z - holePos.z;
-  float distSq = dx * dx + dz * dz;
-
-  if (distSq > holeRadius * holeRadius)
-    return false;
-
-  // 高さチェック：ホールより下かつ一定の深さ内にいる
-  float dy = ballPos.y - holePos.y;
-  bool inHoleRange = (dy < 0.0f && dy > -1.0f);
-
-  // 速度チェック：十分に遅い場合のみカップインと判定
-  bool isSlow = speedSq < 0.01f;
-
-  return inHoleRange && isSlow;
+                                float holeRadius, float ballRadius) {
+  return game::physics::IsBallSettledInCup(MakeCupShape(holePos, holeRadius),
+                                           ballPos, ballRadius);
 }
 
 } // namespace game::scenes::cupin

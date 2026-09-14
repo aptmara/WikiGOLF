@@ -170,9 +170,13 @@ ProceduralFlagResult CreateProceduralFlag(
 
   auto poleEntity = CreateTrackedEntity(ctx, result);
   auto &poleT = ctx.world.Add<Transform>(poleEntity);
-  poleT.position = {basePosition.x, basePosition.y + poleHeight * 0.5f,
+  const float poleSinkDepth = (std::max)(options.poleSinkDepth, 0.0f);
+  poleT.position = {basePosition.x,
+                    basePosition.y + (poleHeight - poleSinkDepth) * 0.5f,
                     basePosition.z};
-  poleT.scale = {0.055f * size, poleHeight, 0.055f * size};
+  poleT.scale = {0.055f * size, poleHeight + poleSinkDepth, 0.055f * size};
+  result.poleRadius = 0.055f * size * 0.5f;
+  result.poleHeight = poleHeight;
   auto &poleMr = ctx.world.Add<MeshRenderer>(poleEntity);
   poleMr.mesh = ctx.resource.LoadMesh("builtin/cube");
   poleMr.shader = basicShader;
