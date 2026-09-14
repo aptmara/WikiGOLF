@@ -8,6 +8,7 @@
 #include "../../core/GameContext.h"
 #include "../../core/Scene.h"
 #include <array>
+#include <vector>
 
 namespace game::scenes {
 
@@ -19,6 +20,8 @@ public:
 
   void OnEnter(core::GameContext &ctx) override;
   void OnUpdate(core::GameContext &ctx) override;
+  void OnExit(core::GameContext &ctx) override;
+  void Render(core::GameContext &ctx) override;
 
 private:
   /** @brief 設定項目の並び順。UIの生成順・action番号(prev0/next0等)にそのまま対応する。*/
@@ -53,6 +56,7 @@ private:
   std::array<ecs::Entity, kRowCount> m_nextButtons{};
   std::array<ecs::Entity, kRowCount> m_valueTexts{};
   ecs::Entity m_closeButton = 0;
+  std::vector<ecs::Entity> m_hiddenUnderlyingButtons;
 };
 
 } // namespace game::scenes

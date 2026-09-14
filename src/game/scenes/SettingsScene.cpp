@@ -11,6 +11,7 @@
 #include "../../graphics/GraphicsDevice.h"
 #include "../components/UIButton.h"
 #include "../components/UIText.h"
+#include "ModalSceneRender.h"
 #include <cstdlib>
 #include <string>
 
@@ -33,9 +34,9 @@ constexpr float kRowStep = 45.0f;
 constexpr float kFirstRowY = kPanelY + 70.0f;
 constexpr float kCloseY = kFirstRowY + 11.0f * kRowStep + 28.0f;
 
-const DirectX::XMFLOAT4 kNormalColor = {0.15f, 0.21f, 0.34f, 0.96f};
-const DirectX::XMFLOAT4 kHoverColor = {0.24f, 0.36f, 0.56f, 0.98f};
-const DirectX::XMFLOAT4 kPressedColor = {0.12f, 0.18f, 0.28f, 1.0f};
+const DirectX::XMFLOAT4 kNormalColor = {0.12f, 0.19f, 0.30f, 1.0f};
+const DirectX::XMFLOAT4 kHoverColor = {0.75f, 0.58f, 0.18f, 1.0f};
+const DirectX::XMFLOAT4 kPressedColor = {0.92f, 0.75f, 0.28f, 1.0f};
 
 std::wstring FormatWindowMode(core::WindowMode mode) {
   switch (mode) {
@@ -148,7 +149,7 @@ void SettingsScene::CreateSettingRow(core::GameContext &ctx, size_t rowIndex,
   labelText.height = kRowHeight;
   labelText.style.fontSize = 20.0f;
   labelText.style.valign = graphics::TextVAlign::Middle;
-  labelText.style.color = {0.86f, 0.90f, 0.98f, 1.0f};
+  labelText.style.color = {0.92f, 0.94f, 0.97f, 1.0f};
   labelText.visible = true;
   labelText.layer = kOverlayLayer + 2;
 
@@ -182,17 +183,8 @@ void SettingsScene::CreateSettingRow(core::GameContext &ctx, size_t rowIndex,
 }
 
 void SettingsScene::OnEnter(core::GameContext &ctx) {
-  auto overlayEntity = CreateEntity(ctx.world);
-  auto &overlay = ctx.world.Add<components::UIText>(overlayEntity);
-  overlay.text = L"";
-  overlay.x = 0.0f;
-  overlay.y = 0.0f;
-  overlay.width = 1280.0f;
-  overlay.height = 720.0f;
-  overlay.style.bgColor = {0.02f, 0.03f, 0.06f, 0.68f};
-  overlay.visible = true;
-  overlay.layer = kOverlayLayer;
-  overlay.fullScreenCover = true; // レターボックス余白も含めて画面全体を暗転させる
+  ctx.input.SetMouseCursorVisible(true);
+  ctx.input.SetMouseCursorLocked(false);
 
   auto panelEntity = CreateEntity(ctx.world);
   auto &panel = ctx.world.Add<components::UIText>(panelEntity);
@@ -201,8 +193,8 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
   panel.y = kPanelY;
   panel.width = kPanelWidth;
   panel.height = kPanelHeight;
-  panel.style.bgColor = {0.08f, 0.12f, 0.20f, 0.94f};
-  panel.style.borderColor = {0.72f, 0.82f, 0.95f, 0.95f};
+  panel.style.bgColor = {0.025f, 0.06f, 0.12f, 0.98f};
+  panel.style.borderColor = {0.8f, 0.68f, 0.28f, 1.0f};
   panel.style.borderWidth = 2.0f;
   panel.style.cornerRadius = 18.0f;
   panel.visible = true;
@@ -215,10 +207,10 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
   title.y = kPanelY + 20.0f;
   title.width = kPanelWidth;
   title.height = 50.0f;
-  title.style.fontSize = 30.0f;
+  title.style.fontFamily = "Times New Roman";
+  title.style.fontSize = 34.0f;
   title.style.align = graphics::TextAlign::Center;
-  title.style.color = {1.0f, 0.97f, 0.90f, 1.0f};
-  title.style.hasShadow = true;
+  title.style.color = {1.0f, 0.9f, 0.55f, 1.0f};
   title.visible = true;
   title.layer = kOverlayLayer + 2;
 
@@ -258,6 +250,14 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
   if (auto *btn = ctx.world.Get<components::UIButton>(m_closeButton)) {
     btn->textStyle.fontSize = 24.0f;
   }
+
+  ctx.world.Query<components::UIButton>().Each(
+      [&](ecs::Entity entity, components::UIButton &button) {
+        if (!OwnsEntity(entity) && button.visible) {
+          m_hiddenUnderlyingButtons.push_back(entity);
+          button.visible = false;
+        }
+      });
 
   RefreshDisplay(ctx);
 }
@@ -336,8 +336,8 @@ void SettingsScene::OnUpdate(core::GameContext &ctx) {
   bool closeRequested = false;
 
   ctx.world.Query<components::UIButton>().Each(
-      [&](ecs::Entity, components::UIButton &button) {
-        if (!button.visible ||
+      [&](ecs::Entity entity, components::UIButton &button) {
+        if (!OwnsEntity(entity) || !button.visible ||
             button.state != components::ButtonState::Pressed ||
             !ctx.input.GetMouseButtonDown(0)) {
           return;
@@ -412,6 +412,20 @@ void SettingsScene::OnUpdate(core::GameContext &ctx) {
     }
     ctx.sceneManager->PopScene();
   }
+}
+
+void SettingsScene::Render(core::GameContext &ctx) {
+  RenderModalScene(ctx, *this, {0.18f, 0.18f, 0.18f, 0.62f});
+}
+
+void SettingsScene::OnExit(core::GameContext &ctx) {
+  for (const ecs::Entity entity : m_hiddenUnderlyingButtons) {
+    if (auto *button = ctx.world.Get<components::UIButton>(entity)) {
+      button->visible = true;
+    }
+  }
+  m_hiddenUnderlyingButtons.clear();
+  DestroyAllEntities(ctx);
 }
 
 } // namespace game::scenes
