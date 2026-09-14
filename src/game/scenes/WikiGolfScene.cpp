@@ -90,9 +90,10 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
   if (!rb || !t)
     return false;
 
-  float speedSq = rb->velocity.x * rb->velocity.x +
-                  rb->velocity.y * rb->velocity.y +
-                  rb->velocity.z * rb->velocity.z;
+  float ballRadius = game::physics::kBallRadius;
+  if (const auto *collider = ctx.world.Get<Collider>(m_ballEntity)) {
+    ballRadius = collider->radius;
+  }
 
   // カップ判定
   auto *state = ctx.world.GetGlobal<GolfGameState>();
@@ -106,7 +107,7 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       continue;
 
     bool readyForCupIn = cupin::IsBallReadyForCupIn(
-        t->position, holeT->position, hole->radius, speedSq);
+        t->position, holeT->position, hole->radius, ballRadius);
 
     if (readyForCupIn) {
       if (m_isTutorial && m_tutorialOverlay &&
@@ -139,8 +140,7 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       // カップイン！
       LOG_INFO("WikiGolf", "Cup In! Target: {}", hole->linkTarget);
 
-      // カップイン後にボールが跳ねてホールから出てしまい、判定が
-      // ちらつく（出入りで再判定される）のを防ぐため速度を即座に停止する。
+      // カップの底に落ちたボールをその場で固定し、演出中に動かないようにする。
       rb->velocity = {0.0f, 0.0f, 0.0f};
       rb->angularVelocity = {0.0f, 0.0f, 0.0f};
       rb->acceleration = {0.0f, 0.0f, 0.0f};

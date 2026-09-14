@@ -28,7 +28,10 @@ TerrainData TerrainGenerator::GenerateTerrain(
   data.materialMap.resize(totalVerts, 0); // 0: Fairway
 
   // 基本形状の生成
-  GenerateBaseHeightMap(data, articleText);
+  GenerateBaseHeightMap(data, articleText, holePositions);
+
+  // 章ごとの大きな地形（台地の段・丘・谷など）
+  ApplyLandforms(data, articleText, holePositions);
 
   if (config.htmlCourse) {
     ApplyHtmlTerrainLayout(config.resolutionX, config.resolutionZ,
@@ -48,11 +51,53 @@ TerrainData TerrainGenerator::GenerateTerrain(
 
   // スムージング処理
   ApplySmoothing(data, 3); // 3回スムージング
+  FlattenCupSites(data, holePositions);
 
   // メッシュの生成
   CalculateNormals(data);
   GenerateMesh(data, holePositions); // ホール位置を渡す
 
+  if (config.generateExtension) {
+    data.extension = std::make_shared<TerrainData>(
+        GenerateExtensionTerrain(articleText, holePositions, config));
+  }
+
+  return data;
+}
+
+TerrainData TerrainGenerator::GenerateExtensionTerrain(
+    const std::string &articleText,
+    const std::vector<DirectX::XMFLOAT2> &holePositions,
+    const TerrainConfig &courseConfig) {
+  constexpr float kExtensionReach = 160.0f; // コースの外へ広げる距離
+  constexpr float kExtensionCell = 2.5f;    // 見た目用なので粗い格子で十分
+
+  TerrainConfig config = courseConfig;
+  const CourseFrame course = CourseFrameOf(courseConfig);
+  config.courseWidth = course.width;
+  config.courseDepth = course.depth;
+  config.worldWidth = course.width + kExtensionReach * 2.0f;
+  config.worldDepth = course.depth + kExtensionReach * 2.0f;
+  config.resolutionX =
+      static_cast<int>(std::ceil(config.worldWidth / kExtensionCell)) + 1;
+  config.resolutionZ =
+      static_cast<int>(std::ceil(config.worldDepth / kExtensionCell)) + 1;
+  config.htmlCourse = false; // 記事要素の起伏はコース内だけのもの
+  config.generateExtension = false;
+
+  TerrainData data;
+  data.config = config;
+  const size_t totalVerts =
+      static_cast<size_t>(config.resolutionX) * config.resolutionZ;
+  data.heightMap.resize(totalVerts, 0.0f);
+  data.materialMap.resize(totalVerts, 0);
+
+  // コースと同じ規則で、ホールに由来する処理（グリーン・バンカー・平坦化）だけを除いて作る。
+  GenerateBaseHeightMap(data, articleText, holePositions);
+  ApplyLandforms(data, articleText, holePositions);
+  ApplyMaterialCleanup(data);
+  GenerateVisualMaterialColors(data);
+  ApplySmoothing(data, 1);
   return data;
 }
 
@@ -167,6 +212,7 @@ TerrainData TerrainGenerator::GenerateTutorialTerrain(
 
   GenerateVisualMaterialColors(data);
   ApplySmoothing(data, 1);
+  FlattenCupSites(data, holePositions);
   CalculateNormals(data);
   GenerateMesh(data, holePositions);
 

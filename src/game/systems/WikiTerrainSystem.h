@@ -9,6 +9,7 @@
 #include "../systems/TerrainGenerator.h"
 #include <d3d11.h>
 #include <wrl/client.h>
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <future>
@@ -86,12 +87,21 @@ public:
   /** @brief 指定座標の地形高さを取得*/
   float GetHeight(float x, float z) const;
 
+  /**
+   * @brief コース外の延長地形（山並み）も含めた、見た目上の地面の高さを取得します。
+   * @details カメラが地形にめり込まないようにする判定用。コース内は GetHeight と同じ。
+   */
+  float GetSceneryHeight(float x, float z) const;
+
   /** @brief ボール近傍の芝を倒し、離れた芝を元の姿勢へ戻す*/
   void UpdateSurfaceResponse(core::GameContext &ctx, ecs::Entity ballEntity,
                              float dt);
 
   /** @brief 視点移動に合わせて表示範囲の芝を更新する。*/
   void UpdateSurfaceGrass(core::GameContext &ctx, ecs::Entity cameraEntity);
+
+  /** @brief 空に浮かぶ地球儀をゆっくり自転・上下させる。*/
+  void UpdateSkyGlobes(core::GameContext &ctx, float dt);
 
 private:
   struct GrassPatch {
@@ -146,6 +156,34 @@ private:
   void CreateWalls(core::GameContext &ctx, float width, float depth);
 
   /**
+   * @brief コース外側に見た目専用の山並みを配置します。
+   * @param ctx ゲームコンテキスト
+   * @param pageTitle 記事タイトル（山並みの形の種）
+   */
+  void CreateBackdrop(core::GameContext &ctx, const std::string &pageTitle);
+
+  /**
+   * @brief 空に Wikipedia パズル地球儀をランダムに浮かべます（見た目専用）。
+   * @param ctx ゲームコンテキスト
+   * @param pageTitle 記事タイトル（配置の種）
+   */
+  void CreateSkyGlobes(core::GameContext &ctx, const std::string &pageTitle);
+
+  struct SkyGlobe {
+    ecs::Entity entity = 0;
+    float scale = 1.0f;
+    int lod = -1;
+    DirectX::XMFLOAT3 basePosition = {0.0f, 0.0f, 0.0f};
+    float tilt = 0.0f;
+    float spinSpeed = 0.0f;
+    float bobPhase = 0.0f;
+    float bobHeight = 0.0f;
+  };
+  std::vector<SkyGlobe> m_skyGlobes; /**< 空に浮かぶ地球儀*/
+  std::array<resources::MeshHandle, 3> m_skyGlobeLodMeshes{}; /**< 地球儀の LOD メッシュ*/
+  float m_skyGlobeTime = 0.0f;
+
+  /**
    * @brief 画像障害物エンティティを配置します。
    * @param ctx ゲームコンテキスト
    * @param result テクスチャ生成結果
@@ -192,6 +230,8 @@ private:
   void ClearSurfaceGrass(core::GameContext &ctx);
 
   int m_biome = 0; /**< 現在のバイオーム*/
+  uint32_t m_backdropSeed = 0;  /**< 延長地形の形の種*/
+  bool m_hasBackdrop = false;   /**< 延長地形を生成済みか*/
 
   // ------------------------------------------------------------------
   // インクリメンタルビルド用状態

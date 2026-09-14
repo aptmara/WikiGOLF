@@ -36,6 +36,7 @@ struct TestContainer final : CourseHtmlContainer {
 };
 int main() {
     try {
+        Require(kMaxTexturePixels==64ull*1024*1024,"64 Mi-pixel HTML texture budget");
         Require(ArticleTarget("/wiki/%E6%97%A5%E6%9C%AC#History")=="日本","decoded title");
         Require(ArticleTarget("https://ja.wikipedia.org/wiki/A_B")=="A B","absolute title");
         Require(ArticleTarget("./日本")=="日本","relative title");

@@ -93,6 +93,7 @@ void WikiTerrainSystem::BeginBuildField(
   config.heightScale  = 1.5f;
   config.biome        = biome;
   config.friction     = 0.5f;
+  config.generateExtension = true; // コース外の延長地形も同じ規則で作る
   config.restitution  = 0.3f;
   switch (biome) {
     case 1: config.heightScale = 2.5f; break;
@@ -410,6 +411,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     ovMr.hasTexture  = true;
     ovMr.isTransparent = true;
     ovMr.blendMode   = game::components::BlendMode::Multiply;
+    ovMr.clipsGolfCupOpening = true;
     ovMr.customFlags = {1.0f, 0.0f, 1.0f, 0.0f};
     ovMr.minimapMode = game::components::MinimapRenderMode::Textured;
 
@@ -441,6 +443,8 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
   case BuildPhase::CreateWalls: {
     PROFILE_SCOPE("StepBuildField.CreateWalls");
     CreateWalls(ctx, m_buildFieldWidth, m_buildFieldDepth);
+    CreateBackdrop(ctx, m_buildPageTitle);
+    CreateSkyGlobes(ctx, m_buildPageTitle);
     m_buildPhase   = BuildPhase::CreateDecorations;
     m_buildProgress = 0.94f;
     return false;

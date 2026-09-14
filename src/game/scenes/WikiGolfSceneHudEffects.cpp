@@ -168,6 +168,7 @@ void WikiGolfScene::UpdateHudAndEffects(
     if (m_terrainSystem) {
         PROFILE_SCOPE("WikiGolf.SurfaceResponse");
         m_terrainSystem->UpdateSurfaceResponse(ctx, m_ballEntity, dt);
+        m_terrainSystem->UpdateSkyGlobes(ctx, dt);
     }
     {
       PROFILE_SCOPE("WikiGolf.ProceduralFlags");

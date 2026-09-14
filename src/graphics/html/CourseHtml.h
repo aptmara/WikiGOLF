@@ -6,7 +6,7 @@
 namespace graphics::html {
 inline constexpr std::size_t kMaxHtmlBytes = 2 * 1024 * 1024;
 inline constexpr std::size_t kMaxImages = 12;
-inline constexpr std::uint64_t kMaxTexturePixels = 32ull * 1024 * 1024;
+inline constexpr std::uint64_t kMaxTexturePixels = 64ull * 1024 * 1024;
 inline constexpr int kLayoutWidth = 2048;
 
 struct PreparedArticle {

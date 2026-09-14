@@ -16,10 +16,13 @@
 #include "../components/GrassRenderBatch.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
+#include "../components/Camera.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
 #include "TerrainGenerator.h"
 #include "TerrainLayoutRules.h"
+#include "SkyGlobeLayout.h"
+#include "TerrainBackdrop.h"
 #include "TerrainObstacleLayout.h"
 #include "WikiClient.h"
 #include "core/Profiler.h"
@@ -62,6 +65,8 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   }
   m_entities.clear();
   m_floorEntity = 0xFFFFFFFF;
+  m_hasBackdrop = false;
+  m_skyGlobes.clear();
 }
 
 /**
@@ -79,6 +84,8 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
 
   CreateFloor(ctx, result, fieldWidth, fieldDepth, pageTitle, pageCategories);
   CreateWalls(ctx, fieldWidth, fieldDepth);
+  CreateBackdrop(ctx, pageTitle);
+  CreateSkyGlobes(ctx, pageTitle);
   CreateDecorations(ctx, fieldWidth, fieldDepth, m_biome);
   CreateSurfaceGrass(ctx, fieldWidth, fieldDepth);
 }
@@ -116,6 +123,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
   // 物理パラメータの統一 (環境によらず一定)
   config.friction = 0.5f;    // 標準的な芝の摩擦
+  config.generateExtension = true; // コース外の延長地形も同じ規則で作る
   config.restitution = 0.3f; // 標準的な反発係数
 
   switch (biome) {
@@ -360,6 +368,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     overlayRenderer.hasTexture = true;
     overlayRenderer.isTransparent = true;
     overlayRenderer.blendMode = BlendMode::Multiply;
+    overlayRenderer.clipsGolfCupOpening = true;
     overlayRenderer.customFlags = {1.0f, 0.0f, 1.0f, 0.0f}; // readabilityMode=0 (乗算で対応)
     overlayRenderer.minimapMode = MinimapRenderMode::Textured;
 
@@ -378,6 +387,157 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
 
     m_entities.push_back(overlayEntity);
     ctx.world.Add<TerrainObject>(overlayEntity);
+  }
+}
+
+/**
+ * @brief 延長地形（山並み）も含めた見た目上の地面の高さを返します。
+*/
+float WikiTerrainSystem::GetSceneryHeight(float x, float z) const {
+  if (!m_terrainData) {
+    return 0.0f;
+  }
+  const float halfW = m_terrainData->config.worldWidth * 0.5f;
+  const float halfD = m_terrainData->config.worldDepth * 0.5f;
+  const bool insideCourse = std::abs(x) <= halfW && std::abs(z) <= halfD;
+  if (insideCourse || !m_hasBackdrop) {
+    return GetHeight(std::clamp(x, -halfW, halfW), std::clamp(z, -halfD, halfD));
+  }
+  return SampleTerrainBackdrop(*m_terrainData, x, z, m_backdropSeed).height;
+}
+
+/**
+ * @brief コース外側に見た目専用の山並みを生成します。
+ * @details 物理は持たない。外周の壁の外にあるのでボールは届かない。
+*/
+void WikiTerrainSystem::CreateBackdrop(core::GameContext &ctx,
+                                       const std::string &pageTitle) {
+  if (!m_terrainData) {
+    return;
+  }
+  const uint32_t seed =
+      static_cast<uint32_t>(std::hash<std::string>{}(pageTitle + "#backdrop"));
+  m_backdropSeed = seed;
+  m_hasBackdrop = true;
+  auto chunks = BuildTerrainBackdrop(*m_terrainData, seed);
+  const auto shader = ctx.resource.LoadShader(
+      "Terrain", L"Assets/shaders/TerrainVS.hlsl", L"Assets/shaders/TerrainPS.hlsl");
+  const auto albedo = ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray",
+                                                       TerrainAlbedoTexturePaths());
+  const auto normal = ctx.resource.LoadTextureArraySRV("TerrainNormalArray",
+                                                       TerrainNormalTexturePaths());
+  for (size_t i = 0; i < chunks.size(); ++i) {
+    auto handle = ctx.resource.CreateDynamicMesh(
+        "TerrainBackdrop_" + std::to_string(i), chunks[i].vertices,
+        chunks[i].indices);
+    auto e = ctx.world.CreateEntity();
+    ctx.world.Add<Transform>(e).position = {0.0f, 0.0f, 0.0f};
+    auto &mr = ctx.world.Add<MeshRenderer>(e);
+    mr.mesh = handle;
+    mr.shader = shader;
+    mr.textureSRV = albedo;
+    mr.hasTexture = static_cast<bool>(albedo);
+    mr.normalMapSRV = normal;
+    mr.hasNormalMap = static_cast<bool>(normal);
+    mr.customFlags = {2.0f, 0.0f, 0.0f, 0.0f};
+    m_entities.push_back(e);
+    ctx.world.Add<TerrainObject>(e);
+  }
+}
+
+/**
+ * @brief 空に Wikipedia パズル地球儀をランダムに浮かべます。
+ * @details タイトル画面・ロード画面と同じモデルを使う。物理は持たない。
+*/
+void WikiTerrainSystem::CreateSkyGlobes(core::GameContext &ctx,
+                                        const std::string &pageTitle) {
+  m_skyGlobes.clear();
+  if (!m_terrainData) {
+    return;
+  }
+  const uint32_t seed =
+      static_cast<uint32_t>(std::hash<std::string>{}(pageTitle + "#skyglobes"));
+  const auto layout = BuildSkyGlobeLayout(
+      m_terrainData->config.worldWidth, m_terrainData->config.worldDepth, seed,
+      [this](float x, float z) { return GetSceneryHeight(x, z); });
+  // 元の STL（約 31 万三角形）は使わず、遠景用に作った LOD モデルだけを使う。
+  for (int lod = 0; lod < kSkyGlobeLodCount; ++lod) {
+    m_skyGlobeLodMeshes[lod] = ctx.resource.LoadMesh(kSkyGlobeLodMeshes[lod]);
+  }
+  const auto shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
+                                              L"Assets/shaders/BasicPS.hlsl");
+  m_skyGlobes.reserve(layout.size());
+  for (const auto &placement : layout) {
+    auto e = ctx.world.CreateEntity();
+    auto &transform = ctx.world.Add<Transform>(e);
+    transform.position = placement.position;
+    transform.scale = {placement.scale, placement.scale, placement.scale};
+    XMStoreFloat4(&transform.rotation,
+                  XMQuaternionRotationRollPitchYaw(placement.tilt, placement.bobPhase, 0.0f));
+    auto &mr = ctx.world.Add<MeshRenderer>(e);
+    mr.mesh = m_skyGlobeLodMeshes[kSkyGlobeLodCount - 1]; // 最初は最も軽いモデル
+    mr.shader = shader;
+    mr.color = {0.95f, 0.95f, 0.98f, 1.0f}; // タイトル画面の地球儀と同じ白
+    mr.isVisible = true;
+    // 霧で見えなくなる距離より先は描かない。
+    mr.maxDrawDistance = 450.0f;
+    m_entities.push_back(e);
+
+    SkyGlobe globe;
+    globe.entity = e;
+    globe.scale = placement.scale;
+    globe.lod = kSkyGlobeLodCount - 1;
+    globe.basePosition = placement.position;
+    globe.tilt = placement.tilt;
+    globe.spinSpeed = placement.spinSpeed;
+    globe.bobPhase = placement.bobPhase;
+    globe.bobHeight = placement.bobHeight;
+    m_skyGlobes.push_back(globe);
+  }
+}
+
+void WikiTerrainSystem::UpdateSkyGlobes(core::GameContext &ctx, float dt) {
+  if (m_skyGlobes.empty()) {
+    return;
+  }
+  m_skyGlobeTime += dt;
+
+  // LOD はメインカメラからの距離で選ぶ。
+  bool hasCamera = false;
+  XMFLOAT3 cameraPosition = {0.0f, 0.0f, 0.0f};
+  ctx.world.Query<Transform, Camera>().Each(
+      [&](ecs::Entity, Transform &cameraTransform, Camera &camera) {
+        if (camera.isMainCamera && !hasCamera) {
+          cameraPosition = cameraTransform.position;
+          hasCamera = true;
+        }
+      });
+
+  for (auto &globe : m_skyGlobes) {
+    auto *transform = ctx.world.Get<Transform>(globe.entity);
+    if (!transform) {
+      continue;
+    }
+    if (hasCamera) {
+      const float dx = globe.basePosition.x - cameraPosition.x;
+      const float dy = globe.basePosition.y - cameraPosition.y;
+      const float dz = globe.basePosition.z - cameraPosition.z;
+      const int lod = SelectSkyGlobeLod(std::sqrt(dx * dx + dy * dy + dz * dz),
+                                        globe.scale, globe.lod);
+      if (lod != globe.lod) {
+        if (auto *renderer = ctx.world.Get<MeshRenderer>(globe.entity)) {
+          renderer->mesh = m_skyGlobeLodMeshes[lod];
+        }
+        globe.lod = lod;
+      }
+    }
+    transform->position = globe.basePosition;
+    transform->position.y +=
+        std::sin(m_skyGlobeTime * 0.35f + globe.bobPhase) * globe.bobHeight;
+    XMStoreFloat4(&transform->rotation,
+                  XMQuaternionRotationRollPitchYaw(
+                      globe.tilt, globe.bobPhase + m_skyGlobeTime * globe.spinSpeed,
+                      0.0f));
   }
 }
 

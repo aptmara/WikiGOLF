@@ -20,8 +20,8 @@ int main() {
     CHECK(minimum.x == 96 && minimum.z == 96,
           "小さいフィールドの解像度を下限へ制限する");
 
-    const auto maximum = TerrainLayoutRules::CalculateResolution(1000.0f, 1000.0f);
-    CHECK(maximum.x == 160 && maximum.z == 320,
+    const auto maximum = TerrainLayoutRules::CalculateResolution(1000.0f, 5000.0f);
+    CHECK(maximum.x == 160 && maximum.z == 2048,
           "大きいフィールドの解像度を軸ごとの上限へ制限する");
 
     CHECK(TerrainLayoutRules::DetermineBiome({"科学技術"}, "記事") == 2,
@@ -81,12 +81,15 @@ int main() {
                         60.0f) < 0.0001f,
           "壁の内側面をフィールド外周へ一致させる");
     CHECK(std::fabs(walls[0].scale.x - 6.0f) < 0.0001f &&
-              std::fabs(walls[0].scale.y - 100.0f) < 0.0001f &&
+              std::fabs(walls[0].scale.y - 300.0f) < 0.0001f &&
               std::fabs(walls[0].scale.z - 120.0f) < 0.0001f &&
               std::fabs(walls[2].scale.x - 80.0f) < 0.0001f &&
-              std::fabs(walls[2].scale.y - 100.0f) < 0.0001f &&
+              std::fabs(walls[2].scale.y - 300.0f) < 0.0001f &&
               std::fabs(walls[2].scale.z - 6.0f) < 0.0001f,
           "壁の表示寸法をコライダー寸法と一致させる");
+    CHECK(walls[0].position.y - walls[0].scale.y * 0.5f < -50.0f &&
+              walls[0].position.y + walls[0].scale.y * 0.5f > 150.0f,
+          "谷や山の標高でもボールが壁の上下から抜けない");
 
     graphics::ImageRegion image;
     image.x = 100.0f;

@@ -131,8 +131,9 @@ uint8_t HazardMaterialForBiome(int biome, float roll) {
 /**
  * @brief 地形チ（�（タを生成します、（
 */
-void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
-                                             const std::string &text) {
+void TerrainGenerator::GenerateBaseHeightMap(
+    TerrainData &data, const std::string &text,
+    const std::vector<DirectX::XMFLOAT2> &holePositions) {
   std::seed_seq seed(text.begin(), text.end());
   std::mt19937 rng(seed);
   std::uniform_real_distribution<float> dist(0.0f, 1.0f);
@@ -143,6 +144,22 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
   float hScale = data.config.heightScale;
   uint32_t terrainSeed = rng();
 
+  // 地表の模様の大きさ・向き・伸び方を記事ごとに変え、どの記事も同じ模様に見えないようにする。
+  // 乱数列を変えないよう、専用の乱数から取る。
+  std::mt19937 patternRng(terrainSeed ^ 0x3b9fu);
+  std::uniform_real_distribution<float> patternDist(0.0f, 1.0f);
+  const float patternScale = 0.55f + patternDist(patternRng) * 1.25f;
+  const float patternAngle = patternDist(patternRng) * 3.14159f;
+  const float patternStretch = 1.0f + patternDist(patternRng) * 1.8f;
+  const float patternCos = std::cos(patternAngle);
+  const float patternSin = std::sin(patternAngle);
+  auto patternNoise = [&](float x, float z, float sizeX, float sizeZ,
+                          uint32_t salt) {
+    const float u = (patternCos * x - patternSin * z) / (patternScale * patternStretch);
+    const float w = (patternSin * x + patternCos * z) / patternScale;
+    return FractalNoise(u / sizeX, w / sizeZ, terrainSeed ^ salt);
+  };
+
   // 全体をデフォルトで初期化
   for (int i = 0; i < resX * resZ; ++i) {
     data.materialMap[i] = 1;
@@ -152,13 +169,24 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
   float startU = 0.5f;
   float startV = 0.85f;
   int courseStyle = static_cast<int>(dist(rng) * 5.0f) % 5;
-  float fairwayWidthBase = resX * (0.10f + dist(rng) * 0.06f);
+  // フェアウェイの幅はコース幅に対する割合で持つ（生成範囲の格子数に依存させない）。
+  float fairwayWidthBase = 0.10f + dist(rng) * 0.06f;
 
   // ルート生成
   std::vector<std::pair<float, float>> routePoints;
   routePoints.push_back({startU, startV});
 
+  // コースを基準にした寸法。延長地形では生成範囲がコースより広い。
+  const CourseFrame frame = CourseFrameOf(data.config);
+  const float worldW = std::max(data.config.worldWidth, 1.0f);
+  const float worldD = std::max(data.config.worldDepth, 1.0f);
+  const float courseW = std::max(frame.width, 1.0f);
+  const float courseD = std::max(frame.depth, 1.0f);
+  // 起伏の大きさはメートル基準にし、記事の長さで地形が引き伸ばされないようにする。
+  // 長いフィールドでは区間を増やして、およそ 60m ごとに上り下りを付ける。
   int numSegments = 5 + (int)(dist(rng) * 4);
+  numSegments = std::max(numSegments,
+                         static_cast<int>(courseD * 0.7f / 60.0f));
   if (courseStyle == 1 || courseStyle == 4) {
     ++numSegments;
   }
@@ -170,9 +198,6 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
   }
   float doglegTarget = std::clamp(startU + doglegDir * (0.22f + dist(rng) * 0.18f),
                                   0.18f, 0.82f);
-
-  std::vector<float> segmentHeights;
-  segmentHeights.push_back(0.0f);
 
   for (int i = 1; i <= numSegments; ++i) {
     float t = (float)i / numSegments;
@@ -210,40 +235,38 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
     currentU = std::clamp(targetU, 0.15f, 0.85f);
     currentV = targetV;
     routePoints.push_back({currentU, currentV});
-
-    float heightChange = (dist(rng) - 0.5f) * 1.5f * hScale;
-    float prevHeight = segmentHeights.back();
-    segmentHeights.push_back(
-        std::clamp(prevHeight + heightChange, -1.0f * hScale, 2.0f * hScale));
   }
 
-  // マウンド生成
-  struct Mound {
-    float u, v, radius, height;
-  };
-  std::vector<Mound> mounds;
-  int numMounds = 3 + (int)(dist(rng) * 4);
-  if (biome == 2)
-    numMounds = 1;
-  if (biome == 3)
-    numMounds = 8;
 
-  for (int i = 0; i < numMounds; ++i) {
-    Mound m;
-    m.u = 0.1f + dist(rng) * 0.8f;
-    m.v = 0.1f + dist(rng) * 0.8f;
-    m.radius = 0.05f + dist(rng) * 0.1f;
-    m.height = 0.3f + dist(rng) * 0.7f;
-    if (biome == 3)
-      m.height *= 1.5f;
-    mounds.push_back(m);
+  // 外周の土手。カップの縁は平らにする必要があり、斜面にカップが並ぶと
+  // 隣同士で段差になるため、土手はホールが存在する範囲の外側にだけ作る。
+  float holeExtentX = 0.0f;
+  float holeExtentZ = 0.0f;
+  for (const auto &pos : holePositions) {
+    holeExtentX = std::max(holeExtentX, std::abs(pos.x));
+    holeExtentZ = std::max(holeExtentZ, std::abs(pos.y));
   }
+  const float defaultBandX = std::clamp(courseW * 0.14f, 8.0f, 14.0f);
+  const float defaultBandZ = std::clamp(courseD * 0.14f, 8.0f, 14.0f);
+  float edgeBandX = defaultBandX;
+  float edgeBandZ = defaultBandZ;
+  if (!holePositions.empty()) {
+    edgeBandX = std::clamp(courseW * 0.5f - holeExtentX - 4.0f, 2.0f, defaultBandX);
+    edgeBandZ = std::clamp(courseD * 0.5f - holeExtentZ - 4.0f, 2.0f, defaultBandZ);
+  }
+  // 帯が狭いときは土手を低くし、傾斜が 25 度程度を超えないようにする。
+  const float bankHeight = std::min({2.2f, edgeBandX * 0.3f, edgeBandZ * 0.3f});
 
   // 高さ計算
   for (int z = 0; z < resZ; ++z) {
-    float v = (float)z / (resZ - 1);
+    // v はコースの奥端を 0、手前端を 1 とする座標（コースの外では範囲外になる）。
+    const float wz = static_cast<float>(z) / (resZ - 1) * worldD - frame.marginZ;
+    const float v = wz / courseD;
     float routeU = startU;
-    float routeHeight = 0.0f;
+    // ルート終端より先は終端の値を保ち、そこでフェアウェイが飛ばないようにする。
+    if (v < routePoints.back().second) {
+      routeU = std::clamp(routePoints.back().first, 0.12f, 0.88f);
+    }
 
     for (size_t seg = 0; seg < routePoints.size() - 1; ++seg) {
       float v0 = routePoints[seg].second;
@@ -262,21 +285,20 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
                        routePoints[next].first, routePoints[following].first,
                        t),
             0.12f, 0.88f);
-        routeHeight = std::clamp(
-            CatmullRom(segmentHeights[previous], segmentHeights[seg],
-                       segmentHeights[next], segmentHeights[following], t),
-            -hScale, 2.0f * hScale);
         break;
       }
     }
 
     for (int x = 0; x < resX; ++x) {
-      float u = (float)x / (resX - 1);
       int idx = z * resX + x;
+      // 模様や幅の変化はコースの左奥を原点にしたメートル座標で計算する。
+      // 延長地形でもコースと同じ座標になるので、模様がそのまま外へ続く。
+      const float wx = static_cast<float>(x) / (resX - 1) * worldW - frame.marginX;
+      const float u = wx / courseW;
       float distFromRoute = std::abs(u - routeU);
-      float distPixels = distFromRoute * resX;
+      float distPixels = distFromRoute;
       float fairwayWidth =
-          fairwayWidthBase * (0.8f + 0.4f * std::sin(v * 6.28f * 2.0f));
+          fairwayWidthBase * (0.8f + 0.4f * std::sin(wz * 0.105f));
       float widthPulse = 1.0f;
       float pulseSign = -1.0f;
       switch (courseStyle) {
@@ -284,104 +306,52 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
         widthPulse = 0.80f + 0.35f * SmoothStep(0.35f, 0.65f, v);
         break;
       case 2:
-        widthPulse = 0.85f + 0.25f * std::sin(v * 18.84954f);
+        widthPulse = 0.85f + 0.25f * std::sin(wz * 0.157f);
         break;
       case 3:
-        if (std::sin(v * 25.13272f) > 0.0f) {
+        if (std::sin(wz * 0.209f) > 0.0f) {
           pulseSign = 1.0f;
         }
         widthPulse = 0.70f + 0.45f * pulseSign;
         break;
       case 4:
-        widthPulse = 0.65f + 0.55f * std::pow(std::sin(v * 15.70795f), 2.0f);
+        widthPulse = 0.65f + 0.55f * std::pow(std::sin(wz * 0.131f), 2.0f);
         break;
       default:
         break;
       }
       fairwayWidth *= std::clamp(widthPulse, 0.55f, 1.35f);
 
+      // 大きな起伏は ApplyLandforms で章ごとに付ける。ここでは外周と微小な凹凸のみ。
       float h = data.config.baseHeight;
 
-      // 進行方向の起伏
-      float routeInfluence =
-          1.0f - std::clamp(distFromRoute * 4.0f, 0.0f, 1.0f);
-      h += routeHeight * routeInfluence;
-
-      // サイドスロープ
-      h += std::min(distFromRoute * 0.3f, 0.2f) * hScale;
-
-      // マウンド
-      for (const auto &m : mounds) {
-        float du = u - m.u;
-        float dv = v - m.v;
-        float distToMound = std::sqrt(du * du + dv * dv);
-        if (distToMound < m.radius) {
-          float t = 1.0f - (distToMound / m.radius);
-          h += t * t * m.height * hScale;
-        }
-      }
-
-      // バイオーム別パターン
-      switch (biome) {
-      case 0:
-        h += FractalNoise(u * 3.2f, v * 3.2f, terrainSeed ^ 0x18a3u) *
-             0.10f * hScale;
-        break;
-      case 1:
-        h += std::sin(u * 9.2f + v * 2.4f) * 0.14f * hScale +
-             FractalNoise(u * 2.6f, v * 2.2f, terrainSeed ^ 0x2bd1u) *
-                 0.12f * hScale;
-        break;
-      case 2:
-        h += FractalNoise(u * 2.0f, v * 2.0f, terrainSeed ^ 0x3ce7u) *
-             0.035f * hScale;
-        break;
-      case 3:
-        h += FractalNoise(u * 5.0f, v * 5.0f, terrainSeed ^ 0x4df9u) *
-                 0.30f * hScale +
-             FractalNoise(u * 11.0f, v * 11.0f, terrainSeed ^ 0x58cbu) *
-                 0.07f * hScale;
-        break;
-      }
-
-      // ティーイングエリア
-      if (v > 0.8f && distFromRoute < 0.1f) {
-        h += SmoothStep(0.8f, 0.9f, v) * 0.2f * hScale;
-      }
-
-      // 外周壁
-      float dx = u - 0.5f;
-      float dz = v - 0.5f;
-      float distFromCenter = std::sqrt(dx * dx + dz * dz) * 2.0f;
-      if (distFromCenter > 0.85f) {
-        h += SmoothStep(0.85f, 1.0f, distFromCenter) * 4.0f;
-      }
+      // 外周の土手。コースの縁を頂にした、なだらかな高まりにする（コースの外でも下る）。
+      const float edgeDistanceX = std::abs(std::min(wx, courseW - wx));
+      const float edgeDistanceZ = std::abs(std::min(wz, courseD - wz));
+      float wallFactor = std::max(SmoothStep(edgeBandX, 0.0f, edgeDistanceX),
+                                  SmoothStep(edgeBandZ, 0.0f, edgeDistanceZ));
+      h += wallFactor * bankHeight;
 
       // 微小ノイズ
-      h += FractalNoise(u * 18.0f, v * 18.0f, terrainSeed ^ 0x69e5u) *
+      h += FractalNoise(wx / 4.5f, wz / 6.7f, terrainSeed ^ 0x69e5u) *
            0.012f * hScale;
 
       SetHeight(data, x, z, h);
 
       // マテリアル判定
-      float wallFactor = 0.0f;
-      if (distFromCenter > 0.85f) {
-        wallFactor = SmoothStep(0.85f, 1.0f, distFromCenter);
-      }
       float borderNoise =
-          FractalNoise(u * 6.0f, v * 6.0f, terrainSeed ^ 0x7af3u) * 0.16f;
+          patternNoise(wx, wz, 13.3f, 20.0f, 0x7af3u) * 0.16f;
       float corridor = distPixels / std::max(fairwayWidth, 0.001f) + borderNoise;
       float materialNoise =
-          FractalNoise(u * 7.0f, v * 7.0f, terrainSeed ^ 0x81bdu);
+          patternNoise(wx, wz, 11.4f, 17.1f, 0x81bdu);
       float detailNoise =
-          FractalNoise(u * 3.5f, v * 3.5f, terrainSeed ^ 0x92c7u);
+          patternNoise(wx, wz, 22.9f, 34.3f, 0x92c7u);
       bool shortcut = false;
       if (courseStyle >= 2 && routePoints.size() > 2) {
         auto first = routePoints.front();
         auto last = routePoints.back();
         float shortcutDist =
-            DistanceToSegment(u, v, first.first, first.second, last.first, last.second) *
-            resX;
+            DistanceToSegment(u, v, first.first, first.second, last.first, last.second);
         float shortcutWidth = fairwayWidthBase * (0.22f + 0.05f * courseStyle);
         shortcut = shortcutDist < shortcutWidth && v > 0.18f && v < 0.78f;
       }
@@ -427,8 +397,7 @@ void TerrainGenerator::GenerateBaseHeightMap(TerrainData &data,
         }
         float hazardField = detailNoise * 0.5f + 0.5f;
         if (hazardField > 1.0f - hazardChance) {
-          float hazardType = FractalNoise(u * 2.0f, v * 2.0f,
-                                          terrainSeed ^ 0xa391u) *
+          float hazardType = patternNoise(wx, wz, 40.0f, 60.0f, 0xa391u) *
                                  0.5f +
                              0.5f;
           data.materialMap[idx] = HazardMaterialForBiome(biome, hazardType);

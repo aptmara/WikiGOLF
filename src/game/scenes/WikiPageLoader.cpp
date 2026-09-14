@@ -149,8 +149,9 @@ void WikiPageLoader::ClearStartPin(core::GameContext& ctx, ecs::Entity ballEntit
 
 float WikiPageLoader::GetTerrainVisualHeight(float x, float z) const
 {
+    // コース紹介カメラがコース外の延長地形（山並み）へめり込まないよう、延長地形も含めて求める。
     const float terrainHeight = m_terrainSystem
-        ? m_terrainSystem->GetHeight(x, z)
+        ? m_terrainSystem->GetSceneryHeight(x, z)
         : 0.0f;
     return game::physics::ToVisualSurfaceHeight(terrainHeight);
 }
@@ -396,10 +397,6 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
             }
 
             hole.hopsToTarget = it->second;
-            if (auto* mr = ctx.world.Get<MeshRenderer>(e)) {
-                mr->color = HoleVisualRules::GetBodyColor(
-                    hole.isTarget, hole.hopsToTarget);
-            }
             if (hole.labelEntity != 0 &&
                 ctx.world.IsAlive(static_cast<ecs::Entity>(hole.labelEntity))) {
                 if (auto* label = ctx.world.Get<UIText>(

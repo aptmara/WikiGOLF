@@ -9,7 +9,9 @@ namespace game::systems {
 
 std::vector<WallLayout> TerrainObstacleLayout::BuildWalls(
     float fieldWidth, float fieldDepth) {
-    constexpr float wallHeight = 100.0f;
+    // 地形は谷で標高がマイナスになり、山で数十メートルになるため、上下に余裕を持たせる。
+    constexpr float wallHeight = 300.0f;
+    constexpr float wallCenterY = 50.0f;
     constexpr float wallThickness = 6.0f;
     const float halfWidth = fieldWidth * 0.5f;
     const float halfDepth = fieldDepth * 0.5f;
@@ -17,22 +19,22 @@ std::vector<WallLayout> TerrainObstacleLayout::BuildWalls(
     std::vector<WallLayout> walls;
     walls.reserve(4);
     walls.push_back({
-        {-halfWidth - wallThickness * 0.5f, wallHeight * 0.5f, 0.0f},
+        {-halfWidth - wallThickness * 0.5f, wallCenterY, 0.0f},
         {wallThickness, wallHeight, fieldDepth},
         {0.0f, 0.0f, 0.0f, 1.0f},
         {1.0f, 1.0f, 1.0f}});
     walls.push_back({
-        {halfWidth + wallThickness * 0.5f, wallHeight * 0.5f, 0.0f},
+        {halfWidth + wallThickness * 0.5f, wallCenterY, 0.0f},
         {wallThickness, wallHeight, fieldDepth},
         {0.0f, 0.0f, 0.0f, 1.0f},
         {1.0f, 1.0f, 1.0f}});
     walls.push_back({
-        {0.0f, wallHeight * 0.5f, halfDepth + wallThickness * 0.5f},
+        {0.0f, wallCenterY, halfDepth + wallThickness * 0.5f},
         {fieldWidth, wallHeight, wallThickness},
         {0.0f, 0.0f, 0.0f, 1.0f},
         {1.0f, 1.0f, 1.0f}});
     walls.push_back({
-        {0.0f, wallHeight * 0.5f, -halfDepth - wallThickness * 0.5f},
+        {0.0f, wallCenterY, -halfDepth - wallThickness * 0.5f},
         {fieldWidth, wallHeight, wallThickness},
         {0.0f, 0.0f, 0.0f, 1.0f},
         {1.0f, 1.0f, 1.0f}});

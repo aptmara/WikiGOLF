@@ -21,22 +21,17 @@ void TerrainGenerator::ApplySmoothing(TerrainData &data, int iterations) {
   std::vector<float> tempMap = data.heightMap;
 
   for (int iter = 0; iter < iterations; ++iter) {
-    for (int z = 1; z < resZ - 1; ++z) {
-      for (int x = 1; x < resX - 1; ++x) {
+    // 外周の行と列も端の値を複製してならす。外周だけ残すと端に段差ができる。
+    for (int z = 0; z < resZ; ++z) {
+      for (int x = 0; x < resX; ++x) {
         // 3x3 平均
         float sum = 0.0f;
-        sum += GetHeight(data, x - 1, z - 1);
-        sum += GetHeight(data, x, z - 1);
-        sum += GetHeight(data, x + 1, z - 1);
-
-        sum += GetHeight(data, x - 1, z);
-        sum += GetHeight(data, x, z);
-        sum += GetHeight(data, x + 1, z);
-
-        sum += GetHeight(data, x - 1, z + 1);
-        sum += GetHeight(data, x, z + 1);
-        sum += GetHeight(data, x + 1, z + 1);
-
+        for (int dz = -1; dz <= 1; ++dz) {
+          const int sz = std::clamp(z + dz, 0, resZ - 1);
+          for (int dx = -1; dx <= 1; ++dx) {
+            sum += GetHeight(data, std::clamp(x + dx, 0, resX - 1), sz);
+          }
+        }
         tempMap[z * resX + x] = sum / 9.0f;
       }
     }
@@ -91,8 +86,10 @@ void TerrainGenerator::ApplyMaterialCleanup(TerrainData &data) {
           sameCount = counts[mat];
         }
         const bool isolated = sameCount <= 1 && majorityCount >= 4;
-        const bool narrowHazard = mat >= 2 && mat != 3 && sameCount <= 2 &&
-                                  majorityCount >= 5;
+        // 同種の隣接が無いハザードは、周囲が混在していても必ずなじませる。
+        const bool narrowHazard =
+            mat >= 2 && mat != 3 &&
+            (sameCount == 0 || (sameCount <= 2 && majorityCount >= 5));
         if (isolated || narrowHazard) {
           cleaned[idx] = majority;
         }

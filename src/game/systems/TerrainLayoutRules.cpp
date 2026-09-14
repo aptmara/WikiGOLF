@@ -27,9 +27,11 @@ TerrainResolution TerrainLayoutRules::CalculateResolution(
     resolution.x = std::clamp(
         static_cast<int>(std::ceil(width / kTerrainVertexSpacing)) + 1,
         96, 160);
+    // 縦長の記事でも縦のマス間隔が横と大きく違わないようにする。
+    // 間隔が粗いとカップ周辺の平坦部が縦に伸び、隣のカップと段差になる。
     resolution.z = std::clamp(
         static_cast<int>(std::ceil(depth / kTerrainVertexSpacing)) + 1,
-        96, 320);
+        96, 2048);
     return resolution;
 }
 

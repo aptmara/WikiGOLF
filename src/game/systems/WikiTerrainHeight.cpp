@@ -25,7 +25,9 @@ float WikiTerrainSystem::GetHeight(float x, float z) const {
 
   const float u = x / worldW + 0.5f;
   const float v = 0.5f - z / worldD;
-  if (u < 0.0f || u >= 1.0f || v < 0.0f || v >= 1.0f) {
+  // 外周ちょうど（u, v = 1）はコース内として扱う。0 を返すと描画メッシュの端が
+  // 高さ 0 へ引き下げられ、起伏のある地形では端に壁ができてしまう。
+  if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) {
     return 0.0f;
   }
 

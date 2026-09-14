@@ -7,6 +7,7 @@
 #include "../../graphics/Mesh.h"
 #include <DirectXMath.h>
 #include "HtmlTerrainRules.h"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,14 @@ struct TerrainConfig {
 
   // バイオーム設定（草原、砂漠、氷原、岩場）
   int biome = 0;
+
+  // コースの寸法。0 なら生成範囲（worldWidth/worldDepth）と同じ。
+  // 延長地形ではコースより広い範囲を、コースを中心にして同じ規則で生成する。
+  float courseWidth = 0.0f;
+  float courseDepth = 0.0f;
+
+  // コースの四方に続く延長地形（見た目用）も生成するか
+  bool generateExtension = false;
 };
 
 struct TerrainData {
@@ -42,6 +51,10 @@ struct TerrainData {
 
   graphics::Mesh mesh; // (Optional)
   TerrainConfig config;
+
+  // コースの外側まで同じ規則で広げた粗い地形（generateExtension のときのみ）。
+  // ホールに由来するグリーンや平坦化は含まない。
+  std::shared_ptr<const TerrainData> extension;
 };
 
 class TerrainGenerator {
@@ -55,6 +68,16 @@ public:
                   const TerrainConfig &config);
 
   /**
+   * @brief コースの四方へ広げた延長地形を、コースと同じ規則で粗く生成します。
+   * @details 章の段・テーマ・地表の模様・記事ごとの模様をコースの外まで続ける。
+   *          ホールに由来するグリーン、バンカー、平坦化は作らない。
+*/
+  static TerrainData
+  GenerateExtensionTerrain(const std::string &articleText,
+                           const std::vector<DirectX::XMFLOAT2> &holePositions,
+                           const TerrainConfig &courseConfig);
+
+  /**
    * @brief チュートリアル用の固定教材地形を生成します。
 */
   static TerrainData
@@ -65,7 +88,9 @@ private:
   /**
    * @brief 基準ハイトマップを生成します。
 */
-  static void GenerateBaseHeightMap(TerrainData &data, const std::string &text);
+  static void GenerateBaseHeightMap(
+      TerrainData &data, const std::string &text,
+      const std::vector<DirectX::XMFLOAT2> &holePositions);
 
   /**
    * @brief ホール周辺に平らなプラットフォームを作成します。
@@ -73,6 +98,16 @@ private:
   static void
   CreatePlatforms(TerrainData &data,
                    const std::vector<DirectX::XMFLOAT2> &holePositions);
+
+  /**
+   * @brief カップ（穴）の周囲を完全に平らにします。
+   * @details 地表は穴の円内をシェーダーでくり抜き、下にカップ内壁を描くため、
+   *          縁の高さが一定でないと内壁との間に隙間が見えてしまう。
+   *          スムージング後に呼び出すこと。
+*/
+  static void
+  FlattenCupSites(TerrainData &data,
+                  const std::vector<DirectX::XMFLOAT2> &holePositions);
 
   /**
    * @brief 小さすぎる孤立地形を整理し、コースの読みやすさを保ちます。

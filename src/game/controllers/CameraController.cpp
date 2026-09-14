@@ -611,13 +611,40 @@ bool CameraController::CheckCameraCollision(core::GameContext &ctx,
     collided = true;
   }
 
-  // 地形高さ制限
+  // 地形高さ制限（コース外の延長地形を含む）
   if (m_cfg.terrain) {
+    constexpr float kGroundClearance = 0.5f;
+    // 注視点からカメラまでの視線上で、山や丘の中を通っていないかを調べる。
+    // 通っていれば、地形に入る手前までカメラを寄せる。注視点（ボール）は地面すれすれに
+    // あるため、視線上では「地面より下に入ったか」だけを見て、余白は最後に高さで確保する。
+    XMVECTOR segment = XMVectorSubtract(outPos, lookAtPos);
+    const float segmentLength = XMVectorGetX(XMVector3Length(segment));
+    if (segmentLength > 0.01f) {
+      const XMVECTOR segmentDir = XMVectorScale(segment, 1.0f / segmentLength);
+      constexpr float kStep = 0.75f;
+      constexpr float kIgnoreNearFocus = 1.0f;
+      float safeDistance = segmentLength;
+      for (float s = kIgnoreNearFocus; s < segmentLength + kStep; s += kStep) {
+        const float along = std::min(s, segmentLength);
+        const XMVECTOR p = XMVectorAdd(lookAtPos, XMVectorScale(segmentDir, along));
+        const float groundY =
+            m_cfg.terrain->GetSceneryHeight(XMVectorGetX(p), XMVectorGetZ(p));
+        if (XMVectorGetY(p) < groundY) {
+          safeDistance = std::max(0.5f, along - kStep);
+          break;
+        }
+      }
+      if (safeDistance < segmentLength) {
+        outPos = XMVectorAdd(lookAtPos, XMVectorScale(segmentDir, safeDistance));
+        collided = true;
+      }
+    }
+
     float camX = XMVectorGetX(outPos);
     float camZ = XMVectorGetZ(outPos);
-    float terrainH  = m_cfg.terrain->GetHeight(camX, camZ);
+    float terrainH  = m_cfg.terrain->GetSceneryHeight(camX, camZ);
     float currentY  = XMVectorGetY(outPos);
-    float minHeight = terrainH + 0.5f;
+    float minHeight = terrainH + kGroundClearance;
     if (currentY < minHeight) {
       outPos   = XMVectorSetY(outPos, minHeight);
       collided = true;
