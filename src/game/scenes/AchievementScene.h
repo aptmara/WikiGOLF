@@ -27,9 +27,14 @@ private:
   /** @brief 左右カラムを現在のスクロール位置に応じて再描画します。*/
   void RefreshColumns(core::GameContext &ctx);
 
+  /** @brief スクロールバーのつまみ位置・高さを現在のスクロール位置に応じて更新します。*/
+  void UpdateScrollThumb(core::GameContext &ctx);
+
   ecs::Entity m_closeButton = 0;
   ecs::Entity m_leftText = 0;
   ecs::Entity m_rightText = 0;
+  ecs::Entity m_scrollTrack = 0;
+  ecs::Entity m_scrollThumb = 0;
   std::vector<ecs::Entity> m_hiddenUnderlyingButtons;
 
   /** @brief 実績1件分のフォーマット済みテキスト（左右カラムに事前分配済み）。*/
@@ -38,6 +43,9 @@ private:
 
   int m_scrollOffset = 0;    ///< 現在表示中の先頭行インデックス
   int m_maxScrollOffset = 0; ///< スクロール可能な最大インデックス
+
+  bool m_draggingThumb = false;   ///< スクロールバーのつまみをドラッグ中か
+  float m_dragGrabOffsetY = 0.0f; ///< ドラッグ開始時のマウスY座標とつまみ上端との差
 };
 
 } // namespace game::scenes

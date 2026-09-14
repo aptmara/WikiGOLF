@@ -18,6 +18,13 @@ constexpr int kLayer = 900;
 constexpr int kVisibleRows = 6; // 1カラムに同時表示する実績数（スクロールで切替）
 constexpr float kScrollStepPerNotch = 1.0f;
 
+// 垂直スクロールバー（右カラムの右側の余白に縦長のトラック/つまみを配置）
+constexpr float kScrollTrackX = 1088.0f;
+constexpr float kScrollTrackWidth = 8.0f;
+constexpr float kScrollTrackY = 160.0f;
+constexpr float kScrollTrackHeight = 490.0f;
+constexpr float kScrollThumbMinHeight = 24.0f;
+
 /** @brief 進捗表示が必要な実績について、現在値を取り出します。0なら進捗表示なし。*/
 int CurrentProgressValue(game::systems::AchievementId id,
                          const game::systems::AchievementProgress &progress) {
@@ -150,6 +157,28 @@ void AchievementScene::OnEnter(core::GameContext &ctx) {
   rightText.visible = true;
   rightText.layer = kLayer + 1;
 
+  m_scrollTrack = CreateEntity(ctx.world);
+  auto &scrollTrack = ctx.world.Add<components::UIText>(m_scrollTrack);
+  scrollTrack.x = kScrollTrackX;
+  scrollTrack.y = kScrollTrackY;
+  scrollTrack.width = kScrollTrackWidth;
+  scrollTrack.height = kScrollTrackHeight;
+  scrollTrack.style.bgColor = {1.0f, 1.0f, 1.0f, 0.12f};
+  scrollTrack.style.cornerRadius = kScrollTrackWidth * 0.5f;
+  scrollTrack.visible = m_maxScrollOffset > 0;
+  scrollTrack.layer = kLayer + 1;
+
+  m_scrollThumb = CreateEntity(ctx.world);
+  auto &scrollThumb = ctx.world.Add<components::UIButton>(m_scrollThumb);
+  scrollThumb = components::UIButton::Create(
+      L"", "achievement_scroll_thumb", kScrollTrackX, kScrollTrackY,
+      kScrollTrackWidth, kScrollTrackHeight);
+  scrollThumb.normalColor = {0.8f, 0.68f, 0.28f, 0.85f};
+  scrollThumb.hoverColor = {0.9f, 0.78f, 0.4f, 0.95f};
+  scrollThumb.pressedColor = {0.95f, 0.85f, 0.5f, 1.0f};
+  scrollThumb.visible = m_maxScrollOffset > 0;
+  m_draggingThumb = false;
+
   m_closeButton = CreateEntity(ctx.world);
   auto &closeButton = ctx.world.Add<components::UIButton>(m_closeButton);
   closeButton = components::UIButton::Create(L"戻る", "achievement_close",
@@ -170,6 +199,7 @@ void AchievementScene::OnEnter(core::GameContext &ctx) {
       });
 
   RefreshColumns(ctx);
+  UpdateScrollThumb(ctx);
 }
 
 void AchievementScene::RefreshColumns(core::GameContext &ctx) {
@@ -193,6 +223,35 @@ void AchievementScene::RefreshColumns(core::GameContext &ctx) {
   if (auto *rightText = ctx.world.Get<components::UIText>(m_rightText)) {
     rightText->text = buildWindow(m_rightLines);
   }
+}
+
+void AchievementScene::UpdateScrollThumb(core::GameContext &ctx) {
+  auto *thumb = ctx.world.Get<components::UIButton>(m_scrollThumb);
+  if (!thumb) return;
+
+  if (m_maxScrollOffset <= 0) {
+    thumb->visible = false;
+    return;
+  }
+  thumb->visible = true;
+
+  const int longestColumn =
+      static_cast<int>(std::max(m_leftLines.size(), m_rightLines.size()));
+  const float visibleRatio =
+      std::clamp(static_cast<float>(kVisibleRows) /
+                     static_cast<float>(std::max(longestColumn, 1)),
+                 0.0f, 1.0f);
+  const float thumbHeight = std::max(
+      kScrollThumbMinHeight, kScrollTrackHeight * visibleRatio);
+  const float scrollRatio = static_cast<float>(m_scrollOffset) /
+                            static_cast<float>(m_maxScrollOffset);
+  const float thumbY =
+      kScrollTrackY + (kScrollTrackHeight - thumbHeight) * scrollRatio;
+
+  thumb->x = kScrollTrackX;
+  thumb->y = thumbY;
+  thumb->width = kScrollTrackWidth;
+  thumb->height = thumbHeight;
 }
 
 void AchievementScene::OnUpdate(core::GameContext &ctx) {
@@ -224,6 +283,39 @@ void AchievementScene::OnUpdate(core::GameContext &ctx) {
       }
     }
   }
+
+  // スクロールバーのつまみをドラッグしての操作
+  if (auto *thumb = ctx.world.Get<components::UIButton>(m_scrollThumb)) {
+    const bool lmbDown = ctx.input.GetMouseButton(0);
+    if (!lmbDown) {
+      m_draggingThumb = false;
+    } else if (!m_draggingThumb && thumb->visible &&
+               thumb->state == components::ButtonState::Pressed &&
+               ctx.input.GetMouseButtonDown(0)) {
+      m_draggingThumb = true;
+      const auto mousePos = ctx.input.GetMousePosition();
+      m_dragGrabOffsetY = static_cast<float>(mousePos.y) - thumb->y;
+    }
+
+    if (m_draggingThumb && m_maxScrollOffset > 0) {
+      const auto mousePos = ctx.input.GetMousePosition();
+      const float trackRange = kScrollTrackHeight - thumb->height;
+      const float newThumbY =
+          static_cast<float>(mousePos.y) - m_dragGrabOffsetY;
+      const float t = trackRange > 0.0f
+                          ? std::clamp((newThumbY - kScrollTrackY) / trackRange,
+                                       0.0f, 1.0f)
+                          : 0.0f;
+      const int newOffset =
+          static_cast<int>(std::round(t * m_maxScrollOffset));
+      if (newOffset != m_scrollOffset) {
+        m_scrollOffset = newOffset;
+        RefreshColumns(ctx);
+      }
+    }
+  }
+
+  UpdateScrollThumb(ctx);
 }
 
 void AchievementScene::Render(core::GameContext &ctx) {
