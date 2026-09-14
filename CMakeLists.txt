@@ -553,6 +553,8 @@ add_executable(test_terrain_generation test_terrain_generation.cpp
                                        src/game/systems/TerrainGenerator.cpp
                                        src/game/systems/TerrainGeneratorMesh.cpp
                                        src/game/systems/TerrainGeneratorNoise.cpp
+                                       src/game/systems/TerrainGeneratorLandforms.cpp
+                                       src/game/systems/TerrainBackdrop.cpp
                                        src/game/systems/TerrainGeneratorPlatforms.cpp
                                        src/game/systems/TerrainGeneratorPostProcess.cpp
                                        src/graphics/TangentGenerator.cpp)
@@ -563,7 +565,8 @@ if(MSVC)
                                                                -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_terrain_generation PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
-add_test(NAME terrain_generation COMMAND test_terrain_generation)
+add_test(NAME terrain_generation COMMAND test_terrain_generation
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_executable(test_grass_streaming_rules test_grass_streaming_rules.cpp)
 target_precompile_headers(test_grass_streaming_rules REUSE_FROM wikigolf_pch)
@@ -674,6 +677,19 @@ if(MSVC)
     target_compile_options(test_terrain_layout_rules PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME terrain_layout_rules COMMAND test_terrain_layout_rules)
+
+add_executable(test_slope_visualization_mesh_builder
+    test_slope_visualization_mesh_builder.cpp
+    src/game/systems/SlopeVisualizationMeshBuilder.cpp)
+target_precompile_headers(test_slope_visualization_mesh_builder REUSE_FROM wikigolf_pch)
+target_include_directories(test_slope_visualization_mesh_builder PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_slope_visualization_mesh_builder PRIVATE
+        -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_slope_visualization_mesh_builder PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME slope_visualization_mesh_builder
+         COMMAND test_slope_visualization_mesh_builder)
 
 add_executable(test_scene_entity_lifecycle
     test_scene_entity_lifecycle.cpp

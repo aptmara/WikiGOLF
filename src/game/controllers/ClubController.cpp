@@ -18,6 +18,7 @@
 #include "../systems/WikiTerrainSystem.h"
 #include "../utils/AimPinClubSelection.h"
 #include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/TerrainBounds.h"
 #include "../utils/TrajectorySimulation.h"
 #include <algorithm>
 #include <cmath>
@@ -76,6 +77,24 @@ float ClubController::GetGolferHeight() const {
 float ClubController::GetImpactDelay() const {
   return m_currentClub.categoryEN == "Putter" ? kPuttImpactSeconds
                                               : kFullSwingImpactSeconds;
+}
+
+XMFLOAT3
+ClubController::ConstrainToTerrain(const XMFLOAT3 &position) const {
+  if (!m_terrainSystem) {
+    return position;
+  }
+
+  const auto terrainData = m_terrainSystem->GetTerrainData();
+  if (!terrainData || !game::utils::HasValidTerrainGrid(*terrainData)) {
+    return position;
+  }
+
+  XMFLOAT3 result = game::utils::ClampToTerrainBounds(
+      position, game::utils::CalculateTerrainWorldBounds(*terrainData));
+  result.y = game::physics::ToVisualSurfaceHeight(
+      m_terrainSystem->GetHeight(result.x, result.z));
+  return result;
 }
 
 namespace {
@@ -183,9 +202,7 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   // ボールがティーやスタートピンの上に乗って浮いている場合でも、
   // ゴルファーが宙に浮いて見えないようにするため。
   if (m_terrainSystem) {
-    const float terrainHeight =
-        m_terrainSystem->GetHeight(targetStandPos.x, targetStandPos.z);
-    targetStandPos.y = game::physics::ToVisualSurfaceHeight(terrainHeight);
+    targetStandPos = ConstrainToTerrain(targetStandPos);
   } else {
     targetStandPos.y = ballTr->position.y;
   }
@@ -233,6 +250,8 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
     clipName = "WalkInPlace";
     loop = true;
   }
+
+  m_golferStandPos = ConstrainToTerrain(m_golferStandPos);
 
   clubTr->position = m_golferStandPos;
   XMStoreFloat4(&clubTr->rotation,
@@ -332,6 +351,7 @@ XMFLOAT3 ClubController::BeginCelebration(core::GameContext &ctx,
   spot = XMVectorAdd(spot, XMVectorScale(side, kCelebrateSideRatio * h));
   XMStoreFloat3(&m_celebrationSpot, spot);
   m_celebrationSpot.y = holePos.y;
+  m_celebrationSpot = ConstrainToTerrain(m_celebrationSpot);
 
   const float dx = m_celebrationSpot.x - m_golferStandPos.x;
   const float dz = m_celebrationSpot.z - m_golferStandPos.z;
@@ -341,6 +361,7 @@ XMFLOAT3 ClubController::BeginCelebration(core::GameContext &ctx,
     XMStoreFloat3(&m_golferStandPos,
                   XMVectorAdd(spot, XMVectorScale(side, kCelebrateWalkInRatio * h)));
     m_golferStandPos.y = holePos.y;
+    m_golferStandPos = ConstrainToTerrain(m_golferStandPos);
     m_golferPositionInitialized = true;
   }
 
@@ -396,6 +417,8 @@ void ClubController::UpdateCelebration(core::GameContext &ctx, float dt,
       m_celebrationStage = CelebrationStage::Done;
     }
   }
+
+  m_golferStandPos = ConstrainToTerrain(m_golferStandPos);
 
   tr->position = m_golferStandPos;
   XMStoreFloat4(&tr->rotation,

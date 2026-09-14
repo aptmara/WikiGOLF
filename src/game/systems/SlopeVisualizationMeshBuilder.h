@@ -12,7 +12,7 @@
 
 namespace game::systems {
 
-class WikiTerrainSystem;
+struct TerrainData;
 
 /** @brief 傾斜可視化メッシュの生成パラメータ*/
 struct SlopeOverlayConfig {
@@ -44,13 +44,14 @@ public:
    * @brief 中心座標を基準に円形の傾斜可視化メッシュを構築します。
    *        （内部的には正方形グリッドを生成し、各頂点のtexCoord.xに
    *        中心からの正規化距離[0,1]を格納して、ピクセルシェーダー側で
-   *        円形にフェードアウトさせています）
-   * @param terrain 高さ取得に使う地形システム
+   *        円形にフェードアウトさせています。地形端ではグリッドを
+   *        有効範囲内へ切り詰めます）
+   * @param terrain 高さ取得に使う地形データ
    * @param center 表示範囲の中心（通常はボール位置）
    * @param config 生成設定
    * @return 構築済みの頂点・インデックス列
   */
-  static BuildResult Build(const WikiTerrainSystem &terrain,
+  static BuildResult Build(const TerrainData &terrain,
                            const DirectX::XMFLOAT3 &center,
                            const SlopeOverlayConfig &config);
 
@@ -62,7 +63,7 @@ private:
     float slope01 = 0.0f;                       /**< 正規化済みの傾斜強度[0,1]*/
   };
 
-  static SampledPoint SamplePoint(const WikiTerrainSystem &terrain,
+  static SampledPoint SamplePoint(const TerrainData &terrain,
                                   float worldX, float worldZ,
                                   const SlopeOverlayConfig &config);
 

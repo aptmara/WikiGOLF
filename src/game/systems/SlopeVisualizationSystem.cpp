@@ -79,8 +79,13 @@ void SlopeVisualizationSystem::ApplyFade(core::GameContext &ctx) {
 void SlopeVisualizationSystem::RebuildMesh(core::GameContext &ctx,
                                            const DirectX::XMFLOAT3 &center,
                                            const WikiTerrainSystem &terrain) {
+  const auto terrainData = terrain.GetTerrainData();
+  if (!terrainData) {
+    return;
+  }
+
   const auto built =
-      SlopeVisualizationMeshBuilder::Build(terrain, center, m_config);
+      SlopeVisualizationMeshBuilder::Build(*terrainData, center, m_config);
   if (built.IsEmpty()) {
     return;
   }

@@ -164,6 +164,9 @@ private:
   */
   void AdvanceClip(const std::string &clipName, bool loop, float dt);
 
+  DirectX::XMFLOAT3
+  ConstrainToTerrain(const DirectX::XMFLOAT3 &position) const;
+
   float ClipDuration(const std::string &clipName) const;
 
   /** @brief ゴルファーの立ち位置を地面の高さへ追従させるための地形システム（借用、null 許容）。*/
