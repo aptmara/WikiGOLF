@@ -24,10 +24,12 @@
 #include "../utils/AimPinSolver.h"
 #include "../utils/CarryDistanceTable.h"
 #include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/FlagFadeRules.h"
 #include "../utils/PageHistoryUtils.h"
 #include "../utils/ProceduralFlag.h"
 #include "../utils/TrajectorySimulation.h"
 #include "PauseScene.h"
+#include <algorithm>
 
 namespace game::scenes {
 
@@ -39,6 +41,33 @@ using namespace game::components;
 void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
                                                 float dt) {
   m_flagEffectTimer += dt;
+
+  const auto *cameraTransform = ctx.world.Get<Transform>(m_cameraEntity);
+  if (!cameraTransform || !m_clubController) {
+    return;
+  }
+
+  DirectX::XMFLOAT3 golferCenter = m_clubController->GetGolferPosition();
+  golferCenter.y += m_clubController->GetGolferHeight() * 0.5f;
+
+  constexpr float kFadeSpeed = 5.0f;
+  ctx.world.Query<HoleFlag>().Each([&](ecs::Entity entity, HoleFlag &flag) {
+    const auto *holeTransform =
+        ctx.world.Get<Transform>(static_cast<ecs::Entity>(flag.holeEntity));
+    auto *renderer = ctx.world.Get<MeshRenderer>(entity);
+    if (!holeTransform || !renderer) {
+      return;
+    }
+
+    DirectX::XMFLOAT3 flagCenter = holeTransform->position;
+    flagCenter.y += 1.5f;
+    const float targetAlpha = game::utils::CalculateFlagFadeAlpha(
+        cameraTransform->position, flagCenter, golferCenter);
+    const float fadeStep = kFadeSpeed * dt;
+    flag.fadeAlpha +=
+        std::clamp(targetAlpha - flag.fadeAlpha, -fadeStep, fadeStep);
+    renderer->color.w = flag.baseAlpha * flag.fadeAlpha;
+  });
 }
 
 /**

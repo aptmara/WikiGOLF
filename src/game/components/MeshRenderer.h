@@ -50,6 +50,8 @@ struct MeshRenderer {
 
   // 追加フラグ（シェーダー用）
   DirectX::XMFLOAT4 customFlags = {0, 0, 0, 0};
+  // Basic シェーダーで color.w を描画率とするドット状フェードを有効にする。
+  bool usesDitherFade = false;
   bool isTransparent = false;
   BlendMode blendMode = BlendMode::Opaque;
   // Basic シェーダーで、カップの開口部をくり抜いて描くか（地表の記事オーバーレイ用）

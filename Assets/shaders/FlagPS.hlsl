@@ -13,6 +13,13 @@ cbuffer ConstantBuffer : register(b0) {
     float4 CameraPos;
 };
 
+static const float kDither4x4[16] = {
+    1.0f / 32.0f, 17.0f / 32.0f, 5.0f / 32.0f, 21.0f / 32.0f,
+    25.0f / 32.0f, 9.0f / 32.0f, 29.0f / 32.0f, 13.0f / 32.0f,
+    7.0f / 32.0f, 23.0f / 32.0f, 3.0f / 32.0f, 19.0f / 32.0f,
+    31.0f / 32.0f, 15.0f / 32.0f, 27.0f / 32.0f, 11.0f / 32.0f
+};
+
 /**
  * @struct PS_INPUT
  * @brief ピクセルシェーダー入力
@@ -30,6 +37,10 @@ struct PS_INPUT {
  * @return 布地陰影計算済みピクセルカラー
  */
 float4 main(PS_INPUT input) : SV_TARGET {
+    uint2 ditherCoord = uint2(input.position.xy) & 3;
+    float ditherThreshold = kDither4x4[ditherCoord.y * 4 + ditherCoord.x];
+    clip(input.color.a - ditherThreshold);
+
     float3 normal = normalize(input.normal);
     float3 lightDir = normalize(float3(0.45f, -1.0f, 0.35f));
     float diffuse = abs(dot(normal, -lightDir));

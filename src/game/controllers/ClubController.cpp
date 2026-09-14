@@ -97,6 +97,35 @@ ClubController::ConstrainToTerrain(const XMFLOAT3 &position) const {
   return result;
 }
 
+void ClubController::BeginGolferTeleport(const XMFLOAT3 &target) {
+  m_golferTeleportTarget = target;
+  m_golferWalking = false;
+
+  if (m_golferFadeAlpha <= 0.0f) {
+    m_golferStandPos = m_golferTeleportTarget;
+    m_golferTeleportPhase = GolferTeleportPhase::FadingIn;
+    return;
+  }
+
+  m_golferTeleportPhase = GolferTeleportPhase::FadingOut;
+}
+
+void ClubController::UpdateGolferTeleport(float dt) {
+  const float fadeStep = dt / kGolferFadeSeconds;
+  if (m_golferTeleportPhase == GolferTeleportPhase::FadingOut) {
+    m_golferFadeAlpha = (std::max)(0.0f, m_golferFadeAlpha - fadeStep);
+    if (m_golferFadeAlpha <= 0.0f) {
+      m_golferStandPos = m_golferTeleportTarget;
+      m_golferTeleportPhase = GolferTeleportPhase::FadingIn;
+    }
+  } else if (m_golferTeleportPhase == GolferTeleportPhase::FadingIn) {
+    m_golferFadeAlpha = (std::min)(1.0f, m_golferFadeAlpha + fadeStep);
+    if (m_golferFadeAlpha >= 1.0f) {
+      m_golferTeleportPhase = GolferTeleportPhase::None;
+    }
+  }
+}
+
 namespace {
 
 bool EndsWith(const std::string &s, const char *suffix) {
@@ -208,32 +237,47 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   }
 
   if (!m_golferPositionInitialized) {
-    // 初回は歩かずその場に配置する
+    // 初回は歩かずその場に配置し、ドット状に出現させる。
     m_golferStandPos = targetStandPos;
     m_golferPositionInitialized = true;
+    m_golferFadeAlpha = 0.0f;
+    m_golferTeleportPhase = GolferTeleportPhase::FadingIn;
   }
 
   const bool isIdlePhase = (shot->phase == ShotState::Phase::Idle);
 
+  // 歩いている途中でショット体勢へ入った場合は、歩行を続けず構え位置へ
+  // ドット状に消えてテレポートする。
+  if (!isIdlePhase && m_golferWalking) {
+    BeginGolferTeleport(targetStandPos);
+  }
+
   // Idle中にボールが新しい位置にあると判定したら歩いて向かう。
   // ただし新ホール開始などの大移動はカメラに映っていないため瞬間移動でよい。
-  if (isIdlePhase && !m_golferWalking) {
+  if (isIdlePhase && !m_golferWalking &&
+      m_golferTeleportPhase == GolferTeleportPhase::None) {
     const float dx = targetStandPos.x - m_golferStandPos.x;
     const float dz = targetStandPos.z - m_golferStandPos.z;
     const float dist = std::sqrt(dx * dx + dz * dz);
     if (dist > kGolferTeleportDistance) {
-      m_golferStandPos = targetStandPos;
+      BeginGolferTeleport(targetStandPos);
     } else if (dist > kGolferWalkTriggerDistance) {
       m_golferWalking = true;
       m_golferWalkTarget = targetStandPos;
     }
   }
 
+  if (m_golferTeleportPhase == GolferTeleportPhase::FadingOut) {
+    // フェード中にも最新のボール位置とショット方向を反映する。
+    m_golferTeleportTarget = targetStandPos;
+  }
+  UpdateGolferTeleport(dt);
+
   float yaw = facingYaw + XMConvertToRadians(kGolferYawOffsetDeg);
   std::string clipName = "Idle";
   bool loop = true;
 
-  if (m_golferWalking) {
+  if (isIdlePhase && m_golferWalking) {
     const float dx = m_golferWalkTarget.x - m_golferStandPos.x;
     const float dz = m_golferWalkTarget.z - m_golferStandPos.z;
     const float dist = std::sqrt(dx * dx + dz * dz);
@@ -257,7 +301,9 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   XMStoreFloat4(&clubTr->rotation,
                XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f));
 
-  clubMr->isVisible = true; // ゴルファーは常駐させ、非表示にはしない
+  clubMr->usesDitherFade = true;
+  clubMr->color.w = m_golferFadeAlpha;
+  clubMr->isVisible = m_golferFadeAlpha > 0.0f;
 
   const bool swingInProgress = m_clubAnimPhase == ClubAnimPhase::Downswing ||
                                m_clubAnimPhase == ClubAnimPhase::FollowThrough;
@@ -357,11 +403,14 @@ XMFLOAT3 ClubController::BeginCelebration(core::GameContext &ctx,
   const float dz = m_celebrationSpot.z - m_golferStandPos.z;
   if (!m_golferPositionInitialized ||
       std::sqrt(dx * dx + dz * dz) > kCelebrateMaxWalkRatio * h) {
-    // 遠くにいる場合は、画面外(ポールの横方向)から歩いて入ってくる位置へ瞬間移動する
-    XMStoreFloat3(&m_golferStandPos,
-                  XMVectorAdd(spot, XMVectorScale(side, kCelebrateWalkInRatio * h)));
-    m_golferStandPos.y = holePos.y;
-    m_golferStandPos = ConstrainToTerrain(m_golferStandPos);
+    // 遠くにいる場合はドット状に消え、画面外(ポールの横方向)から
+    // 歩いて入ってくる位置へテレポートする。
+    XMFLOAT3 walkInPosition;
+    XMStoreFloat3(
+        &walkInPosition,
+        XMVectorAdd(spot, XMVectorScale(side, kCelebrateWalkInRatio * h)));
+    walkInPosition.y = holePos.y;
+    BeginGolferTeleport(ConstrainToTerrain(walkInPosition));
     m_golferPositionInitialized = true;
   }
 
@@ -384,7 +433,23 @@ void ClubController::UpdateCelebration(core::GameContext &ctx, float dt,
     m_celebrationStage = CelebrationStage::Done;
     return;
   }
-  mr->isVisible = true;
+  mr->usesDitherFade = true;
+  UpdateGolferTeleport(dt);
+  mr->color.w = m_golferFadeAlpha;
+  mr->isVisible = m_golferFadeAlpha > 0.0f;
+
+  if (m_golferTeleportPhase != GolferTeleportPhase::None) {
+    m_golferStandPos = ConstrainToTerrain(m_golferStandPos);
+    tr->position = m_golferStandPos;
+    const float teleportYaw =
+        std::atan2(m_celebrationSpot.x - m_golferStandPos.x,
+                   m_celebrationSpot.z - m_golferStandPos.z);
+    XMStoreFloat4(&tr->rotation,
+                  XMQuaternionRotationRollPitchYaw(0.0f, teleportYaw, 0.0f));
+    AdvanceClip("Idle", true, dt);
+    UpdateGolferPose(ctx);
+    return;
+  }
 
   std::string clipName = "Celebrate";
   bool loop = false;
@@ -432,6 +497,8 @@ void ClubController::EndCelebration() {
   m_celebrationStage = CelebrationStage::None;
   m_golferPositionInitialized = false; // 次のコースではボール横に取り直す
   m_golferWalking = false;
+  m_golferFadeAlpha = 0.0f;
+  m_golferTeleportPhase = GolferTeleportPhase::None;
   m_clubAnimPhase = ClubAnimPhase::Idle;
   m_clubAnimTimer = 0.0f;
 }
@@ -512,6 +579,7 @@ void ClubController::InitializeClubModel(core::GameContext &ctx) {
                                       L"Assets/shaders/BasicPS.hlsl");
   mr.color = {0.9f, 0.9f, 0.9f, 1.0f};
   mr.isVisible = false;
+  mr.usesDitherFade = true;
 
   m_golferModelValid =
       m_golferModel.LoadFromFile("Assets/models/G01_Robot_Golfer_Phases.glb");

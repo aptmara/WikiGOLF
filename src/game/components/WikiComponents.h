@@ -400,6 +400,8 @@ struct HoleFlag {
   float phase = 0.0f;      ///< なびき位相
   float amplitude = 1.0f;  ///< なびき振幅
   float colorFactor = 1.0f; ///< 評価色へ追従する際の明度倍率
+  float baseAlpha = 1.0f;   ///< フェード前の本来の不透明度
+  float fadeAlpha = 1.0f;   ///< カメラ近接・遮蔽による現在の描画率
   float yawOffset = 0.0f;  ///< 旗ごとの初期向き補正
   DirectX::XMFLOAT3 basePosition = {0, 0, 0}; ///< 旗布の基準位置
   DirectX::XMFLOAT3 baseScale = {1, 1, 1};    ///< 旗布の基準スケール

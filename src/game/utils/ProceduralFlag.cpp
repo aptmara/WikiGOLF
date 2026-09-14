@@ -181,6 +181,7 @@ ProceduralFlagResult CreateProceduralFlag(
   poleMr.mesh = ctx.resource.LoadMesh("builtin/cube");
   poleMr.shader = basicShader;
   poleMr.color = {0.16f, 0.15f, 0.13f, 1.0f};
+  poleMr.usesDitherFade = true;
   poleMr.maxDrawDistance = options.large ? 0.0f : 220.0f;
 
   auto &poleFlag = ctx.world.Add<HoleFlag>(poleEntity);
@@ -201,6 +202,7 @@ ProceduralFlagResult CreateProceduralFlag(
   capMr.mesh = ctx.resource.LoadMesh("builtin/sphere");
   capMr.shader = basicShader;
   capMr.color = Darken(color, 0.85f, 1.0f);
+  capMr.usesDitherFade = true;
   capMr.maxDrawDistance = options.large ? 0.0f : 80.0f;
   auto &capFlag = ctx.world.Add<HoleFlag>(capEntity);
   capFlag.holeEntity = options.holeEntity;
@@ -240,6 +242,7 @@ ProceduralFlagResult CreateProceduralFlag(
   seamMr.mesh = ctx.resource.LoadMesh("builtin/cube");
   seamMr.shader = basicShader;
   seamMr.color = Darken(color, 0.62f, 1.0f);
+  seamMr.usesDitherFade = true;
   seamMr.maxDrawDistance = options.large ? 0.0f : 80.0f;
   auto &seamFlag = ctx.world.Add<HoleFlag>(seamEntity);
   seamFlag.holeEntity = options.holeEntity;
@@ -271,6 +274,7 @@ ProceduralFlagResult CreateProceduralFlag(
       auto &flag = ctx.world.Add<HoleFlag>(particleEntity);
       flag.holeEntity = options.holeEntity;
       flag.kind = HoleFlag::Kind::Particle;
+      flag.baseAlpha = particleMr.color.w;
       flag.phase = basePosition.x * 0.09f + static_cast<float>(i) * 1.21f;
       flag.amplitude = std::clamp(options.animationWeight, 0.15f, 1.2f);
       flag.basePosition = particleT.position;

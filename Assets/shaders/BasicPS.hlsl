@@ -22,6 +22,13 @@ cbuffer ConstantBuffer : register(b0) {
 #include "ShadowSampling.hlsli"
 #include "GolfCupClip.hlsli"
 
+static const float kDither4x4[16] = {
+    1.0f / 32.0f, 17.0f / 32.0f, 5.0f / 32.0f, 21.0f / 32.0f,
+    25.0f / 32.0f, 9.0f / 32.0f, 29.0f / 32.0f, 13.0f / 32.0f,
+    7.0f / 32.0f, 23.0f / 32.0f, 3.0f / 32.0f, 19.0f / 32.0f,
+    31.0f / 32.0f, 15.0f / 32.0f, 27.0f / 32.0f, 11.0f / 32.0f
+};
+
 /**
  * @brief 2D座標から擬似乱数ハッシュ値を生成します。
  * @param p 入力座標
@@ -82,6 +89,7 @@ struct PS_INPUT {
     float4 shadowPosition : TEXCOORD5;/**< 光源空間座標 */
     float3 worldPosition : TEXCOORD6;/**< ワールド座標 */
     float cupClip : TEXCOORD7;       /**< 1ならカップ開口部をくり抜く */
+    float ditherFade : TEXCOORD8;    /**< ドット状フェードの描画率 */
 };
 
 /**
@@ -114,6 +122,10 @@ float4 main(PS_INPUT input) : SV_TARGET {
         baseColor.rgb *= texColor.rgb;
         baseColor.a *= texColor.a;
     }
+
+    uint2 ditherCoord = uint2(input.position.xy) & 3;
+    float ditherThreshold = kDither4x4[ditherCoord.y * 4 + ditherCoord.x];
+    clip(input.ditherFade - ditherThreshold);
 
     // アルファテスト（地形用はほぼ不透明なので緩めのスレッショルド）
     clip(baseColor.a - 0.02f);

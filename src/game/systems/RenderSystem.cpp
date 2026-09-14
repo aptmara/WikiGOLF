@@ -511,9 +511,10 @@ void RenderSystem(core::GameContext &ctx) {
           );
         }
         if (r.shader == basicHandle) {
-          // BasicVS は Flags.w を色アルファで上書きして使わないため、
-          // カップ開口部のくり抜き指定として渡す。
-          inst.flags.w = r.clipsGolfCupOpening ? 1.0f : 0.0f;
+          // BasicVS の Flags.w はビット相当の値として使う。
+          // 1: カップ開口部のくり抜き、2: ドット状ディザーフェード。
+          inst.flags.w = (r.clipsGolfCupOpening ? 1.0f : 0.0f) +
+                         (r.usesDitherFade ? 2.0f : 0.0f);
         }
 
         if (r.isTransparent) {

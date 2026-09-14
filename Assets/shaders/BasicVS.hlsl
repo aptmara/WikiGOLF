@@ -58,6 +58,7 @@ struct VS_OUTPUT {
     float4 shadowPosition : TEXCOORD5;/**< 光源空間座標 */
     float3 worldPosition : TEXCOORD6;/**< ワールド座標 */
     float cupClip : TEXCOORD7;       /**< 1ならカップ開口部をくり抜く */
+    float ditherFade : TEXCOORD8;    /**< ドット状フェードの描画率 */
 };
 
 /**
@@ -87,9 +88,11 @@ VS_OUTPUT main(VS_INPUT input) {
     output.worldXZ = worldPos.xz;
     output.materialFlags = inst.Flags;
     output.materialFlags.w = inst.Color.a;
-    // Basic の Flags.w は RenderSystem がカップくり抜き指定に使う
+    // Basic の Flags.w は RenderSystem がビット相当の値として使う。
+    // 1: カップくり抜き、2: ドット状ディザーフェード。
     output.worldPosition = worldPos.xyz;
-    output.cupClip = inst.Flags.w;
+    output.cupClip = fmod(inst.Flags.w, 2.0f);
+    output.ditherFade = inst.Flags.w >= 2.0f ? saturate(inst.Color.a) : 1.0f;
     output.shadowPosition = mul(worldPos, ShadowViewProjection);
     
     return output;

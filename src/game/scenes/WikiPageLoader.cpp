@@ -424,6 +424,7 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
             if (auto* mr = ctx.world.Get<MeshRenderer>(e)) {
                 mr->color = HoleVisualRules::GetColor(hole->isTarget,
                                                       it->second);
+                mr->color.w = flag.baseAlpha * flag.fadeAlpha;
             }
         }
     });

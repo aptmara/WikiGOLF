@@ -167,6 +167,9 @@ private:
   DirectX::XMFLOAT3
   ConstrainToTerrain(const DirectX::XMFLOAT3 &position) const;
 
+  void BeginGolferTeleport(const DirectX::XMFLOAT3 &target);
+  void UpdateGolferTeleport(float dt);
+
   float ClipDuration(const std::string &clipName) const;
 
   /** @brief ゴルファーの立ち位置を地面の高さへ追従させるための地形システム（借用、null 許容）。*/
@@ -207,6 +210,12 @@ private:
   static constexpr float kGolferWalkTriggerDistance = 0.5f;
   // これ以上の大移動（新ホール開始など、カメラに映っていない場面）は歩かず瞬間移動する
   static constexpr float kGolferTeleportDistance = 15.0f;
+
+  enum class GolferTeleportPhase { None, FadingOut, FadingIn };
+  GolferTeleportPhase m_golferTeleportPhase = GolferTeleportPhase::None;
+  DirectX::XMFLOAT3 m_golferTeleportTarget = {0.0f, 0.0f, 0.0f};
+  float m_golferFadeAlpha = 0.0f;
+  static constexpr float kGolferFadeSeconds = 0.18f;
 
   // クリップ切替のクロスフェード状態
   std::string m_prevClipName;
