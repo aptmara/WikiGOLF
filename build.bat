@@ -27,4 +27,5 @@ if errorlevel 1 (
 
 echo [WikiGOLF] Build finished successfully.
 echo Output: %BUILD_DIR%\%CONFIG%\WikiGolf.exe
+start "" explorer.exe "%~dp0%BUILD_DIR%\%CONFIG%"
 pause
