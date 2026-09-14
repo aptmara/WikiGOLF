@@ -125,7 +125,7 @@ void MinimapController::UpdateMinimap(
     SetVisible(ctx, false);
     return;
   }
-  if (ui) ui->visible = !m_isMapView;
+  if (ui) ui->visible = true;
 
   game::systems::MapRenderParams params;
   if (m_isMapView) {
@@ -189,6 +189,57 @@ void MinimapController::UpdateMinimap(
     }
   }
   const bool markerSurfaceVisible = m_isMapView || (ui && ui->visible);
+
+  if (auto *viewportBounds =
+          ctx.world.Get<UIText>(m_mapViewportBoundsEntity)) {
+    viewportBounds->visible = false;
+    if (m_isMapView && ui) {
+      XMMATRIX view;
+      XMMATRIX projection;
+      if (game::utils::GetCameraMatrices(ctx, m_cfg.cameraEntity, view,
+                                         projection)) {
+        constexpr std::array<DirectX::XMFLOAT2, 4> screenCorners = {{
+            {0.0f, 0.0f},
+            {minimap_detail::kScreenWidth, 0.0f},
+            {0.0f, minimap_detail::kScreenHeight},
+            {minimap_detail::kScreenWidth, minimap_detail::kScreenHeight},
+        }};
+        std::array<DirectX::XMFLOAT3, 4> worldCorners{};
+        bool allCornersHit = true;
+        const auto viewportMapping = game::utils::GetViewportMapping(ctx);
+        for (size_t i = 0; i < screenCorners.size(); ++i) {
+          const auto ray = game::utils::BuildRayFromVirtualScreen(
+              viewportMapping, view, projection, screenCorners[i].x,
+              screenCorners[i].y);
+          if (ray.direction.y >= -0.0001f) {
+            allCornersHit = false;
+            break;
+          }
+          const float distance = -ray.origin.y / ray.direction.y;
+          worldCorners[i] = {
+              ray.origin.x + ray.direction.x * distance,
+              0.0f,
+              ray.origin.z + ray.direction.z * distance,
+          };
+        }
+
+        minimap_detail::MarkerBounds viewportRect;
+        const minimap_detail::MarkerBounds hudBounds{
+            ui->x, ui->y, ui->width, ui->height};
+        const auto hudParams =
+            minimap_detail::BuildHudMinimapParams(fieldWidth, fieldDepth);
+        if (allCornersHit && minimap_detail::ProjectWorldCornersToHudBounds(
+                                 worldCorners, hudBounds, hudParams,
+                                 viewportRect)) {
+          viewportBounds->x = viewportRect.x;
+          viewportBounds->y = viewportRect.y;
+          viewportBounds->width = viewportRect.width;
+          viewportBounds->height = viewportRect.height;
+          viewportBounds->visible = true;
+        }
+      }
+    }
+  }
 
   if (ui && marker && ballT) {
     // 全体マップビューは実カメラ(傾いた透視投影)で描画されるため、

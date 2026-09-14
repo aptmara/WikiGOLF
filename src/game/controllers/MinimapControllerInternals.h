@@ -200,6 +200,46 @@ inline bool UnprojectHudMinimap(float screenX, float screenY,
   return true;
 }
 
+/** @brief ワールドXZ上の四隅をHUDミニマップ内の矩形へ変換します。*/
+inline bool ProjectWorldCornersToHudBounds(
+    const std::array<DirectX::XMFLOAT3, 4> &worldCorners,
+    const MarkerBounds &mapBounds,
+    const game::systems::MapRenderParams &hudParams,
+    MarkerBounds &outBounds) {
+  float minU = 1.0f;
+  float minV = 1.0f;
+  float maxU = 0.0f;
+  float maxV = 0.0f;
+  const auto worldSize = ComputeMinimapWorldSize(hudParams);
+  if (mapBounds.width <= 0.0f || mapBounds.height <= 0.0f ||
+      worldSize.x <= 0.0f || worldSize.y <= 0.0f) {
+    return false;
+  }
+
+  for (const auto &corner : worldCorners) {
+    const float u = 0.5f + (corner.x - hudParams.center.x) / worldSize.x;
+    const float v = 0.5f - (corner.z - hudParams.center.z) / worldSize.y;
+    minU = std::min(minU, u);
+    minV = std::min(minV, v);
+    maxU = std::max(maxU, u);
+    maxV = std::max(maxV, v);
+  }
+
+  minU = std::clamp(minU, 0.0f, 1.0f);
+  minV = std::clamp(minV, 0.0f, 1.0f);
+  maxU = std::clamp(maxU, 0.0f, 1.0f);
+  maxV = std::clamp(maxV, 0.0f, 1.0f);
+  if (maxU <= minU || maxV <= minV) {
+    return false;
+  }
+
+  outBounds.x = mapBounds.x + minU * mapBounds.width;
+  outBounds.y = mapBounds.y + minV * mapBounds.height;
+  outBounds.width = (maxU - minU) * mapBounds.width;
+  outBounds.height = (maxV - minV) * mapBounds.height;
+  return true;
+}
+
 /**
  * @brief 全体マップビューの描画パラメータを作成します。
 */

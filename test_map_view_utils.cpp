@@ -70,6 +70,20 @@ int main() {
             std::abs(worldX) < 1e-4f && std::abs(worldZ) < 1e-4f,
         "HUD minimap center unprojects to the course origin");
 
+  const std::array<DirectX::XMFLOAT3, 4> viewportCorners = {{
+      {-20.0f, 0.0f, 30.0f},
+      {20.0f, 0.0f, 30.0f},
+      {-20.0f, 0.0f, -30.0f},
+      {20.0f, 0.0f, -30.0f},
+  }};
+  game::controllers::minimap_detail::MarkerBounds viewportBounds;
+  CHECK(game::controllers::minimap_detail::ProjectWorldCornersToHudBounds(
+            viewportCorners, bounds, fixedMap, viewportBounds) &&
+            viewportBounds.x >= bounds.x && viewportBounds.y >= bounds.y &&
+            viewportBounds.x + viewportBounds.width <= bounds.x + bounds.width &&
+            viewportBounds.y + viewportBounds.height <= bounds.y + bounds.height,
+        "map-view screen footprint stays inside the HUD minimap");
+
   using game::controllers::minimap_detail::ClassifyFlag;
   using game::controllers::minimap_detail::FlagKind;
   CHECK(ClassifyFlag(true, 0) == FlagKind::Target,

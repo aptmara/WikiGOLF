@@ -46,6 +46,27 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   ui.visible = true;
   ui.layer = game::ui::kLayerMinimap;
 
+  m_mapViewportBoundsEntity = m_entityOwner.Create(ctx.world);
+  auto &viewportBounds = ctx.world.Add<UIText>(m_mapViewportBoundsEntity);
+  viewportBounds.text = L"";
+  viewportBounds.style.bgColor = {0.05f, 0.35f, 1.0f, 0.08f};
+  viewportBounds.style.borderColor = {0.05f, 0.45f, 1.0f, 1.0f};
+  viewportBounds.style.borderWidth = 3.0f;
+  viewportBounds.layer = game::ui::kLayerMarker + 1;
+  viewportBounds.visible = false;
+
+  constexpr float keyHintSize = 40.0f;
+  constexpr float keyHintInset = 8.0f;
+  m_minimapKeyHintEntity = m_entityOwner.Create(ctx.world);
+  auto &keyHint = ctx.world.Add<UIImage>(m_minimapKeyHintEntity);
+  keyHint = UIImage::Create("Assets/ui/keyboard_m.png",
+                            ui.x + ui.width - keyHintSize - keyHintInset,
+                            ui.y + ui.height - keyHintSize - keyHintInset);
+  keyHint.width = keyHintSize;
+  keyHint.height = keyHintSize;
+  keyHint.layer = game::ui::kLayerMarker + 4;
+  keyHint.visible = true;
+
   // 自ボール内側ドットマーカー (●)
   // 注意: UIText は width=0 のとき描画矩形が画面右端まで自動拡張され、
   // TextAlign::Center はその巨大な矩形の中央に文字を置いてしまう

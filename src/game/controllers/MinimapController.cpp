@@ -61,6 +61,8 @@ void MinimapController::Shutdown(core::GameContext &ctx) {
   m_minimapPulseMarkerEntity = UINT32_MAX;
   m_aimPinMarkerEntity = UINT32_MAX;
   m_minimapHelpEntity = UINT32_MAX;
+  m_minimapKeyHintEntity = UINT32_MAX;
+  m_mapViewportBoundsEntity = UINT32_MAX;
   m_holeHoverLabelEntity = UINT32_MAX;
   m_landingPreviewRangeEntity = UINT32_MAX;
   m_landingPreviewCenterEntity = UINT32_MAX;
@@ -103,8 +105,10 @@ void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
 
     // 表示中のマーカー・ホール・軌道はUpdateMinimapが個別に管理する。
     // 毎フレームのSetVisible(true)で消すと、更新間引き中に点滅する。
-    setUIImg(m_minimapEntity,            visible && !m_isMapView);
+    setUIImg(m_minimapEntity,            visible);
+    setUIImg(m_minimapKeyHintEntity,     visible);
     setUITxt(m_minimapHelpEntity,        visible && !m_isMapView);
+    setUITxt(m_mapViewportBoundsEntity,  visible && m_isMapView);
     if (visible) {
       UpdateFlagFilterToggles(ctx);
       return;

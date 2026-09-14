@@ -230,6 +230,8 @@ private:
   ecs::Entity m_aimPinMarkerEntity = UINT32_MAX;       ///< エイムピン(中クリック設置)用マーカー
   std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）
   ecs::Entity m_minimapHelpEntity = UINT32_MAX;
+  ecs::Entity m_minimapKeyHintEntity = UINT32_MAX;     ///< マップ切替用Mキー画像
+  ecs::Entity m_mapViewportBoundsEntity = UINT32_MAX;  ///< マップビューの表示範囲枠
   ecs::Entity m_holeHoverLabelEntity = UINT32_MAX;
 
   static constexpr size_t kFlagFilterCount = 6;
