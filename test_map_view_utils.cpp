@@ -1,5 +1,7 @@
 #include "src/game/utils/MapViewState.h"
 #include "src/game/controllers/MinimapControllerInternals.h"
+#include "src/game/components/MeshRenderer.h"
+#include "src/game/systems/ShadowCulling.h"
 #include <cmath>
 #include <iostream>
 
@@ -85,6 +87,27 @@ int main() {
         "unevaluated holes use the blue flag filter");
   CHECK(game::controllers::minimap_detail::kFlagKindCount == 6,
         "all six flag colors have a filter");
+
+  using game::components::IsMinimapRenderable;
+  using game::components::MinimapRenderMode;
+  CHECK(!IsMinimapRenderable(MinimapRenderMode::None) &&
+            IsMinimapRenderable(MinimapRenderMode::VertexColor) &&
+            IsMinimapRenderable(MinimapRenderMode::Textured),
+        "minimap renders terrain colors and HTML texture overlays");
+
+  DirectX::BoundingSphere nearCaster({49.0f, 0.0f, 0.0f}, 0.0f);
+  DirectX::BoundingSphere farCaster({51.0f, 0.0f, 0.0f}, 0.0f);
+  DirectX::BoundingSphere overlappingCaster({51.0f, 0.0f, 0.0f}, 2.0f);
+  CHECK(game::systems::shadow_detail::ShouldRenderFrame(false) &&
+            !game::systems::shadow_detail::ShouldRenderFrame(true),
+        "map view skips the shadow pass");
+  CHECK(game::systems::shadow_detail::IsNearFocus(
+            nearCaster, {0.0f, 0.0f, 0.0f}) &&
+            !game::systems::shadow_detail::IsNearFocus(
+                farCaster, {0.0f, 0.0f, 0.0f}) &&
+            game::systems::shadow_detail::IsNearFocus(
+                overlappingCaster, {0.0f, 0.0f, 0.0f}),
+        "shadow casters are limited to the nearby 50 meter area");
 
   using game::controllers::minimap_detail::ResolveFlagVisibility;
   constexpr size_t flagCount =

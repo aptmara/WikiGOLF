@@ -143,14 +143,14 @@ VS_OUTPUT main(VS_INPUT input) {
     // 表面に現れない。
     float alongPosition = dot(worldPos.xz, windDir);
     float crossPosition = dot(worldPos.xz, crossWindDir);
-    const float vortexBandSpacing = 24.0f;
-    const float vortexPacketSpacing = 78.0f;
+    const float vortexBandSpacing = 20.0f;
+    const float vortexPacketSpacing = 62.0f;
     float vortexBand = floor(crossPosition / vortexBandSpacing);
     float bandRandom = Hash21(float2(vortexBand, 37.19f));
     float vortexCrossCenter =
         (vortexBand + 0.5f) * vortexBandSpacing +
-        (bandRandom - 0.5f) * 5.0f;
-    float vortexTravel = time * lerp(2.2f, 5.2f, windStrength);
+        (bandRandom - 0.5f) * 3.0f;
+    float vortexTravel = time * lerp(2.8f, 6.4f, windStrength);
     float packetCoordinate =
         alongPosition - vortexTravel + bandRandom * vortexPacketSpacing;
     float vortexPacket = floor(packetCoordinate / vortexPacketSpacing);
@@ -160,15 +160,33 @@ VS_OUTPUT main(VS_INPUT input) {
     float localCross = crossPosition - vortexCrossCenter;
     float packetRandom = Hash21(float2(vortexBand + 83.7f,
                                        vortexPacket - 19.4f));
-    float packetExists = smoothstep(0.28f, 0.38f, packetRandom);
+    float packetExists = smoothstep(0.12f, 0.24f, packetRandom);
 
-    float vortexAlongRadius = lerp(5.5f, 8.0f, windStrength);
-    float vortexCrossRadius = lerp(3.2f, 4.8f, windStrength);
+    float vortexAlongRadius = lerp(9.0f, 13.0f, windStrength);
+    float vortexCrossRadius = lerp(4.8f, 7.0f, windStrength);
     float vortexDistance = length(float2(localAlong / vortexAlongRadius,
                                          localCross / vortexCrossRadius));
-    float vortexMask = saturate(1.0f - vortexDistance);
-    vortexMask = vortexMask * vortexMask *
-                 (3.0f - 2.0f * vortexMask) * packetExists * windActivity;
+    float vortexCoreMask = saturate(1.0f - vortexDistance);
+    vortexCoreMask = vortexCoreMask * vortexCoreMask *
+                     (3.0f - 2.0f * vortexCoreMask);
+    // 中心だけでなく外周にも細い波頭を作り、芝面を進む輪郭を見せる。
+    float vortexCrest =
+        1.0f - smoothstep(0.08f, 0.30f, abs(vortexDistance - 0.58f));
+    float vortexMask = saturate(vortexCoreMask + vortexCrest * 0.48f) *
+                       packetExists * windActivity;
+
+    // 主波の後ろへ短い二次波を残す。局所風が一塊で平行移動するだけで
+    // なく、芝を順番に押し倒して進む流れとして読めるようにする。
+    float wakeAlong = saturate(1.0f -
+        abs(localAlong) / (vortexAlongRadius * 1.35f));
+    float wakeAcross = saturate(1.0f -
+        abs(localCross) / (vortexCrossRadius * 1.20f));
+    float wakeRipple =
+        0.5f + 0.5f * sin(localAlong * 1.05f -
+                          time * (2.4f + windStrength * 2.8f) +
+                          bandRandom * 6.2831853f);
+    wakeRipple = wakeRipple * wakeRipple * wakeAlong * wakeAcross *
+                 packetExists * windActivity;
 
     float2 fromVortex =
         windDir * localAlong + crossWindDir * localCross;
@@ -178,14 +196,18 @@ VS_OUTPUT main(VS_INPUT input) {
     float2 vortexTangent =
         float2(-radialDirection.y, radialDirection.x) * spinDirection;
     float vortexRing = saturate(vortexDistance * 2.4f);
-    float vortexAmplitude = lerp(0.035f, 0.155f, windStrength);
+    float vortexAmplitude = lerp(0.065f, 0.280f, windStrength);
     float2 vortexOffset =
-        (vortexTangent * lerp(0.35f, 1.0f, vortexRing) + windDir * 0.42f) *
+        (vortexTangent * lerp(0.48f, 1.18f, vortexRing) + windDir * 0.68f) *
         vortexAmplitude * vortexMask * surfaceFlex * windTipWeight;
+    vortexOffset += windDir * vortexAmplitude * 0.34f * wakeRipple *
+                    surfaceFlex * windTipWeight;
+    float vortexVisual = saturate(vortexMask * 0.88f + wakeRipple * 0.52f);
     windOffset += vortexOffset;
 
     worldPos.xz += windOffset;
-    worldPos.y -= length(windOffset) * lerp(0.08f, 0.22f, windStrength);
+    worldPos.y -= length(windOffset) * lerp(0.18f, 0.38f, windStrength) +
+                  vortexVisual * surfaceFlex * windTipWeight * 0.025f;
 
     output.position = mul(mul(worldPos, View), Projection);
 
@@ -202,7 +224,11 @@ VS_OUTPUT main(VS_INPUT input) {
                                        -leanTotal.y));
     output.normal = normal;
     output.texCoord = input.texCoord;
-    output.color = float4(input.color.rgb * inst.Color.rgb * individualTint, 1.0f);
+    float3 grassColor = input.color.rgb * inst.Color.rgb * individualTint;
+    float windHighlight = vortexVisual * windTipWeight;
+    float3 windCrestColor = grassColor * float3(1.16f, 1.30f, 0.92f);
+    output.color = float4(lerp(grassColor, windCrestColor,
+                               windHighlight * 0.78f), 1.0f);
     output.worldPos = worldPos.xyz;
     float cameraDistance = distance(CameraPos.xyz, worldPos.xyz);
     float fadeEnd = 14.0f + materialClass * 50.0f;

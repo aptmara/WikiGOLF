@@ -66,11 +66,12 @@ bool MapSys::Initialize(ID3D11Device *device, int width, int height) {
     return false;
 
   D3D11_SAMPLER_DESC sd = {};
-  sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+  sd.Filter = D3D11_FILTER_ANISOTROPIC;
   sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
   sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
   sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
   sd.ComparisonFunc = D3D11_COMPARISON_NEVER;
+  sd.MaxAnisotropy = 8;
   sd.MaxLOD = D3D11_FLOAT32_MAX;
   device->CreateSamplerState(&sd, &m_samp);
 
@@ -275,9 +276,7 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
           components::MeshRenderer &r) {
         if (!r.isVisible)
           return;
-        if (r.minimapMode == components::MinimapRenderMode::None)
-          return;
-        if (r.minimapMode != components::MinimapRenderMode::VertexColor)
+        if (!components::IsMinimapRenderable(r.minimapMode))
           return;
         // 専用のミニマップメッシュ（間引き済み）が設定されていないエンティティは、
         // 本描画用フル解像度メッシュを誤って使わないよう安全に除外する。

@@ -16,6 +16,8 @@
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
 #include <DirectXCollision.h>
+#include <algorithm>
+#include <vector>
 #include <DirectXMath.h>
 #include <chrono>
 #include <d3d11.h>
@@ -40,9 +42,20 @@ struct VSConstants {
   XMFLOAT4 shadowParams;
 };
 
+// GolfCupClip.hlsli の GolfCupBuffer と同じレイアウト
+constexpr size_t kGolfCupClipMaxCount = 32;
+struct GolfCupClipConstants {
+  XMFLOAT4 cups[kGolfCupClipMaxCount]; // xyz: 縁の中心、w: 開口半径
+  XMFLOAT4 info;                       // x: 有効数
+};
+constexpr UINT kGolfCupClipSlot = 3;
+constexpr float kGolfCupClipMaxDistance = 150.0f;
+
 struct RenderState {
   ComPtr<ID3D11Buffer> cBuffer;
+  ComPtr<ID3D11Buffer> golfCupBuffer;
   ComPtr<ID3D11SamplerState> sampler;
+  ComPtr<ID3D11SamplerState> htmlTerrainSampler;
   ComPtr<ID3D11BlendState> alphaBlendState;
   ComPtr<ID3D11BlendState> multiplyBlendState;
   ComPtr<ID3D11BlendState> addBlendState;
@@ -108,6 +121,10 @@ void RenderSystem(core::GameContext &ctx) {
     desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     device->CreateBuffer(&desc, nullptr, &newState.cBuffer);
 
+    D3D11_BUFFER_DESC cupDesc = desc;
+    cupDesc.ByteWidth = sizeof(GolfCupClipConstants);
+    device->CreateBuffer(&cupDesc, nullptr, &newState.golfCupBuffer);
+
     // サンプラーステート作成
     D3D11_SAMPLER_DESC sampDesc = {};
     sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -118,6 +135,15 @@ void RenderSystem(core::GameContext &ctx) {
     sampDesc.MinLOD = 0;
     sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
     device->CreateSamplerState(&sampDesc, &newState.sampler);
+
+    D3D11_SAMPLER_DESC htmlTerrainSamplerDesc = sampDesc;
+    htmlTerrainSamplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
+    htmlTerrainSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    htmlTerrainSamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    htmlTerrainSamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    htmlTerrainSamplerDesc.MaxAnisotropy = 8;
+    device->CreateSamplerState(&htmlTerrainSamplerDesc,
+                               &newState.htmlTerrainSampler);
 
     // ブレンドステート作成（半透明対応）
     D3D11_BLEND_DESC blendDesc = {};
@@ -203,6 +229,59 @@ void RenderSystem(core::GameContext &ctx) {
   const XMMATRIX inverseView = XMMatrixInverse(&inverseViewDeterminant, view);
   viewFrustum.Transform(worldFrustum, inverseView);
 
+  // カップの開口部（地形・オーバーレイ・芝をくり抜く円）をカメラに近い順に設定する
+  if (state->golfCupBuffer) {
+    PROFILE_SCOPE("RenderSystem.GolfCupClip");
+    struct CupCandidate {
+      float distanceSq;
+      XMFLOAT4 cup;
+    };
+    std::vector<CupCandidate> candidates;
+    if (golfState) {
+      candidates.reserve(golfState->holes.size());
+      for (uint32_t id : golfState->holes) {
+        const ecs::Entity holeEntity = static_cast<ecs::Entity>(id);
+        const auto *holeTransform = world.Get<components::Transform>(holeEntity);
+        const auto *hole = world.Get<components::GolfHole>(holeEntity);
+        if (!holeTransform || !hole) {
+          continue;
+        }
+        const float dx = holeTransform->position.x - camPos.x;
+        const float dz = holeTransform->position.z - camPos.z;
+        const float distanceSq = dx * dx + dz * dz;
+        if (distanceSq > kGolfCupClipMaxDistance * kGolfCupClipMaxDistance) {
+          continue;
+        }
+        candidates.push_back(
+            {distanceSq,
+             XMFLOAT4(holeTransform->position.x, holeTransform->position.y,
+                      holeTransform->position.z, hole->radius)});
+      }
+    }
+    const size_t cupCount = std::min(candidates.size(), kGolfCupClipMaxCount);
+    std::partial_sort(candidates.begin(), candidates.begin() + cupCount,
+                      candidates.end(),
+                      [](const CupCandidate &a, const CupCandidate &b) {
+                        return a.distanceSq < b.distanceSq;
+                      });
+
+    D3D11_MAPPED_SUBRESOURCE mappedCups;
+    if (SUCCEEDED(context->Map(state->golfCupBuffer.Get(), 0,
+                               D3D11_MAP_WRITE_DISCARD, 0, &mappedCups))) {
+      auto *constants = static_cast<GolfCupClipConstants *>(mappedCups.pData);
+      for (size_t i = 0; i < kGolfCupClipMaxCount; ++i) {
+        constants->cups[i] =
+            i < cupCount ? candidates[i].cup : XMFLOAT4(0, 0, 0, 0);
+      }
+      constants->info = XMFLOAT4(static_cast<float>(cupCount), 0, 0, 0);
+      context->Unmap(state->golfCupBuffer.Get(), 0);
+    }
+    context->VSSetConstantBuffers(kGolfCupClipSlot, 1,
+                                  state->golfCupBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(kGolfCupClipSlot, 1,
+                                  state->golfCupBuffer.GetAddressOf());
+  }
+
   // 転置（HLSLは列優先）
   view = XMMatrixTranspose(view);
   proj = XMMatrixTranspose(proj);
@@ -240,12 +319,14 @@ void RenderSystem(core::GameContext &ctx) {
     components::BlendMode blendMode;
     bool isTransparent;
     bool twoSided = false;
+    bool usesHtmlTerrainSampler = false;
 
     bool operator==(const RenderKey &o) const {
       return mesh == o.mesh && shader == o.shader &&
              textureSRV == o.textureSRV && normalMapSRV == o.normalMapSRV &&
              blendMode == o.blendMode && isTransparent == o.isTransparent &&
-             twoSided == o.twoSided;
+             twoSided == o.twoSided &&
+             usesHtmlTerrainSampler == o.usesHtmlTerrainSampler;
     }
   };
 
@@ -262,6 +343,7 @@ void RenderSystem(core::GameContext &ctx) {
       h = h * 31 + static_cast<size_t>(k.blendMode);
       h = h * 31 + (k.isTransparent ? 1 : 0);
       h = h * 31 + (k.twoSided ? 1 : 0);
+      h = h * 31 + (k.usesHtmlTerrainSampler ? 1 : 0);
       return h;
     }
   };
@@ -395,6 +477,10 @@ void RenderSystem(core::GameContext &ctx) {
         key.normalMapSRV = r.normalMapSRV.Get();
         key.blendMode = r.blendMode;
         key.isTransparent = r.isTransparent;
+        key.usesHtmlTerrainSampler =
+            world.Has<components::TerrainObject>(e) &&
+            r.blendMode == components::BlendMode::Multiply && r.hasTexture &&
+            r.textureSRV;
 
         RenderInstance inst;
         inst.entity = e;
@@ -423,6 +509,11 @@ void RenderSystem(core::GameContext &ctx) {
               r.customFlags.x,
               r.customFlags.y
           );
+        }
+        if (r.shader == basicHandle) {
+          // BasicVS は Flags.w を色アルファで上書きして使わないため、
+          // カップ開口部のくり抜き指定として渡す。
+          inst.flags.w = r.clipsGolfCupOpening ? 1.0f : 0.0f;
         }
 
         if (r.isTransparent) {
@@ -645,7 +736,10 @@ void RenderSystem(core::GameContext &ctx) {
       context->PSSetShaderResources(1, 1, &nullSRV);
     }
 
-    context->PSSetSamplers(0, 1, state->sampler.GetAddressOf());
+    ID3D11SamplerState *textureSampler =
+        key.usesHtmlTerrainSampler ? state->htmlTerrainSampler.Get()
+                                   : state->sampler.Get();
+    context->PSSetSamplers(0, 1, &textureSampler);
     if (shadowEnabled) {
       ID3D11ShaderResourceView *shadowResource =
           shadowState->shaderResourceView.Get();

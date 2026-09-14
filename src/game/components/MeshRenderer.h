@@ -29,6 +29,10 @@ enum class MinimapRenderMode {
     Textured,     ///< Texture2Dをサンプルして描画（記事オーバーレイタイル用）
 };
 
+constexpr bool IsMinimapRenderable(MinimapRenderMode mode) {
+  return mode != MinimapRenderMode::None;
+}
+
 struct MeshRenderer {
   resources::MeshHandle mesh;
   // ミニマップ専用の簡略化メッシュ（既定は無効＝ミニマップ描画対象から除外）。
@@ -48,6 +52,8 @@ struct MeshRenderer {
   DirectX::XMFLOAT4 customFlags = {0, 0, 0, 0};
   bool isTransparent = false;
   BlendMode blendMode = BlendMode::Opaque;
+  // Basic シェーダーで、カップの開口部をくり抜いて描くか（地表の記事オーバーレイ用）
+  bool clipsGolfCupOpening = false;
 
   // 0以下なら距離LODを無効化する。フラスタムカリングは常に適用される。
   float maxDrawDistance = 0.0f;

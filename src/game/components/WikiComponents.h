@@ -7,6 +7,7 @@
 #include "../systems/TerrainGenerator.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
+#include "../utils/GolfCupPhysics.h"
 #include <DirectXMath.h>
 #include <cstdint>
 #include <memory>
@@ -355,14 +356,18 @@ struct AimPinState {
 /**
  * @brief ゴルフホール（リンク用）
 */
-inline constexpr float kGolfHoleVisualDiameter = 0.5f;
-inline constexpr float kGolfHoleCaptureRadius = 0.55f;
 inline constexpr float kGolfHoleSuctionStrength = 0.0f;
 inline constexpr float kGolfHoleSuctionRangeMultiplier = 1.1f;
 
+/**
+ * @details エンティティの Transform::position は「カップ縁の中心」（地表の見た目の
+ *          高さ）を表す。カップの深さ・当たり判定は GolfCupPhysics.h を参照。
+*/
 struct GolfHole {
   std::string linkTarget;    ///< リンク先記事
-  float radius = kGolfHoleCaptureRadius; ///< 判定半径（吸い込み範囲も兼ねる）
+  float radius = game::physics::kGolfCupRadius; ///< カップ開口部の見た目半径
+  float pinRadius = 0.0f;    ///< 旗竿の見た目半径（0ならピン判定なし）
+  float pinHeight = 0.0f;    ///< 縁から上の旗竿の高さ
   bool isTarget = false;     ///< 目的記事へのリンクか
   float gravity = kGolfHoleSuctionStrength; ///< 通常時は吸引しない
   int hopsToTarget = -1;     ///< ターゲットまでのリンク数 (-1=未計算)

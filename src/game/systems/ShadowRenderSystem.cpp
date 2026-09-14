@@ -4,12 +4,14 @@
  */
 
 #include "ShadowRenderSystem.h"
+#include "ShadowCulling.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
 #include "../../ecs/World.h"
 #include "../../graphics/GraphicsDevice.h"
 #include "../../resources/ResourceManager.h"
 #include "../components/MeshRenderer.h"
+#include "../components/Camera.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
 #include <algorithm>
@@ -136,11 +138,41 @@ void ShadowRenderSystem(core::GameContext &ctx) {
   if (!golfState || !world.IsAlive(golfState->ballEntity)) {
     return;
   }
+  if (!shadow_detail::ShouldRenderFrame(golfState->isMapView)) {
+    return;
+  }
   const auto *ballTransform =
       world.Get<components::Transform>(golfState->ballEntity);
   if (!ballTransform) {
     return;
   }
+
+  components::Transform cameraTransform;
+  components::Camera camera;
+  bool cameraFound = false;
+  world.Query<components::Transform, components::Camera>().Each(
+      [&](ecs::Entity, components::Transform &candidateTransform,
+          components::Camera &candidateCamera) {
+        if (candidateCamera.isMainCamera || !cameraFound) {
+          cameraTransform = candidateTransform;
+          camera = candidateCamera;
+          cameraFound = true;
+        }
+      });
+  if (!cameraFound) {
+    return;
+  }
+
+  const XMMATRIX cameraView = camera.GetViewMatrix(cameraTransform);
+  const XMMATRIX cameraProjection = XMMatrixPerspectiveFovLH(
+      camera.fov, ctx.graphics.GetAspectRatio(), camera.nearZ, camera.farZ);
+  BoundingFrustum viewFrustum;
+  BoundingFrustum worldFrustum;
+  BoundingFrustum::CreateFromMatrix(viewFrustum, cameraProjection);
+  XMVECTOR inverseViewDeterminant;
+  const XMMATRIX inverseCameraView =
+      XMMatrixInverse(&inverseViewDeterminant, cameraView);
+  viewFrustum.Transform(worldFrustum, inverseCameraView);
 
   auto *device = ctx.graphics.GetDevice();
   auto *context = ctx.graphics.GetContext();
@@ -204,10 +236,13 @@ void ShadowRenderSystem(core::GameContext &ctx) {
 
         BoundingSphere bounds;
         mesh->GetBounds().Transform(bounds, transform.GetWorldMatrix());
-        const float dx = bounds.Center.x - ballTransform->position.x;
-        const float dz = bounds.Center.z - ballTransform->position.z;
-        const float maximumDistance = kShadowCoverage * 0.72f + bounds.Radius;
-        if (dx * dx + dz * dz > maximumDistance * maximumDistance) {
+        if (!shadow_detail::IsNearFocus(bounds, ballTransform->position)) {
+          return;
+        }
+
+        BoundingSphere screenBounds = bounds;
+        screenBounds.Radius += shadow_detail::kScreenMargin;
+        if (worldFrustum.Contains(screenBounds) == DISJOINT) {
           return;
         }
 
