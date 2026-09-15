@@ -713,17 +713,18 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       shot->resultDisplayTime -= dt;
       if (shot->resultDisplayTime <= 0.0f) {
           shot->phase = game::components::ShotState::Phase::RestoringCamera;
-          m_screenFade.SetCenter(0.5f, 0.5f);
-          m_screenFade.FadeOut(0.4f, game::utils::FadeType::CircleWipe, {0, 0, 0});
+          shot->resultDisplayTime = 0.2f; // カメラ復帰までの間
       }
+  } else if (shot->phase == game::components::ShotState::Phase::RestoringCamera) {
+      shot->resultDisplayTime -= dt;
   }
 
-  // カメラフェード復帰
-  if (shot->phase == game::components::ShotState::Phase::RestoringCamera && !m_screenFade.IsFading()) {
+  // カメラ復帰（暗転なし、少し間を置いてから）
+  if (shot->phase == game::components::ShotState::Phase::RestoringCamera &&
+      shot->resultDisplayTime <= 0.0f) {
       if (m_cameraController) m_cameraController->RestoreAfterFade(ctx);
       shot->Reset();
       if (m_hud) m_hud->ResetShotUI(ctx);
-      m_screenFade.FadeIn(0.4f, game::utils::FadeType::CircleWipe, {0, 0, 0});
   }
 
   UpdateTrajectoryAndGuide(ctx, *state, *shot, dt, tutorialInputLocked, isMapView);
