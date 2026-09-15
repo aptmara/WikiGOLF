@@ -460,7 +460,7 @@ void WikiTerrainSystem::CreateSkyGlobes(core::GameContext &ctx,
   const auto layout = BuildSkyGlobeLayout(
       m_terrainData->config.worldWidth, m_terrainData->config.worldDepth, seed,
       [this](float x, float z) { return GetSceneryHeight(x, z); });
-  // 元の STL（約 31 万三角形）は使わず、遠景用に作った LOD モデルだけを使う。
+  // LOD0 はタイトル画面と同じ元のモデル。遠いものだけ軽いモデルに切り替える。
   for (int lod = 0; lod < kSkyGlobeLodCount; ++lod) {
     m_skyGlobeLodMeshes[lod] = ctx.resource.LoadMesh(kSkyGlobeLodMeshes[lod]);
   }
@@ -475,18 +475,18 @@ void WikiTerrainSystem::CreateSkyGlobes(core::GameContext &ctx,
     XMStoreFloat4(&transform.rotation,
                   XMQuaternionRotationRollPitchYaw(placement.tilt, placement.bobPhase, 0.0f));
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = m_skyGlobeLodMeshes[kSkyGlobeLodCount - 1]; // 最初は最も軽いモデル
+    mr.mesh = m_skyGlobeLodMeshes[0];
     mr.shader = shader;
     mr.color = {0.95f, 0.95f, 0.98f, 1.0f}; // タイトル画面の地球儀と同じ白
     mr.isVisible = true;
-    // 霧で見えなくなる距離より先は描かない。
-    mr.maxDrawDistance = 450.0f;
+    // 大きな地球儀は遠くからも見えるよう、半径の分だけ描画距離を延ばす。
+    mr.maxDrawDistance = 600.0f + placement.scale * kSkyGlobeModelRadius;
+    mr.boundsScale = 1.0f;
     m_entities.push_back(e);
 
     SkyGlobe globe;
     globe.entity = e;
     globe.scale = placement.scale;
-    globe.lod = kSkyGlobeLodCount - 1;
     globe.basePosition = placement.position;
     globe.tilt = placement.tilt;
     globe.spinSpeed = placement.spinSpeed;
@@ -522,8 +522,9 @@ void WikiTerrainSystem::UpdateSkyGlobes(core::GameContext &ctx, float dt) {
       const float dx = globe.basePosition.x - cameraPosition.x;
       const float dy = globe.basePosition.y - cameraPosition.y;
       const float dz = globe.basePosition.z - cameraPosition.z;
-      const int lod = SelectSkyGlobeLod(std::sqrt(dx * dx + dy * dy + dz * dz),
-                                        globe.scale, globe.lod);
+      const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+      const int lod = SelectSkyGlobeLod(distance, globe.scale * kSkyGlobeModelRadius,
+                                        globe.lod);
       if (lod != globe.lod) {
         if (auto *renderer = ctx.world.Get<MeshRenderer>(globe.entity)) {
           renderer->mesh = m_skyGlobeLodMeshes[lod];

@@ -43,10 +43,15 @@ public:
 
   /**
    * @brief 地表を連続して覆うため、葉を面状に分散した芝パッチを生成
+   *        葉1枚は3頂点1三角形で、裏面は両面ラスタライザで描画する前提。
    * @param variantSeed 個体差を出すためのバリアントID（0以上、値ごとに異なる配置になる）
+   * @param keepRatio 残す葉の割合。同じ引数で1.0のパッチの部分集合になる（LOD用）
+   * @param widthScale 間引いた分の被覆を補う葉幅の倍率
    */
   static Mesh CreateGrassPatch(ID3D11Device *device, uint32_t variantSeed = 0,
-                               int gridSize = 9, int bladesPerCell = 2);
+                               int gridSize = 9, int bladesPerCell = 2,
+                               float keepRatio = 1.0f,
+                               float widthScale = 1.0f);
 
   /**
    * @brief フェアウェイ/グリーン用の刈り込み芝パッチを生成。

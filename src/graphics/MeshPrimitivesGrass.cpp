@@ -85,7 +85,8 @@ Mesh MeshPrimitives::CreateGrassClump(ID3D11Device *device) {
 
 Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
                                        uint32_t variantSeed, int gridSize,
-                                       int bladesPerCell) {
+                                       int bladesPerCell, float keepRatio,
+                                       float widthScale) {
   std::vector<Vertex> vertices;
   std::vector<uint32_t> indices;
   // ゴルフ場のラフは独立した草株の集合ではなく、地表全体を覆う芝床から
@@ -97,8 +98,8 @@ Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
   constexpr float pi = 3.14159265358979f;
   const float variantOffset = static_cast<float>(variantSeed) * 811.87f;
 
-  vertices.reserve(cellCount * bladesPerCell * 6);
-  indices.reserve(cellCount * bladesPerCell * 24);
+  vertices.reserve(cellCount * bladesPerCell * 3);
+  indices.reserve(cellCount * bladesPerCell * 3);
 
   for (int cz = 0; cz < gridSize; ++cz) {
     for (int cx = 0; cx < gridSize; ++cx) {
@@ -141,6 +142,12 @@ Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
         if (dropoutRoll > density) {
           continue;
         }
+        // LOD用の間引き。seedだけで決まるため、keepRatioを下げたパッチは
+        // 常に高密度パッチの部分集合になり、切り替え時に葉の位置が動かない。
+        const float lodRoll = std::abs(std::sin(seed * 91.37f + 3.71f));
+        if (lodRoll >= keepRatio) {
+          continue;
+        }
 
         // 芝床全体では方向を均一に分散するが、葉単体はほぼ直立させる。
         // 放射状に大きく開かせると雑草の株に見えるため行わない。
@@ -156,16 +163,19 @@ Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
         const float height =
             (0.78f + 0.20f * (0.5f + 0.5f * std::sin(seed * 4.173f))) *
             edgeHeightScale;
+        // 葉は幅1cm前後で、通常の視点では数ピクセル幅にしかならない。
+        // 中間の絞りと穂先の幅を持つ6頂点形状と見分けがつかないため、
+        // 根元2点と穂先1点の三角形1枚にする。三角形は中腹が細くなる分、
+        // 根元幅を広げて従来の葉面積（被覆率）を保つ。
         const float halfWidth =
-            0.0045f + 0.0022f * (0.5f + 0.5f * std::sin(seed * 7.913f));
+            (0.0045f + 0.0022f * (0.5f + 0.5f * std::sin(seed * 7.913f))) *
+            1.27f * widthScale;
         const float lean = std::sin(seed * 3.117f) * 0.045f;
         const uint32_t base = static_cast<uint32_t>(vertices.size());
 
         const DirectX::XMFLOAT3 normal = {normalX, 0.12f, normalZ};
         const DirectX::XMFLOAT4 rootColor = {0.52f, 0.64f, 0.42f, 1.0f};
-        const DirectX::XMFLOAT4 midColor = {0.82f, 0.91f, 0.68f, 1.0f};
-        const DirectX::XMFLOAT4 tipColor = {0.74f, 0.84f, 0.58f, 1.0f};
-        const float tipHalfWidth = halfWidth * 0.16f;
+        const DirectX::XMFLOAT4 tipColor = {0.78f, 0.87f, 0.63f, 1.0f};
 
         vertices.push_back({{rootOffsetX - sideX * halfWidth, 0.0f,
                              rootOffsetZ - sideZ * halfWidth},
@@ -173,41 +183,12 @@ Mesh MeshPrimitives::CreateGrassPatch(ID3D11Device *device,
         vertices.push_back({{rootOffsetX + sideX * halfWidth, 0.0f,
                              rootOffsetZ + sideZ * halfWidth},
                             normal, {1.0f, 1.0f}, rootColor});
-        vertices.push_back({{rootOffsetX - sideX * halfWidth * 0.62f +
-                                 normalX * lean,
-                             height * 0.58f,
-                             rootOffsetZ - sideZ * halfWidth * 0.62f +
-                                 normalZ * lean},
-                            normal, {0.18f, 0.45f}, midColor});
-        vertices.push_back({{rootOffsetX + sideX * halfWidth * 0.62f +
-                                 normalX * lean,
-                             height * 0.58f,
-                             rootOffsetZ + sideZ * halfWidth * 0.62f +
-                                 normalZ * lean},
-                            normal, {0.82f, 0.45f}, midColor});
-        vertices.push_back({{rootOffsetX - sideX * tipHalfWidth +
-                                 normalX * lean * 2.0f,
-                             height,
-                             rootOffsetZ - sideZ * tipHalfWidth +
-                                 normalZ * lean * 2.0f},
-                            normal, {0.32f, 0.0f}, tipColor});
-        vertices.push_back({{rootOffsetX + sideX * tipHalfWidth +
-                                 normalX * lean * 2.0f,
-                             height,
-                             rootOffsetZ + sideZ * tipHalfWidth +
-                                 normalZ * lean * 2.0f},
-                            normal, {0.68f, 0.0f}, tipColor});
+        vertices.push_back({{rootOffsetX + normalX * lean * 2.0f, height,
+                             rootOffsetZ + normalZ * lean * 2.0f},
+                            normal, {0.5f, 0.0f}, tipColor});
 
-        const uint32_t front[] = {base,     base + 1, base + 3,
-                                  base,     base + 3, base + 2,
-                                  base + 2, base + 3, base + 5,
-                                  base + 2, base + 5, base + 4};
-        indices.insert(indices.end(), front, front + 12);
-        for (int tri = 0; tri < 4; ++tri) {
-          indices.push_back(front[tri * 3 + 2]);
-          indices.push_back(front[tri * 3 + 1]);
-          indices.push_back(front[tri * 3]);
-        }
+        // 裏面は複製せず、描画側の両面ラスタライザ（CULL_NONE）で出す。
+        indices.insert(indices.end(), {base, base + 1, base + 2});
       }
     }
   }

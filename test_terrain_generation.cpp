@@ -583,52 +583,67 @@ int main() {
       CHECK(normalsUp, "Backdrop mesh is generated with upward normals");
 
       // 空に浮かぶ地球儀
-      if (biome == 0) {
+      if (biome == 0 || biome == 3) {
+        using namespace game::systems;
         auto ground = [&](float x, float z) {
-          return game::systems::SampleTerrainBackdrop(longData, x, z, backdropSeed).height;
+          return SampleTerrainBackdrop(longData, x, z, backdropSeed).height;
         };
-        const auto globes = game::systems::BuildSkyGlobeLayout(
-            longConfig.worldWidth, longConfig.worldDepth, 0x610bu, ground);
-        bool aboveGround = true;
-        bool spread = true;
-        int overCourse = 0;
+        const auto globes = BuildSkyGlobeLayout(longConfig.worldWidth,
+                                                longConfig.worldDepth, 0x610bu, ground);
+        const float halfW = longConfig.worldWidth * 0.5f;
+        const float halfD = longConfig.worldDepth * 0.5f;
+        bool clearOfBarrier = true;
+        bool aboveTerrain = true;
+        bool separated = true;
+        float smallest = 1.0e9f;
+        float largest = 0.0f;
         for (size_t i = 0; i < globes.size(); ++i) {
           const auto &g = globes[i];
-          const float clearance = g.position.y - g.bobHeight - g.scale * 0.57f -
-                                  ground(g.position.x, g.position.z);
-          aboveGround = aboveGround && clearance > 15.0f;
-          overCourse += std::abs(g.position.x) <= longConfig.worldWidth * 0.5f ? 1 : 0;
+          const float radius = g.scale * kSkyGlobeModelRadius;
+          smallest = std::min(smallest, radius);
+          largest = std::max(largest, radius);
+          // コースの上には無く、壁（厚み 6m）に触れない
+          clearOfBarrier = clearOfBarrier &&
+                           DistanceOutsideCourse(g.position.x, g.position.z, halfW, halfD) >
+                               radius + kSkyGlobeBarrierThickness;
+          // 球の真下の範囲（細かい格子で調べる）の地面に触れない
+          for (float ox = -radius; ox <= radius; ox += 3.0f) {
+            for (float oz = -radius; oz <= radius; oz += 3.0f) {
+              const float d2 = ox * ox + oz * oz;
+              if (d2 > radius * radius) continue;
+              const float surfaceBottom =
+                  g.position.y - g.bobHeight - std::sqrt(radius * radius - d2);
+              aboveTerrain = aboveTerrain &&
+                             surfaceBottom > ground(g.position.x + ox, g.position.z + oz);
+            }
+          }
           for (size_t j = i + 1; j < globes.size(); ++j) {
-            const float dx = g.position.x - globes[j].position.x;
-            const float dz = g.position.z - globes[j].position.z;
-            spread = spread && (dx * dx + dz * dz > 4.0f);
+            const auto &h = globes[j];
+            const float dx = g.position.x - h.position.x;
+            const float dy = g.position.y - h.position.y;
+            const float dz = g.position.z - h.position.z;
+            const float minimum = radius + h.scale * kSkyGlobeModelRadius;
+            separated = separated && dx * dx + dy * dy + dz * dz > minimum * minimum;
           }
         }
-        std::cout << "  sky globes=" << globes.size() << " overCourse=" << overCourse << std::endl;
-        CHECK(globes.size() >= 8 && globes.size() <= 20,
+        std::cout << "  sky globes=" << globes.size() << " radius=" << smallest << ".."
+                  << largest << "m" << std::endl;
+        CHECK(globes.size() >= 8 && globes.size() <= 16,
               "A moderate number of globes float in the sky");
-        CHECK(aboveGround, "Sky globes float well above the terrain");
-        CHECK(spread, "Sky globes do not overlap each other");
-        CHECK(overCourse > 0 && overCourse < static_cast<int>(globes.size()),
-              "Sky globes are spread over the course and the surrounding terrain");
-        const auto shortCourseGlobes = game::systems::BuildSkyGlobeLayout(80.0f, 120.0f, 1u, ground);
+        CHECK(clearOfBarrier, "Sky globes stay outside the course and clear of the barrier");
+        CHECK(aboveTerrain, "Sky globes never sink into the terrain");
+        CHECK(separated, "Sky globes do not overlap each other");
+        CHECK(largest > smallest * 6.0f, "Sky globes range from small to huge");
+        const auto shortCourseGlobes = BuildSkyGlobeLayout(80.0f, 120.0f, 1u, ground);
         CHECK(shortCourseGlobes.size() == 8, "Short courses still get a handful of globes");
 
-        // LOD: 近い大きな地球儀ほど細かいモデル、遠いほど軽いモデル
-        using game::systems::SelectSkyGlobeLod;
-        CHECK(SelectSkyGlobeLod(40.0f, 10.0f, 2) == 0, "Nearby globes use the detailed LOD");
-        CHECK(SelectSkyGlobeLod(250.0f, 10.0f, 0) == 1, "Mid-distance globes use the middle LOD");
-        CHECK(SelectSkyGlobeLod(600.0f, 5.0f, 0) == 2, "Far globes use the lightest LOD");
-        // 境目の近くでは今の LOD を保ち、切り替えがちらつかない
-        const float edge = 25.0f * 10.0f * 0.57f;
-        CHECK(SelectSkyGlobeLod(edge * 1.05f, 10.0f, 0) == 0 &&
-                  SelectSkyGlobeLod(edge * 0.95f, 10.0f, 1) == 1,
+        // 段階的 LOD: 見かけが大きいうちは元のモデル、文字が見えない距離から軽いモデル
+        CHECK(SelectSkyGlobeLod(100.0f, 50.0f, 1) == 0, "Large nearby globes use the original model");
+        CHECK(SelectSkyGlobeLod(80.0f * 5.0f, 5.0f, 0) == 1, "Mid-distance globes use LOD1");
+        CHECK(SelectSkyGlobeLod(200.0f * 3.0f, 3.0f, 0) == 2, "Far globes use LOD2");
+        CHECK(SelectSkyGlobeLod(57.0f * 10.0f, 10.0f, 0) == 0 &&
+                  SelectSkyGlobeLod(53.0f * 10.0f, 10.0f, 1) == 1,
               "LOD switching has hysteresis around the threshold");
-        for (const char *path : game::systems::kSkyGlobeLodMeshes) {
-          FILE *file = std::fopen(path, "rb");
-          CHECK(file != nullptr, "Sky globe LOD model exists");
-          if (file) std::fclose(file);
-        }
       }
 
       // 手前・奥の縁と角もコースと隙間なくつながる

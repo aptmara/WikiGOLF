@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 namespace game::systems {
@@ -11,6 +12,22 @@ struct GrassStreamingBounds {
   float minZ = 0.0f;
   float maxZ = 0.0f;
 };
+
+struct GrassNormalSampleRange {
+  float lower = 0.0f;
+  float upper = 0.0f;
+};
+
+inline int CalculateGrassGridCellCount(float fieldExtent, float spacing) {
+  return std::max(
+      1, static_cast<int>(std::ceil(std::max(0.0f, fieldExtent) / spacing)));
+}
+
+inline GrassNormalSampleRange CalculateGrassNormalSampleRange(
+    float center, float offset, float fieldMin, float fieldMax) {
+  return {std::clamp(center - offset, fieldMin, fieldMax),
+          std::clamp(center + offset, fieldMin, fieldMax)};
+}
 
 inline uint32_t MakeGrassCellSeed(uint32_t fieldSeed, int row, int column) {
   return fieldSeed ^ static_cast<uint32_t>(row) * 374761393u ^

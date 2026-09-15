@@ -163,8 +163,8 @@ ProceduralFlagResult CreateProceduralFlag(
   (void)ctx.resource.LoadShader("FlagCloth", L"Assets/shaders/FlagVS.hlsl",
                                 L"Assets/shaders/FlagPS.hlsl");
 
-  const float size = options.large ? 1.75f : 0.90f;
-  const float poleHeight = 2.65f * size;
+  const float size = GetProceduralFlagSize(options.large);
+  const float poleHeight = GetProceduralFlagPoleHeight(options.large);
   const float clothHeight = kClothMeshHeight * size;
   const float clothY = basePosition.y + poleHeight * 0.84f;
 

@@ -4,6 +4,7 @@
 */
 
 #include "WikiTerrainSystem.h"
+#include "GrassRenderRules.h"
 #include "GrassStreamingRules.h"
 #include "../../core/DisplaySettings.h"
 #include "../../core/GameContext.h"
@@ -35,11 +36,13 @@ constexpr float kGrassStreamingPadding = 24.0f;
 constexpr size_t kGrassInstancesGeneratedPerBuildFrame = 128;
 constexpr size_t kGrassInstancesGeneratedPerStreamingFrame = 512;
 
+// 生成範囲は最も遠くまで見えるラフのシェーダーフェード距離に合わせる。
+// これより遠い芝は生成しても必ずディザーで消えているため作らない。
 float GrassStreamingDrawDistance(core::GraphicsPreset preset) {
   if (preset == core::GraphicsPreset::Ultra) {
-    return 90.0f;
+    return 56.0f;
   }
-  return 62.0f;
+  return 46.0f;
 }
 
 } // namespace
@@ -95,43 +98,46 @@ bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
     return true;
   }
 
+  // roughFadeScale: ラフ（Color.a=0.88）のフェード終了距離 58m に掛ける倍率。
+  //   地形シェーダー側のラフ繊維表現があるため、遠景の3D葉は省く。
+  // triangleBudget: 1フレームに描画する芝ポリゴン数の上限。超えた分は
+  //   RenderSystemが中距離の密度→遠くの芝の順に削る。
   struct VegetationQuality {
     float roughSpacing;
-    float semiRoughDrawDistance;
-    float roughDrawDistance;
+    float roughLodDistance;
+    float roughFadeScale;
     float turfSpacing;
     float greenLodDistance;
     float fairwayLodDistance;
     float greenDrawDistance;
     float fairwayDrawDistance;
+    uint64_t triangleBudget;
   } quality{};
   switch (graphicsPreset) {
   case core::GraphicsPreset::Medium:
-    quality = {0.85f, 40.0f, 52.0f, 1.20f,
-               4.0f, 5.0f, 16.0f, 19.0f};
+    quality = {0.85f, 8.0f, 0.60f, 1.20f,
+               4.0f, 5.0f, 16.0f, 19.0f, 800000};
     break;
   case core::GraphicsPreset::ExHigh:
-    quality = {0.72f, 46.0f, 60.0f, 1.05f,
-               6.0f, 8.0f, 19.0f, 22.0f};
+    quality = {0.72f, 14.0f, 0.75f, 1.05f,
+               6.0f, 8.0f, 19.0f, 22.0f, 2000000};
     break;
   case core::GraphicsPreset::Ultra:
-    quality = {0.50f, 70.0f, 90.0f, 0.70f,
-               10.0f, 13.0f, 26.0f, 32.0f};
+    quality = {0.50f, 18.0f, 0.90f, 0.70f,
+               10.0f, 13.0f, 26.0f, 32.0f, 3000000};
     break;
   case core::GraphicsPreset::High:
   default:
-    quality = {0.72f, 46.0f, 60.0f, 1.05f,
-               5.0f, 6.0f, 18.0f, 20.0f};
+    quality = {0.72f, 12.0f, 0.70f, 1.05f,
+               5.0f, 6.0f, 18.0f, 20.0f, 1500000};
     break;
   }
 
   // 1パッチ内を高密度の芝床として生成し、パッチ自体は適度に広げて重ねる。
   // 小さな草株を大量に並べる方式より、連続面としてのラフを保ちやすい。
   const float spacing = quality.roughSpacing;
-  const int columns =
-      std::max(1, static_cast<int>(std::ceil(fieldWidth * 0.96f / spacing)));
-  const int rows =
-      std::max(1, static_cast<int>(std::ceil(fieldDepth * 0.96f / spacing)));
+  const int columns = CalculateGrassGridCellCount(fieldWidth, spacing);
+  const int rows = CalculateGrassGridCellCount(fieldDepth, spacing);
   const unsigned grassSeed = static_cast<unsigned>(
       resX * 73856093u ^ resZ * 19349663u ^ (m_biome + 1) * 83492791u);
   const float fieldHalfWidth = fieldWidth * 0.5f;
@@ -221,13 +227,19 @@ bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
   auto computeSlopeAlignQuat = [&](float x, float z,
                                    float *outFootprintScale) {
     constexpr float normalSampleOffset = 0.15f;
-    const float heightLeft = GetHeight(x - normalSampleOffset, z);
-    const float heightRight = GetHeight(x + normalSampleOffset, z);
-    const float heightDown = GetHeight(x, z - normalSampleOffset);
-    const float heightUp = GetHeight(x, z + normalSampleOffset);
+    const GrassNormalSampleRange sampleX = CalculateGrassNormalSampleRange(
+        x, normalSampleOffset, -fieldHalfWidth, fieldHalfWidth);
+    const GrassNormalSampleRange sampleZ = CalculateGrassNormalSampleRange(
+        z, normalSampleOffset, -fieldHalfDepth, fieldHalfDepth);
+    const float heightLeft = GetHeight(sampleX.lower, z);
+    const float heightRight = GetHeight(sampleX.upper, z);
+    const float heightDown = GetHeight(x, sampleZ.lower);
+    const float heightUp = GetHeight(x, sampleZ.upper);
+    const float sampleWidth = std::max(sampleX.upper - sampleX.lower, 1e-6f);
+    const float sampleDepth = std::max(sampleZ.upper - sampleZ.lower, 1e-6f);
     XMVECTOR slopeNormal = XMVector3Normalize(XMVectorSet(
-        (heightLeft - heightRight) / (2.0f * normalSampleOffset), 1.0f,
-        (heightDown - heightUp) / (2.0f * normalSampleOffset), 0.0f));
+        (heightLeft - heightRight) / sampleWidth, 1.0f,
+        (heightDown - heightUp) / sampleDepth, 0.0f));
 
     if (outFootprintScale) {
       const float slopeCos =
@@ -263,6 +275,12 @@ bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
       ctx.resource.LoadMesh(grassMeshPrefix + "2"),
       ctx.resource.LoadMesh(grassMeshPrefix + "3"),
   };
+  resources::MeshHandle grassLodMeshVariants[kGrassVariantCount] = {
+      ctx.resource.LoadMesh(grassMeshPrefix + "lod_0"),
+      ctx.resource.LoadMesh(grassMeshPrefix + "lod_1"),
+      ctx.resource.LoadMesh(grassMeshPrefix + "lod_2"),
+      ctx.resource.LoadMesh(grassMeshPrefix + "lod_3"),
+  };
   auto grassShader = ctx.resource.LoadShader(
       "Grass", L"Assets/shaders/GrassVS.hlsl",
       L"Assets/shaders/GrassPS.hlsl");
@@ -277,6 +295,8 @@ bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
     return true;
   }
   grassSpatialIndex->chunkSize = kGrassStreamChunkSize;
+  grassSpatialIndex->roughFadeScale = quality.roughFadeScale;
+  grassSpatialIndex->triangleBudget = quality.triangleBudget;
   enum class GrassSurfaceGroup {
     Rough,
     SemiRough,
@@ -292,7 +312,8 @@ bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
         // GrassVSの距離ディザーが完了する前にCPU側でインスタンスを
         // 丸ごと落とすと、残っていた葉がパッチ形状のまま瞬時に消える。
         // 最遠頂点までフェード終了距離へ到達できる余白を確保する。
-        const float shaderFadeEnd = 14.0f + color.w * 50.0f;
+        const float shaderFadeEnd =
+            CalculateGrassShaderFadeEnd(color.w, quality.roughFadeScale);
         const float effectiveMaxDrawDistance =
             std::max(maxDrawDistance, shaderFadeEnd + horizontalScale);
 
@@ -488,16 +509,14 @@ bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
       if (isSemiRough) {
         surface = GrassSurfaceGroup::SemiRough;
       }
-      float drawDistance = quality.roughDrawDistance;
-      if (isSemiRough) {
-        drawDistance = quality.semiRoughDrawDistance;
-      }
+      // 描画距離はシェーダーのフェード終了距離から決まるため0を渡す。
+      // 葉は片面三角形なので両面ラスタライザで描く。
       if (appendGrassInstance(
               x, terrainHeight + 0.003f, z,
               horizontalScale * slopeFootprintScale, heightScale, rotation,
               color, grassMeshVariants[variantIndex],
-              resources::MeshHandle::Invalid(), variantIndex, surface, 0.0f,
-              drawDistance, false)) {
+              grassLodMeshVariants[variantIndex], variantIndex, surface,
+              quality.roughLodDistance, 0.0f, true)) {
         ++generatedInstances;
         if (generatedInstances >= instanceBudget) {
           return false;
@@ -509,10 +528,10 @@ bool WikiTerrainSystem::GenerateSurfaceGrassChunk(
   // Fairway / Greenは同寸法のセルを隙間なく並べ、近距離の3D葉から
   // 中遠距離の地表シェーダーへディザーフェードで連続させる。
   const float turfSpacing = quality.turfSpacing;
-  const int turfColumns = std::max(
-      1, static_cast<int>(std::ceil(fieldWidth * 0.96f / turfSpacing)));
-  const int turfRows = std::max(
-      1, static_cast<int>(std::ceil(fieldDepth * 0.96f / turfSpacing)));
+  const int turfColumns =
+      CalculateGrassGridCellCount(fieldWidth, turfSpacing);
+  const int turfRows =
+      CalculateGrassGridCellCount(fieldDepth, turfSpacing);
   constexpr int kTurfVariantCount = 4;
   resources::MeshHandle baseTurfMeshVariants[kTurfVariantCount] = {
       ctx.resource.LoadMesh("builtin/turf_patch_0"),

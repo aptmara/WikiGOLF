@@ -15,6 +15,18 @@ struct GameContext;
 
 namespace game::utils {
 
+inline constexpr float kProceduralFlagNormalSize = 0.90f;
+inline constexpr float kProceduralFlagLargeSize = 1.75f;
+inline constexpr float kProceduralFlagPoleHeightScale = 2.65f;
+
+constexpr float GetProceduralFlagSize(bool large) {
+  return large ? kProceduralFlagLargeSize : kProceduralFlagNormalSize;
+}
+
+constexpr float GetProceduralFlagPoleHeight(bool large) {
+  return kProceduralFlagPoleHeightScale * GetProceduralFlagSize(large);
+}
+
 /**
  * @brief プロシージャル旗の生成設定です。
 */

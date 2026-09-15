@@ -44,7 +44,8 @@ int main() {
     std::vector<graphics::Vertex> source(16);
     source[0].position.y = 1.0f;
     source[15].position.y = 9.0f;
-    source[0].color.w = (5.0f + 0.5f) / 255.0f;
+    source[0].color = {0.32f, 0.58f, 0.41f,
+                       (5.0f + 0.5f) / 255.0f};
     std::vector<std::uint32_t> indices;
     const auto grid = TerrainLayoutRules::BuildMinimapTerrainGrid(
         source, 4, 4, indices);
@@ -52,10 +53,11 @@ int main() {
           "ミニマップ用グリッドの頂点数と三角形数を保つ");
     CHECK(grid.front().normal.y == 1.0f && grid.front().tangent.x == 1.0f,
           "ミニマップ頂点へ既定の法線と接線を設定する");
-    CHECK(std::fabs(grid.front().color.x - 0.20f) < 0.0001f &&
-              std::fabs(grid.front().color.y - 0.45f) < 0.0001f &&
-              std::fabs(grid.front().color.z - 0.85f) < 0.0001f,
-          "ミニマップ頂点へ水マテリアルの識別色を反映する");
+    CHECK(std::fabs(grid.front().color.x - 0.32f) < 0.0001f &&
+              std::fabs(grid.front().color.y - 0.58f) < 0.0001f &&
+              std::fabs(grid.front().color.z - 0.41f) < 0.0001f &&
+              std::fabs(grid.front().color.w - 1.0f) < 0.0001f,
+          "ミニマップ頂点で補間済みの材質色を保持する");
 
     const auto quad = TerrainLayoutRules::BuildMinimapOverlayQuad(
         20.0f, 5.0f, -5.0f, 3.0f, indices);

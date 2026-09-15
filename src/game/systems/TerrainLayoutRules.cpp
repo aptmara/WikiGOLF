@@ -4,7 +4,6 @@
 */
 
 #include "TerrainLayoutRules.h"
-#include "TerrainMaterialAssets.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -89,11 +88,10 @@ std::vector<graphics::Vertex> TerrainLayoutRules::BuildMinimapTerrainGrid(
             sourceX = std::clamp(sourceX, 0, sourceResolutionX - 1);
             graphics::Vertex vertex =
                 source[sourceZ * sourceResolutionX + sourceX];
-            const auto materialId = static_cast<std::uint8_t>(std::clamp(
-                static_cast<int>(vertex.color.w * 255.0f), 0, 7));
-            const auto materialColor = TerrainMaterialMapColor(materialId);
-            vertex.color = {materialColor.x, materialColor.y,
-                            materialColor.z, 1.0f};
+            // 元メッシュには材質境界を双線形補間した表示色が入っている。
+            // RGBを材質IDの単色へ戻すとミニマップだけ境界が硬くなるため、
+            // 補間済みの色を保持し、材質ID格納用のalphaだけ不透明へ戻す。
+            vertex.color.w = 1.0f;
             vertex.normal = {0.0f, 1.0f, 0.0f};
             vertex.tangent = {1.0f, 0.0f, 0.0f};
             vertex.bitangent = {0.0f, 0.0f, 1.0f};

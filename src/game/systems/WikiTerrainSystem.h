@@ -172,7 +172,7 @@ private:
   struct SkyGlobe {
     ecs::Entity entity = 0;
     float scale = 1.0f;
-    int lod = -1;
+    int lod = 0;
     DirectX::XMFLOAT3 basePosition = {0.0f, 0.0f, 0.0f};
     float tilt = 0.0f;
     float spinSpeed = 0.0f;
@@ -180,7 +180,7 @@ private:
     float bobHeight = 0.0f;
   };
   std::vector<SkyGlobe> m_skyGlobes; /**< 空に浮かぶ地球儀*/
-  std::array<resources::MeshHandle, 3> m_skyGlobeLodMeshes{}; /**< 地球儀の LOD メッシュ*/
+  std::array<resources::MeshHandle, 3> m_skyGlobeLodMeshes{}; /**< 地球儀の段階的 LOD メッシュ*/
   float m_skyGlobeTime = 0.0f;
 
   /**

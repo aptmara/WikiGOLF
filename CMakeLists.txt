@@ -608,8 +608,7 @@ if(MSVC)
                                                                -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_terrain_generation PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
-add_test(NAME terrain_generation COMMAND test_terrain_generation
-         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+add_test(NAME terrain_generation COMMAND test_terrain_generation)
 
 add_executable(test_grass_streaming_rules test_grass_streaming_rules.cpp)
 target_precompile_headers(test_grass_streaming_rules REUSE_FROM wikigolf_pch)

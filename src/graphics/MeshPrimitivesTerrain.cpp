@@ -23,8 +23,8 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
   const int cellCount = gridSize * gridSize;
   const float variantOffset = static_cast<float>(variantSeed) * 733.31f;
 
-  vertices.reserve(cellCount * bladesPerCell * 4);
-  indices.reserve(cellCount * bladesPerCell * 6);
+  vertices.reserve(cellCount * bladesPerCell * 3);
+  indices.reserve(cellCount * bladesPerCell * 3);
 
   for (int cz = 0; cz < gridSize; ++cz) {
     for (int cx = 0; cx < gridSize; ++cx) {
@@ -60,16 +60,18 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
             0.88f + 0.10f * (0.5f + 0.5f * std::sin(seed * 4.173f));
         const float widthVariation =
             0.5f + 0.5f * std::sin(seed * 7.913f);
+        // 穂先の幅は数ミリで画面上は点になるため、穂先を1頂点に畳んで
+        // 三角形1枚にする。失う面積分だけ根元幅を広げて被覆率を保つ。
         const float halfWidth =
-            minimumHalfWidth +
-            (maximumHalfWidth - minimumHalfWidth) * widthVariation;
+            (minimumHalfWidth +
+             (maximumHalfWidth - minimumHalfWidth) * widthVariation) *
+            1.28f;
         const float lean = std::sin(seed * 3.117f) * maximumLean;
         const uint32_t base = static_cast<uint32_t>(vertices.size());
 
         const DirectX::XMFLOAT3 normal = {normalX, 0.10f, normalZ};
         const DirectX::XMFLOAT4 rootColor = {0.62f, 0.72f, 0.52f, 1.0f};
         const DirectX::XMFLOAT4 tipColor = {0.84f, 0.91f, 0.70f, 1.0f};
-        const float tipHalfWidth = halfWidth * 0.28f;
 
         vertices.push_back({{rootOffsetX - sideX * halfWidth, 0.0f,
                              rootOffsetZ - sideZ * halfWidth},
@@ -77,22 +79,11 @@ Mesh CreateTurfPatchMesh(ID3D11Device *device, uint32_t variantSeed,
         vertices.push_back({{rootOffsetX + sideX * halfWidth, 0.0f,
                              rootOffsetZ + sideZ * halfWidth},
                             normal, {1.0f, 1.0f}, rootColor});
-        vertices.push_back({{rootOffsetX - sideX * tipHalfWidth +
-                                 normalX * lean * 2.0f,
-                             height,
-                             rootOffsetZ - sideZ * tipHalfWidth +
-                                 normalZ * lean * 2.0f},
-                            normal, {0.32f, 0.0f}, tipColor});
-        vertices.push_back({{rootOffsetX + sideX * tipHalfWidth +
-                                 normalX * lean * 2.0f,
-                             height,
-                             rootOffsetZ + sideZ * tipHalfWidth +
-                                 normalZ * lean * 2.0f},
-                            normal, {0.68f, 0.0f}, tipColor});
+        vertices.push_back({{rootOffsetX + normalX * lean * 2.0f, height,
+                             rootOffsetZ + normalZ * lean * 2.0f},
+                            normal, {0.5f, 0.0f}, tipColor});
 
-        const uint32_t front[] = {base, base + 1, base + 3,
-                                  base, base + 3, base + 2};
-        indices.insert(indices.end(), front, front + 6);
+        indices.insert(indices.end(), {base, base + 1, base + 2});
       }
     }
   }

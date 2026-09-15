@@ -1,10 +1,20 @@
 #include "game/utils/FlagFadeRules.h"
+#include "game/utils/ProceduralFlag.h"
 #include <cassert>
 
 using DirectX::XMFLOAT3;
 using game::utils::CalculateFlagFadeAlpha;
 
 int main() {
+  static_assert(game::utils::GetProceduralFlagPoleHeight(true) ==
+                game::utils::kProceduralFlagPoleHeightScale *
+                    game::utils::kProceduralFlagLargeSize);
+  static_assert(game::utils::GetProceduralFlagPoleHeight(false) ==
+                game::utils::kProceduralFlagPoleHeightScale *
+                    game::utils::kProceduralFlagNormalSize);
+  static_assert(game::utils::GetProceduralFlagPoleHeight(true) >
+                game::utils::GetProceduralFlagPoleHeight(false));
+
   const XMFLOAT3 camera{0.0f, 1.5f, 0.0f};
 
   const float nearAlpha = CalculateFlagFadeAlpha(

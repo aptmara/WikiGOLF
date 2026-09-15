@@ -50,6 +50,10 @@ struct GrassRenderSpatialIndex {
   float chunkSize = 0.0f;
   float maxDrawDistance = 0.0f;
   float maxHorizontalExtent = 0.0f;
+  /** ラフ／セミラフのシェーダーフェード距離に掛けるプリセット別倍率 */
+  float roughFadeScale = 1.0f;
+  /** 1フレームに描画する芝ポリゴン数の上限（0=無制限） */
+  uint64_t triangleBudget = 0;
   std::unordered_map<uint64_t, std::vector<ecs::Entity>> batchesByChunk;
 };
 
