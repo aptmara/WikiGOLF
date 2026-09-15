@@ -311,6 +311,7 @@ endif()
 if(WIKIGOLF_STATIC_BUILD)
     add_custom_command(TARGET DX_GAME POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/Fonts $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/all_terrain_ui_assets $<TARGET_FILE_DIR:DX_GAME>/Assets/all_terrain_ui_assets
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/kenney_input-images_1.5 $<TARGET_FILE_DIR:DX_GAME>/Assets/kenney_input-images_1.5
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders

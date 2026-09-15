@@ -33,16 +33,47 @@ const char *SurfaceTexture(game::components::TerrainMaterial terrain) {
   using game::components::TerrainMaterial;
   switch (terrain) {
   case TerrainMaterial::Fairway:
-    return "Assets/textures/ui_terrain_fairway.png";
-  case TerrainMaterial::Green:
-    return "Assets/textures/ui_terrain_green.png";
+    return "Assets/all_terrain_ui_assets/fairway.png";
+  case TerrainMaterial::Rough:
+    return "Assets/all_terrain_ui_assets/rough.png";
   case TerrainMaterial::Bunker:
-    return "Assets/textures/ui_terrain_bunker.png";
+    return "Assets/all_terrain_ui_assets/bunker.png";
+  case TerrainMaterial::Green:
+    return "Assets/all_terrain_ui_assets/green.png";
+  case TerrainMaterial::Ice:
+    return "Assets/all_terrain_ui_assets/ice.png";
   case TerrainMaterial::Water:
+    return "Assets/all_terrain_ui_assets/water.png";
   case TerrainMaterial::Lava:
-    return "Assets/textures/ui_terrain_ob.png";
+    return "Assets/all_terrain_ui_assets/lava.png";
+  case TerrainMaterial::Stone:
+    return "Assets/all_terrain_ui_assets/rock.png";
   default:
-    return "Assets/textures/ui_terrain_rough.png";
+    return "Assets/all_terrain_ui_assets/rough.png";
+  }
+}
+
+const wchar_t *SurfaceLabel(game::components::TerrainMaterial terrain) {
+  using game::components::TerrainMaterial;
+  switch (terrain) {
+  case TerrainMaterial::Fairway:
+    return L"フェアウェイ";
+  case TerrainMaterial::Rough:
+    return L"ラフ";
+  case TerrainMaterial::Bunker:
+    return L"バンカー";
+  case TerrainMaterial::Green:
+    return L"グリーン";
+  case TerrainMaterial::Ice:
+    return L"アイス";
+  case TerrainMaterial::Water:
+    return L"ウォーター";
+  case TerrainMaterial::Lava:
+    return L"溶岩";
+  case TerrainMaterial::Stone:
+    return L"ストーン";
+  default:
+    return L"ラフ";
   }
 }
 
@@ -82,21 +113,21 @@ void WindPanel::Initialize(core::GameContext &ctx) {
   m_surfaceTexture = m_entityOwner.Create(ctx.world);
   auto &surface = ctx.world.Add<game::components::UIImage>(m_surfaceTexture);
   surface = game::components::UIImage::Create(
-      "Assets/textures/ui_terrain_fairway.png", x, y);
-  surface.width = 160.0f;
+      "Assets/all_terrain_ui_assets/fairway.png", x + 44.0f, y);
+  surface.width = 72.0f;
   surface.height = 72.0f;
   surface.layer = game::ui::kLayerWind + 1;
 
   m_label = m_entityOwner.Create(ctx.world);
   auto &label = ctx.world.Add<game::components::UIText>(m_label);
-  label.text = L"Wind";
+  label.text = L"フェアウェイ";
   label.x = x + 18.0f;
   label.y = y + 77.0f;
   label.width = 122.0f;
   label.height = 34.0f;
   label.style = graphics::TextStyle::Guide();
-  label.style.fontFamily = "Barlow Condensed Black";
-  label.style.fontSize = 25.0f;
+  label.style.fontFamily = "Kiwi Maru Medium";
+  label.style.fontSize = 18.0f;
   label.layer = game::ui::kLayerWind + 2;
 
   m_value = m_entityOwner.Create(ctx.world);
@@ -144,6 +175,10 @@ void WindPanel::Update(core::GameContext &ctx, float elapsedTime,
   if (auto *surface =
           ctx.world.Get<game::components::UIImage>(m_surfaceTexture)) {
     surface->texturePath = SurfaceTexture(terrain);
+  }
+
+  if (auto *label = ctx.world.Get<game::components::UIText>(m_label)) {
+    label->text = SurfaceLabel(terrain);
   }
 
   if (auto *value = ctx.world.Get<game::components::UIText>(m_value)) {

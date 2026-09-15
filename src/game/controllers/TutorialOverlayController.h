@@ -47,6 +47,12 @@ struct TutorialInputPolicy {
     bool map = false;
 };
 
+struct TutorialPresentationPolicy {
+    bool courseInfo = false;
+    bool club = false;
+    bool minimap = false;
+};
+
 struct TerrainCard {
     std::wstring name;
     std::wstring desc;
@@ -83,6 +89,7 @@ public:
     void SetVisible(core::GameContext& ctx, bool visible);
     TutorialStep GetStep() const { return m_step; }
     TutorialInputPolicy GetInputPolicy() const;
+    TutorialPresentationPolicy GetPresentationPolicy() const;
     game::controllers::MinimapController::InputPermissions GetMapInputPermissions() const;
     bool CanAcceptCupIn(const std::string& linkTarget, bool isTarget) const;
     void NotifyLinkCupIn(core::GameContext& ctx);

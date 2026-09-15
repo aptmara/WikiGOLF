@@ -49,31 +49,28 @@ void ResetPracticeShot(core::GameContext& ctx) {
 
 TutorialInputPolicy TutorialOverlayController::GetInputPolicy() const {
     TutorialInputPolicy policy;
-    switch (m_step) {
-    case TutorialStep::Camera: policy.camera = true; break;
-    case TutorialStep::Aim: policy.aimPin = true; break;
-    case TutorialStep::Club: policy.club = true; break;
-    case TutorialStep::Power:
-    case TutorialStep::Impact: policy.shot = true; break;
-    case TutorialStep::MapOpen:
-    case TutorialStep::MapPan:
-    case TutorialStep::MapZoom:
-    case TutorialStep::MapAim:
-    case TutorialStep::MapHelpOpen:
-    case TutorialStep::MapHelpClose:
-    case TutorialStep::MapClose:
-        policy.map = true;
-        if (m_step == TutorialStep::MapAim) policy.aimPin = true;
-        break;
-    case TutorialStep::LinkCup:
-    case TutorialStep::GoalCup:
-        policy.camera = true;
-        policy.aimPin = true;
-        policy.club = true;
-        policy.shot = true;
-        break;
-    default: break;
+    if (m_step == TutorialStep::Intro || m_step == TutorialStep::Done) {
+        return policy;
     }
+    const int step = static_cast<int>(m_step);
+    policy.camera = step >= static_cast<int>(TutorialStep::Camera);
+    policy.aimPin = step >= static_cast<int>(TutorialStep::Aim);
+    policy.club = step >= static_cast<int>(TutorialStep::Club);
+    policy.shot = step >= static_cast<int>(TutorialStep::Power);
+    policy.map = step >= static_cast<int>(TutorialStep::MapOpen);
+    return policy;
+}
+
+TutorialPresentationPolicy
+TutorialOverlayController::GetPresentationPolicy() const {
+    TutorialPresentationPolicy policy;
+    if (m_step == TutorialStep::Done) {
+        return policy;
+    }
+    const int step = static_cast<int>(m_step);
+    policy.club = step >= static_cast<int>(TutorialStep::Aim);
+    policy.minimap = step >= static_cast<int>(TutorialStep::Aim);
+    policy.courseInfo = step >= static_cast<int>(TutorialStep::LinkCup);
     return policy;
 }
 
@@ -91,13 +88,20 @@ TutorialOverlayController::GetMapInputPermissions() const {
     p.recenter = false;
     p.fitCourse = false;
     p.resetZoom = false;
-    p.openWithM = m_step == TutorialStep::MapOpen;
-    p.panWithLeftDrag = m_step == TutorialStep::MapPan;
-    p.zoomWithWheel = m_step == TutorialStep::MapZoom;
-    p.toggleHelp = m_step == TutorialStep::MapHelpOpen ||
-                   m_step == TutorialStep::MapHelpClose;
-    p.closeWithEscape = m_step == TutorialStep::MapClose;
-    p.closeWithM = m_step == TutorialStep::MapClose;
+    const int step = static_cast<int>(m_step);
+    const bool mapIntroduced =
+        step >= static_cast<int>(TutorialStep::MapOpen) &&
+        m_step != TutorialStep::Done;
+    p.openWithM = mapIntroduced;
+    p.closeWithM = mapIntroduced;
+    p.panWithLeftDrag = step >= static_cast<int>(TutorialStep::MapPan);
+    p.panWithRightDrag = p.panWithLeftDrag;
+    p.zoomWithWheel = step >= static_cast<int>(TutorialStep::MapZoom);
+    p.toggleHelp = step >= static_cast<int>(TutorialStep::MapHelpOpen);
+    p.recenter = p.toggleHelp;
+    p.fitCourse = p.recenter;
+    p.resetZoom = p.recenter;
+    p.closeWithEscape = step >= static_cast<int>(TutorialStep::MapClose);
     return p;
 }
 

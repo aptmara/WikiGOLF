@@ -453,8 +453,12 @@ void MinimapController::SetTutorialHelpMode(core::GameContext& ctx,
                                             bool enabled) {
   static const std::vector<std::wstring> tutorialHelp = {
       L"[M] マップビューを開く",
-      L"[左ドラッグ] マップをパン",
+      L"[左 / 右ドラッグ] マップをパン",
       L"[スクロール] ズームイン / ズームアウト",
+      L"[C / Space] ボール位置にフォーカス",
+      L"[F] フィールド全体を表示",
+      L"[0] ズーム率を等倍(100%)にリセット",
+      L"[Q / E] クラブを切り替え",
       L"[中クリック] 照準ピンを設置",
       L"[?] 操作ガイドの表示切り替え",
       L"[M / Esc] マップビューを閉じる",
@@ -478,7 +482,7 @@ void MinimapController::SetTutorialHelpMode(core::GameContext& ctx,
   }
   if (auto* hint = ctx.world.Get<UIText>(m_mapOpenHintText)) {
     hint->text = enabled
-        ? L"[左ドラッグ] パン  [スクロール] ズーム  [中クリック] 照準ピン  [?] ヘルプ  [Esc/M] 閉じる"
+        ? L"[左/右ドラッグ] パン  [スクロール] ズーム  [Q/E] クラブ  [中クリック] 照準ピン  [C/Space] ボール中央  [F] 全体表示  [?] ヘルプ  [Esc/M] 閉じる"
         : L"[左/右ドラッグ] パン  [スクロール/+/-] ズーム  [Q/E] クラブ  [中クリック] 照準ピン  [C/Space] ボール中央  [F] 全体表示  [?] ヘルプ  [Esc/M] 閉じる";
   }
 }

@@ -38,6 +38,10 @@ void WikiGolfHUD::Initialize(core::GameContext& ctx) {
     m_normalHudOpacity = 1.0f;
     m_shotSequenceActive = false;
     m_isVisible = true;
+    m_tutorialPresentation = false;
+    m_tutorialShowCourseInfo = false;
+    m_tutorialShowClubSelection = false;
+    m_tutorialShowMinimapDecoration = false;
 }
 
 void WikiGolfHUD::Shutdown(core::GameContext& ctx) {
@@ -50,6 +54,10 @@ void WikiGolfHUD::Shutdown(core::GameContext& ctx) {
     m_normalHudOpacity = 1.0f;
     m_shotSequenceActive = false;
     m_isVisible = true;
+    m_tutorialPresentation = false;
+    m_tutorialShowCourseInfo = false;
+    m_tutorialShowClubSelection = false;
+    m_tutorialShowMinimapDecoration = false;
 }
 
 // =====================================================
@@ -109,10 +117,14 @@ void WikiGolfHUD::UpdateNormalHudTransition(
 
 void WikiGolfHUD::ApplyNormalHudOpacity(core::GameContext& ctx) {
     const bool visible = m_isVisible && m_normalHudOpacity > 0.001f;
-    m_courseInfoPanel.SetVisible(ctx, visible);
-    m_windPanel.SetVisible(ctx, visible);
-    m_clubSelectionPanel.SetVisible(ctx, visible);
-    m_minimapDecorationPanel.SetVisible(ctx, visible);
+    const bool showAll = !m_tutorialPresentation;
+    m_courseInfoPanel.SetVisible(
+        ctx, visible && (showAll || m_tutorialShowCourseInfo));
+    m_windPanel.SetVisible(ctx, visible && showAll);
+    m_clubSelectionPanel.SetVisible(
+        ctx, visible && (showAll || m_tutorialShowClubSelection));
+    m_minimapDecorationPanel.SetVisible(
+        ctx, visible && (showAll || m_tutorialShowMinimapDecoration));
     m_courseInfoPanel.SetOpacity(ctx, m_normalHudOpacity);
     m_windPanel.SetOpacity(ctx, m_normalHudOpacity);
     m_clubSelectionPanel.SetOpacity(ctx, m_normalHudOpacity);
@@ -172,6 +184,16 @@ void WikiGolfHUD::SetVisible(core::GameContext& ctx, bool visible) {
     ApplyNormalHudOpacity(ctx);
     m_shotGaugePanel.SetVisible(ctx, visible);
 
+}
+
+void WikiGolfHUD::SetTutorialPresentation(
+    core::GameContext& ctx, bool enabled, bool showCourseInfo,
+    bool showClubSelection, bool showMinimapDecoration) {
+    m_tutorialPresentation = enabled;
+    m_tutorialShowCourseInfo = showCourseInfo;
+    m_tutorialShowClubSelection = showClubSelection;
+    m_tutorialShowMinimapDecoration = showMinimapDecoration;
+    ApplyNormalHudOpacity(ctx);
 }
 
 } // namespace controllers

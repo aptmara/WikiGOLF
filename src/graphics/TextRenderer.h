@@ -117,6 +117,16 @@ public:
   void RenderTextCached(const std::wstring &text, const D2D1_RECT_F &rect,
                         const TextStyle &style);
 
+  /**
+   * @brief 指定幅で折り返したときのテキストの描画高さを測ります。
+   * @param text 測定するテキストです。
+   * @param style フォント・サイズ・揃えを参照するスタイルです。
+   * @param maxWidth 折り返し幅です（仮想解像度）。
+   * @return 描画高さです。測定できない場合は負値を返します。
+   */
+  float MeasureTextHeight(const std::wstring &text, const TextStyle &style,
+                          float maxWidth);
+
   /** @brief 画面サイズ取得 */
   float GetWidth() const { return kVirtualWidth; }
   float GetHeight() const { return kVirtualHeight; }

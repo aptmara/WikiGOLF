@@ -30,41 +30,41 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
     std::wstring hint;
     switch (m_step) {
     case TutorialStep::Intro:
-        text = L"WIKIGOLF ガイド  1 / 9\n記事から記事へ、カップインでリンクを渡り歩くゴルフです。";
+        text = L"WIKIGOLF ガイド  1 / 9\n記事内のリンクがカップ（旗）になります。カップインして次の記事へ進みましょう。";
         action = L"[ ENTER ] はじめる";
         break;
     case TutorialStep::Camera:
-        text = L"カメラ  2 / 9\n左または右ドラッグで回転。ホイールでズーム。Shift中は精密操作。";
-        action = L"[ ドラッグ ] 回転  ＋  [ ホイール ] ズーム";
+        text = L"カメラ操作  2 / 9\nマウスドラッグで視点を回転、ホイールでズームできます。（Shiftで微調整）";
+        action = L"[ マウスドラッグ ] 回転  ＋  [ ホイール ] ズーム";
         hint = L"[ ENTER ] スキップ";
         break;
     case TutorialStep::Aim:
-        text = L"狙う  3 / 9\n中クリックで狙いを置くと、向きと距離に合うクラブが自動で選ばれます。";
-        action = L"[ 中クリック ] コース上に照準ピンを置く";
+        text = L"狙いを定める  3 / 9\nミニマップやコース上を中クリックすると、照準ピンと推奨クラブ・強さの目安が出ます。";
+        action = L"[ 中クリック ] ミニマップに照準ピンを置く";
         hint = L"[ ENTER ] スキップ";
         break;
     case TutorialStep::Club:
-        text = L"クラブ  4 / 9\nQ / Eでクラブを変更。飛距離と弾道が変わり、パターはグリーン向きです。";
+        text = L"クラブ選択  4 / 9\nQ / Eキーでクラブを変更できます。状況に合わせて弾道や番手を選び直せます。";
         action = L"[ Q / E ] クラブを切り替える";
         hint = L"[ ENTER ] スキップ";
         break;
     case TutorialStep::Power:
-        text = L"ショット  5 / 9 — パワー\n左クリックでゲージ開始、もう一度左クリックで飛距離を決定。右クリックで取消。";
-        action = L"[ 左クリック ] 開始  →  [ 左クリック ] パワー決定";
-        hint = L"[ ENTER ] ショット説明をスキップ";
+        text = L"ショット（強さ決定）  5 / 9\n左クリックでスイングを開始し、もう一度左クリックで打つ強さを決定します。";
+        action = L"[ 左クリック ] 開始  →  [ 左クリック ] 強さを決定";
+        hint = L"[ 右クリック ] 取消  ｜  [ ENTER ] スキップ";
         break;
     case TutorialStep::Impact:
-        text = L"ショット  5 / 9 — インパクト\n戻るマーカーを左クリック。決めたパワー位置がPerfect、周囲ほど精度が落ちます。";
-        action = L"[ 左クリック ] インパクトを決めて打つ";
+        text = L"ショット（インパクト）  5 / 9\n折り返して戻るバーを左クリック！ 決めた強さの位置に近いほど正確に飛びます。";
+        action = L"[ 左クリック ] タイミングを合わせてショット";
         hint = L"[ 右クリック ] やり直す  ｜  [ ENTER ] スキップ";
         break;
     case TutorialStep::TerrainInfo: {
         const auto& targets = GetActiveEventCameraTargets();
         if (m_terrainCardIndex < targets.size()) {
             const auto& target = targets[m_terrainCardIndex];
-            text = L"地形  6 / 9  —  " + target.name + L"\n" + target.desc;
+            text = L"コースの地形  6 / 9  —  " + target.name + L"\n" + target.desc;
         } else {
-            text = L"地形  6 / 9\n地形ごとに転がりやすさが変わります。";
+            text = L"コースの地形  6 / 9\n地形によってボールの転がりやすさやショットのしやすさが変化します。";
         }
         action = L"[ ENTER ] 次の地形を見る";
         break;
@@ -75,67 +75,67 @@ void TutorialOverlayController::UpdateUI(core::GameContext& ctx) {
             const auto& target = targets[m_terrainCardIndex];
             text = L"リンクの旗  7 / 9  —  " + target.name + L"\n" + target.desc;
         } else {
-            text = L"リンクの旗  7 / 9\n旗色はゴール記事までのリンク距離を示します。";
+            text = L"リンクの旗  7 / 9\n旗の色は、最終目標（ゴール記事）までのリンク距離を表しています。";
         }
         action = L"[ ENTER ] 次の旗を見る";
         break;
     }
     case TutorialStep::MapOpen:
-        text = L"マップ  8 / 9 — 開く\nコース全体と旗の位置を確認できます。";
+        text = L"全体マップ  8 / 9\nMキーで全体マップを開きます。コース全体の地形や旗の位置を俯瞰してみましょう。";
         action = L"[ M ] マップを開く";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::MapPan:
-        text = L"マップ  8 / 9 — 移動\n見たい場所へ地図を動かします。";
-        action = L"[ 左ドラッグ ] マップをパンする";
+        text = L"マップ移動  8 / 9\nマウスをドラッグ（左 / 右）して、見たいエリアへマップを移動できます。";
+        action = L"[ 左 / 右ドラッグ ] マップをスクロール";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::MapZoom:
-        text = L"マップ  8 / 9 — 拡大縮小\n旗が密集した場所も細かく確認できます。";
-        action = L"[ ホイール ] マップをズームする";
+        text = L"マップ拡大縮小  8 / 9\nホイールを回転させてズームできます。旗が密集しているエリアの確認に役立ちます。";
+        action = L"[ ホイール ] ズームイン / ズームアウト";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::MapAim:
-        text = L"マップ  8 / 9 — 狙いを置く\n中クリックした地点へ照準ピンを置き、距離に合うクラブを自動選択します。";
+        text = L"マップ照準  8 / 9\n全体マップ上でも中クリックで照準ピンを置けます。（設置後にショット画面へ戻ります）";
         action = L"[ 中クリック ] マップ上に照準ピンを置く";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::MapHelpOpen:
-        text = L"マップ  8 / 9 — ヘルプ\nマップ専用の操作一覧をその場で確認できます。";
-        action = L"[ ? ] ヘルプを開く";
+        text = L"操作一覧  8 / 9\nSpaceキーでボール位置へ復帰、Fキーでコース全景、?キーで操作一覧を確認できます。";
+        action = L"[ ? ] 操作ヘルプを開く";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::MapHelpClose:
-        text = L"マップ  8 / 9 — ヘルプを閉じる\n同じキーで表示を切り替えます。";
-        action = L"[ ? ] ヘルプを閉じる";
+        text = L"操作一覧  8 / 9\nもう一度 ? キーを押すと、操作一覧ヘルプを閉じることができます。";
+        action = L"[ ? ] 操作ヘルプを閉じる";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::MapClose:
-        text = L"マップ  8 / 9 — 戻る\n俯瞰を終えてショット画面へ戻ります。";
+        text = L"ショットへ戻る  8 / 9\n全体マップの確認を終えたら、マップを閉じてショット画面へ戻りましょう。";
         action = L"[ M / Esc ] マップを閉じる";
         hint = L"[ ENTER ] マップ説明をスキップ";
         break;
     case TutorialStep::LinkCup:
-        text = L"リンクを渡る  9 / 9\nスタート地点のすぐ前（約4m）、「フェアウェイ」の照準ピンへ入れましょう。";
-        action = L"[ 照準ピン ] フェアウェイへカップイン";
-        hint = L"[ ENTER ] 記事移動をスキップ";
+        text = L"リンクを渡る  9 / 9\n照準ピンを目安に、すぐ目の前（約4m先）にある「フェアウェイ」のカップへ打ちましょう。";
+        action = L"「フェアウェイ」のカップに入れる";
+        hint = L"[ ENTER ] スキップして次へ";
         break;
     case TutorialStep::GoalCup:
         if (const auto* state = ctx.world.GetGlobal<components::GolfGameState>();
             state && state->gameCleared) {
-            text = L"TUTORIAL COMPLETE\nリンクを読み、狙い、打ってゴールへ到達しました。";
-            action = L"ゴール到達！";
-            hint = L"タイトルへ戻ります…";
+            text = L"チュートリアル完了！\nお見事です！基本操作をマスターしてゴールへ到達しました。";
+            action = L"ゴール達成！";
+            hint = L"タイトル画面へ戻ります…";
         } else {
-            text = L"最後のチャレンジ\n赤い「ゴール」の旗へ。好きなクラブと狙い方でカップインしてください。";
-            action = L"[ 赤い旗 ] ゴールへカップイン";
-            hint = L"ゴール以外はティーへ復帰  ｜  [ ENTER ] 終了";
+            text = L"最後のチャレンジ\n正面奥に見える赤い旗「ゴール」を目指しましょう！ 自由にカップインしてください。";
+            action = L"赤いカップ（ゴール）に入れる";
+            hint = L"ゴール以外に入ると打ち直し  ｜  [ ENTER ] 終了";
         }
         break;
     case TutorialStep::Done:
-        text = L"TUTORIAL COMPLETE\nリンクを読み、狙い、打ってゴールへ到達しました。";
-        action = L"Wikiへの接続を確認中です";
-        hint = L"接続成功後、通常プレイを開始します…";
+        text = L"チュートリアル完了！\nお見事です！基本操作をマスターしてゴールへ到達しました。";
+        action = L"Wikipediaへの接続を確認中...";
+        hint = L"接続確認後、ゲームを開始します…";
         break;
     }
 

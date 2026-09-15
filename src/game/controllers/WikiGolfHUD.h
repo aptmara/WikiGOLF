@@ -84,6 +84,12 @@ public:
 */
     void SetVisible(core::GameContext& ctx, bool visible);
 
+    /** @brief チュートリアル中に、その時点で関係する通常HUDだけを表示します。*/
+    void SetTutorialPresentation(core::GameContext& ctx, bool enabled,
+                                 bool showCourseInfo,
+                                 bool showClubSelection,
+                                 bool showMinimapDecoration);
+
     /** @brief 通常HUDの現在のフェード透明度を返します。*/
     float GetNormalHudOpacity() const {
         return m_isVisible ? m_normalHudOpacity : 0.0f;
@@ -105,6 +111,10 @@ private:
     float m_normalHudOpacity = 1.0f;
     bool m_shotSequenceActive = false;
     bool m_isVisible = true;
+    bool m_tutorialPresentation = false;
+    bool m_tutorialShowCourseInfo = false;
+    bool m_tutorialShowClubSelection = false;
+    bool m_tutorialShowMinimapDecoration = false;
 };
 
 } // namespace game::controllers

@@ -59,6 +59,30 @@ IDWriteTextLayout *TextRenderer::GetOrCreateTextLayout(
   return res.first->second.layout.Get();
 }
 
+float TextRenderer::MeasureTextHeight(const std::wstring &text,
+                                      const TextStyle &style, float maxWidth) {
+  if (text.empty()) {
+    return 0.0f;
+  }
+  IDWriteTextFormat *format =
+      m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
+  if (!format) {
+    return -1.0f;
+  }
+  constexpr float kUnboundedHeight = 10000.0f;
+  IDWriteTextLayout *layout =
+      GetOrCreateTextLayout(text, format, style.fontFamily, style.fontSize,
+                            style.align, maxWidth, kUnboundedHeight);
+  if (!layout) {
+    return -1.0f;
+  }
+  DWRITE_TEXT_METRICS metrics;
+  if (FAILED(layout->GetMetrics(&metrics))) {
+    return -1.0f;
+  }
+  return metrics.height;
+}
+
 void TextRenderer::EvictLayoutCacheIfNeeded() {
   while (m_layoutCache.size() >= kMaxLayoutCacheEntries) {
     auto oldest = m_layoutCache.begin();

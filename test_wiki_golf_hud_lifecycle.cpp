@@ -14,10 +14,10 @@
 #define CHECK_TRUE(condition, message)                                         \
   do {                                                                         \
     if (!(condition)) {                                                        \
-      std::cerr << "[FAIL] " << message << "\n";                             \
+      std::cerr << "[FAIL] " << message << std::endl;                          \
       std::exit(1);                                                            \
     }                                                                          \
-    std::cout << "[PASS] " << message << "\n";                               \
+    std::cout << "[PASS] " << message << std::endl;                           \
   } while (0)
 
 namespace resources {
@@ -175,7 +175,7 @@ int main() {
              "更新時にカメラ相対の風向きを反映する");
   CHECK_TRUE(world.GetEntityCount() == initialEntityCount,
              "初回更新時に旧ライパネルを追加しない");
-  CHECK_TRUE(FindImage(world, "Assets/textures/ui_terrain_fairway.png"),
+  CHECK_TRUE(FindImage(world, "Assets/all_terrain_ui_assets/fairway.png"),
              "風表示の座布団へフェアウェイ画像を反映する");
 
   state.currentMaterial = game::components::TerrainMaterial::Water;
@@ -183,7 +183,7 @@ int main() {
              game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
              0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubs, -1, 0.0f, 0.0f,
              nullptr);
-  CHECK_TRUE(FindImage(world, "Assets/textures/ui_terrain_ob.png"),
+  CHECK_TRUE(FindImage(world, "Assets/all_terrain_ui_assets/water.png"),
              "OB地形では風表示の座布団画像を切り替える");
 
   const std::vector<game::controllers::ClubUIData> clubsWithIcon = {
@@ -232,8 +232,9 @@ int main() {
              "ショット中は単一クラブ表示を隠す");
   CHECK_TRUE(!FindText(world, L"中クリック  照準ピン設置")->visible,
              "ショット中は照準ピン操作説明を隠す");
+  auto *surfaceText = FindText(world, L"ウォーター");
   CHECK_TRUE(!FindText(world, L"CURRENT")->visible &&
-                 !FindText(world, L"Wind")->visible &&
+                 surfaceText && !surfaceText->visible &&
                  !FindText(world, L"N\n▲")->visible,
              "ショット中はゲージ以外の通常HUDをすべて隠す");
 
