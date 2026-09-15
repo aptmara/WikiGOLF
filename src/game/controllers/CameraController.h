@@ -87,15 +87,13 @@ public:
   void ResetForTransition(float fieldScale);
 
   /**
-   * @brief クラブ変更時にカメラ距離目標を更新
-   * @param recommendedDistance ClubController::GetRecommendedCameraDistance()
-   * @param recommendedHeight   ClubController::GetRecommendedCameraHeight()
-*/
-  void SetTargetDistanceAndHeight(float recommendedDistance,
-                                  float recommendedHeight);
-
-  /** @brief 現在距離から設定済みの目標距離へのイージングを開始する。*/
-  void BeginTargetDistanceEase();
+   * @brief 通常のボール中心オービット範囲で距離と目標方向を調整する。
+   * @details 距離・Yaw・Pitchを同じ時間で補間し、ボールと地面上の目標を
+   *          画面中心軸付近へ収める。
+   */
+  void BeginTargetFraming(core::GameContext &ctx,
+                          const DirectX::XMFLOAT3 &groundTarget,
+                          float recommendedDistance);
 
   /**
    * @brief 視線(ショット)の水平方向を、fromPosからtoPosへの向きに合わせます。
@@ -114,6 +112,8 @@ public:
 
   /** @brief ショット中かどうか（カメラ追尾中か）*/
   bool IsCameraChasing() const { return m_isCameraChasing; }
+  /** @brief ショット中にマウス操作で自動カメラを解除しているか*/
+  bool IsFreeCamera() const { return m_isFreeCamera; }
 
   /** @brief 現在のカメラYaw*/
   float GetYaw()      const { return m_cameraYaw; }
@@ -160,10 +160,11 @@ private:
   float m_cameraDistance = 60.0f;
   float m_yawEaseFrom = 0.0f;
   float m_yawEaseDelta = 0.0f;
+  float m_pitchEaseFrom = 0.5f;
+  float m_pitchEaseDelta = 0.0f;
   float m_yawEaseTimer = 0.0f;
   bool m_isYawEasing = false;
   float m_targetCameraDistance = 60.0f;
-  float m_targetCameraHeight   = 20.0f;
   float m_distanceEaseFrom = 60.0f;
   float m_distanceEaseTimer = 0.0f;
   bool m_isDistanceEasing = false;
@@ -178,6 +179,11 @@ private:
   bool m_isCameraChasing = false;
   /** @brief 前フレームがショット用カメラ（三人称見上げ）だったか*/
   bool m_wasShotCamera = false;
+  /** @brief ショット中にマウス操作され、自動カメラを解除したか（フリーカメラ）*/
+  bool m_isFreeCamera = false;
+
+  /** @brief 現在のカメラ位置を保ったままフリーカメラ（オービット）へ切り替える*/
+  void EnterFreeCamera(core::GameContext &ctx);
 
   /** @brief ゴルファーの立ち位置と身長（SetGolferAnchorで設定）*/
   DirectX::XMFLOAT3 m_golferAnchorPos = {0, 0, 0};

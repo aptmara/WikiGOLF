@@ -22,6 +22,7 @@
 #include "../components/WikiComponents.h"
 #include "../systems/GameJuiceSystem.h"
 #include "../systems/WikiTerrainSystem.h"
+#include "../utils/CameraFramingRules.h"
 #include <algorithm>
 #include <cmath>
 
@@ -131,7 +132,6 @@ void CameraController::Initialize(Config cfg) {
 
   m_cameraDistance = 15.0f * cfg.fieldScale;
   m_targetCameraDistance = m_cameraDistance;
-  m_targetCameraHeight   = 20.0f;
   m_distanceEaseFrom = m_cameraDistance;
   m_distanceEaseTimer = 0.0f;
   m_isDistanceEasing = false;
@@ -139,22 +139,40 @@ void CameraController::Initialize(Config cfg) {
   m_cameraPitch = 0.5f;
   m_yawEaseFrom = m_cameraYaw;
   m_yawEaseDelta = 0.0f;
+  m_pitchEaseFrom = m_cameraPitch;
+  m_pitchEaseDelta = 0.0f;
   m_yawEaseTimer = 0.0f;
   m_isYawEasing = false;
   m_shotDirection = {0.0f, 0.0f, 1.0f};
   m_isCameraChasing = false;
+  m_isFreeCamera = false;
 }
 
-void CameraController::SetTargetDistanceAndHeight(float recommendedDistance,
-                                                   float recommendedHeight) {
+void CameraController::BeginTargetFraming(
+    core::GameContext &ctx, const DirectX::XMFLOAT3 &groundTarget,
+    float recommendedDistance) {
+  using namespace game::components;
+
+  auto *ball = ctx.world.Get<Transform>(m_cfg.ballEntity);
+  if (!ball) {
+    return;
+  }
+
+  const auto angles = game::utils::FindTargetCenteredOrbitAngles(
+      ball->position, groundTarget, m_cameraYaw, m_cameraPitch);
+
   m_targetCameraDistance = recommendedDistance;
-  m_targetCameraHeight   = recommendedHeight;
-}
-
-void CameraController::BeginTargetDistanceEase() {
   m_distanceEaseFrom = m_cameraDistance;
   m_distanceEaseTimer = 0.0f;
   m_isDistanceEasing = true;
+
+  m_yawEaseFrom = m_cameraYaw;
+  m_yawEaseDelta =
+      game::utils::NormalizeAngleDelta(angles.yaw - m_cameraYaw);
+  m_pitchEaseFrom = m_cameraPitch;
+  m_pitchEaseDelta = angles.pitch - m_cameraPitch;
+  m_yawEaseTimer = 0.0f;
+  m_isYawEasing = true;
 }
 
 void CameraController::AimYawTowards(const DirectX::XMFLOAT3 &fromPos,
@@ -171,6 +189,8 @@ void CameraController::AimYawTowards(const DirectX::XMFLOAT3 &fromPos,
 
   m_yawEaseFrom = m_cameraYaw;
   m_yawEaseDelta = delta;
+  m_pitchEaseFrom = m_cameraPitch;
+  m_pitchEaseDelta = 0.0f;
   m_yawEaseTimer = 0.0f;
   m_isYawEasing = true;
 }
@@ -180,6 +200,8 @@ void CameraController::ResetForTransition(float fieldScale) {
   m_cameraPitch    = 0.5f;
   m_yawEaseFrom = m_cameraYaw;
   m_yawEaseDelta = 0.0f;
+  m_pitchEaseFrom = m_cameraPitch;
+  m_pitchEaseDelta = 0.0f;
   m_yawEaseTimer = 0.0f;
   m_isYawEasing = false;
   m_cameraDistance = 15.0f * fieldScale;
@@ -190,6 +212,7 @@ void CameraController::ResetForTransition(float fieldScale) {
   m_shotDirection  = {0.0f, 0.0f, 1.0f};
   m_isCameraChasing = false;
   m_wasShotCamera = false;
+  m_isFreeCamera = false;
   m_orbitBlend = 1.0f;
 }
 
@@ -208,6 +231,7 @@ void CameraController::OnShotStart(core::GameContext &ctx) {
   }
   m_isCameraChasing = false;
   m_wasShotCamera = false;
+  m_isFreeCamera = false;
   m_orbitBlend = 1.0f;
   m_shotCamTimer = 0.0f;
   m_shotTpsCamPos = m_shotStartCamPos;
@@ -261,6 +285,7 @@ void CameraController::BeginCelebrationView(core::GameContext &ctx,
   m_celebrationTimer = 0.0f;
   m_isCameraChasing = false;
   m_wasShotCamera = false;
+  m_isFreeCamera = false;
   m_orbitBlend = 1.0f;
 
   // ポールとロボットの中間を注視点にする
@@ -312,15 +337,23 @@ void CameraController::ProcessInput(core::GameContext &ctx,
   // なお左ボタンは「動かさずに押して離す」とショットチャージ開始のクリックに
   // なるため（ShotController::ProcessShot参照）、実際の回転はマウスが動いた
   // フレームのみ発生し、静止クリックではここでの回転は起きない。
+  // ショット実行中（ボールの飛行・転がり中）は自動カメラで追うが、ドラッグや
+  // ホイールの入力があった時点で自動カメラを解除し、フリーカメラへ切り替える。
   auto *shotState = ctx.world.GetGlobal<components::ShotState>();
   bool isIdle = (!shotState || shotState->phase == components::ShotState::Phase::Idle);
-  bool canRotate = isIdle && (ctx.input.GetMouseButton(0) || ctx.input.GetMouseButton(1));
+  bool isExecuting =
+      (shotState && shotState->phase == components::ShotState::Phase::Executing);
+  bool isDragging = ctx.input.GetMouseButton(0) || ctx.input.GetMouseButton(1);
+  bool canRotate = (isIdle || isExecuting) && isDragging;
 
   if (canRotate) {
     int deltaX = mouseX - m_prevMouseX;
     int deltaY = mouseY - m_prevMouseY;
 
     if (deltaX != 0 || deltaY != 0) {
+      if (isExecuting && !m_isFreeCamera) {
+        EnterFreeCamera(ctx);
+      }
       m_isYawEasing = false;
       float sensitivity = 0.005f;
       if (ctx.input.GetKey(VK_SHIFT)) {
@@ -335,6 +368,9 @@ void CameraController::ProcessInput(core::GameContext &ctx,
   // ホイールでズーム
   float wheel = ctx.input.GetMouseScrollDelta();
   if (wheel != 0.0f && !canRotate) {
+    if (isExecuting && !m_isFreeCamera) {
+      EnterFreeCamera(ctx);
+    }
     const float fieldScale = m_cfg.fieldScale;
     m_cameraDistance -= wheel * 2.0f * fieldScale;
     m_cameraDistance  = std::clamp(m_cameraDistance,
@@ -345,6 +381,36 @@ void CameraController::ProcessInput(core::GameContext &ctx,
 
   m_prevMouseX = mouseX;
   m_prevMouseY = mouseY;
+}
+
+void CameraController::EnterFreeCamera(core::GameContext &ctx) {
+  using namespace game::components;
+  m_isFreeCamera = true;
+  m_isCameraChasing = false;
+  m_orbitBlend = 1.0f;
+  m_isYawEasing = false;
+  m_isDistanceEasing = false;
+
+  // 今のカメラ位置からボールを見るYaw/Pitch/距離を逆算し、切替時に視点が飛ばないようにする
+  auto *ballT = ctx.world.Get<Transform>(m_cfg.ballEntity);
+  auto *camT = ctx.world.Get<Transform>(m_cfg.cameraEntity);
+  if (!ballT || !camT) {
+    return;
+  }
+  const XMVECTOR toBall = XMVectorSubtract(XMLoadFloat3(&ballT->position),
+                                           XMLoadFloat3(&camT->position));
+  const float dist = XMVectorGetX(XMVector3Length(toBall));
+  if (dist < 0.01f) {
+    return;
+  }
+  const XMVECTOR dir = XMVectorScale(toBall, 1.0f / dist);
+  m_cameraYaw = std::atan2(XMVectorGetX(dir), XMVectorGetZ(dir));
+  m_cameraPitch = std::clamp(-std::asin(std::clamp(XMVectorGetY(dir), -1.0f, 1.0f)),
+                             -1.5f, 1.5f);
+  const float fieldScale = m_cfg.fieldScale;
+  m_cameraDistance =
+      std::clamp(dist, 1.2f * fieldScale, 35.0f * fieldScale);
+  m_targetCameraDistance = m_cameraDistance;
 }
 
 void CameraController::Update(core::GameContext &ctx) {
@@ -369,7 +435,9 @@ void CameraController::Update(core::GameContext &ctx) {
                       shotState->phase == ShotState::Phase::ImpactTiming &&
                       shotState->swingCommitted);
 
-  if (isShotCamera) {
+  if (isShotCamera && m_isFreeCamera) {
+    // フリーカメラ: 自動の見上げ・追尾は行わず、入力されたYaw/Pitchでボールを周回する
+  } else if (isShotCamera) {
     if (!m_isCameraChasing) {
       // 約1秒でロボット背後の三人称視点へ寄り、そこから見上げてボールを追う
       m_shotCamTimer += ctx.dt;
@@ -434,19 +502,24 @@ void CameraController::Update(core::GameContext &ctx) {
       float targetPitch = 0.5f;
       m_cameraPitch += (targetPitch - m_cameraPitch) * 2.0f * ctx.dt;
     }
-  } else if (m_wasShotCamera && !m_isCameraChasing) {
+  } else if (m_wasShotCamera && !m_isCameraChasing && !m_isFreeCamera) {
     // 追尾に入る前にボールが止まった(パット等)場合も三人称視点から滑らかに戻す
     BeginOrbitBlend(camT->position);
   }
   m_wasShotCamera = isShotCamera;
+  if (!isShotCamera) {
+    m_isFreeCamera = false;
+  }
 
   if (!isShotCamera && m_isYawEasing) {
     m_yawEaseTimer += ctx.dt;
     const float progress = m_yawEaseTimer / kTargetYawEaseSeconds;
-    m_cameraYaw =
-        m_yawEaseFrom + m_yawEaseDelta * SmoothStep01(progress);
+    const float ease = SmoothStep01(progress);
+    m_cameraYaw = m_yawEaseFrom + m_yawEaseDelta * ease;
+    m_cameraPitch = m_pitchEaseFrom + m_pitchEaseDelta * ease;
     if (progress >= 1.0f) {
       m_cameraYaw = m_yawEaseFrom + m_yawEaseDelta;
+      m_cameraPitch = m_pitchEaseFrom + m_pitchEaseDelta;
       m_isYawEasing = false;
     }
   }
@@ -552,6 +625,7 @@ void CameraController::RestoreAfterFade(core::GameContext &ctx) {
 
   m_isCameraChasing = false;
   m_wasShotCamera = false;
+  m_isFreeCamera = false;
   m_orbitBlend = 1.0f;
   XMStoreFloat3(&m_shotStartCamPos, adjustedPos);
 }

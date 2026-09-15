@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -26,6 +27,19 @@ struct FeaturedCourseHoles {
   std::vector<CourseIntroductionHole> goals;
   std::vector<CourseIntroductionHole> oneHop;
 };
+
+inline float CalculateCourseIntroductionDuration(
+    const DirectX::XMFLOAT3 &start, const DirectX::XMFLOAT3 &end,
+    float minimumDuration) {
+  constexpr float kTravelSpeed = 140.0f;
+  constexpr float kMaximumDuration = 24.0f;
+  const float dx = end.x - start.x;
+  const float dy = end.y - start.y;
+  const float dz = end.z - start.z;
+  const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+  return std::clamp(distance / kTravelSpeed, minimumDuration,
+                    kMaximumDuration);
+}
 
 inline std::wstring FormatCourseAbstract(std::wstring_view source,
                                          std::size_t maxCharacters = 180) {
@@ -175,6 +189,33 @@ inline FeaturedCourseHoles SelectFeaturedCourseHoles(
     }
     result.oneHop.push_back(candidates[selectedIndex]);
     candidates.erase(candidates.begin() + selectedIndex);
+  }
+
+  if (result.oneHop.size() >= 5) {
+    std::vector<CourseIntroductionHole> ordered;
+    ordered.reserve(result.oneHop.size());
+    float currentX = teeX;
+    float currentZ = teeZ;
+    while (!result.oneHop.empty()) {
+      const auto nearest = std::min_element(
+          result.oneHop.begin(), result.oneHop.end(),
+          [&](const CourseIntroductionHole &left,
+              const CourseIntroductionHole &right) {
+            const float leftDistance =
+                distanceSquared(left.x, left.z, currentX, currentZ);
+            const float rightDistance =
+                distanceSquared(right.x, right.z, currentX, currentZ);
+            if (leftDistance == rightDistance) {
+              return left.originalIndex < right.originalIndex;
+            }
+            return leftDistance < rightDistance;
+          });
+      currentX = nearest->x;
+      currentZ = nearest->z;
+      ordered.push_back(*nearest);
+      result.oneHop.erase(nearest);
+    }
+    result.oneHop = std::move(ordered);
   }
 
   return result;
