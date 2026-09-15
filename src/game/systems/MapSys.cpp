@@ -75,6 +75,19 @@ bool MapSys::Initialize(ID3D11Device *device, int width, int height) {
   sd.MaxLOD = D3D11_FLOAT32_MAX;
   device->CreateSamplerState(&sd, &m_samp);
 
+  D3D11_BLEND_DESC blendDesc = {};
+  blendDesc.RenderTarget[0].BlendEnable = TRUE;
+  blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_DEST_COLOR;
+  blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ZERO;
+  blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+  blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+  blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+  blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+  blendDesc.RenderTarget[0].RenderTargetWriteMask =
+      D3D11_COLOR_WRITE_ENABLE_ALL;
+  if (FAILED(device->CreateBlendState(&blendDesc, &m_multiplyBlendState)))
+    return false;
+
   return true;
 }
 
@@ -82,6 +95,8 @@ void MapSys::BeginRender(ID3D11DeviceContext *ctx) {
   UINT n = 1;
   ctx->OMGetRenderTargets(1, m_saveRTV.ReleaseAndGetAddressOf(),
                           m_saveDSV.ReleaseAndGetAddressOf());
+  ctx->OMGetBlendState(m_saveBlendState.ReleaseAndGetAddressOf(),
+                       m_saveBlendFactor, &m_saveSampleMask);
   ctx->RSGetViewports(&n, &m_saveVP);
 
   // m_srv（このミニマップの出力）がPS/VSの入力として残っていると、これから
@@ -92,6 +107,7 @@ void MapSys::BeginRender(ID3D11DeviceContext *ctx) {
   ctx->VSSetShaderResources(15, 1, nullSRVs);
 
   ctx->OMSetRenderTargets(1, m_rtv.GetAddressOf(), m_dsv.Get());
+  ctx->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
   ctx->RSSetViewports(1, &m_vp);
   float color[] = {0.035f, 0.040f, 0.060f, 1.0f};
   ctx->ClearRenderTargetView(m_rtv.Get(), color);
@@ -105,6 +121,8 @@ void MapSys::EndRender(ID3D11DeviceContext *ctx) {
   ctx->VSSetShaderResources(15, 1, nullSRVs);
 
   ctx->OMSetRenderTargets(1, m_saveRTV.GetAddressOf(), m_saveDSV.Get());
+  ctx->OMSetBlendState(m_saveBlendState.Get(), m_saveBlendFactor,
+                       m_saveSampleMask);
   ctx->RSSetViewports(1, &m_saveVP);
 }
 
@@ -323,48 +341,63 @@ void MapSys::Render(core::GameContext &ctx, const MapRenderParams &params) {
   context->PSSetSamplers(0, 1, m_samp.GetAddressOf());
 
   size_t drawCalls = 0;
-  for (const auto &[key, instances] : buckets) {
-    if (instances.empty())
-      continue;
+  const auto drawPass = [&](components::MinimapRenderMode passMode) {
+    context->OMSetBlendState(
+        passMode == components::MinimapRenderMode::Textured
+            ? m_multiplyBlendState.Get()
+            : nullptr,
+        nullptr, 0xFFFFFFFF);
 
-    auto *mesh = ctx.resource.GetMesh(key.mesh);
-    if (!mesh)
-      continue;
+    for (const auto &[key, instances] : buckets) {
+      if (key.mode != passMode || instances.empty())
+        continue;
 
-    // バッファ確保に失敗している、または古い（より小さい）バッファしかない場合、
-    // このバケットの書き込みで容量を超えてオーバーフローしないよう安全にスキップする。
-    if (!m_instancedBuffer || instances.size() > m_instancedBufferCapacity)
-      continue;
+      auto *mesh = ctx.resource.GetMesh(key.mesh);
+      if (!mesh)
+        continue;
 
-    D3D11_MAPPED_SUBRESOURCE mappedInst;
-    if (FAILED(context->Map(m_instancedBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedInst))) {
-      continue;
+      // バッファ確保に失敗している、または古い（より小さい）バッファしかない場合、
+      // このバケットの書き込みで容量を超えてオーバーフローしないよう安全にスキップする。
+      if (!m_instancedBuffer || instances.size() > m_instancedBufferCapacity)
+        continue;
+
+      D3D11_MAPPED_SUBRESOURCE mappedInst;
+      if (FAILED(context->Map(m_instancedBuffer.Get(), 0,
+                              D3D11_MAP_WRITE_DISCARD, 0, &mappedInst))) {
+        continue;
+      }
+      auto *dest = static_cast<MapInstanceData *>(mappedInst.pData);
+      for (size_t i = 0; i < instances.size(); ++i) {
+        XMStoreFloat4x4(
+            &dest[i].world,
+            XMMatrixTranspose(instances[i].worldMatrix));
+        dest[i].color = instances[i].color;
+        const bool vertexColorTerrain =
+            key.mode == components::MinimapRenderMode::VertexColor;
+        dest[i].flags =
+            XMFLOAT4(key.textureSRV ? 1.0f : 0.0f,
+                     vertexColorTerrain ? 1.0f : 0.0f, 1.0f, 0.0f);
+      }
+      context->Unmap(m_instancedBuffer.Get(), 0);
+
+      if (key.textureSRV) {
+        context->PSSetShaderResources(0, 1, &key.textureSRV);
+      } else {
+        ID3D11ShaderResourceView *nullSRV = nullptr;
+        context->PSSetShaderResources(0, 1, &nullSRV);
+      }
+
+      mesh->Bind(context);
+      context->VSSetShaderResources(15, 1, m_instancedSRV.GetAddressOf());
+      context->DrawIndexedInstanced(
+          mesh->GetIndexCount(), static_cast<UINT>(instances.size()), 0, 0, 0);
+      ++drawCalls;
     }
-    auto *dest = static_cast<MapInstanceData *>(mappedInst.pData);
-    for (size_t i = 0; i < instances.size(); ++i) {
-      XMStoreFloat4x4(&dest[i].world, XMMatrixTranspose(instances[i].worldMatrix));
-      dest[i].color = instances[i].color;
-      const bool vertexColorTerrain =
-          key.mode == components::MinimapRenderMode::VertexColor;
-      dest[i].flags =
-          XMFLOAT4(key.textureSRV ? 1.0f : 0.0f,
-                   vertexColorTerrain ? 1.0f : 0.0f, 1.0f, 0.0f);
-    }
-    context->Unmap(m_instancedBuffer.Get(), 0);
+  };
 
-    if (key.textureSRV) {
-      context->PSSetShaderResources(0, 1, &key.textureSRV);
-    } else {
-      ID3D11ShaderResourceView *nullSRV = nullptr;
-      context->PSSetShaderResources(0, 1, &nullSRV);
-    }
-
-    mesh->Bind(context);
-    context->VSSetShaderResources(15, 1, m_instancedSRV.GetAddressOf());
-    context->DrawIndexedInstanced(mesh->GetIndexCount(),
-                                  static_cast<UINT>(instances.size()), 0, 0, 0);
-    ++drawCalls;
-  }
+  // 地形色を先に確定し、その上へ記事テクスチャを乗算する。
+  drawPass(components::MinimapRenderMode::VertexColor);
+  drawPass(components::MinimapRenderMode::Textured);
 
   auto &profiler = core::Profiler::Instance();
   profiler.SetCounter("Minimap.Items", static_cast<double>(itemCount));

@@ -109,6 +109,15 @@ public:
                           float toWeight,
                           std::vector<Vertex> &outVertices) const;
 
+  /**
+   * @brief 指定ボーンが最も強く影響する頂点群の重心を求める
+   * @param posedVertices ComputePose等で得た頂点（GetBindPoseVertices()と同サイズ）
+   * @return ボーンが存在し対象頂点が1つ以上あればtrue
+  */
+  bool ComputeBoneVertexCentroid(const std::string &boneName,
+                                 const std::vector<Vertex> &posedVertices,
+                                 DirectX::XMFLOAT3 &outCentroid) const;
+
   /** @brief バインドポーズのバウンディングボックス高さ(Y方向)。スケール調整用 */
   float GetBindPoseHeight() const { return m_bindPoseHeight; }
 

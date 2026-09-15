@@ -61,7 +61,7 @@ void LoadingScene::BuildGameplayPreloadQueue() {
   };
 
   // ミニマップ用アイコン、地形/判定バッジUI画像
-  static const std::array<const char *, 11> kUiTextures = {
+  static const std::array<const char *, 19> kUiTextures = {
       "Assets/textures/golf_ball_icon_transparent.png",
       "Assets/textures/golf_hole_icon_transparent.png",
       "Assets/textures/ui_terrain_bunker.png",
@@ -73,10 +73,18 @@ void LoadingScene::BuildGameplayPreloadQueue() {
       "Assets/textures/ui_judge_miss.png",
       "Assets/textures/ui_judge_nice.png",
       "Assets/textures/ui_judge_perfect.png",
+      "Assets/all_terrain_ui_assets/fairway.png",
+      "Assets/all_terrain_ui_assets/rough.png",
+      "Assets/all_terrain_ui_assets/bunker.png",
+      "Assets/all_terrain_ui_assets/green.png",
+      "Assets/all_terrain_ui_assets/ice.png",
+      "Assets/all_terrain_ui_assets/water.png",
+      "Assets/all_terrain_ui_assets/lava.png",
+      "Assets/all_terrain_ui_assets/rock.png",
   };
 
   // ショット/判定/地形/カップ/ゴール/ワープ/OB経路で実際に再生されるSE
-  static const std::array<const char *, 22> kGameplaySounds = {
+  static const std::array<const char *, 23> kGameplaySounds = {
       "Assets/sounds/se_shot.mp3",
       "Assets/sounds/se_shot_hard.mp3",
       "Assets/sounds/se_shot_soft.mp3",
@@ -98,6 +106,7 @@ void LoadingScene::BuildGameplayPreloadQueue() {
       "Assets/sounds/se_OB.wav",
       "Assets/sounds/se_cupin.mp3",
       "Assets/sounds/se_holeInOne.mp3",
+      "Assets/sounds/se_goal.mp3",
       "Assets/sounds/se_warp.mp3",
   };
 

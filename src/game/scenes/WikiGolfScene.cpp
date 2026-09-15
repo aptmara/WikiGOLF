@@ -33,6 +33,7 @@
 #include "../systems/PhysicsSystem.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
+#include "../utils/CameraProjection.h"
 #include "../utils/JudgeFeedback.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/TrajectorySimulation.h"
@@ -302,9 +303,9 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
           };
           m_pageLoader->SetPreloadedData(
               std::move(links),
-              "フェアウェイの記事へ移動しました。記事中のリンクが旗になり、"
-              "カップインするたびに別の記事コースへ進みます。"
-              "赤いゴールの旗を目指しましょう。",
+              "「フェアウェイ」の記事へ移動しました！このようにカップインするたびに"
+              "次の記事コースへと進んでいきます。"
+              "正面奥に見える赤い「ゴール」の旗を目指してショットしましょう。",
               true);
         }
         TransitionToPage(ctx, hole->linkTarget);
@@ -329,6 +330,7 @@ void WikiGolfScene::BeginCupInCelebration(core::GameContext &ctx,
                                           const XMFLOAT3 &holePos) {
   m_phase = ScenePhase::Celebrating;
   m_celebrationElapsed = 0.0f;
+  m_celebrationIrisStarted = false;
   m_pendingLaunchTimer = -1.0f;
 
   // 演出を見せるためHUD類は隠す（遷移完了時/リザルトで元に戻る）
@@ -378,11 +380,15 @@ void WikiGolfScene::UpdateCupInCelebration(core::GameContext &ctx) {
     m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
   UpdateProceduralFlagEffects(ctx, dt);
+  UpdateCelebrationIris(ctx);
 
-  // 喜びモーションが終わったら遷移（念のため一定時間で打ち切る）
+  // 喜びモーションとアイリスが終わったら遷移（念のため一定時間で打ち切る）
   constexpr float kCelebrationTimeoutSeconds = 12.0f;
-  const bool finished = !m_clubController ||
-                        m_clubController->IsCelebrationFinished() ||
+  const bool motionFinished =
+      !m_clubController || m_clubController->IsCelebrationFinished();
+  const bool irisFinished =
+      !m_celebrationIrisStarted || m_screenFade.IsFadeOutComplete();
+  const bool finished = (motionFinished && irisFinished) ||
                         m_celebrationElapsed >= kCelebrationTimeoutSeconds;
   if (!finished) {
     return;
@@ -407,6 +413,61 @@ void WikiGolfScene::UpdateCupInCelebration(core::GameContext &ctx) {
 
   m_phase = ScenePhase::Playing;
   TransitionToPage(ctx, m_celebrationTargetPage);
+  if (m_celebrationIrisStarted) {
+    m_screenFade.FadeIn(0.5f, game::utils::FadeType::Fade, {0, 0, 0});
+    m_celebrationIrisStarted = false;
+  }
+}
+
+void WikiGolfScene::UpdateCelebrationIris(core::GameContext &ctx) {
+  if (!m_clubController) {
+    return;
+  }
+
+  // モーション終了のこの秒数前からアイリスを閉じ始める
+  constexpr float kIrisLeadSeconds = 0.9f;
+  constexpr float kIrisDurationSeconds = 1.2f;
+  // 顔の半径（身長比）と、溜める円を顔より少し大きくする倍率
+  constexpr float kFaceRadiusRatio = 0.12f;
+  constexpr float kIrisHoldScale = 1.8f;
+
+  if (!m_celebrationIrisStarted) {
+    float remaining = 0.0f;
+    if (!m_clubController->GetCelebrateRemainingSeconds(remaining) ||
+        remaining > kIrisLeadSeconds) {
+      return;
+    }
+    m_celebrationIrisStarted = true;
+    m_screenFade.FadeOut(kIrisDurationSeconds,
+                         game::utils::FadeType::IrisClose, {0, 0, 0});
+  }
+
+  // 顔の画面位置へ中心を追従させる（取れなければ画面中央で閉じる）
+  float centerU = 0.5f;
+  float centerV = 0.5f;
+  float holdRadius = 0.0f;
+  XMFLOAT3 face{};
+  XMMATRIX view, proj;
+  if (m_clubController->GetGolferFaceWorldPosition(ctx, face) &&
+      game::utils::GetCameraMatrices(ctx, m_cameraEntity, view, proj)) {
+    const XMVECTOR viewPos =
+        XMVector3TransformCoord(XMLoadFloat3(&face), view);
+    const float depth = XMVectorGetZ(viewPos);
+    if (depth > 0.01f) {
+      const XMVECTOR clip = XMVector3TransformCoord(XMLoadFloat3(&face),
+                                                    view * proj);
+      centerU = XMVectorGetX(clip) * 0.5f + 0.5f;
+      centerV = 0.5f - XMVectorGetY(clip) * 0.5f;
+      XMFLOAT4X4 p;
+      XMStoreFloat4x4(&p, proj);
+      const float worldRadius =
+          m_clubController->GetGolferHeight() * kFaceRadiusRatio;
+      holdRadius = worldRadius * p._22 / (2.0f * depth) * kIrisHoldScale;
+    }
+  }
+  m_screenFade.SetCenter(std::clamp(centerU, 0.0f, 1.0f),
+                         std::clamp(centerV, 0.0f, 1.0f));
+  m_screenFade.SetIrisHoldRadius(std::clamp(holdRadius, 0.0f, 0.5f));
 }
 
 } // namespace game::scenes

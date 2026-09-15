@@ -225,7 +225,8 @@ public:
 */
     void UpdateNearbyHoleSignboards(core::GameContext& ctx,
                                     const DirectX::XMFLOAT3& ballPos,
-                                    ecs::Entity cameraEntity);
+                                    ecs::Entity cameraEntity,
+                                    const DirectX::XMFLOAT3* golferPosition);
 
     /**
      * @brief ホールを生成します。
@@ -250,6 +251,14 @@ public:
      * @brief フィールドの奥行きを取得します。
 */
     float GetFieldDepth() const { return m_fieldDepth; }
+
+    /** @brief 目的記事の代表サムネイルを取得します（未設定なら nullptr）。*/
+    ID3D11ShaderResourceView* GetTargetThumbnailSRV() const {
+        return m_hasTargetThumbnail ? m_targetThumbnailSRV.Get() : nullptr;
+    }
+
+    /** @brief 目的記事の代表サムネイルの幅/高さ比を取得します。*/
+    float GetTargetThumbnailAspect() const { return m_targetThumbnailAspect; }
 
     /** @brief 最後に構築を完了したコースの紹介用データを取得します。*/
     const CourseIntroductionData& GetCourseIntroductionData() const {

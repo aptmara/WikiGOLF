@@ -71,7 +71,15 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
       if (m_phase == ScenePhase::Playing) {
           if (auto* ballT = ctx.world.Get<game::components::Transform>(m_ballEntity)) {
-              m_pageLoader->UpdateNearbyHoleSignboards(ctx, ballT->position, m_cameraEntity);
+              DirectX::XMFLOAT3 golferCenter{};
+              const DirectX::XMFLOAT3* golferPosition = nullptr;
+              if (m_clubController) {
+                  golferCenter = m_clubController->GetGolferPosition();
+                  golferCenter.y += m_clubController->GetGolferHeight() * 0.5f;
+                  golferPosition = &golferCenter;
+              }
+              m_pageLoader->UpdateNearbyHoleSignboards(
+                  ctx, ballT->position, m_cameraEntity, golferPosition);
           }
       }
   }
@@ -101,22 +109,32 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (m_isTutorial && !m_tutorialOverlay) {
               m_tutorialOverlay = std::make_unique<game::controllers::TutorialOverlayController>();
               m_tutorialOverlay->Initialize(ctx);
+              const auto tutorialPresentation =
+                  m_tutorialOverlay->GetPresentationPolicy();
+              if (m_hud) {
+                  m_hud->SetTutorialPresentation(
+                      ctx, true, tutorialPresentation.courseInfo,
+                      tutorialPresentation.club,
+                      tutorialPresentation.minimap);
+              }
               if (m_minimapController) {
                   m_minimapController->SetTutorialHelpMode(ctx, true);
+                  m_minimapController->SetVisible(
+                      ctx, tutorialPresentation.minimap);
               }
               CreateTutorialFlagSamples(ctx);
 
               std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> targets = {
-                  { {0.0f, 15.0f, -25.0f}, {0.0f, 0.0f, -10.0f}, L"Fairway (フェアウェイ)", L"ボールが転がりやすい標準的な地形です。" },
-                  { {-15.0f, 15.0f, -15.0f}, {-15.0f, 0.0f, 0.0f}, L"Rough (ラフ)", L"草が深く、ボールの転がりが少し悪くなります。" },
-                  { {24.0f, 15.0f, -18.0f}, {24.0f, 0.0f, -3.0f}, L"Bunker (バンカー)", L"砂地です。転がりにくく、パワーも落ちやすくなります。" },
-                  { {0.0f, 15.0f, 37.0f}, {0.0f, 0.0f, 52.0f}, L"Green (グリーン)", L"カップ周りの滑らかな地形です。よく転がります。" },
-                  { {-24.0f, 15.0f, 5.0f}, {-24.0f, 0.0f, 20.0f}, L"OB / Water / Lava", L"水や溶岩などの危険エリア。入るとペナルティで1打戻されます。" }
+                  { {0.0f, 15.0f, -25.0f}, {0.0f, 0.0f, -10.0f}, L"Fairway (フェアウェイ)", L"芝が短く刈り揃えられた基本コースです。真っ直ぐよく転がります。" },
+                  { {-15.0f, 15.0f, -15.0f}, {-15.0f, 0.0f, 0.0f}, L"Rough (ラフ)", L"草が深いエリアです。飛距離が落ち、ボールが転がりにくくなります。" },
+                  { {24.0f, 15.0f, -18.0f}, {24.0f, 0.0f, -3.0f}, L"Bunker (バンカー)", L"砂地のハザードです。脱出に強い力が必要で、ほとんど転がりません。" },
+                  { {0.0f, 15.0f, 37.0f}, {0.0f, 0.0f, 52.0f}, L"Green (グリーン)", L"カップ周辺の滑らかな芝エリアです。非常によく転がるため力加減に注意しましょう。" },
+                  { {-24.0f, 15.0f, 5.0f}, {-24.0f, 0.0f, 20.0f}, L"OB / ハザード (水・溶岩など)", L"コース外や水・溶岩などの危険地帯です。入ると1打罰で打ち直しになります。" }
               };
               std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> flagTargets = {
-                  { {-37.5f, 10.0f, 18.0f}, {-37.5f, 1.4f, 30.0f}, L"赤い旗 / 目的地", L"赤はターゲット記事へのホールです。ここに入れるとチュートリアルクリアです。" },
-                  { {-15.0f, 11.0f, 16.0f}, {-15.0f, 1.4f, 30.0f}, L"黄・橙の旗", L"黄は目的地まで1リンク、橙は2リンク先のホールです。近道候補になります。" },
-                  { {15.0f, 11.0f, 16.0f}, {15.0f, 1.4f, 30.0f}, L"白・灰・青の旗", L"白は3〜5リンク、灰は6リンク以上、青は距離が未解析です。赤に近い色ほど有利です。" }
+                  { {-37.5f, 10.0f, 18.0f}, {-37.5f, 1.4f, 30.0f}, L"赤い旗（目的地・ゴール）", L"目標となるゴール記事へのカップです。ここに入れるとコースクリアとなります。" },
+                  { {-15.0f, 11.0f, 16.0f}, {-15.0f, 1.4f, 30.0f}, L"黄・橙の旗（近いリンク）", L"黄はゴールまであと1手、橙はあと2手で繋がるカップです。少ない打数で進める近道になります。" },
+                  { {15.0f, 11.0f, 16.0f}, {15.0f, 1.4f, 30.0f}, L"白・灰・青の旗（遠いリンク）", L"白は3〜5手、灰は6手以上、青は未解析のカップです。赤に近い色ほどゴールに早く近づけます。" }
               };
               m_tutorialOverlay->SetEventCameraTargets(m_cameraEntity,
                                                        std::move(targets),
@@ -138,6 +156,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   int mouseY = mousePos.y;
 
   bool tutorialInputLocked = false;
+  bool tutorialMinimapVisible = false;
   game::controllers::TutorialInputPolicy tutorialPolicy;
   if (m_isTutorial && m_tutorialOverlay) {
     PROFILE_SCOPE("WikiGolf.TutorialOverlay");
@@ -224,9 +243,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (distance >= 0.0f && m_clubController) {
             RefreshAimPinSolution(ctx, true);
             if (m_cameraController) {
-              m_cameraController->SetTargetDistanceAndHeight(
-                  m_clubController->GetRecommendedCameraDistance(4.0f),
-                  m_clubController->GetRecommendedCameraHeight(4.0f));
+              m_cameraController->BeginTargetFraming(
+                  ctx, holeTransform->position,
+                  m_clubController->GetRecommendedCameraDistance(
+                      scene_detail::kFieldScale));
             }
           }
         }
@@ -250,6 +270,11 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
     tutorialInputLocked = m_tutorialOverlay->IsInputLocked();
     tutorialPolicy = m_tutorialOverlay->GetInputPolicy();
+    tutorialMinimapVisible =
+        m_tutorialOverlay->GetPresentationPolicy().minimap;
+    if (m_minimapController && tutorialMinimapVisible) {
+      m_minimapController->SetVisible(ctx, true);
+    }
   }
 
   // マップビュー更新
@@ -262,15 +287,18 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       fieldW = m_pageLoader->GetFieldWidth();
       fieldD = m_pageLoader->GetFieldDepth();
   }
-  if (m_minimapController && (!m_isTutorial || tutorialPolicy.map)) {
+  if (m_minimapController &&
+      (!m_isTutorial || tutorialPolicy.map || tutorialMinimapVisible)) {
       PROFILE_SCOPE("WikiGolf.Minimap");
-      if (m_isTutorial && m_tutorialOverlay) {
-          m_minimapController->ProcessInput(
-              ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity,
-              m_tutorialOverlay->GetMapInputPermissions());
-      } else {
-          m_minimapController->ProcessInput(
-              ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
+      if (!m_isTutorial || tutorialPolicy.map) {
+          if (m_isTutorial && m_tutorialOverlay) {
+              m_minimapController->ProcessInput(
+                  ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity,
+                  m_tutorialOverlay->GetMapInputPermissions());
+          } else {
+              m_minimapController->ProcessInput(
+                  ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
+          }
       }
       static const std::vector<ecs::Entity> noTrajectory;
       const auto &trajectoryEntities = m_trajectoryPredictor
@@ -344,19 +372,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       if (pinResult.pinPlaced) {
           RefreshAimPinSolution(ctx, true);
           if (m_cameraController) {
-              m_cameraController->SetTargetDistanceAndHeight(
-                  m_clubController->GetRecommendedCameraDistance(4.0f),
-                  m_clubController->GetRecommendedCameraHeight(4.0f));
-              m_cameraController->BeginTargetDistanceEase();
-
-              // ピンを狙った方向へ視線(ショット方向)も合わせる。
               const auto *aimPin =
                   ctx.world.GetGlobal<game::components::AimPinState>();
-              auto *ballTransform =
-                  ctx.world.Get<game::components::Transform>(m_ballEntity);
-              if (aimPin && ballTransform) {
-                  m_cameraController->AimYawTowards(ballTransform->position,
-                                                    aimPin->worldPosition);
+              if (aimPin && aimPin->active) {
+                  m_cameraController->BeginTargetFraming(
+                      ctx, aimPin->worldPosition,
+                      m_clubController->GetRecommendedCameraDistance(
+                          scene_detail::kFieldScale));
               }
           }
 
@@ -384,9 +406,20 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           // バーのピン位置表示を新しいクラブで解き直す。
           RefreshAimPinSolution(ctx, false);
           if (m_cameraController) {
-              m_cameraController->SetTargetDistanceAndHeight(
-                  m_clubController->GetRecommendedCameraDistance(4.0f),
-                  m_clubController->GetRecommendedCameraHeight(4.0f));
+              std::optional<DirectX::XMFLOAT3> framingTarget;
+              const auto *aimPin =
+                  ctx.world.GetGlobal<game::components::AimPinState>();
+              if (aimPin && aimPin->active) {
+                  framingTarget = aimPin->worldPosition;
+              } else {
+                  framingTarget = CalculateFullSwingLandingTarget(ctx);
+              }
+              if (framingTarget) {
+                  m_cameraController->BeginTargetFraming(
+                      ctx, *framingTarget,
+                      m_clubController->GetRecommendedCameraDistance(
+                          scene_detail::kFieldScale));
+              }
           }
       }
   }

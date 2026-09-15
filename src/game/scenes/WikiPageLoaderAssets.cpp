@@ -14,6 +14,9 @@
 #include "../components/WikiComponents.h"
 #include "../controllers/MinimapController.h"
 #include "../systems/WikiClient.h"
+#include "../utils/FlagFadeRules.h"
+#include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/ProceduralFlag.h"
 #include <algorithm>
 #include <cmath>
 #include <future>
@@ -104,14 +107,11 @@ ecs::Entity WikiPageLoader::CreateHoleSignboardEntity(
     constexpr float kSignboardClearance = 0.4f; // 旗ポール先端からの浮かせ量
     const float signboardHeight = kSignboardWidth / std::max(0.1f, aspect);
 
-    // CreateProceduralFlag（ProceduralFlag.cpp）と同じ計算式で旗ポールの高さを求め、
-    // その真上に看板を置く。
-    float poleSize = 0.90f;
-    if (isTargetHole) {
-        poleSize = 1.05f;
-    }
-    const float poleHeight = 2.65f * poleSize;
-    const float poleTopY = terrainH + 0.05f + poleHeight;
+    // 旗生成と同じ寸法を使い、大型の金・赤フラッグでも旗布より上へ置く。
+    const bool usesLargeFlag = isTargetHole || hopsToTarget == 1;
+    const float poleTopY = game::physics::ToVisualSurfaceHeight(terrainH) +
+                           game::utils::GetProceduralFlagPoleHeight(
+                               usesLargeFlag);
 
     auto signE = m_pageEntityOwner.Create(ctx.world);
     auto& signT = ctx.world.Add<Transform>(signE);
@@ -153,7 +153,8 @@ ecs::Entity WikiPageLoader::CreateHoleSignboardEntity(
 */
 void WikiPageLoader::UpdateNearbyHoleSignboards(core::GameContext& ctx,
                                                 const DirectX::XMFLOAT3& ballPos,
-                                                ecs::Entity cameraEntity)
+                                                ecs::Entity cameraEntity,
+                                                const DirectX::XMFLOAT3* golferPosition)
 {
     // 距離判定・フェッチ開始・キャッシュ走査は毎フレーム行うと全ホールを60回/秒
     // スキャンすることになり無駄が大きいため、一定間隔に間引く。
@@ -249,9 +250,6 @@ void WikiPageLoader::UpdateNearbyHoleSignboards(core::GameContext& ctx,
     //    真上から見下ろしてもヨーだけでは正面が見えなくなるため
     //    3軸フルビルボード（Look-at）に切り替える。
     if (auto* camT = ctx.world.Get<Transform>(cameraEntity)) {
-        constexpr float kFadeEndDistance = 3.0f;   // これ以下の距離で完全に消える
-        constexpr float kFadeStartDistance = 7.0f; // これより遠ければ完全表示
-
         const auto* state = ctx.world.GetGlobal<GolfGameState>();
         const bool useLookAt = state && state->isMapView;
 
@@ -298,11 +296,19 @@ void WikiPageLoader::UpdateNearbyHoleSignboards(core::GameContext& ctx,
                         // しまうため、常に非表示にする。
                         mr->customFlags.x = 0.0f;
                     } else {
-                        const float dist = std::sqrt(distSq);
-                        const float fade = std::clamp(
-                            (dist - kFadeEndDistance) / (kFadeStartDistance - kFadeEndDistance),
-                            0.0f, 1.0f);
-                        mr->customFlags.x = fade;
+                        const DirectX::XMFLOAT3 fallbackGolferPosition =
+                            camT->position;
+                        const auto& fadeTarget = golferPosition
+                            ? *golferPosition
+                            : fallbackGolferPosition;
+                        const float targetAlpha =
+                            game::utils::CalculateFlagFadeAlpha(
+                                camT->position, t.position, fadeTarget);
+                        constexpr float kFadeSpeed = 5.0f;
+                        const float fadeStep = kFadeSpeed * ctx.dt;
+                        mr->customFlags.x += std::clamp(
+                            targetAlpha - mr->customFlags.x,
+                            -fadeStep, fadeStep);
                     }
                 }
             });

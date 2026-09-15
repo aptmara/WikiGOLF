@@ -397,6 +397,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           "GPU.DedicatedVideoMemoryMB",
           static_cast<double>(graphics.GetDedicatedVideoMemoryBytes()) /
               (1024.0 * 1024.0));
+      {
+        uint64_t videoMemoryUsage = 0;
+        uint64_t videoMemoryBudget = 0;
+        if (graphics.QueryLocalVideoMemory(videoMemoryUsage,
+                                           videoMemoryBudget)) {
+          profiler.SetCounter("GPU.LocalVideoMemoryUsageMB",
+                              static_cast<double>(videoMemoryUsage) /
+                                  (1024.0 * 1024.0));
+          profiler.SetCounter("GPU.LocalVideoMemoryBudgetMB",
+                              static_cast<double>(videoMemoryBudget) /
+                                  (1024.0 * 1024.0));
+        }
+      }
 #endif
 
       {

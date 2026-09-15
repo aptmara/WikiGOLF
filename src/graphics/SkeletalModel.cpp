@@ -154,8 +154,14 @@ XMVECTOR InterpolateQuat(const std::vector<AnimKeyQuat> &keys, float t,
 
 bool SkeletalModel::LoadFromFile(const std::string &path) {
   Assimp::Importer importer;
+  // glTF等は右手系のため、左手系(XMMatrixLookAtLH等)の描画に合わせて変換する。
+  // 変換しないとモデルが左右反転して表示される(右打ちが左打ちになる)。
+  // ConvertToLeftHanded = MakeLeftHanded(Z反転: 頂点・ノード・ボーン・アニメ) |
+  //                       FlipUVs | FlipWindingOrder
+  // Z反転によりモデル正面は-Zになる点に注意。
   unsigned int flags = aiProcess_Triangulate | aiProcess_GenNormals |
-                       aiProcess_FlipUVs | aiProcess_LimitBoneWeights;
+                       aiProcess_ConvertToLeftHanded |
+                       aiProcess_LimitBoneWeights;
 
   const aiScene *scene = importer.ReadFile(path, flags);
   if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) ||
@@ -370,6 +376,39 @@ bool SkeletalModel::LoadFromFile(const std::string &path) {
           m_bindVertices.size(), m_bones.size(), m_clips.size());
 
   return !m_bindVertices.empty();
+}
+
+bool SkeletalModel::ComputeBoneVertexCentroid(
+    const std::string &boneName, const std::vector<Vertex> &posedVertices,
+    XMFLOAT3 &outCentroid) const {
+  const auto boneIt = m_boneNameToIndex.find(boneName);
+  if (boneIt == m_boneNameToIndex.end() ||
+      posedVertices.size() != m_vertexWeights.size()) {
+    return false;
+  }
+  const uint32_t boneIndex = static_cast<uint32_t>(boneIt->second);
+
+  XMVECTOR sum = XMVectorZero();
+  size_t count = 0;
+  for (size_t v = 0; v < m_vertexWeights.size(); ++v) {
+    const VertexBoneWeights &w = m_vertexWeights[v];
+    int dominant = 0;
+    for (int k = 1; k < 4; ++k) {
+      if (w.boneWeights[k] > w.boneWeights[dominant]) {
+        dominant = k;
+      }
+    }
+    if (w.boneWeights[dominant] > 0.0f && w.boneIndices[dominant] == boneIndex) {
+      sum = XMVectorAdd(sum, XMLoadFloat3(&posedVertices[v].position));
+      ++count;
+    }
+  }
+  if (count == 0) {
+    return false;
+  }
+  XMStoreFloat3(&outCentroid,
+                XMVectorScale(sum, 1.0f / static_cast<float>(count)));
+  return true;
 }
 
 const AnimationClip *SkeletalModel::FindClip(const std::string &name) const {

@@ -4,6 +4,7 @@
 */
 
 #include "ClubController.h"
+#include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
@@ -27,6 +28,19 @@ namespace game::controllers {
 
 using namespace DirectX;
 using namespace game::components;
+
+namespace {
+
+/**
+ * @brief ワールドの+Z方向を0としたヨー角から、ゴルファーモデルの回転を作る。
+ * @details SkeletalModelは左手系へ変換して読み込むためモデル正面が-Zになる。
+ *          その分を180度補正し、呼び出し側は「yaw方向を向く」とだけ考えればよい。
+*/
+XMVECTOR GolferRotationFromYaw(float yaw) {
+  return XMQuaternionRotationRollPitchYaw(0.0f, yaw + XM_PI, 0.0f);
+}
+
+} // namespace
 
 void ClubController::Initialize(core::GameContext &ctx,
                                 game::systems::WikiTerrainSystem *terrainSystem) {
@@ -298,8 +312,7 @@ void ClubController::UpdateAnimation(core::GameContext &ctx, float dt,
   m_golferStandPos = ConstrainToTerrain(m_golferStandPos);
 
   clubTr->position = m_golferStandPos;
-  XMStoreFloat4(&clubTr->rotation,
-               XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f));
+  XMStoreFloat4(&clubTr->rotation, GolferRotationFromYaw(yaw));
 
   clubMr->usesDitherFade = true;
   clubMr->color.w = m_golferFadeAlpha;
@@ -444,8 +457,7 @@ void ClubController::UpdateCelebration(core::GameContext &ctx, float dt,
     const float teleportYaw =
         std::atan2(m_celebrationSpot.x - m_golferStandPos.x,
                    m_celebrationSpot.z - m_golferStandPos.z);
-    XMStoreFloat4(&tr->rotation,
-                  XMQuaternionRotationRollPitchYaw(0.0f, teleportYaw, 0.0f));
+    XMStoreFloat4(&tr->rotation, GolferRotationFromYaw(teleportYaw));
     AdvanceClip("Idle", true, dt);
     UpdateGolferPose(ctx);
     return;
@@ -464,6 +476,11 @@ void ClubController::UpdateCelebration(core::GameContext &ctx, float dt,
     if (dist < 0.05f) {
       m_golferStandPos = m_celebrationSpot;
       m_celebrationStage = CelebrationStage::Celebrating;
+      // 喜びモーション開始に合わせてBGMを下げ、ゴールジングルを流す
+      if (ctx.audio) {
+        ctx.audio->PlayJingleWithBgmDuck(ctx, "GoalJingle",
+                                         "Assets/sounds/se_goal.mp3");
+      }
     } else {
       const float step = (std::min)(kGolferWalkSpeed * dt, dist);
       m_golferStandPos.x += dx / dist * step;
@@ -486,8 +503,7 @@ void ClubController::UpdateCelebration(core::GameContext &ctx, float dt,
   m_golferStandPos = ConstrainToTerrain(m_golferStandPos);
 
   tr->position = m_golferStandPos;
-  XMStoreFloat4(&tr->rotation,
-                XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f));
+  XMStoreFloat4(&tr->rotation, GolferRotationFromYaw(yaw));
 
   AdvanceClip(clipName, loop, dt);
   UpdateGolferPose(ctx);
@@ -503,6 +519,37 @@ void ClubController::EndCelebration() {
   m_clubAnimTimer = 0.0f;
 }
 
+bool ClubController::GetCelebrateRemainingSeconds(float &outSeconds) const {
+  if (m_celebrationStage != CelebrationStage::Celebrating &&
+      m_celebrationStage != CelebrationStage::Done) {
+    return false;
+  }
+  if (m_currentClipName != "Celebrate") {
+    return false;
+  }
+  outSeconds = (std::max)(0.0f, ClipDuration("Celebrate") - m_clipTime);
+  return true;
+}
+
+bool ClubController::GetGolferFaceWorldPosition(core::GameContext &ctx,
+                                                XMFLOAT3 &outPos) const {
+  if (!m_golferModelValid) {
+    return false;
+  }
+  auto *tr = ctx.world.Get<Transform>(m_clubModelEntity);
+  if (!tr) {
+    return false;
+  }
+  XMFLOAT3 local{};
+  if (!m_golferModel.ComputeBoneVertexCentroid("Head", m_golferPoseScratch,
+                                               local)) {
+    return false;
+  }
+  XMStoreFloat3(&outPos, XMVector3TransformCoord(XMLoadFloat3(&local),
+                                                 tr->GetWorldMatrix()));
+  return true;
+}
+
 const ClubController::Club &ClubController::GetCurrentClub() const {
   return m_currentClub;
 }
@@ -511,20 +558,10 @@ int ClubController::GetCurrentClubIndex() const { return m_currentClubIndex; }
 
 float ClubController::GetRecommendedCameraDistance(float fieldScale) const {
   if (m_currentClub.categoryEN == "Putter") {
+    return 3.0f * fieldScale;
+  }
+  if (m_currentClub.categoryEN == "Wedge") {
     return 4.0f * fieldScale;
-  }
-  if (m_currentClub.categoryEN == "Wedge") {
-    return 10.0f * fieldScale;
-  }
-  return 15.0f * fieldScale;
-}
-
-float ClubController::GetRecommendedCameraHeight(float fieldScale) const {
-  if (m_currentClub.categoryEN == "Putter") {
-    return 8.0f * fieldScale;
-  }
-  if (m_currentClub.categoryEN == "Wedge") {
-    return 6.0f * fieldScale;
   }
   return 5.0f * fieldScale;
 }

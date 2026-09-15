@@ -79,6 +79,18 @@ public:
   /** @brief BGM停止 */
   void StopBGM();
 
+  /**
+   * @brief BGMをフェードアウトさせてジングルを再生し、終了後にBGMをフェードインする
+   * @param label ジングル識別子（StopOneShotで止めた場合もフェードインする）
+   * @param path 音声ファイルパス
+   * @param fadeOutSeconds BGMのフェードアウト時間（秒）
+   * @param fadeInSeconds ジングル終了後のBGMフェードイン時間（秒）
+   */
+  void PlayJingleWithBgmDuck(core::GameContext &ctx, const std::string &label,
+                             const std::string &path, float volume = 1.0f,
+                             float fadeOutSeconds = 0.4f,
+                             float fadeInSeconds = 1.5f);
+
   /** @brief 全体音量設定 */
   void SetMasterVolume(float volume);
 
@@ -147,6 +159,15 @@ private:
   IXAudio2SourceVoice *m_bgmVoice = nullptr;
   std::string m_currentBgmName;
   VoiceCallback m_bgmCallback; // ループするのでEndは来ないが
+  float m_bgmBaseVolume = 0.6f;
+
+  // ジングル再生中のBGMダッキング（0=無音, 1=通常音量）
+  std::string m_bgmDuckLabel;
+  float m_bgmDuckLevel = 1.0f;
+  float m_bgmDuckFadeOutSpeed = 1.0f;
+  float m_bgmDuckFadeInSpeed = 1.0f;
+
+  void UpdateBgmDuck(float dt);
 };
 
 } // namespace game::systems

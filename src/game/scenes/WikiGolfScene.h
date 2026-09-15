@@ -38,6 +38,7 @@
 #include <DirectXMath.h>
 #include <atomic>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -110,6 +111,9 @@ private:
   /** @brief 喜び演出中の更新。演出が終わったら保留していた遷移を実行します。*/
   void UpdateCupInCelebration(core::GameContext &ctx);
 
+  /** @brief 喜び演出の締めのアイリスをロボットの顔へ追従させます。*/
+  void UpdateCelebrationIris(core::GameContext &ctx);
+
   /** @brief プロシージャル旗のなびきと旗粒子を更新します。*/
   void UpdateProceduralFlagEffects(core::GameContext &ctx, float dt);
 
@@ -118,6 +122,10 @@ private:
    * 計算し、MinimapControllerへ反映します。
 */
   void RefreshLandingPreview(core::GameContext &ctx);
+
+  /** @brief 現在クラブのフルスイング予測着地点を地面座標で返します。*/
+  std::optional<DirectX::XMFLOAT3>
+  CalculateFullSwingLandingTarget(core::GameContext &ctx) const;
 
   /**
    * @brief エイムピンまでの高低差・風を織り込んだ必要パワーを解き直します。
@@ -256,6 +264,7 @@ private:
   CelebrationNext m_celebrationNext = CelebrationNext::None;
   std::string m_celebrationTargetPage; /**< 演出後に遷移する記事名です。*/
   float m_celebrationElapsed = 0.0f;   /**< 喜び演出の経過時間(タイムアウト用)です。*/
+  bool m_celebrationIrisStarted = false; /**< 締めのアイリスを開始済みかどうかです。*/
   bool m_cupApproachEffectTriggered = false; /**< 現在のショットで接近演出を再生済みか。*/
   float m_cupApproachZoomTimer = 0.0f; /**< 接近ズームを維持する残り時間です。*/
   /** @brief インパクト確定からボール発射(クラブ最下点)までの残り秒数。負なら発射待ちなし。*/

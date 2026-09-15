@@ -9,6 +9,7 @@
 #include "../core/Logger.h"
 #include "../resources/ResourceManager.h"
 #include "AudioClip.h"
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 
@@ -56,7 +57,8 @@ void AudioSystem::PlayBGM(core::GameContext &ctx, const std::string &name,
   buffer.Flags = XAUDIO2_END_OF_STREAM;
   buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
 
-  m_bgmVoice->SetVolume(volume);
+  m_bgmBaseVolume = volume;
+  m_bgmVoice->SetVolume(volume * m_bgmDuckLevel);
   hr = m_bgmVoice->SubmitSourceBuffer(&buffer);
   if (FAILED(hr)) {
     LOG_ERROR("Audio", "Failed to submit BGM buffer");
@@ -73,6 +75,45 @@ void AudioSystem::StopBGM() {
     m_bgmVoice = nullptr;
   }
   m_currentBgmName.clear();
+}
+
+void AudioSystem::PlayJingleWithBgmDuck(core::GameContext &ctx,
+                                        const std::string &label,
+                                        const std::string &path, float volume,
+                                        float fadeOutSeconds,
+                                        float fadeInSeconds) {
+  if (!m_xaudio2 || label.empty()) {
+    return;
+  }
+
+  PlayOneShotFile(ctx, label, path, volume);
+  if (m_oneShotVoices.find(label) == m_oneShotVoices.end()) {
+    return; // 再生できなかった場合はBGMを下げない
+  }
+
+  m_bgmDuckLabel = label;
+  m_bgmDuckFadeOutSpeed = 1.0f / std::max(0.01f, fadeOutSeconds);
+  m_bgmDuckFadeInSpeed = 1.0f / std::max(0.01f, fadeInSeconds);
+}
+
+void AudioSystem::UpdateBgmDuck(float dt) {
+  const bool jinglePlaying =
+      !m_bgmDuckLabel.empty() &&
+      m_oneShotVoices.find(m_bgmDuckLabel) != m_oneShotVoices.end();
+
+  if (jinglePlaying) {
+    m_bgmDuckLevel = std::max(0.0f, m_bgmDuckLevel - m_bgmDuckFadeOutSpeed * dt);
+  } else {
+    m_bgmDuckLabel.clear();
+    if (m_bgmDuckLevel >= 1.0f) {
+      return;
+    }
+    m_bgmDuckLevel = std::min(1.0f, m_bgmDuckLevel + m_bgmDuckFadeInSpeed * dt);
+  }
+
+  if (m_bgmVoice) {
+    m_bgmVoice->SetVolume(m_bgmBaseVolume * m_bgmDuckLevel);
+  }
 }
 
 void AudioSystem::SetMasterVolume(float volume) {

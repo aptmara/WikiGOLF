@@ -114,6 +114,8 @@ void AudioSystem::Update(core::GameContext &ctx) {
     }
   }
 
+  UpdateBgmDuck(dt);
+
   // 着地音ボイスの更新
   if (m_landingVoice) {
     if (m_landingVoice->callback.isFinished) {

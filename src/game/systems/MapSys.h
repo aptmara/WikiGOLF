@@ -108,6 +108,7 @@ private:
 
   Microsoft::WRL::ComPtr<ID3D11Buffer> m_cb;
   Microsoft::WRL::ComPtr<ID3D11SamplerState> m_samp;
+  Microsoft::WRL::ComPtr<ID3D11BlendState> m_multiplyBlendState;
 
   // インスタンシング用の動的構造化バッファ（t15にバインド）
   Microsoft::WRL::ComPtr<ID3D11Buffer> m_instancedBuffer;
@@ -116,6 +117,9 @@ private:
 
   Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_saveRTV;
   Microsoft::WRL::ComPtr<ID3D11DepthStencilView> m_saveDSV;
+  Microsoft::WRL::ComPtr<ID3D11BlendState> m_saveBlendState;
+  float m_saveBlendFactor[4] = {};
+  UINT m_saveSampleMask = 0xFFFFFFFF;
   D3D11_VIEWPORT m_saveVP;
 
   /**

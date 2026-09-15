@@ -92,7 +92,6 @@ public:
   */
   bool ResetToFirstClub(core::GameContext &ctx);
   float GetRecommendedCameraDistance(float fieldScale) const;
-  float GetRecommendedCameraHeight(float fieldScale) const;
 
   /** @brief 全クラブ名リストを返す (WikiGolfHUD のクラブ選択リスト描画用)*/
   const std::vector<Club>& GetAllClubs() const { return m_availableClubs; }
@@ -129,6 +128,19 @@ public:
 
   /** @brief 喜び演出を終了し、次のコースで立ち位置を取り直す状態に戻す*/
   void EndCelebration();
+
+  /**
+   * @brief 喜びモーション(Celebrate)の残り再生秒数
+   * @return 喜びモーション再生中ならtrue（歩行中などはfalse）
+  */
+  bool GetCelebrateRemainingSeconds(float &outSeconds) const;
+
+  /**
+   * @brief 現在のポーズでのゴルファーの顔（Headボーン）のワールド座標
+   * @return 取得できればtrue
+  */
+  bool GetGolferFaceWorldPosition(core::GameContext &ctx,
+                                  DirectX::XMFLOAT3 &outPos) const;
 
 private:
   enum class ClubAnimPhase {

@@ -78,19 +78,15 @@ void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
  * クラブ切り替えはマップビュー中は行えないため、マップビューに入った
  * 瞬間に1回計算すれば十分。
 */
-void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
-  if (!m_minimapController) return;
-
+std::optional<DirectX::XMFLOAT3>
+WikiGolfScene::CalculateFullSwingLandingTarget(core::GameContext &ctx) const {
   if (!m_clubController || !ctx.world.IsAlive(m_ballEntity)) {
-    m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
-    return;
+    return std::nullopt;
   }
-
   const auto &club = m_clubController->GetCurrentClub();
   auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
   if (!ballT || club.baseCarryDistance <= 0.0f) {
-    m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
-    return;
+    return std::nullopt;
   }
 
   DirectX::XMFLOAT3 shotDir{0, 0, 1};
@@ -114,10 +110,23 @@ void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
       club.maxPower, club.launchAngle, shotDir, ballT->position,
       m_terrainSystem.get(), flatGroundUnused, ballParams, wind);
 
+  return result.landingPosition;
+}
+
+void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
+  if (!m_minimapController) return;
+
+  const auto landingTarget = CalculateFullSwingLandingTarget(ctx);
+  if (!landingTarget || !m_clubController) {
+    m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
+    return;
+  }
+
   // ばらつき範囲は基準飛距離の一定割合(ミート精度による左右・距離ブレの
   // ざっくりした目安)とする。
+  const auto &club = m_clubController->GetCurrentClub();
   const float dispersionRadius = club.baseCarryDistance * 0.06f;
-  m_minimapController->SetLandingPreview(ctx, result.landingPosition,
+  m_minimapController->SetLandingPreview(ctx, *landingTarget,
                                          dispersionRadius, true);
 }
 

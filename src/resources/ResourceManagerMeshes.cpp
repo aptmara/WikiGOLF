@@ -12,6 +12,7 @@
 #include "../graphics/ObjLoader.h"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <vector>
 
 namespace resources {
@@ -131,6 +132,30 @@ MeshHandle ResourceManager::LoadMesh(const std::string &path) {
   } else if (path == "builtin/grass_patch_ultra_3") {
     mesh = graphics::MeshPrimitives::CreateGrassPatch(m_device.GetDevice(), 3,
                                                        12, 3);
+    success = true;
+  } else if (path.rfind("builtin/grass_patch_lod_", 0) == 0 ||
+             path.rfind("builtin/grass_patch_medium_lod_", 0) == 0 ||
+             path.rfind("builtin/grass_patch_ultra_lod_", 0) == 0) {
+    // 中距離LOD。同じseed・グリッドの近距離パッチから葉を間引いた部分集合で、
+    // 間引いた分は葉幅で被覆を補う（中距離の葉は1ピクセル未満になるため）。
+    const uint32_t variant = static_cast<uint32_t>(
+        std::strtoul(path.substr(path.find_last_of('_') + 1).c_str(),
+                     nullptr, 10));
+    int gridSize = 9;
+    int bladesPerCell = 2;
+    float keepRatio = 0.4f;
+    if (path.rfind("builtin/grass_patch_medium_lod_", 0) == 0) {
+      gridSize = 8;
+      bladesPerCell = 1;
+      keepRatio = 0.5f;
+    } else if (path.rfind("builtin/grass_patch_ultra_lod_", 0) == 0) {
+      gridSize = 12;
+      bladesPerCell = 3;
+      keepRatio = 0.3f;
+    }
+    mesh = graphics::MeshPrimitives::CreateGrassPatch(
+        m_device.GetDevice(), variant, gridSize, bladesPerCell, keepRatio,
+        std::min(1.0f / keepRatio, 2.2f));
     success = true;
   } else if (path == "builtin/turf_patch_0") {
     mesh = graphics::MeshPrimitives::CreateTurfPatch(m_device.GetDevice(), 0);

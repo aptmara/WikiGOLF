@@ -106,8 +106,8 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   floorMr.customFlags.x = 30.0f; // UV Scale
 
   // タイトルの固定カメラから見える前景～中景へ、ULTRA用メッシュを
-  // 重ねて配置する。150m四方すべてを埋めず、見えない領域の頂点負荷は
-  // 増やさない。
+  // 重ねて配置する。描画時はバッチと各インスタンスが視錐台カリング
+  // されるため、画面端まで芝が続く範囲を確保する。
   auto grassShader = ctx.resource.LoadShader(
       "Grass", L"Assets/shaders/GrassVS.hlsl",
       L"Assets/shaders/GrassPS.hlsl");
@@ -125,6 +125,8 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     batch.mesh = grassMeshes[variant];
     batch.shader = grassShader;
     batch.maxDrawDistance = 70.0f;
+    // 芝パッチの葉は片面三角形のため、両面ラスタライザで描画する。
+    batch.twoSided = true;
   }
 
   auto sampleTerrainHeight = [&](float x, float z) {
@@ -157,10 +159,10 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
 
   constexpr float grassSpacing = 0.85f;
   constexpr float grassHorizontalScale = 1.42f;
-  constexpr float grassMinX = -23.0f;
-  constexpr float grassMaxX = 23.0f;
-  constexpr float grassMinZ = -10.0f;
-  constexpr float grassMaxZ = 31.0f;
+  constexpr float grassMinX = -45.0f;
+  constexpr float grassMaxX = 45.0f;
+  constexpr float grassMinZ = -12.0f;
+  constexpr float grassMaxZ = 58.0f;
   int grassRow = 0;
   for (float z = grassMinZ; z <= grassMaxZ;
        z += grassSpacing, ++grassRow) {
