@@ -8,6 +8,7 @@
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
 #include "../../graphics/TextStyle.h"
+#include "StartGoalIntroductionPanel.h"
 #include "WikiGolfHUD.h" // HUDなどへのアクセス用
 #include "../scenes/WikiPageLoader.h"
 #include <DirectXMath.h>
@@ -45,7 +46,13 @@ public:
     /** @brief 現在トランジション中かどうか*/
     bool IsActive() const { return m_isActive; }
 
-    /** @brief コース紹介カメラの再生中かどうか*/
+    /**
+     * @brief 次のトランジション完了時に、コース紹介の前へスタート/ゴール記事紹介を挟む
+     * @details ラウンド開始時の1回だけ呼ぶ想定。ゴール記事の概要取得を裏で開始する。
+    */
+    void RequestStartGoalIntroduction(const std::string& startPage, const std::string& goalPage);
+
+    /** @brief コース上での紹介演出（スタート/ゴール紹介・コース紹介カメラ）の再生中かどうか*/
     bool IsCourseIntroductionActive() const;
 
 private:
@@ -61,6 +68,12 @@ private:
     void UpdateCourseIntroduction(core::GameContext& ctx, float dt);
     void ApplyCourseIntroductionShot(core::GameContext& ctx);
     void FinishCourseIntroduction(core::GameContext& ctx);
+    void BeginStartGoalIntroduction(core::GameContext& ctx, const scenes::CourseIntroductionData& data);
+    void UpdateStartGoalIntroduction(core::GameContext& ctx, float dt);
+    /** @brief スキップボタンを紹介演出用の見た目にする*/
+    void ShowIntroductionSkipButton(core::GameContext& ctx);
+    /** @brief スキップボタンのホバー表示を更新し、クリックされたら true を返す*/
+    bool UpdateIntroductionSkipButton(core::GameContext& ctx);
     void ResetLoadState();
 
     bool m_isActive = false;
@@ -72,6 +85,7 @@ private:
         Loading,
         ErrorWait,
         Building,
+        StartGoalIntroduction,
         CourseIntroduction,
         FadeOut
     };
@@ -125,6 +139,7 @@ private:
         std::wstring body;
         std::wstring detail;
         float duration = 1.0f;
+        float cameraControlHeight = 0.0f;
     };
 
     std::vector<IntroductionShot> m_introductionShots;
@@ -132,6 +147,13 @@ private:
     float m_introductionShotTimer = 0.0f;
     DirectX::XMFLOAT3 m_introductionCameraStart{};
     DirectX::XMFLOAT3 m_introductionFocusStart{};
+
+    // ラウンド開始時のスタート/ゴール記事紹介
+    bool m_startGoalIntroductionRequested = false;
+    std::string m_startGoalStartPage;
+    std::string m_startGoalGoalPage;
+    std::future<std::string> m_goalExtractTask; ///< ゴール記事概要の非同期取得
+    StartGoalIntroductionPanel m_startGoalPanel;
 
     // エンティティ
     ecs::Entity m_globeEntity = UINT32_MAX;

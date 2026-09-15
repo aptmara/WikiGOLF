@@ -76,6 +76,14 @@ void WikiGolfScene::UpdateHudAndEffects(
     // HUD 更新
     if (m_hud) {
         PROFILE_SCOPE("WikiGolf.HUD");
+        game::controllers::TutorialPresentationPolicy tutorialPresentation;
+        if (m_isTutorial && m_tutorialOverlay) {
+            tutorialPresentation =
+                m_tutorialOverlay->GetPresentationPolicy();
+        }
+        m_hud->SetTutorialPresentation(
+            ctx, m_isTutorial, tutorialPresentation.courseInfo,
+            tutorialPresentation.club, tutorialPresentation.minimap);
         float currentPower = shot.powerGaugePos;
         if (shot.phase == game::components::ShotState::Phase::ImpactTiming || shot.confirmedPower > 0.0f) {
             currentPower = shot.confirmedPower;
@@ -156,7 +164,10 @@ void WikiGolfScene::UpdateHudAndEffects(
         m_hud->SetShotPhaseUIVisible(ctx, isShotPhase);
         if (m_minimapController) {
             const float opacity = m_hud->GetNormalHudOpacity();
-            m_minimapController->SetVisible(ctx, opacity > 0.001f);
+            const bool tutorialAllowsMinimap =
+                !m_isTutorial || tutorialPresentation.minimap;
+            m_minimapController->SetVisible(
+                ctx, opacity > 0.001f && tutorialAllowsMinimap);
             m_minimapController->SetHudOpacity(ctx, opacity);
         }
     }

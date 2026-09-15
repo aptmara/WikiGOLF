@@ -266,6 +266,9 @@ void SkyboxRenderSystem(core::GameContext &ctx) {
     return;
   }
 
+  // TAA有効時はRenderSystemと同じサブピクセルジッターを加える
+  ctx.graphics.ApplyProjectionJitter(proj);
+
   // 転置（HLSLは列優先）
   view = XMMatrixTranspose(view);
   proj = XMMatrixTranspose(proj);

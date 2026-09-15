@@ -130,9 +130,9 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     links.push_back({"ゴール", "ゴール"});
     globalData->cachedLinks = links;
     globalData->cachedExtract =
-        "チュートリアルへようこそ。フェアウェイ、ラフ、バンカー、"
-        "グリーン、ウォーターハザードの違いを確認しながら、"
-        "最後はゴールへカップインしましょう。";
+        "WikiGOLFのチュートリアルへようこそ！フェアウェイ、ラフ、バンカー、"
+        "グリーン、ハザードなどの地形特性や操作方法を学びながら、"
+        "最終ゴールのカップインを目指しましょう。";
     globalData->hasCachedData = true;
   }
 
@@ -516,6 +516,11 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
         if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
       }
       m_slopeVisualization.ForceHide(ctx);
+      if (!m_isTutorial) {
+        // ラウンド開始時だけ、コース紹介の前にスタート/ゴール記事を紹介する
+        m_transitionController->RequestStartGoalIntroduction(startPage,
+                                                             targetPage);
+      }
       m_transitionController->StartTransition(ctx, startPage, m_pageLoader.get(), m_ballEntity, m_cameraEntity, m_skyboxEntity, m_minimapController.get());
   }
   LOG_DEBUG("WikiGolf", "After LoadPage: Cam Alive={}",

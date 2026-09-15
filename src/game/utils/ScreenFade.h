@@ -5,14 +5,19 @@
 */
 
 #include "../../core/GameContext.h"
-#include "../../ecs/Entity.h"
+#include "../../resources/ResourceManager.h"
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include <wrl/client.h>
 
 namespace game::utils {
 
-enum class FadeType { Fade, CircleWipe, HexagonWipe };
+/**
+ * @brief フェード種別
+ * @details IrisClose: 外側から中心へ円が閉じていく。SetIrisHoldRadiusで
+ *          途中の小さな円で一瞬溜めてから閉じる。
+ */
+enum class FadeType { Fade, CircleWipe, HexagonWipe, IrisClose };
 
 /** @brief 画面フェード制御クラス*/
 class ScreenFade {
@@ -61,11 +66,15 @@ public:
   /** @brief ワイプの中心を設定 (0.0~1.0)*/
   void SetCenter(float u, float v);
 
+  /** @brief IrisCloseで溜める円の半径（画面高さ=1基準。0で溜めなし）*/
+  void SetIrisHoldRadius(float radius) { m_irisHoldRadius = radius; }
+
   bool IsFading() const { return m_isFading; }
   bool IsFadeOutComplete() const { return m_progress >= 1.0f && !m_fadeIn; }
 
 private:
-  ecs::Entity m_fadeEntity = UINT32_MAX;
+  resources::MeshHandle m_mesh;
+  resources::ShaderHandle m_shader;
 
   bool m_isFading = false;
   bool m_fadeIn = true;    // フェードイン状態のフラグ
@@ -76,6 +85,7 @@ private:
   FadeType m_currentType = FadeType::Fade;
   DirectX::XMFLOAT3 m_color = {0, 0, 0};
   DirectX::XMFLOAT2 m_center = {0.5f, 0.5f};
+  float m_irisHoldRadius = 0.0f;
 
   Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbFade;
   Microsoft::WRL::ComPtr<ID3D11BlendState> m_blendState;
@@ -84,8 +94,9 @@ private:
   // 定数バッファ用構造体
   struct FadeCB {
     DirectX::XMFLOAT4 Color;
-    DirectX::XMFLOAT4 Params1; // フェードパラメータ1
-    DirectX::XMFLOAT4 Params2; // フェードパラメータ2
+    DirectX::XMFLOAT4 Params1; // progress, type, aspect, smoothness
+    DirectX::XMFLOAT4 Params2; // center.xy, irisHoldRadius, -
+    DirectX::XMFLOAT4 Params3; // viewportSize.xy, -, -
   };
 
 

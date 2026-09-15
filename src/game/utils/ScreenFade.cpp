@@ -27,24 +27,12 @@ void ScreenFade::Initialize(core::GameContext &ctx) {
   static_assert((sizeof(FadeCB) % 16) == 0,
                 "FadeCB must be 16-byte aligned for constant buffers");
 
-  // フェード用のエンティティを作成します。
-  m_fadeEntity = ctx.world.CreateEntity();
-
-  // トランスフォームの設定を行います。
-  auto &t = ctx.world.Add<Transform>(m_fadeEntity);
-  t.position = {0, 0, 0};
-
-  // メッシュのロードを行います。
-  auto &mr = ctx.world.Add<MeshRenderer>(m_fadeEntity);
-  mr.mesh = ctx.resource.LoadMesh("builtin/quad");
-
-  // カスタムシェーダーのロードを行います。
-  mr.shader = ctx.resource.LoadShader("TransitionFade",
-                                      L"Assets/shaders/FullscreenVS.hlsl",
-                                      L"Assets/shaders/TransitionPS.hlsl");
-
-  // 手動描画するため描画システムでの描画は無効化します。
-  mr.isVisible = false;
+  // ECSエンティティにすると、シーン側の残存エンティティ掃除などで破棄されて
+  // 描画されなくなるため、メッシュ/シェーダーのハンドルを直接保持して手動描画する。
+  m_mesh = ctx.resource.LoadMesh("builtin/quad");
+  m_shader = ctx.resource.LoadShader("TransitionFade",
+                                     L"Assets/shaders/FullscreenVS.hlsl",
+                                     L"Assets/shaders/TransitionPS.hlsl");
 
   // 定数バッファを生成します。
   D3D11_BUFFER_DESC desc = {};
@@ -98,10 +86,9 @@ void ScreenFade::Initialize(core::GameContext &ctx) {
  * @brief フェード用の終了�（琁（��行います、（
 */
 void ScreenFade::Shutdown(core::GameContext &ctx) {
-  if (m_fadeEntity != UINT32_MAX && ctx.world.IsAlive(m_fadeEntity)) {
-    ctx.world.DestroyEntity(m_fadeEntity);
-    m_fadeEntity = UINT32_MAX;
-  }
+  (void)ctx;
+  m_mesh = {};
+  m_shader = {};
   m_cbFade.Reset();
   m_blendState.Reset();
   m_depthState.Reset();
@@ -172,13 +159,6 @@ void ScreenFade::Render(core::GameContext &ctx) {
     return;
   }
 
-  if (!ctx.world.IsAlive(m_fadeEntity))
-    return;
-
-  auto *mr = ctx.world.Get<MeshRenderer>(m_fadeEntity);
-  if (!mr)
-    return;
-
   auto device = ctx.graphics.GetDevice();
   auto context = ctx.graphics.GetContext();
 
@@ -201,7 +181,8 @@ void ScreenFade::Render(core::GameContext &ctx) {
 
       cb->Params1 = {m_progress, static_cast<float>(m_currentType), aspect,
                      0.1f};
-      cb->Params2 = {m_center.x, m_center.y, 0.0f, 0.0f};
+      cb->Params2 = {m_center.x, m_center.y, m_irisHoldRadius, 0.0f};
+      cb->Params3 = {vp.Width, vp.Height, 0.0f, 0.0f};
 
       context->Unmap(m_cbFade.Get(), 0);
     }
@@ -211,8 +192,8 @@ void ScreenFade::Render(core::GameContext &ctx) {
   }
 
   // 全画面描画のための頂点・ピクセルシェーダーおよびメッシュを取得します。
-  const auto *shader = ctx.resource.GetShader(mr->shader);
-  const auto *mesh = ctx.resource.GetMesh(mr->mesh);
+  const auto *shader = ctx.resource.GetShader(m_shader);
+  const auto *mesh = ctx.resource.GetMesh(m_mesh);
 
   if (!shader || !shader->IsValid())
     return;
