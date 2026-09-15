@@ -33,9 +33,12 @@ bool GraphicsDevice::Initialize(HWND hWnd, uint32_t width, uint32_t height,
     return false;
   if (!InitializePostProcessResources())
     return false;
+  // DLSSの可否で描画解像度が変わるため、シーンターゲットより先に調べる
+  m_dlss.Initialize(m_device.Get());
   if (!CreateSceneRenderTargets())
     return false;
   SetupSceneViewport();
+  InitializeGpuFrameTimer();
 
 #ifdef WIKIGOLF_PROFILING
   m_gpuProfilerAvailable = InitializeGpuProfilerQueries();
@@ -59,9 +62,19 @@ void GraphicsDevice::Shutdown() {
   if (m_context) {
     m_context->ClearState();
   }
+  // NGXはデバイスを参照するため、デバイス解放より前に終了する
+  m_dlss.Shutdown();
   m_currentGpuQueryFrame = nullptr;
   m_gpuScopeStack.clear();
   m_readyGpuSamples.clear();
+  m_currentGpuFrameTimer = nullptr;
+  m_gpuFrameTimerAvailable = false;
+  for (auto &timer : m_gpuFrameTimers) {
+    timer.disjoint.Reset();
+    timer.frameStart.Reset();
+    timer.frameEnd.Reset();
+    timer.issued = false;
+  }
   for (auto &frame : m_gpuQueryFrames) {
     frame.scopes.clear();
     frame.frameEnd.Reset();
@@ -85,6 +98,10 @@ void GraphicsDevice::Shutdown() {
   m_postProcessTex.Reset();
   m_postProcessRTV.Reset();
   m_postProcessSRV.Reset();
+  ReleaseTemporalTargets();
+  m_taaConstantBuffer.Reset();
+  m_velocityResolveConstantBuffer.Reset();
+  m_pointSampler.Reset();
   m_fullscreenVB.Reset();
   m_linearSampler.Reset();
   m_fxaaConstantBuffer.Reset();
@@ -106,6 +123,16 @@ void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
 #endif
   m_gpuScopeStack.clear();
   m_currentGpuQueryFrame = nullptr;
+
+  m_currentGpuFrameTimer = nullptr;
+  if (m_gpuFrameTimerAvailable) {
+    auto &timer = m_gpuFrameTimers[m_gpuFrameTimerWriteIndex];
+    if (!timer.issued) {
+      m_context->Begin(timer.disjoint.Get());
+      m_context->End(timer.frameStart.Get());
+      m_currentGpuFrameTimer = &timer;
+    }
+  }
 
 #ifdef WIKIGOLF_PROFILING
   if (m_gpuProfilerAvailable) {
@@ -139,6 +166,8 @@ void GraphicsDevice::BeginFrame(uint64_t profileFrameIndex, float r, float g,
                                    1.0f, 0);
   m_context->OMSetRenderTargets(1, &sceneRTV, m_depthStencilView.Get());
   SetupSceneViewport();
+
+  BeginTemporalFrame();
 }
 
 void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView *srv,
@@ -193,18 +222,29 @@ void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView 
     if (SUCCEEDED(m_context->Map(m_upscaleConstantBuffer.Get(), 0,
                                  D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
       float *data = static_cast<float *>(mapped.pData);
+      // テンポラル方式では入力が既に出力解像度になっている
+      const uint32_t sourceWidth = IsTemporalActive() ? m_width : m_renderWidth;
+      const uint32_t sourceHeight = IsTemporalActive() ? m_height : m_renderHeight;
       data[0] = 0.0f;
       data[1] = 0.0f;
-      if (m_renderWidth > 0) {
-        data[0] = 1.0f / static_cast<float>(m_renderWidth);
+      if (sourceWidth > 0) {
+        data[0] = 1.0f / static_cast<float>(sourceWidth);
       }
-      if (m_renderHeight > 0) {
-        data[1] = 1.0f / static_cast<float>(m_renderHeight);
+      if (sourceHeight > 0) {
+        data[1] = 1.0f / static_cast<float>(sourceHeight);
       }
       // Render Scaleで縮小しているほどアップスケールのぼやけが目立つため、
       // 縮小率に応じてシャープ量を自動調整する（CAS的な軽量アンシャープマスク）。
       const float downscale = 1.0f - m_quality.renderScale;
-      data[2] = std::clamp(downscale * 1.5f, 0.0f, 0.6f);
+      float sharpen = std::clamp(downscale * 1.5f, 0.0f, 0.6f);
+      if (IsTaaActive()) {
+        // TAA/TAAUは履歴の再サンプリングでわずかに甘くなるため、控えめに締める
+        sharpen = std::clamp(downscale, 0.2f, 0.45f);
+      } else if (IsDlssActive()) {
+        // DLSSは自前で復元するため追加のシャープは掛けない
+        sharpen = 0.0f;
+      }
+      data[2] = sharpen;
       data[3] = 0.0f;
       m_context->Unmap(m_upscaleConstantBuffer.Get(), 0);
     }
@@ -222,7 +262,8 @@ void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView 
 }
 
 void GraphicsDevice::RunPostProcessPass(ID3D11ShaderResourceView *colorSRV,
-                                        ID3D11RenderTargetView *dstRTV) {
+                                        ID3D11RenderTargetView *dstRTV,
+                                        uint32_t dstWidth, uint32_t dstHeight) {
   if (!m_postProcessShader.IsValid() || !colorSRV || !dstRTV) {
     return;
   }
@@ -230,8 +271,8 @@ void GraphicsDevice::RunPostProcessPass(ID3D11ShaderResourceView *colorSRV,
   D3D11_VIEWPORT vp = {};
   vp.TopLeftX = 0.0f;
   vp.TopLeftY = 0.0f;
-  vp.Width = static_cast<float>(m_renderWidth);
-  vp.Height = static_cast<float>(m_renderHeight);
+  vp.Width = static_cast<float>(dstWidth);
+  vp.Height = static_cast<float>(dstHeight);
   vp.MinDepth = 0.0f;
   vp.MaxDepth = 1.0f;
   m_context->RSSetViewports(1, &vp);
@@ -281,12 +322,31 @@ void GraphicsDevice::ResolveSceneToBackbuffer() {
   }
 
   ID3D11ShaderResourceView *sourceSRV = m_sceneColorSRVResolved.Get();
+  uint32_t sourceWidth = m_renderWidth;
+  uint32_t sourceHeight = m_renderHeight;
+
+  if (IsTemporalActive()) {
+    // TAA/DLSSは霧・色調補正より前の生のシーンカラーへ適用し、
+    // ここで出力解像度へ復元する（以降のポストプロセスは出力解像度で行う）。
+    RunVelocityResolvePass();
+    ID3D11ShaderResourceView *temporalSRV = nullptr;
+    if (IsDlssActive()) {
+      temporalSRV = RunDlssPass();
+    } else {
+      temporalSRV = RunTaaPass();
+    }
+    if (temporalSRV) {
+      sourceSRV = temporalSRV;
+      sourceWidth = m_width;
+      sourceHeight = m_height;
+    }
+  }
 
   // 霧/色調補正/ビネット/ブルームは常時適用する
-  RunPostProcessPass(sourceSRV, m_postProcessRTV.Get());
+  RunPostProcessPass(sourceSRV, m_postProcessRTV.Get(), sourceWidth, sourceHeight);
   sourceSRV = m_postProcessSRV.Get();
 
-  if (m_quality.fxaaEnabled && m_fxaaRTV && m_fxaaSRV) {
+  if (!IsTemporalActive() && m_quality.fxaaEnabled && m_fxaaRTV && m_fxaaSRV) {
     RunFullscreenPass(m_fxaaShader, sourceSRV, m_fxaaRTV.Get(), m_renderWidth,
                       m_renderHeight, FullscreenConstants::Fxaa);
     sourceSRV = m_fxaaSRV.Get();
@@ -304,7 +364,6 @@ void GraphicsDevice::ResolveSceneToBackbuffer() {
   m_context->OMSetDepthStencilState(nullptr, 0);
   SetupBackbufferViewport();
 }
-
 void GraphicsDevice::EndFrame() {
 #ifdef WIKIGOLF_PROFILING
   if (m_currentGpuQueryFrame) {
@@ -322,14 +381,75 @@ void GraphicsDevice::EndFrame() {
   }
 #endif
 
+  if (m_currentGpuFrameTimer) {
+    m_context->End(m_currentGpuFrameTimer->frameEnd.Get());
+    m_context->End(m_currentGpuFrameTimer->disjoint.Get());
+    m_currentGpuFrameTimer->issued = true;
+    m_gpuFrameTimerWriteIndex =
+        (m_gpuFrameTimerWriteIndex + 1) % kGpuFrameTimerCount;
+    m_currentGpuFrameTimer = nullptr;
+  }
+
   UINT syncInterval = 0;
   if (m_vsyncEnabled) {
     syncInterval = 1;
   }
   m_swapChain->Present(syncInterval, 0);
+  ResolveGpuFrameTimer();
 #ifdef WIKIGOLF_PROFILING
   ResolveGpuProfilerQueries();
 #endif
+}
+
+void GraphicsDevice::InitializeGpuFrameTimer() {
+  m_gpuFrameTimerAvailable = false;
+  if (!m_device) {
+    return;
+  }
+  D3D11_QUERY_DESC disjointDesc{D3D11_QUERY_TIMESTAMP_DISJOINT, 0};
+  D3D11_QUERY_DESC timestampDesc{D3D11_QUERY_TIMESTAMP, 0};
+  for (auto &timer : m_gpuFrameTimers) {
+    if (FAILED(m_device->CreateQuery(&disjointDesc, &timer.disjoint)) ||
+        FAILED(m_device->CreateQuery(&timestampDesc, &timer.frameStart)) ||
+        FAILED(m_device->CreateQuery(&timestampDesc, &timer.frameEnd))) {
+      return;
+    }
+    timer.issued = false;
+  }
+  m_gpuFrameTimerAvailable = true;
+}
+
+void GraphicsDevice::ResolveGpuFrameTimer() {
+  if (!m_gpuFrameTimerAvailable) {
+    return;
+  }
+  for (auto &timer : m_gpuFrameTimers) {
+    if (!timer.issued) {
+      continue;
+    }
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT disjoint{};
+    if (m_context->GetData(timer.disjoint.Get(), &disjoint, sizeof(disjoint),
+                           D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK) {
+      continue;
+    }
+    UINT64 start = 0;
+    UINT64 end = 0;
+    const bool startReady =
+        m_context->GetData(timer.frameStart.Get(), &start, sizeof(start),
+                           D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK;
+    const bool endReady =
+        m_context->GetData(timer.frameEnd.Get(), &end, sizeof(end),
+                           D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK;
+    if (!startReady || !endReady) {
+      continue;
+    }
+    timer.issued = false;
+    if (!disjoint.Disjoint && disjoint.Frequency > 0 && end >= start) {
+      m_latestGpuFrameMs = static_cast<float>(
+          static_cast<double>(end - start) * 1000.0 /
+          static_cast<double>(disjoint.Frequency));
+    }
+  }
 }
 
 void GraphicsDevice::BeginGpuScope(std::string_view name) {
@@ -418,6 +538,8 @@ void GraphicsDevice::ApplyQualitySettings(const QualitySettings &settings) {
   }
   m_quality.msaaSamples = samples;
   m_quality.fxaaEnabled = settings.fxaaEnabled;
+  m_quality.taaEnabled = settings.taaEnabled;
+  m_quality.dlssEnabled = settings.dlssEnabled;
 
   if (!CreateSceneRenderTargets()) {
     LOG_ERROR("GraphicsDevice",
@@ -428,9 +550,12 @@ void GraphicsDevice::ApplyQualitySettings(const QualitySettings &settings) {
   SetupRenderState();
 
   LOG_INFO("GraphicsDevice",
-           "Quality settings applied: renderScale={:.2f} ({}x{}) MSAA={}x FXAA={}",
-           m_quality.renderScale, m_renderWidth, m_renderHeight,
-           m_quality.msaaSamples, m_quality.fxaaEnabled);
+           "Quality settings applied: renderScale={:.2f} ({}x{} -> {}x{}) MSAA={}x "
+           "FXAA={} TAA={} DLSS={} (activeTAA={} activeDLSS={})",
+           m_quality.renderScale, m_renderWidth, m_renderHeight, m_width,
+           m_height, m_quality.msaaSamples, m_quality.fxaaEnabled,
+           m_quality.taaEnabled, m_quality.dlssEnabled, IsTaaActive(),
+           IsDlssActive());
 }
 
 bool GraphicsDevice::SetFullscreenExclusive(bool enable, uint32_t width,

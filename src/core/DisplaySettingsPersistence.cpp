@@ -194,12 +194,23 @@ void DisplaySettings::LoadFromFile(const std::string &path) {
       m_data.msaaSamples = std::max(1, std::atoi(value.c_str()));
     } else if (key == "TAA") {
       m_data.taaEnabled = display_settings_detail::ParseBool(value, false);
+    } else if (key == "DLSS") {
+      m_data.dlssEnabled = display_settings_detail::ParseBool(value, false);
     } else if (key == "ShowFps") {
       m_data.showFps = display_settings_detail::ParseBool(value, false);
     } else if (key == "GPU") {
       m_data.gpuAdapterName = value;
     }
   }
+
+  // 旧バージョンではFXAA/MSAA/TAAを個別に保存していたため、1方式へ正規化する
+  const AntiAliasingFlags antiAliasing = GetAntiAliasingFlags(
+      ResolveAntiAliasingMode(m_data.fxaaEnabled, m_data.msaaSamples,
+                              m_data.taaEnabled, m_data.dlssEnabled));
+  m_data.fxaaEnabled = antiAliasing.fxaaEnabled;
+  m_data.msaaSamples = antiAliasing.msaaSamples;
+  m_data.taaEnabled = antiAliasing.taaEnabled;
+  m_data.dlssEnabled = antiAliasing.dlssEnabled;
 
   const int screenWidth = GetSystemMetrics(SM_CXSCREEN);
   const int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -221,11 +232,11 @@ void DisplaySettings::LoadFromFile(const std::string &path) {
 
   LOG_INFO("DisplaySettings",
            "設定を読み込みました: mode={} {}x{} scale={:.2f} vsync={} fps={} "
-           "fxaa={} msaa={}x taa={}",
+           "fxaa={} msaa={}x taa={} dlss={}",
            display_settings_detail::WindowModeToString(m_data.mode),
            m_data.windowedWidth, m_data.windowedHeight, m_data.renderScale,
            m_data.vsync, m_data.fpsLimit, m_data.fxaaEnabled,
-           m_data.msaaSamples, m_data.taaEnabled);
+           m_data.msaaSamples, m_data.taaEnabled, m_data.dlssEnabled);
 }
 
 void DisplaySettings::SaveToFile(const std::string &path) const {
@@ -249,6 +260,8 @@ void DisplaySettings::SaveToFile(const std::string &path) const {
        << "\n";
   file << "MSAA=" << m_data.msaaSamples << "\n";
   file << "TAA=" << display_settings_detail::BoolToInt(m_data.taaEnabled)
+       << "\n";
+  file << "DLSS=" << display_settings_detail::BoolToInt(m_data.dlssEnabled)
        << "\n";
   file << "ShowFps=" << display_settings_detail::BoolToInt(m_data.showFps)
        << "\n";

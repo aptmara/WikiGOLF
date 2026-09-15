@@ -19,6 +19,7 @@ struct InstanceData {
     matrix World; /**< ワールド行列 */
     float4 Color; /**< トレイルカラー */
     float4 Flags; /**< フラグ情報 */
+    matrix PrevWorld; /**< 前フレームのワールド行列（BasicVSと共通のレイアウト。未使用） */
 };
 
 /** @brief トレイルインスタンスバッファ */

@@ -48,6 +48,8 @@ tools/
 .gemini/
 .claude/
 libs/assimp-6.0.2/static/
+# NVIDIA DLSS SDK は各自 https://github.com/NVIDIA/DLSS から配置する（大容量・独自ライセンス）
+libs/DLSS/
 
 # File extensions to ignore
 *.txt

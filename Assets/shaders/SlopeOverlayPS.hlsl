@@ -31,7 +31,7 @@ struct PS_INPUT {
  * @param input ピクセル入力情報
  * @return 合成済みピクセルカラー（半透明）
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+float4 ShadeMain(PS_INPUT input) {
     float slope = saturate(input.color.a);
     float time = LightDir.w;
     float fade = saturate(MaterialFlags.z);
@@ -67,4 +67,17 @@ float4 main(PS_INPUT input) : SV_TARGET {
     alpha *= circleFade;
 
     return float4(input.color.rgb, alpha);
+}
+
+#include "TemporalVelocity.hlsli"
+
+/**
+ * @brief ピクセルシェーダーメインエントリ（カラー + 速度）
+ * @details 静止物のため速度は「カメラ移動のみ」とし、解決パスで深度から補完する。
+ */
+SceneOutput main(PS_INPUT input) {
+    SceneOutput output;
+    output.color = ShadeMain(input);
+    output.velocity = kCameraOnlyVelocity;
+    return output;
 }

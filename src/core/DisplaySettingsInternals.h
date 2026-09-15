@@ -25,7 +25,6 @@ inline constexpr std::pair<int, int> kResolutionPresets[] = {
 };
 
 inline constexpr int kFpsLimitPresets[] = {0, 30, 60, 120, 144};
-inline constexpr int kMsaaPresets[] = {1, 2, 4, 8};
 inline constexpr float kRenderScalePresets[] = {0.5f, 0.6f, 0.7f,
                                                  0.8f, 0.9f, 1.0f};
 

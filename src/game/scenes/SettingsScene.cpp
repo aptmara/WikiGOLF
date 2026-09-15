@@ -20,19 +20,31 @@ namespace game::scenes {
 namespace {
 constexpr int kOverlayLayer = 900;
 constexpr float kPanelX = 240.0f;
-constexpr float kPanelY = 10.0f;
+constexpr float kPanelY = 20.0f;
 constexpr float kPanelWidth = 800.0f;
-constexpr float kPanelHeight = 700.0f;
+constexpr float kPanelHeight = 680.0f;
 
 constexpr float kSectionX = kPanelX + 40.0f;
 constexpr float kSectionWidth = kPanelWidth - 80.0f;
 constexpr float kLabelWidth = 220.0f;
 constexpr float kArrowWidth = 44.0f;
 constexpr float kValueWidth = kSectionWidth - kLabelWidth - kArrowWidth * 2.0f;
-constexpr float kRowHeight = 38.0f;
-constexpr float kRowStep = 45.0f;
-constexpr float kFirstRowY = kPanelY + 70.0f;
-constexpr float kCloseY = kFirstRowY + 11.0f * kRowStep + 28.0f;
+constexpr float kRowHeight = 36.0f;
+constexpr float kRowStep = 43.0f;
+constexpr float kSectionHeaderHeight = 30.0f;
+constexpr float kSectionHeaderGap = 6.0f;  ///< 見出しと最初の行の間
+constexpr float kSectionSpacing = 12.0f;   ///< 前セクション末尾と次の見出しの間
+constexpr float kContentTopY = kPanelY + 74.0f;
+constexpr float kHintHeight = 22.0f;
+constexpr float kCloseHeight = 48.0f;
+
+/** @brief 「画面」セクションの見出しY */
+constexpr float kDisplayHeaderY = kContentTopY;
+/** @brief 「画質」セクションの見出しY（画面セクションの行数から決まる） */
+constexpr float QualityHeaderY(size_t displayRowCount) {
+  return kDisplayHeaderY + kSectionHeaderHeight + kSectionHeaderGap +
+         static_cast<float>(displayRowCount) * kRowStep + kSectionSpacing;
+}
 
 const DirectX::XMFLOAT4 kNormalColor = {0.12f, 0.19f, 0.30f, 1.0f};
 const DirectX::XMFLOAT4 kHoverColor = {0.75f, 0.58f, 0.18f, 1.0f};
@@ -60,12 +72,64 @@ std::wstring FormatPercent(float ratio) {
 
 std::wstring FormatOnOff(bool value) { return value ? L"ON" : L"OFF"; }
 
+/** @brief DLSS選択中の「描画解像度」表示（倍率ではなく画質モード名で出す） */
+std::wstring FormatDlssQuality(float renderScale) {
+  switch (core::DlssQualityFromRenderScale(renderScale)) {
+  case core::DlssQuality::Performance:
+    return L"DLSS パフォーマンス";
+  case core::DlssQuality::Balanced:
+    return L"DLSS バランス";
+  case core::DlssQuality::Dlaa:
+    return L"DLAA（100%）";
+  case core::DlssQuality::Quality:
+  default:
+    return L"DLSS 品質";
+  }
+}
+
 std::wstring FormatFpsLimit(int fps) {
   return fps <= 0 ? L"無制限" : std::to_wstring(fps);
 }
 
-std::wstring FormatMsaa(int samples) {
-  return samples <= 1 ? L"OFF" : (std::to_wstring(samples) + L"x");
+std::wstring FormatAntiAliasing(core::AntiAliasingMode mode) {
+  switch (mode) {
+  case core::AntiAliasingMode::Fxaa:
+    return L"FXAA";
+  case core::AntiAliasingMode::Taa:
+    return L"TAA";
+  case core::AntiAliasingMode::Dlss:
+    return L"DLSS";
+  case core::AntiAliasingMode::Msaa2:
+    return L"MSAA 2x";
+  case core::AntiAliasingMode::Msaa4:
+    return L"MSAA 4x";
+  case core::AntiAliasingMode::Msaa8:
+    return L"MSAA 8x";
+  case core::AntiAliasingMode::Off:
+  default:
+    return L"OFF";
+  }
+}
+
+const wchar_t *DescribeAntiAliasing(core::AntiAliasingMode mode,
+                                    bool dlssAvailable) {
+  switch (mode) {
+  case core::AntiAliasingMode::Fxaa:
+    return L"FXAA：軽量。輪郭のギザギザを画面処理でなめらかにします";
+  case core::AntiAliasingMode::Taa:
+    return L"TAA：複数フレームを合成し、ちらつきを抑えます（描画解像度<100%で高画質化）";
+  case core::AntiAliasingMode::Dlss:
+    return dlssAvailable
+               ? L"DLSS：AIで低解像度から高画質に復元します（NVIDIA RTX）"
+               : L"DLSS：このPCでは使えないため、TAAで代替しています";
+  case core::AntiAliasingMode::Msaa2:
+  case core::AntiAliasingMode::Msaa4:
+  case core::AntiAliasingMode::Msaa8:
+    return L"※MSAA選択中はTAA/DLSSと距離フォグが無効になります（輪郭は高品質・重め）";
+  case core::AntiAliasingMode::Off:
+  default:
+    return L"アンチエイリアスなし（最も軽量）";
+  }
 }
 
 const wchar_t *FormatGraphicsPresetName(core::GraphicsPreset preset) {
@@ -136,6 +200,25 @@ ecs::Entity SettingsScene::CreateArrowButton(core::GameContext &ctx,
   button.disabledColor = {0.10f, 0.10f, 0.12f, 0.5f};
   button.visible = true;
   return entity;
+}
+
+void SettingsScene::CreateSectionHeader(core::GameContext &ctx,
+                                        const std::wstring &label, float y) {
+  auto entity = CreateEntity(ctx.world);
+  auto &header = ctx.world.Add<components::UIText>(entity);
+  // 先頭の空白は背景帯の左端から文字を少し離すため
+  header.text = L"  " + label;
+  header.x = kSectionX;
+  header.y = y;
+  header.width = kSectionWidth;
+  header.height = kSectionHeaderHeight;
+  header.style.fontSize = 18.0f;
+  header.style.valign = graphics::TextVAlign::Middle;
+  header.style.color = {1.0f, 0.86f, 0.5f, 1.0f};
+  header.style.bgColor = {0.07f, 0.13f, 0.23f, 1.0f};
+  header.style.cornerRadius = 6.0f;
+  header.visible = true;
+  header.layer = kOverlayLayer + 2;
 }
 
 void SettingsScene::CreateSettingRow(core::GameContext &ctx, size_t rowIndex,
@@ -214,39 +297,54 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
   title.visible = true;
   title.layer = kOverlayLayer + 2;
 
-  const struct { RowId id; const wchar_t *label; } kRows[] = {
-      {RowId::WindowMode, L"ウィンドウモード"},
-      {RowId::Resolution, L"解像度"},
-      {RowId::GraphicsPreset, L"画質テンプレート"},
-      {RowId::RenderScale, L"描画解像度"},
-      {RowId::VSync, L"VSync"},
-      {RowId::FpsLimit, L"FPS上限"},
-      {RowId::Fxaa, L"FXAA"},
-      {RowId::Msaa, L"MSAA"},
-      {RowId::Taa, L"TAA"},
-      {RowId::ShowFps, L"FPS表示"},
-      {RowId::Gpu, L"利用GPU"},
+  // RowIdの並び順どおりに表示する（kFirstQualityRowでセクションを分ける）
+  const wchar_t *const kRowLabels[kRowCount] = {
+      L"ウィンドウモード", L"解像度",     L"VSync",
+      L"FPS上限",         L"FPS表示",    L"画質テンプレート",
+      L"描画解像度",       L"アンチエイリアス", L"利用GPU",
   };
-  for (const auto &row : kRows) {
-    const size_t index = static_cast<size_t>(row.id);
-    CreateSettingRow(ctx, index, row.label, kFirstRowY + index * kRowStep);
+
+  const float qualityHeaderY = QualityHeaderY(kFirstQualityRow);
+  CreateSectionHeader(ctx, L"画面", kDisplayHeaderY);
+  CreateSectionHeader(ctx, L"画質", qualityHeaderY);
+
+  const float displayRowsY =
+      kDisplayHeaderY + kSectionHeaderHeight + kSectionHeaderGap;
+  const float qualityRowsY =
+      qualityHeaderY + kSectionHeaderHeight + kSectionHeaderGap;
+  for (size_t index = 0; index < kRowCount; ++index) {
+    float y = displayRowsY + static_cast<float>(index) * kRowStep;
+    if (index >= kFirstQualityRow) {
+      y = qualityRowsY + static_cast<float>(index - kFirstQualityRow) * kRowStep;
+    }
+    CreateSettingRow(ctx, index, kRowLabels[index], y);
   }
 
-  auto gpuHintEntity = CreateEntity(ctx.world);
-  auto &gpuHint = ctx.world.Add<components::UIText>(gpuHintEntity);
-  gpuHint.text = L"※GPU設定の変更は次回起動時に反映されます";
-  gpuHint.x = kSectionX;
-  gpuHint.y = kFirstRowY + static_cast<float>(kRowCount) * kRowStep - 4.0f;
-  gpuHint.width = kSectionWidth;
-  gpuHint.height = 22.0f;
-  gpuHint.style.fontSize = 13.0f;
-  gpuHint.style.align = graphics::TextAlign::Center;
-  gpuHint.style.color = {0.6f, 0.66f, 0.74f, 1.0f};
-  gpuHint.visible = true;
-  gpuHint.layer = kOverlayLayer + 2;
+  auto createHint = [&](const std::wstring &text, float y) {
+    auto entity = CreateEntity(ctx.world);
+    auto &hint = ctx.world.Add<components::UIText>(entity);
+    hint.text = text;
+    hint.x = kSectionX;
+    hint.y = y;
+    hint.width = kSectionWidth;
+    hint.height = kHintHeight;
+    hint.style.fontSize = 13.0f;
+    hint.style.align = graphics::TextAlign::Center;
+    hint.style.valign = graphics::TextVAlign::Middle;
+    hint.style.color = {0.6f, 0.66f, 0.74f, 1.0f};
+    hint.visible = true;
+    hint.layer = kOverlayLayer + 2;
+    return entity;
+  };
 
-  m_closeButton = CreateArrowButton(ctx, L"閉じる", "close", kSectionX, kCloseY,
-                                    kSectionWidth, 48.0f);
+  const float hintsY = qualityRowsY +
+                       static_cast<float>(kRowCount - kFirstQualityRow) * kRowStep;
+  m_antiAliasingHint = createHint(L"", hintsY);
+  createHint(L"※GPU設定の変更は次回起動時に反映されます", hintsY + kHintHeight);
+
+  const float closeY = hintsY + kHintHeight * 2.0f + 12.0f;
+  m_closeButton = CreateArrowButton(ctx, L"閉じる", "close", kSectionX, closeY,
+                                    kSectionWidth, kCloseHeight);
   if (auto *btn = ctx.world.Get<components::UIButton>(m_closeButton)) {
     btn->textStyle.fontSize = 24.0f;
   }
@@ -283,14 +381,30 @@ void SettingsScene::RefreshDisplay(core::GameContext &ctx) {
   setValue(RowId::GraphicsPreset,
            FormatGraphicsPreset(data.graphicsPreset,
                                 ctx.displaySettings->GetEffectiveGraphicsPreset()));
-  setValue(RowId::RenderScale, FormatPercent(data.renderScale));
+  setValue(RowId::RenderScale, data.dlssEnabled
+                                   ? FormatDlssQuality(data.renderScale)
+                                   : FormatPercent(data.renderScale));
   setValue(RowId::VSync, FormatOnOff(data.vsync));
   setValue(RowId::FpsLimit, FormatFpsLimit(data.fpsLimit));
-  setValue(RowId::Fxaa, FormatOnOff(data.fxaaEnabled));
-  setValue(RowId::Msaa, FormatMsaa(data.msaaSamples));
-  setValue(RowId::Taa, data.taaEnabled ? L"ON（未実装）" : L"OFF");
+  const core::AntiAliasingMode antiAliasing =
+      ctx.displaySettings->GetAntiAliasingMode();
+  setValue(RowId::AntiAliasing, FormatAntiAliasing(antiAliasing));
   setValue(RowId::ShowFps, FormatOnOff(data.showFps));
   setValue(RowId::Gpu, FormatGpu(data.gpuAdapterName, ctx.graphics.GetAdapterName()));
+
+  if (auto *hint = ctx.world.Get<components::UIText>(m_antiAliasingHint)) {
+    const bool dlssAvailable = ctx.displaySettings->IsDlssAvailable();
+    hint->text = DescribeAntiAliasing(antiAliasing, dlssAvailable);
+    // 他の機能が無効になる・代替で動いている選択は注意色で目立たせる
+    const bool isMsaa = antiAliasing == core::AntiAliasingMode::Msaa2 ||
+                        antiAliasing == core::AntiAliasingMode::Msaa4 ||
+                        antiAliasing == core::AntiAliasingMode::Msaa8;
+    const bool isDlssFallback =
+        antiAliasing == core::AntiAliasingMode::Dlss && !dlssAvailable;
+    hint->style.color = (isMsaa || isDlssFallback)
+                            ? DirectX::XMFLOAT4{1.0f, 0.72f, 0.3f, 1.0f}
+                            : DirectX::XMFLOAT4{0.6f, 0.66f, 0.74f, 1.0f};
+  }
 
   // 解像度はBorderless中はモニタ解像度に固定されるため矢印を無効化する
   if (auto *t = ctx.world.Get<components::UIText>(m_valueTexts[static_cast<size_t>(RowId::Resolution)])) {
@@ -378,14 +492,8 @@ void SettingsScene::OnUpdate(core::GameContext &ctx) {
         case RowId::FpsLimit:
           ds->CycleFpsLimit(direction);
           break;
-        case RowId::Fxaa:
-          ds->SetFxaaEnabled(!ds->GetData().fxaaEnabled);
-          break;
-        case RowId::Msaa:
-          ds->CycleMsaa(direction);
-          break;
-        case RowId::Taa:
-          ds->SetTaaEnabled(!ds->GetData().taaEnabled);
+        case RowId::AntiAliasing:
+          ds->CycleAntiAliasing(direction);
           break;
         case RowId::ShowFps:
           ds->SetShowFps(!ds->GetData().showFps);

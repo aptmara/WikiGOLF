@@ -284,6 +284,29 @@ void GraphicsDevice::CaptureAdapterInfo() {
   }
 }
 
+bool GraphicsDevice::QueryLocalVideoMemory(uint64_t &usageBytes,
+                                           uint64_t &budgetBytes) const {
+  usageBytes = 0;
+  budgetBytes = 0;
+  if (!m_device) {
+    return false;
+  }
+  ComPtr<IDXGIDevice> dxgiDevice;
+  ComPtr<IDXGIAdapter> adapter;
+  ComPtr<IDXGIAdapter3> adapter3;
+  DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+  if (FAILED(m_device.As(&dxgiDevice)) ||
+      FAILED(dxgiDevice->GetAdapter(&adapter)) ||
+      FAILED(adapter.As(&adapter3)) ||
+      FAILED(adapter3->QueryVideoMemoryInfo(
+          0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info))) {
+    return false;
+  }
+  usageBytes = info.CurrentUsage;
+  budgetBytes = info.Budget;
+  return true;
+}
+
 
 
 } // namespace graphics

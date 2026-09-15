@@ -73,6 +73,24 @@ float TurfFibers(float2 worldXZ, float2 bladeDirection, float density) {
     return fiber * (0.55f + seed * 0.45f);
 }
 
+/**
+ * @brief 画素より細かい手続き模様を平均値へ寄せる係数を求めます。
+ * @details 1画素に模様のセルが何個入るかを、ワールド座標の画面微分から見積もる。
+ *          細かすぎる模様はサンプル位置（TAA/DLSSのジッター含む）で毎フレーム
+ *          値が変わり、ちらつきや「流れる」ようなモアレになるため、
+ *          1セルが約1.5画素を下回るあたりから滑らかに平均値へ置き換える。
+ * @param pixelFootprint 1画素が覆うワールド距離[m]
+ * @param cellsPerMeter 模様の細かさ（1mあたりのセル数）
+ * @return 1=模様をそのまま使う、0=平均値に置き換える
+ */
+float ProceduralDetailFade(float pixelFootprint, float cellsPerMeter) {
+    float cellsPerPixel = pixelFootprint * cellsPerMeter;
+    return 1.0f - smoothstep(0.35f, 0.7f, cellsPerPixel);
+}
+
+/** @brief TurfFibers の画面全体での平均的な値（細部を消したときの置き換え先） */
+static const float kTurfFiberMean = 0.12f;
+
 /** @brief 地形マテリアルパレット色定義（8種） */
 static const float3 kTerrainPalette[8] = {
     float3(0.25f, 0.43f, 0.16f),
@@ -126,7 +144,7 @@ void FindMaterialBlend(float3 color, out float layerA, out float layerB,
  * @param input ピクセル入力情報
  * @return 陰影・マテリアル合成済みピクセルカラー
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+float4 ShadeMain(PS_INPUT input) {
     // カップの開口部は描かず、下のカップ内壁を見せる
     ClipGolfCupOpening(input.WorldPos);
 
@@ -166,10 +184,18 @@ float4 main(PS_INPUT input) : SV_TARGET {
             lerp(float3(1.0f, 1.0f, 1.0f), texColor.rgb, textureStrength);
     }
 
+    // 1画素が覆う地表の広さ。これより細かい手続き模様はエイリアシングするため弱める
+    float pixelFootprint = max(length(ddx(input.WorldPos)),
+                               length(ddy(input.WorldPos)));
+
     // バンカー専用の微細な砂粒と、風でできた複数スケールの波紋。
     float2 sandWorld = input.WorldPos.xz;
-    float sandGrain = SandHash(floor(sandWorld * 145.0f));
-    float sandGrainFine = SandHash(floor(sandWorld * 310.0f + 17.0f));
+    float sandGrainFade = ProceduralDetailFade(pixelFootprint, 145.0f);
+    float sandGrainFineFade = ProceduralDetailFade(pixelFootprint, 310.0f);
+    float sandGrain =
+        lerp(0.5f, SandHash(floor(sandWorld * 145.0f)), sandGrainFade);
+    float sandGrainFine =
+        lerp(0.5f, SandHash(floor(sandWorld * 310.0f + 17.0f)), sandGrainFineFade);
     float windRippleA = sin(dot(sandWorld, float2(0.94f, 0.34f)) * 18.0f +
                             sin(sandWorld.y * 2.7f) * 0.65f);
     float windRippleB = sin(dot(sandWorld, float2(-0.28f, 0.96f)) * 7.5f +
@@ -182,15 +208,24 @@ float4 main(PS_INPUT input) : SV_TARGET {
     // 中遠距離でも短芝が連続面に見えるよう、刈り方向へ伸びる
     // 複数スケールの微細繊維と、葉が倒れる向きの反転を加える。
     float2 turfWorld = input.WorldPos.xz;
-    float fairwayFiber = TurfFibers(turfWorld, float2(0.0f, 1.0f), 18.0f);
-    float fairwayFiberFine =
-        TurfFibers(turfWorld + 9.4f, float2(0.0f, 1.0f), 38.0f);
-    float roughFiber = TurfFibers(turfWorld, float2(0.64f, 0.77f), 11.0f);
-    float roughFiberFine =
-        TurfFibers(turfWorld + 13.7f, float2(-0.38f, 0.92f), 24.0f);
-    float greenFiber = TurfFibers(turfWorld, float2(1.0f, 0.0f), 30.0f);
-    float greenFiberFine =
-        TurfFibers(turfWorld + 21.6f, float2(1.0f, 0.0f), 56.0f);
+    float fairwayFiber = lerp(kTurfFiberMean,
+        TurfFibers(turfWorld, float2(0.0f, 1.0f), 18.0f),
+        ProceduralDetailFade(pixelFootprint, 18.0f));
+    float fairwayFiberFine = lerp(kTurfFiberMean,
+        TurfFibers(turfWorld + 9.4f, float2(0.0f, 1.0f), 38.0f),
+        ProceduralDetailFade(pixelFootprint, 38.0f));
+    float roughFiber = lerp(kTurfFiberMean,
+        TurfFibers(turfWorld, float2(0.64f, 0.77f), 11.0f),
+        ProceduralDetailFade(pixelFootprint, 11.0f));
+    float roughFiberFine = lerp(kTurfFiberMean,
+        TurfFibers(turfWorld + 13.7f, float2(-0.38f, 0.92f), 24.0f),
+        ProceduralDetailFade(pixelFootprint, 24.0f));
+    float greenFiber = lerp(kTurfFiberMean,
+        TurfFibers(turfWorld, float2(1.0f, 0.0f), 30.0f),
+        ProceduralDetailFade(pixelFootprint, 30.0f));
+    float greenFiberFine = lerp(kTurfFiberMean,
+        TurfFibers(turfWorld + 21.6f, float2(1.0f, 0.0f), 56.0f),
+        ProceduralDetailFade(pixelFootprint, 56.0f));
 
     float fairwayStripeWave = sin(turfWorld.x * (6.28318f / 3.2f));
     float greenStripeWave = sin(turfWorld.y * (6.28318f / 1.8f));
@@ -247,10 +282,10 @@ float4 main(PS_INPUT input) : SV_TARGET {
     N = normalize(lerp(N, fairwayMowNormal, fairwayWeight * 0.82f));
     N = normalize(lerp(N, greenMowNormal, greenWeight * 0.72f));
 
-    float sandDx = SandHash(floor((sandWorld + float2(0.008f, 0.0f)) * 145.0f)) -
-                   sandGrain;
-    float sandDz = SandHash(floor((sandWorld + float2(0.0f, 0.008f)) * 145.0f)) -
-                   sandGrain;
+    float sandDx = (SandHash(floor((sandWorld + float2(0.008f, 0.0f)) * 145.0f)) -
+                    sandGrain) * sandGrainFade;
+    float sandDz = (SandHash(floor((sandWorld + float2(0.0f, 0.008f)) * 145.0f)) -
+                    sandGrain) * sandGrainFade;
     N = normalize(N + float3(sandDx, 0.0f, sandDz) * bunkerWeight * 0.18f);
 
     // 4. ライティング
@@ -285,7 +320,7 @@ float4 main(PS_INPUT input) : SV_TARGET {
     // ごく一部の砂粒だけが強く反射し、均一な黄色い面に見えるのを防ぐ。
     float viewFacing = saturate(dot(N, V));
     float grainSparkle = pow(saturate(sandGrainFine), 24.0f) *
-                         pow(viewFacing, 5.0f) * diff;
+                         pow(viewFacing, 5.0f) * diff * sandGrainFineFade;
     finalColor.rgb += bunkerWeight * grainSparkle *
                       float3(0.42f, 0.31f, 0.13f);
     
@@ -300,4 +335,17 @@ float4 main(PS_INPUT input) : SV_TARGET {
     finalColor.rgb = lerp(finalColor.rgb, fogColor, fogFactor);
     
     return finalColor;
+}
+
+#include "TemporalVelocity.hlsli"
+
+/**
+ * @brief ピクセルシェーダーメインエントリ（カラー + 速度）
+ * @details 静止物のため速度は「カメラ移動のみ」とし、解決パスで深度から補完する。
+ */
+SceneOutput main(PS_INPUT input) {
+    SceneOutput output;
+    output.color = ShadeMain(input);
+    output.velocity = kCameraOnlyVelocity;
+    return output;
 }

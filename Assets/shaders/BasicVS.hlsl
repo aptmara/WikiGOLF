@@ -23,7 +23,10 @@ struct InstanceData {
     matrix World;      /**< ワールド変換行列 */
     float4 Color;      /**< 乗算カラー */
     float4 Flags;      /**< マテリアルフラグ群 */
+    matrix PrevWorld;  /**< 前フレームのワールド変換行列（速度バッファ用） */
 };
+
+#include "TemporalVelocity.hlsli"
 
 /** @brief インスタンスデータバッファ */
 StructuredBuffer<InstanceData> g_instances : register(t15);
@@ -59,6 +62,7 @@ struct VS_OUTPUT {
     float3 worldPosition : TEXCOORD6;/**< ワールド座標 */
     float cupClip : TEXCOORD7;       /**< 1ならカップ開口部をくり抜く */
     float ditherFade : TEXCOORD8;    /**< ドット状フェードの描画率 */
+    float4 prevClip : TEXCOORD9;     /**< 前フレームのクリップ座標（速度バッファ用） */
 };
 
 /**
@@ -94,6 +98,8 @@ VS_OUTPUT main(VS_INPUT input) {
     output.cupClip = fmod(inst.Flags.w, 2.0f);
     output.ditherFade = inst.Flags.w >= 2.0f ? saturate(inst.Color.a) : 1.0f;
     output.shadowPosition = mul(worldPos, ShadowViewProjection);
-    
+    output.prevClip = TemporalPrevClip(
+        mul(float4(input.position, 1.0f), inst.PrevWorld).xyz);
+
     return output;
 }

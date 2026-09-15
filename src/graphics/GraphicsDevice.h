@@ -6,6 +6,7 @@
 
 #include <DirectXMath.h>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <d3d11.h>
 #include <dxgi.h>
@@ -16,17 +17,20 @@
 #include <wrl/client.h>
 
 #include "../core/Profiler.h"
+#include "DlssUpscaler.h"
 #include "Shader.h"
 
 namespace graphics {
 
 using Microsoft::WRL::ComPtr;
 
-/** @brief 画質設定（Render Scale/MSAA/FXAA）。SettingsSceneからDisplaySettings経由で渡される。 */
+/** @brief 画質設定（Render Scale/MSAA/FXAA/TAA）。SettingsSceneからDisplaySettings経由で渡される。 */
 struct QualitySettings {
   float renderScale = 1.0f; /**< 内部描画解像度の倍率 (0.5〜1.0) */
   int msaaSamples = 1;      /**< 1(オフ)/2/4/8 */
   bool fxaaEnabled = false; /**< 最終画面へのFXAA適用 */
+  bool taaEnabled = false;  /**< テンポラルAA（MSAA無効時のみ。描画解像度<100%ならTAAU） */
+  bool dlssEnabled = false; /**< DLSS（MSAA無効かつ対応GPUのみ。非対応ならTAAで代替） */
 };
 
 /**
@@ -112,6 +116,13 @@ public:
   /** @brief 非同期回収済みのGPU計測結果を取得します。 */
   std::vector<core::GpuFrameSample> ConsumeGpuProfileSamples();
 
+  /**
+   * @brief 数フレーム遅れで回収した直近のGPUフレーム時間（ミリ秒）。
+   *        プロファイリング無効ビルドでも計測し、描画負荷の自動調整に使う。
+   *        未計測なら0。
+   */
+  float GetLatestGpuFrameMs() const { return m_latestGpuFrameMs; }
+
   /** @brief ウィンドウ（バックバッファ）リサイズ */
   bool Resize(uint32_t width, uint32_t height);
 
@@ -129,6 +140,53 @@ public:
 
   /** @brief 深度バッファがシェーダーから読める状態か（MSAA有効時はfalse） */
   bool IsDepthReadable() const { return m_depthSRV != nullptr; }
+
+  /** @brief TAA（またはDLSS非対応時の代替TAA）が動作中か */
+  bool IsTaaActive() const { return m_temporalMode == TemporalMode::Taa; }
+  /** @brief DLSSが動作中か */
+  bool IsDlssActive() const { return m_temporalMode == TemporalMode::Dlss; }
+  /** @brief TAA/DLSSのどちらかが動作中か（ジッター・速度バッファを使う）*/
+  bool IsTemporalActive() const { return m_temporalMode != TemporalMode::None; }
+  /** @brief このPCでDLSSが使えるか（SDK組み込み・対応GPU・ドライバー）*/
+  bool IsDlssSupported() const { return m_dlss.IsSupported(); }
+
+  /**
+   * @brief メインカメラの投影行列へ今フレームのサブピクセルジッターを加える。
+   * @details 3Dシーン本体（RenderSystem/SkyboxRenderSystem）の描画用行列にだけ
+   *          適用する。UI投影やレイキャスト、カリングには未ジッター行列を使うこと。
+   *          TAA/DLSS無効時は何もしない。
+   */
+  void ApplyProjectionJitter(DirectX::XMMATRIX &projection) const;
+
+  /**
+   * @brief 今フレームのメインカメラのView*Projection（ジッター無し）を登録する。
+   * @details 再投影と速度バッファに使う。登録されなかったフレームは履歴を破棄する。
+   */
+  void SetTemporalCameraViewProjection(const DirectX::XMMATRIX &viewProjection);
+
+  /** @brief 速度バッファ出力用にシーンシェーダーへ渡す値（TemporalVelocity.hlsli）*/
+  struct TemporalShaderConstants {
+    DirectX::XMMATRIX prevViewProjection; /**< 前フレームのView*Projection（ジッター無し・未転置） */
+    DirectX::XMFLOAT4 jitterUv;           /**< xy: ジッター(UV)、zw: 1/描画解像度 */
+    bool velocityEnabled = false;         /**< 速度バッファへ書き込むか */
+  };
+  TemporalShaderConstants GetTemporalShaderConstants() const;
+
+  /**
+   * @brief シーンカラーに加えて速度バッファ(SV_Target1)を出力先へ追加する。
+   * @details RenderSystemのメッシュ描画の間だけ有効にする（スカイボックス等の
+   *          書き込まない描画は、クリア値=カメラ移動のみとして扱われる）。
+   */
+  void BindSceneVelocityTarget();
+  /** @brief 出力先をシーンカラー1枚に戻す */
+  void UnbindSceneVelocityTarget();
+
+  /**
+   * @brief テクスチャのミップLODバイアス。
+   * @details 描画解像度より高い出力解像度へ復元する場合、出力解像度相当の
+   *          細かさでテクスチャを読む（DLSS Programming Guide 3.5）。
+   */
+  float GetTextureMipBias() const;
 
   /** @brief VSync有効/無効を設定（Present時に反映） */
   void SetVSync(bool enabled) { m_vsyncEnabled = enabled; }
@@ -158,6 +216,13 @@ public:
   uint64_t GetDedicatedVideoMemoryBytes() const {
     return m_dedicatedVideoMemoryBytes;
   }
+  /**
+   * @brief このプロセスのVRAM使用量と、OSが割り当てたVRAM予算を取得します。
+   *        使用量が予算を超えるとWDDMが資源を退避し、GPU全体が数秒停滞する。
+   * @return 取得できた場合true
+   */
+  bool QueryLocalVideoMemory(uint64_t &usageBytes,
+                             uint64_t &budgetBytes) const;
   /** @brief 出力（バックバッファ）解像度 */
   uint32_t GetWidth() const { return m_width; }
   uint32_t GetHeight() const { return m_height; }
@@ -202,6 +267,11 @@ private:
 
   /** @brief 完了したGPUタイムスタンプクエリの結果を回収・集計します。 */
   void ResolveGpuProfilerQueries();
+
+  /** @brief 常時計測用のGPUフレームタイマーを初期化します。 */
+  void InitializeGpuFrameTimer();
+  /** @brief 完了したGPUフレームタイマーの結果を回収します。 */
+  void ResolveGpuFrameTimer();
   /** @brief フルスクリーンパスで使う定数バッファの種類 */
   enum class FullscreenConstants { None, Fxaa, Upscale };
   void RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView *srv,
@@ -209,7 +279,27 @@ private:
                          uint32_t dstHeight, FullscreenConstants constants);
   /** @brief 霧/色調補正/ビネット/ブルームのパス（シーンカラー+深度 → 出力） */
   void RunPostProcessPass(ID3D11ShaderResourceView *colorSRV,
-                          ID3D11RenderTargetView *dstRTV);
+                          ID3D11RenderTargetView *dstRTV, uint32_t dstWidth,
+                          uint32_t dstHeight);
+
+  // --- テンポラルAA（TAA/DLSS）: GraphicsDeviceTemporal.cpp ---
+  enum class TemporalMode { None, Taa, Dlss };
+  /** @brief 画質設定と対応状況から、描画解像度とテンポラル方式を決める */
+  void DecideTemporalModeAndRenderSize();
+  /** @brief 速度バッファ・履歴・DLSS出力など、テンポラル方式に必要な資源を作る */
+  bool CreateTemporalTargets(const D3D11_TEXTURE2D_DESC &sceneColorDesc);
+  void ReleaseTemporalTargets();
+  /** @brief フレーム開始時のジッター決定と前フレーム行列の繰り越し */
+  void BeginTemporalFrame();
+  /** @brief 速度バッファ（物体の動き）と深度（カメラの動き）から完全な速度を作る */
+  void RunVelocityResolvePass();
+  /** @brief TAA/TAAU（出力解像度の履歴へ蓄積）。@return 出力解像度のSRV */
+  ID3D11ShaderResourceView *RunTaaPass();
+  /** @brief DLSS。失敗時はnullptr */
+  ID3D11ShaderResourceView *RunDlssPass();
+  /** @brief 描画・出力解像度を指定してフルスクリーン三角形を描く共通処理 */
+  void DrawFullscreenTriangle(Shader &shader, ID3D11RenderTargetView *dstRTV,
+                              uint32_t dstWidth, uint32_t dstHeight);
 
   struct GpuTimestampQueries {
     std::string name;
@@ -259,10 +349,45 @@ private:
   ComPtr<ID3D11RenderTargetView> m_postProcessRTV;
   ComPtr<ID3D11ShaderResourceView> m_postProcessSRV;
 
+  // --- テンポラルAA（TAA/DLSS） ---
+  TemporalMode m_temporalMode = TemporalMode::None;
+  // 速度バッファ（描画解像度）。rg=UV速度、a=1なら物体の動き込み、0ならカメラのみ
+  ComPtr<ID3D11Texture2D> m_velocityTex;
+  ComPtr<ID3D11RenderTargetView> m_velocityRTV;
+  ComPtr<ID3D11ShaderResourceView> m_velocitySRV;
+  // 解決済み速度（描画解像度, RG16F）。TAAとDLSSの共通入力
+  ComPtr<ID3D11Texture2D> m_resolvedVelocityTex;
+  ComPtr<ID3D11RenderTargetView> m_resolvedVelocityRTV;
+  ComPtr<ID3D11ShaderResourceView> m_resolvedVelocitySRV;
+  // TAA履歴（出力解像度）。毎フレーム書き込み先を入れ替えるピンポン方式
+  std::array<ComPtr<ID3D11Texture2D>, 2> m_taaHistoryTex;
+  std::array<ComPtr<ID3D11RenderTargetView>, 2> m_taaHistoryRTV;
+  std::array<ComPtr<ID3D11ShaderResourceView>, 2> m_taaHistorySRV;
+  size_t m_taaWriteIndex = 0;
+  // DLSS出力（出力解像度, UAV対応）
+  ComPtr<ID3D11Texture2D> m_dlssOutputTex;
+  ComPtr<ID3D11ShaderResourceView> m_dlssOutputSRV;
+  DlssUpscaler m_dlss;
+
+  bool m_temporalHistoryValid = false;
+  bool m_temporalCameraSetThisFrame = false;
+  bool m_temporalPrevViewProjectionValid = false;
+  uint32_t m_temporalFrameIndex = 0;
+  DirectX::XMFLOAT2 m_jitterNdc{0.0f, 0.0f};
+  DirectX::XMFLOAT4X4 m_temporalViewProjection{};
+  DirectX::XMFLOAT4X4 m_temporalPrevViewProjection{};
+  std::chrono::steady_clock::time_point m_lastTemporalFrameAt{};
+  float m_temporalFrameTimeMs = 0.0f;
+  ComPtr<ID3D11Buffer> m_taaConstantBuffer;
+  ComPtr<ID3D11Buffer> m_velocityResolveConstantBuffer;
+  ComPtr<ID3D11SamplerState> m_pointSampler;
+
   // アップスケール/FXAA/ポストプロセス用の共有リソース
   Shader m_upscaleShader;
   Shader m_fxaaShader;
   Shader m_postProcessShader;
+  Shader m_taaShader;
+  Shader m_velocityResolveShader;
   ComPtr<ID3D11Buffer> m_fullscreenVB; /**< 画面全体を覆う巨大三角形（POSITION+TEXCOORD0） */
   ComPtr<ID3D11SamplerState> m_linearSampler;
   ComPtr<ID3D11Buffer> m_fxaaConstantBuffer;
@@ -295,6 +420,19 @@ private:
   std::vector<size_t> m_gpuScopeStack;
   std::vector<core::GpuFrameSample> m_readyGpuSamples;
   bool m_gpuProfilerAvailable = false;
+
+  struct GpuFrameTimerQueries {
+    ComPtr<ID3D11Query> disjoint;
+    ComPtr<ID3D11Query> frameStart;
+    ComPtr<ID3D11Query> frameEnd;
+    bool issued = false;
+  };
+  static constexpr size_t kGpuFrameTimerCount = 4;
+  std::array<GpuFrameTimerQueries, kGpuFrameTimerCount> m_gpuFrameTimers;
+  size_t m_gpuFrameTimerWriteIndex = 0;
+  GpuFrameTimerQueries *m_currentGpuFrameTimer = nullptr;
+  bool m_gpuFrameTimerAvailable = false;
+  float m_latestGpuFrameMs = 0.0f;
 };
 
 class ScopedGpuTimer {

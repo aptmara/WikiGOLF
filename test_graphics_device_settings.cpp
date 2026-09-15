@@ -19,7 +19,11 @@ int main() {
   CHECK(quality.renderScale == 1.0f, "Default render scale is one");
   CHECK(quality.msaaSamples == 1, "Default MSAA is disabled");
   CHECK(!quality.fxaaEnabled, "Default FXAA is disabled");
-  CHECK(device.GetVSync(), "VSync is enabled by default");
+  CHECK(!quality.taaEnabled, "Default TAA is disabled");
+  CHECK(!device.IsTaaActive(), "TAA is inactive before initialization");
+  CHECK(!quality.dlssEnabled, "Default DLSS is disabled");
+  CHECK(!device.IsDlssActive(), "DLSS is inactive before initialization");
+  CHECK(!device.IsDlssSupported(), "DLSS is unsupported before initialization");  CHECK(device.GetVSync(), "VSync is enabled by default");
   CHECK(!device.IsFullscreenExclusive(),
         "Exclusive fullscreen is disabled by default");
   CHECK(!device.IsDepthReadable(),

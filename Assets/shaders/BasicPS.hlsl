@@ -21,6 +21,7 @@ cbuffer ConstantBuffer : register(b0) {
 
 #include "ShadowSampling.hlsli"
 #include "GolfCupClip.hlsli"
+#include "TemporalVelocity.hlsli"
 
 static const float kDither4x4[16] = {
     1.0f / 32.0f, 17.0f / 32.0f, 5.0f / 32.0f, 21.0f / 32.0f,
@@ -90,14 +91,15 @@ struct PS_INPUT {
     float3 worldPosition : TEXCOORD6;/**< ワールド座標 */
     float cupClip : TEXCOORD7;       /**< 1ならカップ開口部をくり抜く */
     float ditherFade : TEXCOORD8;    /**< ドット状フェードの描画率 */
+    float4 prevClip : TEXCOORD9;     /**< 前フレームのクリップ座標 */
 };
 
 /**
  * @brief 基本ピクセルシェーダーメインエントリ
  * @param input ピクセル入力情報
- * @return 陰影計算済みピクセルカラー
+ * @return 陰影計算済みピクセルカラーと速度
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+SceneOutput main(PS_INPUT input) {
     // 地表を覆う記事オーバーレイはカップの開口部を描かない
     if (input.cupClip > 0.5f) {
         ClipGolfCupOpening(input.worldPosition);
@@ -180,5 +182,6 @@ float4 main(PS_INPUT input) : SV_TARGET {
                                 ShadowParams.x);
     float lighting = saturate(diffuse * shadow + ambient);
     
-    return float4(baseColor.rgb * lighting, baseColor.a);
+    return MakeSceneOutput(float4(baseColor.rgb * lighting, baseColor.a),
+                           EncodeVelocity(input.position, input.prevClip));
 }

@@ -22,6 +22,8 @@ void DisplaySettings::ApplyQualityToGraphics() {
   quality.renderScale = m_data.renderScale;
   quality.msaaSamples = m_data.msaaSamples;
   quality.fxaaEnabled = m_data.fxaaEnabled;
+  quality.taaEnabled = m_data.taaEnabled;
+  quality.dlssEnabled = m_data.dlssEnabled;
   m_graphics->ApplyQualitySettings(quality);
 }
 
@@ -44,6 +46,9 @@ void DisplaySettings::ApplySelectedGraphicsPreset() {
     m_data.renderScale = preset.renderScale;
     m_data.msaaSamples = preset.msaaSamples;
     m_data.fxaaEnabled = preset.fxaaEnabled;
+    // プリセットのAAはFXAA/MSAAで表現されるため排他にする
+    m_data.taaEnabled = false;
+    m_data.dlssEnabled = false;
     if (effective == GraphicsPreset::Ultra) {
       m_data.vsync = true;
       m_data.fpsLimit = 0;
@@ -87,6 +92,12 @@ void DisplaySettings::SetRenderScale(float scale) {
 }
 
 void DisplaySettings::CycleRenderScale(int direction) {
+  if (m_data.dlssEnabled) {
+    // DLSS中は「パフォーマンス/バランス/品質/DLAA」の4段階だけを巡回する
+    SetRenderScale(display_settings_detail::StepOption(
+        kDlssRenderScalePresets, m_data.renderScale, direction));
+    return;
+  }
   SetRenderScale(display_settings_detail::StepOption(
       display_settings_detail::kRenderScalePresets, m_data.renderScale,
       direction));
@@ -150,41 +161,35 @@ void DisplaySettings::CycleFpsLimit(int direction) {
       display_settings_detail::kFpsLimitPresets, m_data.fpsLimit, direction));
 }
 
-void DisplaySettings::SetFxaaEnabled(bool enabled) {
-  if (m_data.fxaaEnabled == enabled) {
+void DisplaySettings::SetAntiAliasingMode(AntiAliasingMode mode) {
+  const AntiAliasingFlags flags = GetAntiAliasingFlags(mode);
+  if (m_data.fxaaEnabled == flags.fxaaEnabled &&
+      m_data.msaaSamples == flags.msaaSamples &&
+      m_data.taaEnabled == flags.taaEnabled &&
+      m_data.dlssEnabled == flags.dlssEnabled) {
     return;
   }
-  m_data.fxaaEnabled = enabled;
+  m_data.fxaaEnabled = flags.fxaaEnabled;
+  m_data.msaaSamples = flags.msaaSamples;
+  m_data.taaEnabled = flags.taaEnabled;
+  m_data.dlssEnabled = flags.dlssEnabled;
+  if (flags.dlssEnabled) {
+    // DLSSの画質モードは描画解像度から決めるため、候補の倍率へ揃える
+    m_data.renderScale = kDlssRenderScalePresets[static_cast<size_t>(
+        DlssQualityFromRenderScale(m_data.renderScale))];
+  }
   MarkGraphicsPresetCustom();
   ApplyQualityToGraphics();
   SaveToFile();
 }
 
-void DisplaySettings::SetMsaaSamples(int samples) {
-  if (samples != 1 && samples != 2 && samples != 4 && samples != 8) {
-    samples = 1;
-  }
-  if (m_data.msaaSamples == samples) {
-    return;
-  }
-  m_data.msaaSamples = samples;
-  MarkGraphicsPresetCustom();
-  ApplyQualityToGraphics();
-  SaveToFile();
+void DisplaySettings::CycleAntiAliasing(int direction) {
+  SetAntiAliasingMode(StepAntiAliasingMode(GetAntiAliasingMode(), direction,
+                                           IsDlssAvailable()));
 }
 
-void DisplaySettings::CycleMsaa(int direction) {
-  SetMsaaSamples(display_settings_detail::StepOption(
-      display_settings_detail::kMsaaPresets, m_data.msaaSamples, direction));
-}
-
-void DisplaySettings::SetTaaEnabled(bool enabled) {
-  if (m_data.taaEnabled == enabled) {
-    return;
-  }
-  m_data.taaEnabled = enabled;
-  // TAA は設定値だけ保存し、未実装の描画処理へは反映しない。
-  SaveToFile();
+bool DisplaySettings::IsDlssAvailable() const {
+  return m_graphics && m_graphics->IsDlssSupported();
 }
 
 void DisplaySettings::SetShowFps(bool enabled) {

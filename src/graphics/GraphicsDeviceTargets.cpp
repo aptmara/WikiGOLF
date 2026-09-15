@@ -124,13 +124,12 @@ bool GraphicsDevice::CreateSceneRenderTargets() {
   m_postProcessTex.Reset();
   m_postProcessRTV.Reset();
   m_postProcessSRV.Reset();
+  ReleaseTemporalTargets();
   m_depthStencilView.Reset();
   m_depthStencilBuffer.Reset();
 
-  m_renderWidth = (std::max)(
-      1u, static_cast<uint32_t>(static_cast<float>(m_width) * m_quality.renderScale));
-  m_renderHeight = (std::max)(
-      1u, static_cast<uint32_t>(static_cast<float>(m_height) * m_quality.renderScale));
+  // 描画解像度とTAA/DLSSの採否を決める（DLSSは推奨解像度に従う）
+  DecideTemporalModeAndRenderSize();
 
   constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
@@ -189,8 +188,22 @@ bool GraphicsDevice::CreateSceneRenderTargets() {
   if (!CreateDepthStencilView())
     return false;
 
-  // ポストプロセス（霧/色調補正/ビネット/ブルーム）は常時適用するため常に作成する
-  hr = m_device->CreateTexture2D(&desc, nullptr, &m_postProcessTex);
+  // 速度バッファ・履歴などを用意する。失敗したらテンポラル方式を諦めて通常経路で描く
+  if (IsTemporalActive() && !CreateTemporalTargets(desc)) {
+    LOG_WARN("GraphicsDevice",
+             "CreateSceneRenderTargets: temporal AA resources failed; TAA/DLSS disabled");
+    ReleaseTemporalTargets();
+    m_temporalMode = TemporalMode::None;
+  }
+
+  // ポストプロセス（霧/色調補正/ビネット/ブルーム）は常時適用するため常に作成する。
+  // TAA/DLSSでは出力解像度へ復元した後に掛けるため、出力解像度で作る。
+  D3D11_TEXTURE2D_DESC postProcessDesc = desc;
+  if (IsTemporalActive()) {
+    postProcessDesc.Width = m_width;
+    postProcessDesc.Height = m_height;
+  }
+  hr = m_device->CreateTexture2D(&postProcessDesc, nullptr, &m_postProcessTex);
   if (FAILED(hr)) {
     LOG_ERROR("GraphicsDevice",
              "CreateSceneRenderTargets: post-process texture failed ({:08X})",
@@ -206,7 +219,7 @@ bool GraphicsDevice::CreateSceneRenderTargets() {
   if (FAILED(hr))
     return false;
 
-  if (m_quality.fxaaEnabled) {
+  if (m_quality.fxaaEnabled && !IsTemporalActive()) {
     hr = m_device->CreateTexture2D(&desc, nullptr, &m_fxaaTex);
     if (FAILED(hr))
       return false;
@@ -271,6 +284,18 @@ bool GraphicsDevice::InitializePostProcessResources() {
     LOG_ERROR("GraphicsDevice", "InitializePostProcessResources: PostProcess shader failed");
     return false;
   }
+  // TAAは任意機能のため、読み込めなくても初期化は失敗扱いにしない（IsTaaActive()がfalseになる）
+  if (!m_taaShader.LoadFromFile(m_device.Get(), L"Assets/shaders/PostProcessVS.hlsl",
+                                "main", L"Assets/shaders/TAAPS.hlsl", "main",
+                                layout)) {
+    LOG_WARN("GraphicsDevice", "InitializePostProcessResources: TAA shader failed");
+  }
+  if (!m_velocityResolveShader.LoadFromFile(
+          m_device.Get(), L"Assets/shaders/PostProcessVS.hlsl", "main",
+          L"Assets/shaders/VelocityResolvePS.hlsl", "main", layout)) {
+    LOG_WARN("GraphicsDevice",
+             "InitializePostProcessResources: velocity resolve shader failed");
+  }
 
   D3D11_SAMPLER_DESC sampDesc = {};
   sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -278,6 +303,10 @@ bool GraphicsDevice::InitializePostProcessResources() {
   sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
   sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
   hr = m_device->CreateSamplerState(&sampDesc, &m_linearSampler);
+  if (FAILED(hr))
+    return false;
+  sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+  hr = m_device->CreateSamplerState(&sampDesc, &m_pointSampler);
   if (FAILED(hr))
     return false;
 
@@ -299,6 +328,19 @@ bool GraphicsDevice::InitializePostProcessResources() {
   ppCbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
   ppCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
   hr = m_device->CreateBuffer(&ppCbDesc, nullptr, &m_postProcessConstantBuffer);
+  if (FAILED(hr))
+    return false;
+
+  D3D11_BUFFER_DESC taaCbDesc = ppCbDesc;
+  taaCbDesc.ByteWidth = sizeof(float) * 4 * 4; // float4 x 4（TAAPS.hlsl準拠）
+  hr = m_device->CreateBuffer(&taaCbDesc, nullptr, &m_taaConstantBuffer);
+  if (FAILED(hr))
+    return false;
+  D3D11_BUFFER_DESC velocityCbDesc = ppCbDesc;
+  // float4x4 x 2 + float4 x 2（VelocityResolvePS.hlsl準拠）
+  velocityCbDesc.ByteWidth = sizeof(float) * 4 * 10;
+  hr = m_device->CreateBuffer(&velocityCbDesc, nullptr,
+                              &m_velocityResolveConstantBuffer);
   if (FAILED(hr))
     return false;
 

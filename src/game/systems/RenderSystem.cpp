@@ -4,6 +4,7 @@
 */
 
 #include "RenderSystem.h"
+#include "GrassRenderRules.h"
 #include "ShadowRenderSystem.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -17,6 +18,7 @@
 #include "../components/WikiComponents.h"
 #include <DirectXCollision.h>
 #include <algorithm>
+#include <cmath>
 #include <vector>
 #include <DirectXMath.h>
 #include <chrono>
@@ -51,6 +53,14 @@ struct GolfCupClipConstants {
 constexpr UINT kGolfCupClipSlot = 3;
 constexpr float kGolfCupClipMaxDistance = 150.0f;
 
+// TemporalVelocity.hlsli の TemporalConstants と同じレイアウト
+struct TemporalConstants {
+  XMMATRIX prevViewProjection; // 前フレームのView*Projection（ジッター無し・転置済み）
+  XMFLOAT4 jitterUv;           // xy: ジッター(UV)、zw: 1/描画解像度
+  XMFLOAT4 params;             // x: 前フレームの経過時間、y: 速度出力有効(1/0)
+};
+constexpr UINT kTemporalSlot = 6;
+
 struct RenderState {
   ComPtr<ID3D11Buffer> cBuffer;
   ComPtr<ID3D11Buffer> golfCupBuffer;
@@ -63,7 +73,60 @@ struct RenderState {
   ComPtr<ID3D11Buffer> instancedBuffer;
   ComPtr<ID3D11ShaderResourceView> instancedSRV;
   size_t instancedBufferSize = 0;
+  // 芝の描画上限による距離倍率。急に芝が消えたり現れたりしないよう、
+  // 目標値へフレームごとに近づける。
+  float grassLodScale = 1.0f;
+  float grassDrawScale = 1.0f;
+  GrassGpuLoadController grassGpuLoad;
+  // TAA/DLSS用: 速度バッファの定数、前フレームのワールド行列・時刻、テクスチャLODバイアス
+  ComPtr<ID3D11Buffer> temporalBuffer;
+  std::unordered_map<ecs::Entity, XMFLOAT4X4> previousWorlds;
+  float previousTime = -1.0f;
+  float samplerMipBias = 0.0f;
 };
+
+namespace {
+
+/**
+ * @brief メッシュ用テクスチャサンプラーを作成します。
+ * @param mipBias 描画解像度を下げて出力解像度へ復元する場合の負のLODバイアス
+ */
+void CreateTextureSamplers(ID3D11Device *device, RenderState &state,
+                           float mipBias) {
+  D3D11_SAMPLER_DESC sampDesc = {};
+  sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+  sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+  sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+  sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+  sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+  sampDesc.MipLODBias = mipBias;
+  sampDesc.MinLOD = 0;
+  sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+  state.sampler.Reset();
+  device->CreateSamplerState(&sampDesc, &state.sampler);
+
+  D3D11_SAMPLER_DESC htmlTerrainSamplerDesc = sampDesc;
+  htmlTerrainSamplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
+  htmlTerrainSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+  htmlTerrainSamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+  htmlTerrainSamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+  htmlTerrainSamplerDesc.MaxAnisotropy = 8;
+  state.htmlTerrainSampler.Reset();
+  device->CreateSamplerState(&htmlTerrainSamplerDesc, &state.htmlTerrainSampler);
+  state.samplerMipBias = mipBias;
+}
+
+/** @brief 芝の距離倍率を目標値へ近づけます。負荷を下げる方向は速く、戻す方向はゆっくり動かす。 */
+float ApproachGrassScale(float current, float target) {
+  constexpr float kDecreasePerFrame = 0.12f;
+  constexpr float kIncreasePerFrame = 0.015f;
+  if (target < current) {
+    return std::max(target, current - kDecreasePerFrame);
+  }
+  return std::min(target, current + kIncreasePerFrame);
+}
+
+} // namespace
 
 /**
  * @brief 1フレーム分の描画負荷を集計します。
@@ -94,6 +157,8 @@ struct RenderFrameStats {
   size_t grassInstancesFrustumSkipped = 0;
   size_t grassNearLodInstances = 0;
   size_t grassMidLodInstances = 0;
+  size_t grassInstancesBudgetSkipped = 0;
+  uint64_t grassTriangles = 0;
 };
 
 void RenderSystem(core::GameContext &ctx) {
@@ -125,30 +190,29 @@ void RenderSystem(core::GameContext &ctx) {
     cupDesc.ByteWidth = sizeof(GolfCupClipConstants);
     device->CreateBuffer(&cupDesc, nullptr, &newState.golfCupBuffer);
 
+    D3D11_BUFFER_DESC temporalDesc = desc;
+    temporalDesc.ByteWidth = sizeof(TemporalConstants);
+    device->CreateBuffer(&temporalDesc, nullptr, &newState.temporalBuffer);
+
     // サンプラーステート作成
-    D3D11_SAMPLER_DESC sampDesc = {};
-    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-    sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-    sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-    sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-    sampDesc.MinLOD = 0;
-    sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-    device->CreateSamplerState(&sampDesc, &newState.sampler);
+    CreateTextureSamplers(device, newState, ctx.graphics.GetTextureMipBias());
 
-    D3D11_SAMPLER_DESC htmlTerrainSamplerDesc = sampDesc;
-    htmlTerrainSamplerDesc.Filter = D3D11_FILTER_ANISOTROPIC;
-    htmlTerrainSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-    htmlTerrainSamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-    htmlTerrainSamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    htmlTerrainSamplerDesc.MaxAnisotropy = 8;
-    device->CreateSamplerState(&htmlTerrainSamplerDesc,
-                               &newState.htmlTerrainSampler);
-
-    // ブレンドステート作成（半透明対応）
+    // ブレンドステート作成（半透明対応）。
+    // 半透明物は背後の物体の速度を上書きしないよう、速度バッファ(RT1)へは書き込まない。
     D3D11_BLEND_DESC blendDesc = {};
     blendDesc.AlphaToCoverageEnable = FALSE;
-    blendDesc.IndependentBlendEnable = FALSE;
+    blendDesc.IndependentBlendEnable = TRUE;
+    for (UINT i = 1; i < 8; ++i) {
+      auto &target = blendDesc.RenderTarget[i];
+      target.BlendEnable = FALSE;
+      target.SrcBlend = D3D11_BLEND_ONE;
+      target.DestBlend = D3D11_BLEND_ZERO;
+      target.BlendOp = D3D11_BLEND_OP_ADD;
+      target.SrcBlendAlpha = D3D11_BLEND_ONE;
+      target.DestBlendAlpha = D3D11_BLEND_ZERO;
+      target.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+      target.RenderTargetWriteMask = 0;
+    }
     blendDesc.RenderTarget[0].BlendEnable = TRUE;
     blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
@@ -229,6 +293,60 @@ void RenderSystem(core::GameContext &ctx) {
   const XMMATRIX inverseView = XMMatrixInverse(&inverseViewDeterminant, view);
   viewFrustum.Transform(worldFrustum, inverseView);
 
+  // TAA/DLSS: 再投影用にジッター無しの行列を登録してから、描画用の投影行列だけを
+  // サブピクセルずらす（カリングは上で未ジッター行列を使用済み）。
+  ctx.graphics.SetTemporalCameraViewProjection(view * proj);
+  ctx.graphics.ApplyProjectionJitter(proj);
+
+  // 描画解像度を下げて復元する場合は、テクスチャを出力解像度相当の細かさで読む
+  const float mipBias = ctx.graphics.GetTextureMipBias();
+  if (std::abs(mipBias - state->samplerMipBias) > 0.001f) {
+    CreateTextureSamplers(device, *state, mipBias);
+  }
+
+  // 速度バッファ用の定数（前フレームの行列・時刻、ジッター）
+  const auto temporal = ctx.graphics.GetTemporalShaderConstants();
+  if (state->previousTime < 0.0f) {
+    state->previousTime = ctx.time;
+  }
+  if (state->temporalBuffer) {
+    D3D11_MAPPED_SUBRESOURCE mappedTemporal;
+    if (SUCCEEDED(context->Map(state->temporalBuffer.Get(), 0,
+                               D3D11_MAP_WRITE_DISCARD, 0, &mappedTemporal))) {
+      auto *constants = static_cast<TemporalConstants *>(mappedTemporal.pData);
+      constants->prevViewProjection = XMMatrixTranspose(temporal.prevViewProjection);
+      constants->jitterUv = temporal.jitterUv;
+      constants->params = XMFLOAT4(state->previousTime,
+                                   temporal.velocityEnabled ? 1.0f : 0.0f, 0, 0);
+      context->Unmap(state->temporalBuffer.Get(), 0);
+    }
+    context->VSSetConstantBuffers(kTemporalSlot, 1,
+                                  state->temporalBuffer.GetAddressOf());
+    context->PSSetConstantBuffers(kTemporalSlot, 1,
+                                  state->temporalBuffer.GetAddressOf());
+  }
+  state->previousTime = ctx.time;
+
+  // 前フレームのワールド行列（エンティティ単位）。今フレームに描いたものだけを次へ残す
+  std::unordered_map<ecs::Entity, XMFLOAT4X4> currentWorlds;
+  const bool tracksPreviousWorlds = temporal.velocityEnabled;
+  if (tracksPreviousWorlds) {
+    currentWorlds.reserve(state->previousWorlds.size());
+  }
+  auto previousWorldOf = [&](ecs::Entity entity, const XMMATRIX &worldMatrix) {
+    if (!tracksPreviousWorlds) {
+      return worldMatrix;
+    }
+    XMFLOAT4X4 stored;
+    XMStoreFloat4x4(&stored, worldMatrix);
+    currentWorlds[entity] = stored;
+    const auto it = state->previousWorlds.find(entity);
+    if (it == state->previousWorlds.end()) {
+      return worldMatrix; // 初登場の物体は動いていないものとして扱う
+    }
+    return XMLoadFloat4x4(&it->second);
+  };
+
   // カップの開口部（地形・オーバーレイ・芝をくり抜く円）をカメラに近い順に設定する
   if (state->golfCupBuffer) {
     PROFILE_SCOPE("RenderSystem.GolfCupClip");
@@ -304,10 +422,12 @@ void RenderSystem(core::GameContext &ctx) {
                     : XMMatrixIdentity();
 
   // インスタンス構造体の定義
+  // BasicVS/GrassVS/FlagVS/ParticleVS/TrailVS の InstanceData と同じレイアウト
   struct InstanceData {
     XMFLOAT4X4 world;
     XMFLOAT4 color;
     XMFLOAT4 flags;
+    XMFLOAT4X4 prevWorld; // 前フレームのワールド行列（速度バッファ用）
   };
 
   // バケットキーの定義
@@ -351,12 +471,16 @@ void RenderSystem(core::GameContext &ctx) {
   struct RenderInstance {
     ecs::Entity entity;
     XMMATRIX worldMatrix;
+    XMMATRIX prevWorldMatrix;
     XMFLOAT4 color;
     XMFLOAT4 flags;
   };
 
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> opaqueBuckets;
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> transparentBuckets;
+  // GrassVS.hlslのMaterialColor.xyへ渡す描画距離倍率とラフのフェード倍率
+  float grassDrawScale = 1.0f;
+  float grassRoughFadeScale = 1.0f;
 
   auto reserveAdditionalInstances = [](auto &instances,
                                        size_t additionalCount) {
@@ -485,6 +609,7 @@ void RenderSystem(core::GameContext &ctx) {
         RenderInstance inst;
         inst.entity = e;
         inst.worldMatrix = t.GetWorldMatrix();
+        inst.prevWorldMatrix = previousWorldOf(e, inst.worldMatrix);
         inst.color = r.color;
 
         const bool hasDiffuse = r.hasTexture && r.textureSRV;
@@ -523,6 +648,25 @@ void RenderSystem(core::GameContext &ctx) {
           opaqueBuckets[key].push_back(inst);
         }
       });
+
+    // 芝はまず候補を集め、画面内ポリゴン上限に収まる距離倍率を決めてから
+    // バケットへ振り分ける。
+    struct GrassBatchDraw {
+      ecs::Entity entity;
+      const components::GrassRenderBatch *batch;
+      std::vector<RenderInstance> *nearInstances;
+      std::vector<RenderInstance> *midInstances;
+      uint32_t nearTriangles;
+      uint32_t lodTriangles;
+    };
+    struct GrassDrawCandidate {
+      uint32_t batchIndex;
+      const components::GrassRenderInstance *instance;
+      float distance;
+    };
+    std::vector<GrassBatchDraw> grassBatches;
+    std::vector<GrassDrawCandidate> grassCandidates;
+    std::vector<GrassBudgetSample> grassBudgetSamples;
 
     auto collectGrassBatch =
         [&](ecs::Entity e, components::GrassRenderBatch &batch) {
@@ -606,6 +750,15 @@ void RenderSystem(core::GameContext &ctx) {
                                        batch.instances.size());
           }
 
+          const uint32_t batchIndex =
+              static_cast<uint32_t>(grassBatches.size());
+          const uint32_t nearTriangles = candidateMesh->GetIndexCount() / 3;
+          const uint32_t lodTriangles =
+              midInstances ? lodCandidateMesh->GetIndexCount() / 3
+                           : nearTriangles;
+          grassBatches.push_back({e, &batch, &nearInstances, midInstances,
+                                  nearTriangles, lodTriangles});
+
           for (const auto &grassInstance : batch.instances) {
             ++stats.grassInstancesConsidered;
             const float dx = grassInstance.position.x - camPos.x;
@@ -627,35 +780,26 @@ void RenderSystem(core::GameContext &ctx) {
                 continue;
               }
             }
-            const bool usesMidLod =
-                midInstances &&
-                distanceSq >
-                    batch.lodSwitchDistance * batch.lodSwitchDistance;
-            const auto *instanceMesh =
-                usesMidLod ? lodCandidateMesh : candidateMesh;
+            // LODメッシュは近距離メッシュの部分集合なので、近距離側の
+            // 境界球で判定すればどちらのメッシュでも取りこぼさない。
             BoundingSphere instanceBounds;
-            instanceMesh->GetBounds().Transform(
+            candidateMesh->GetBounds().Transform(
                 instanceBounds, XMLoadFloat4x4(&grassInstance.world));
             if (worldFrustum.Contains(instanceBounds) == DISJOINT) {
               ++stats.grassInstancesFrustumSkipped;
               continue;
             }
 
-            RenderInstance instance;
-            instance.entity = e;
-            instance.worldMatrix = XMLoadFloat4x4(&grassInstance.world);
-            instance.color = grassInstance.color;
-            instance.flags = grassInstance.flags;
-
-            if (usesMidLod) {
-              midInstances->push_back(instance);
-              ++stats.grassMidLodInstances;
-            } else {
-              nearInstances.push_back(instance);
-              if (midInstances || batch.twoSided) {
-                ++stats.grassNearLodInstances;
-              }
-            }
+            const float distance = std::sqrt(distanceSq);
+            grassCandidates.push_back({batchIndex, &grassInstance, distance});
+            GrassBudgetSample sample;
+            sample.distance = distance;
+            sample.lodSwitchDistance =
+                midInstances ? batch.lodSwitchDistance : 0.0f;
+            sample.maxDrawDistance = batch.maxDrawDistance;
+            sample.nearTriangles = nearTriangles;
+            sample.lodTriangles = lodTriangles;
+            grassBudgetSamples.push_back(sample);
           }
         };
 
@@ -690,6 +834,72 @@ void RenderSystem(core::GameContext &ctx) {
       }
     } else {
       world.Query<components::GrassRenderBatch>().Each(collectGrassBatch);
+    }
+
+    // 画面内の芝ポリゴン数を上限に収める。超える場合は中距離の密度を
+    // 落とし、次に遠くの芝から消す。消える距離はシェーダーのディザー
+    // フェードにも同じ倍率で渡すため、パッチ形状のまま途切れない。
+    // プリセットの上限に、GPU時間から決めた倍率を掛ける。
+    UpdateGrassGpuLoad(state->grassGpuLoad,
+                       ctx.graphics.GetLatestGpuFrameMs());
+    const uint64_t grassTriangleBudget =
+        grassSpatialIndex && grassSpatialIndex->triangleBudget > 0
+            ? std::max<uint64_t>(
+                  1, static_cast<uint64_t>(
+                         static_cast<double>(grassSpatialIndex->triangleBudget) *
+                         state->grassGpuLoad.budgetScale))
+            : 0;
+    const GrassBudgetScales grassTarget =
+        SolveGrassDrawBudget(grassBudgetSamples, grassTriangleBudget);
+    state->grassLodScale =
+        ApproachGrassScale(state->grassLodScale, grassTarget.lodScale);
+    state->grassDrawScale =
+        ApproachGrassScale(state->grassDrawScale, grassTarget.drawScale);
+    grassDrawScale = state->grassDrawScale;
+    if (grassSpatialIndex) {
+      grassRoughFadeScale = grassSpatialIndex->roughFadeScale;
+    }
+    const float grassExtentMargin =
+        grassSpatialIndex ? grassSpatialIndex->maxHorizontalExtent : 0.0f;
+
+    for (const auto &candidate : grassCandidates) {
+      const auto &draw = grassBatches[candidate.batchIndex];
+      const auto &batch = *draw.batch;
+      if (batch.maxDrawDistance > 0.0f) {
+        // 倍率を掛けたフェード終了距離より、パッチの半径分だけ遠くまで
+        // 残して、端の葉がフェードしきる前に切らないようにする。
+        const float cutoff =
+            batch.maxDrawDistance * grassDrawScale +
+            (1.0f - grassDrawScale) * grassExtentMargin;
+        if (candidate.distance > cutoff) {
+          ++stats.grassInstancesBudgetSkipped;
+          continue;
+        }
+      }
+
+      RenderInstance instance;
+      instance.entity = draw.entity;
+      instance.worldMatrix = XMLoadFloat4x4(&candidate.instance->world);
+      // 芝の株は移動しない（揺れはシェーダーが前フレーム時刻で再計算する）
+      instance.prevWorldMatrix = instance.worldMatrix;
+      instance.color = candidate.instance->color;
+      instance.flags = candidate.instance->flags;
+
+      const bool usesMidLod =
+          draw.midInstances &&
+          candidate.distance >
+              batch.lodSwitchDistance * state->grassLodScale;
+      if (usesMidLod) {
+        draw.midInstances->push_back(instance);
+        ++stats.grassMidLodInstances;
+        stats.grassTriangles += draw.lodTriangles;
+      } else {
+        draw.nearInstances->push_back(instance);
+        if (draw.midInstances || batch.twoSided) {
+          ++stats.grassNearLodInstances;
+        }
+        stats.grassTriangles += draw.nearTriangles;
+      }
     }
   }
 
@@ -768,6 +978,8 @@ void RenderSystem(core::GameContext &ctx) {
           XMStoreFloat4x4(&dest[i].world, XMMatrixTranspose(instances[i].worldMatrix));
           dest[i].color = instances[i].color;
           dest[i].flags = instances[i].flags;
+          XMStoreFloat4x4(&dest[i].prevWorld,
+                          XMMatrixTranspose(instances[i].prevWorldMatrix));
         }
         context->Unmap(state->instancedBuffer.Get(), 0);
       }
@@ -785,6 +997,10 @@ void RenderSystem(core::GameContext &ctx) {
             XMFLOAT4(shadowEnabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
         constants->world = XMMatrixIdentity();
         constants->materialColor = XMFLOAT4(1, 1, 1, 1);
+        if (key.shader == grassHandle) {
+          constants->materialColor =
+              XMFLOAT4(grassDrawScale, grassRoughFadeScale, 0.0f, 0.0f);
+        }
         if (key.shader == grassHandle && golfState) {
           constants->materialFlags =
               XMFLOAT4(golfState->windDirection.x,
@@ -858,6 +1074,9 @@ void RenderSystem(core::GameContext &ctx) {
 
   {
     PROFILE_SCOPE("RenderSystem.SubmitDraws");
+    // TAA/DLSS有効時は、メッシュ描画の間だけ速度バッファへも書き込む
+    ctx.graphics.BindSceneVelocityTarget();
+
     // 不透明描画実行
     for (const auto &pair : opaqueBuckets) {
       DrawBucket(pair.first, pair.second);
@@ -867,6 +1086,13 @@ void RenderSystem(core::GameContext &ctx) {
     for (const auto &pair : transparentBuckets) {
       DrawBucket(pair.first, pair.second);
     }
+
+    ctx.graphics.UnbindSceneVelocityTarget();
+  }
+  if (tracksPreviousWorlds) {
+    state->previousWorlds.swap(currentWorlds);
+  } else {
+    state->previousWorlds.clear();
   }
 
   context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
@@ -901,6 +1127,18 @@ void RenderSystem(core::GameContext &ctx) {
                       static_cast<double>(stats.grassNearLodInstances));
   profiler.SetCounter("Render.GrassMidLodInstances",
                       static_cast<double>(stats.grassMidLodInstances));
+  profiler.SetCounter("Render.GrassInstancesBudgetSkipped",
+                      static_cast<double>(stats.grassInstancesBudgetSkipped));
+  profiler.SetCounter("Render.GrassTriangles",
+                      static_cast<double>(stats.grassTriangles));
+  profiler.SetCounter("Render.GrassLodScale",
+                      static_cast<double>(state->grassLodScale));
+  profiler.SetCounter("Render.GrassDrawScale",
+                      static_cast<double>(state->grassDrawScale));
+  profiler.SetCounter("Render.GrassBudgetScale",
+                      static_cast<double>(state->grassGpuLoad.budgetScale));
+  profiler.SetCounter("Render.GrassSmoothedGpuMs",
+                      static_cast<double>(state->grassGpuLoad.smoothedGpuMs));
   profiler.SetCounter("Render.OpaqueBuckets",
                       static_cast<double>(opaqueBuckets.size()));
   profiler.SetCounter("Render.TransparentBuckets",

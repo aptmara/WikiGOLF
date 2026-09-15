@@ -5,6 +5,7 @@
  *        FXAA/MSAA/TAA）の管理と永続化
 */
 
+#include "AntiAliasingMode.h"
 #include "GraphicsPreset.h"
 #include <Windows.h>
 #include <string>
@@ -38,11 +39,12 @@ struct DisplaySettingsData {
   float renderScale = 1.0f; ///< 内部描画解像度の倍率 (0.5〜1.0)
   bool vsync = true;        ///< Present同期
   int fpsLimit = 60;        ///< フレームレート上限。0 = 無制限
+  // アンチエイリアスはFXAA/MSAA/TAA/DLSSのいずれか1つだけが有効になる
+  // （AntiAliasingMode.h の排他ルール。保存形式は方式ごとの個別キー）。
   bool fxaaEnabled = false; ///< 最終画面へのFXAA適用
   int msaaSamples = 1;      ///< 1(オフ)/2/4/8
-  // TAAは現状未実装（前フレーム情報・モーションベクトル等の基盤が必要なため）。
-  // 設定値としては保持・永続化するが、描画には反映されない。
-  bool taaEnabled = false;
+  bool taaEnabled = false;  ///< テンポラルAA（描画解像度<100%ならアップスケールも兼ねる）
+  bool dlssEnabled = false; ///< NVIDIA DLSS（非対応環境ではTAAで代替）
 
   bool showFps = false; ///< 画面右上へのFPS表示
 
@@ -116,13 +118,19 @@ public:
   void SetFpsLimit(int fps); ///< 0 = 無制限
   void CycleFpsLimit(int direction);
 
-  void SetFxaaEnabled(bool enabled);
-
-  void SetMsaaSamples(int samples); ///< 1/2/4/8
-  void CycleMsaa(int direction);
-
-  /** @brief TAA有効/無効を保存する。※現状描画には反映されない（未実装）。*/
-  void SetTaaEnabled(bool enabled);
+  /** @brief アンチエイリアス方式を選択する（FXAA/TAA/DLSS/MSAAは排他）。*/
+  void SetAntiAliasingMode(AntiAliasingMode mode);
+  /**
+   * @brief OFF→FXAA→TAA→DLSS→MSAA 2x/4x/8x を前後に移動する。
+   * @details DLSSは IsDlssAvailable() のときだけ候補に入る。
+   */
+  void CycleAntiAliasing(int direction);
+  AntiAliasingMode GetAntiAliasingMode() const {
+    return ResolveAntiAliasingMode(m_data.fxaaEnabled, m_data.msaaSamples,
+                                   m_data.taaEnabled, m_data.dlssEnabled);
+  }
+  /** @brief このPCでDLSSが使えるか（NVIDIA RTX + 対応ドライバー + DLSS組み込みビルド）*/
+  bool IsDlssAvailable() const;
 
   /** @brief 画面右上のFPS表示の有効/無効を設定する*/
   void SetShowFps(bool enabled);

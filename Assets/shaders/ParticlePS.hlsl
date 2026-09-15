@@ -17,6 +17,8 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags_unused;
 };
 
+#include "TemporalVelocity.hlsli"
+
 /**
  * @struct PS_INPUT
  * @brief ピクセルシェーダー入力
@@ -33,8 +35,9 @@ struct PS_INPUT {
  * @brief パーティクルピクセルシェーダーメインエントリ
  * @param input ピクセル入力情報
  * @return 円形・星型減衰適用後のアルファ合成カラー
+ *         （半透明のため速度はカメラ移動のみ扱い。半透明描画では書き込み自体も無効）
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+SceneOutput main(PS_INPUT input) {
     // 頂点カラー * マテリアルカラー
     float4 finalColor = input.color;
 
@@ -102,5 +105,6 @@ float4 main(PS_INPUT input) : SV_TARGET {
         alpha = saturate(pow(max(diamond, max(cross * 0.72, diagonal * 0.45)), 1.25) + core * 0.85);
     }
 
-    return float4(finalColor.rgb, finalColor.a * alpha);
+    return MakeSceneOutput(float4(finalColor.rgb, finalColor.a * alpha),
+                           kCameraOnlyVelocity);
 }

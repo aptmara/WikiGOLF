@@ -8,7 +8,8 @@ cbuffer ConstantBuffer : register(b0) {
     matrix World_unused;
     matrix View;
     matrix Projection;
-    float4 MaterialColor_unused;
+    // x: 描画上限による距離倍率、y: ラフ／セミラフのフェード距離倍率
+    float4 GrassDistanceParams;
     // xy: ゲーム内風向、z: 風速(m/s)
     float4 MaterialFlags_unused;
     float4 LightDir; // w: 経過時間（秒）
@@ -22,9 +23,12 @@ struct InstanceData {
     float4 Color;
     // xy: 最後の接触位置、z: 曲がる方向の角度、w: 曲がり量
     float4 Flags;
+    matrix PrevWorld; // 前フレームのワールド行列（速度バッファ用）
 };
 
 StructuredBuffer<InstanceData> g_instances : register(t15);
+
+#include "TemporalVelocity.hlsli"
 
 struct VS_INPUT {
     float3 position : POSITION;
@@ -45,6 +49,7 @@ struct VS_OUTPUT {
     float distanceFade : TEXCOORD2;
     float materialClass : TEXCOORD3;
     float4 shadowPosition : TEXCOORD4;
+    float4 prevClip : TEXCOORD5;
 };
 
 /**
@@ -58,19 +63,27 @@ float Hash21(float2 p) {
     return frac(p.x * p.y);
 }
 
+/** @brief 風・接触による葉の変形結果 */
+struct GrassDeformation {
+    float4 worldPos;
+    float bladeRandom;
+    float bend;
+    float2 bendDirection;
+    float2 windOffset;
+    float vortexVisual;
+    float windTipWeight;
+};
+
 /**
- * @brief 芝生頂点シェーダーメインエントリ
- * @param input 頂点入力情報
- * @return 風・曲がり変形適用後の頂点出力
+ * @brief 指定したワールド行列・時刻での葉の変形後ワールド座標を求めます。
+ * @details 速度バッファ用に前フレームの行列・時刻でも同じ式を評価するため関数化している。
  */
-VS_OUTPUT main(VS_INPUT input) {
-    VS_OUTPUT output;
-    InstanceData inst = g_instances[input.instanceID];
+GrassDeformation DeformGrass(InstanceData inst, VS_INPUT input, matrix world,
+                             float time) {
+    GrassDeformation result;
+    float4 worldPos = mul(float4(input.position, 1.0f), world);
 
-    float4 worldPos = mul(float4(input.position, 1.0f), inst.World);
-
-    float bladeRandom = Hash21(worldPos.xz);
-    float individualTint = 0.94f + bladeRandom * 0.12f;
+    result.bladeRandom = Hash21(worldPos.xz);
     float windPhase = Hash21(worldPos.xz + 91.7f) * 6.2831853f;
 
     float materialClass = saturate(inst.Color.a);
@@ -91,7 +104,6 @@ VS_OUTPUT main(VS_INPUT input) {
     // ゲーム内の風向・風速へ連動する。遠くまで伝わる風の帯、局所的な
     // 突風、葉ごとの細かな揺れを異なる周期で重ね、芝面全体が同時に
     // 左右へ往復して見えないようにする。
-    float time = LightDir.w;
     float2 windVector = MaterialFlags_unused.xy;
     float windLength = length(windVector);
     float2 windDir = windLength > 0.0001f
@@ -209,7 +221,43 @@ VS_OUTPUT main(VS_INPUT input) {
     worldPos.y -= length(windOffset) * lerp(0.18f, 0.38f, windStrength) +
                   vortexVisual * surfaceFlex * windTipWeight * 0.025f;
 
+    result.worldPos = worldPos;
+    result.bend = bend;
+    result.bendDirection = bendDirection;
+    result.windOffset = windOffset;
+    result.vortexVisual = vortexVisual;
+    result.windTipWeight = windTipWeight;
+    return result;
+}
+
+/**
+ * @brief 芝生頂点シェーダーメインエントリ
+ * @param input 頂点入力情報
+ * @return 風・曲がり変形適用後の頂点出力
+ */
+VS_OUTPUT main(VS_INPUT input) {
+    VS_OUTPUT output;
+    InstanceData inst = g_instances[input.instanceID];
+
+    GrassDeformation deform = DeformGrass(inst, input, inst.World, LightDir.w);
+    float4 worldPos = deform.worldPos;
+    float materialClass = saturate(inst.Color.a);
+    float individualTint = 0.94f + deform.bladeRandom * 0.12f;
+    float bend = deform.bend;
+    float2 bendDirection = deform.bendDirection;
+    float2 windOffset = deform.windOffset;
+    float vortexVisual = deform.vortexVisual;
+    float windTipWeight = deform.windTipWeight;
+
     output.position = mul(mul(worldPos, View), Projection);
+
+    // 速度バッファ有効時だけ、前フレームの時刻で同じ変形を評価する
+    output.prevClip = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (TemporalParams.y > 0.5f) {
+        GrassDeformation prevDeform =
+            DeformGrass(inst, input, inst.PrevWorld, TemporalParams.x);
+        output.prevClip = TemporalPrevClip(prevDeform.worldPos.xyz);
+    }
 
     // SRT行列の各基底からスケールを除いて法線を変換する。草丈と横幅で
     // 非等方スケールしても、照明法線が押し潰されないようにする。
@@ -231,9 +279,6 @@ VS_OUTPUT main(VS_INPUT input) {
                                windHighlight * 0.78f), 1.0f);
     output.worldPos = worldPos.xyz;
     float cameraDistance = distance(CameraPos.xyz, worldPos.xyz);
-    float fadeEnd = 14.0f + materialClass * 50.0f;
-    float fadeWidth = 5.0f + materialClass * 7.0f;
-    float distanceFade = saturate((fadeEnd - cameraDistance) / fadeWidth);
 
     // フェアウェイとグリーンは低角度でだけ立体葉を見せる。見下ろし時は
     // 地形側の密な短芝表現へ移行し、点状に見える小さな葉を残さない。
@@ -248,6 +293,15 @@ VS_OUTPUT main(VS_INPUT input) {
     // 急な見下ろし角（ほぼ真上）でだけ地形側の短芝表現へ切り替える。
     float roughClass =
         1.0f - smoothstep(0.15f, 0.25f, abs(materialClass - 0.73f));
+
+    // フェード距離は GrassRenderRules.h の CalculateGrassShaderFadeEnd と
+    // 一致させる（CPU側はこの距離を超えたインスタンスを描画しない）。
+    float roughFadeScale = GrassDistanceParams.y > 0.0f ? GrassDistanceParams.y : 1.0f;
+    float drawScale = GrassDistanceParams.x > 0.0f ? GrassDistanceParams.x : 1.0f;
+    float fadeEnd = (14.0f + materialClass * 50.0f) *
+                    lerp(1.0f, roughFadeScale, roughClass) * drawScale;
+    float fadeWidth = (5.0f + materialClass * 7.0f) * drawScale;
+    float distanceFade = saturate((fadeEnd - cameraDistance) / fadeWidth);
     float3 viewDirection = normalize(CameraPos.xyz - worldPos.xyz);
     float overheadRatio = abs(viewDirection.y);
     float shortTurfOverheadFade = 1.0f - smoothstep(0.55f, 0.75f, overheadRatio);

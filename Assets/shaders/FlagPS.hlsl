@@ -29,14 +29,17 @@ struct PS_INPUT {
     float3 normal : NORMAL;        /**< ワールド法線 */
     float2 texCoord : TEXCOORD;    /**< UV座標 */
     float4 color : COLOR;          /**< 頂点カラー */
+    float4 prevClip : TEXCOORD1;   /**< 前フレームのクリップ座標 */
 };
+
+#include "TemporalVelocity.hlsli"
 
 /**
  * @brief 旗布ピクセルシェーダーメインエントリ
  * @param input ピクセル入力情報
- * @return 布地陰影計算済みピクセルカラー
+ * @return 布地陰影計算済みピクセルカラーと速度
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+SceneOutput main(PS_INPUT input) {
     uint2 ditherCoord = uint2(input.position.xy) & 3;
     float ditherThreshold = kDither4x4[ditherCoord.y * 4 + ditherCoord.x];
     clip(input.color.a - ditherThreshold);
@@ -48,5 +51,6 @@ float4 main(PS_INPUT input) : SV_TARGET {
                         sin(input.texCoord.y * 72.0f) * 0.014f;
     float edgeShade = lerp(0.92f, 1.05f, saturate(input.texCoord.x));
     float lighting = saturate(0.48f + diffuse * 0.54f + fabricWeave) * edgeShade;
-    return float4(saturate(input.color.rgb * lighting), input.color.a);
+    return MakeSceneOutput(float4(saturate(input.color.rgb * lighting), input.color.a),
+                           EncodeVelocity(input.position, input.prevClip));
 }

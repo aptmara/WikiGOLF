@@ -11,9 +11,11 @@ cbuffer ConstantBuffer : register(b0) {
     float4 MaterialFlags;  /**< マテリアルフラグ */
 };
 
+#include "TemporalVelocity.hlsli"
+
 /**
  * @struct PS_INPUT
- * @brief ピクセルシェーダー入力
+ * @brief ピクセルシェーダー入力（BasicVS.hlsl の出力と対応）
  */
 struct PS_INPUT {
     float4 position : SV_POSITION;  /**< 射影座標 */
@@ -23,20 +25,27 @@ struct PS_INPUT {
     float3 tangent : TANGENT;       /**< ワールド接線 */
     float3 bitangent : BINORMAL;    /**< ワールド従法線 */
     float2 worldXZ : TEXCOORD1;     /**< ワールドXZ座標 */
+    float4 materialFlags : TEXCOORD4;/**< 未使用 */
+    float4 shadowPosition : TEXCOORD5;/**< 未使用 */
+    float3 worldPosition : TEXCOORD6;/**< 未使用 */
+    float cupClip : TEXCOORD7;      /**< 未使用 */
+    float ditherFade : TEXCOORD8;   /**< 未使用 */
+    float4 prevClip : TEXCOORD9;    /**< 前フレームのクリップ座標 */
 };
 
 /**
  * @brief 発光ピクセルシェーダーメインエントリ
  * @param input ピクセル入力情報
- * @return リムグロー適用済み発光カラー
+ * @return リムグロー適用済み発光カラーと速度
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+SceneOutput main(PS_INPUT input) {
     // ビュー空間法線へ変換
     float3 viewNormal = normalize(mul((float3x3)View, input.normal));
-    
+
     // カメラ正対面で1.0、シルエット部で0.0となるグロー係数
     float centerGlow = saturate(abs(viewNormal.z));
     float glow = pow(centerGlow, 3.0f);
-    
-    return float4(MaterialColor.rgb, MaterialColor.a * glow);
+
+    return MakeSceneOutput(float4(MaterialColor.rgb, MaterialColor.a * glow),
+                           EncodeVelocity(input.position, input.prevClip));
 }

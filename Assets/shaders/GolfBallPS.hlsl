@@ -20,6 +20,7 @@ cbuffer ConstantBuffer : register(b0) {
 };
 
 #include "ShadowSampling.hlsli"
+#include "TemporalVelocity.hlsli"
 
 /**
  * @brief 2D座標から擬似乱数ハッシュ値を生成します。
@@ -79,14 +80,18 @@ struct PS_INPUT {
     float2 worldXZ : TEXCOORD1;      /**< ワールドXZ座標 */
     float4 materialFlags : TEXCOORD4;/**< マテリアルフラグ */
     float4 shadowPosition : TEXCOORD5;/**< 光源空間座標 */
+    float3 worldPosition : TEXCOORD6;/**< ワールド座標（未使用。BasicVSとの対応のため） */
+    float cupClip : TEXCOORD7;       /**< 未使用。BasicVSとの対応のため */
+    float ditherFade : TEXCOORD8;    /**< 未使用。BasicVSとの対応のため */
+    float4 prevClip : TEXCOORD9;     /**< 前フレームのクリップ座標 */
 };
 
 /**
  * @brief ゴルフボールピクセルシェーダーメインエントリ
  * @param input ピクセル入力情報
- * @return ディンプル法線強調・ライティング適用済みピクセルカラー
+ * @return ディンプル法線強調・ライティング適用済みピクセルカラーと速度
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+SceneOutput main(PS_INPUT input) {
     float hasDiffuse = input.materialFlags.x;
     float hasNormalMap = input.materialFlags.y;
 
@@ -165,5 +170,6 @@ float4 main(PS_INPUT input) : SV_TARGET {
                                 ShadowParams.x);
     float lighting = saturate(diffuse * shadow + ambient);
 
-    return float4(baseColor.rgb * lighting, baseColor.a);
+    return MakeSceneOutput(float4(baseColor.rgb * lighting, baseColor.a),
+                           EncodeVelocity(input.position, input.prevClip));
 }

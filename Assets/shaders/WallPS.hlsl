@@ -82,7 +82,7 @@ float DrawGlyph(float2 uv, float seed) {
  * @param input ピクセル入力情報
  * @return バリア色にコードストリーム演出を重ねたピクセルカラー
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+float4 ShadeMain(PS_INPUT input) {
     // 外周壁は厚みを持つ箱として配置されているため、そのままでは
     // コース外側からも外向きの面が見えてしまう。コース中心
     // （フィールドはワールド原点を中心に配置される）への方向と
@@ -142,4 +142,17 @@ float4 main(PS_INPUT input) : SV_TARGET {
     baseColor.a = saturate(baseColor.a + glow * 0.6f);
 
     return baseColor;
+}
+
+#include "TemporalVelocity.hlsli"
+
+/**
+ * @brief ピクセルシェーダーメインエントリ（カラー + 速度）
+ * @details 静止物のため速度は「カメラ移動のみ」とし、解決パスで深度から補完する。
+ */
+SceneOutput main(PS_INPUT input) {
+    SceneOutput output;
+    output.color = ShadeMain(input);
+    output.velocity = kCameraOnlyVelocity;
+    return output;
 }

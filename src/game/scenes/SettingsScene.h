@@ -1,8 +1,9 @@
 #pragma once
 /**
  * @file SettingsScene.h
- * @brief 表示・画質設定（ウィンドウモード/解像度/Render Scale/VSync/FPS上限/
- *        FXAA/MSAA/TAA）を変更する設定画面
+ * @brief 表示・画質設定（「画面」: ウィンドウモード/解像度/VSync/FPS上限/FPS表示、
+ *        「画質」: 画質テンプレート/描画解像度/アンチエイリアス/利用GPU）を
+ *        変更する設定画面
 */
 
 #include "../../core/GameContext.h"
@@ -24,22 +25,32 @@ public:
   void Render(core::GameContext &ctx) override;
 
 private:
-  /** @brief 設定項目の並び順。UIの生成順・action番号(prev0/next0等)にそのまま対応する。*/
+  /**
+   * @brief 設定項目の並び順。UIの表示順・action番号(prev0/next0等)にそのまま対応する。
+   * @details WindowMode〜ShowFpsが「画面」セクション、GraphicsPreset以降が
+   *          「画質」セクション（境界は kFirstQualityRow）。
+   */
   enum class RowId {
+    // 画面
     WindowMode = 0,
     Resolution,
-    GraphicsPreset,
-    RenderScale,
     VSync,
     FpsLimit,
-    Fxaa,
-    Msaa,
-    Taa,
     ShowFps,
+    // 画質
+    GraphicsPreset,
+    RenderScale,
+    AntiAliasing,
     Gpu,
     Count,
   };
   static constexpr size_t kRowCount = static_cast<size_t>(RowId::Count);
+  static constexpr size_t kFirstQualityRow =
+      static_cast<size_t>(RowId::GraphicsPreset);
+
+  /** @brief セクション見出し（「画面」「画質」）を生成する*/
+  void CreateSectionHeader(core::GameContext &ctx, const std::wstring &label,
+                           float y);
 
   ecs::Entity CreateArrowButton(core::GameContext &ctx, const std::wstring &label,
                                const std::string &action, float x, float y,
@@ -55,6 +66,7 @@ private:
   std::array<ecs::Entity, kRowCount> m_prevButtons{};
   std::array<ecs::Entity, kRowCount> m_nextButtons{};
   std::array<ecs::Entity, kRowCount> m_valueTexts{};
+  ecs::Entity m_antiAliasingHint = 0; ///< 選択中のアンチエイリアス方式の説明文
   ecs::Entity m_closeButton = 0;
   std::vector<ecs::Entity> m_hiddenUnderlyingButtons;
 };

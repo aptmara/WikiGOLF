@@ -20,6 +20,7 @@ struct InstanceData {
     matrix World; /**< ワールド行列 */
     float4 Color; /**< パーティクルカラー */
     float4 Flags; /**< x,y: texture flags, z: shape mode, w: variant */
+    matrix PrevWorld; /**< 前フレームのワールド行列（BasicVSと共通のレイアウト。未使用） */
 };
 
 /** @brief パーティクルインスタンスバッファ */

@@ -18,6 +18,7 @@ cbuffer ConstantBuffer : register(b0) {
 
 #include "ShadowSampling.hlsli"
 #include "GolfCupClip.hlsli"
+#include "TemporalVelocity.hlsli"
 
 struct PS_INPUT {
     float4 position : SV_POSITION;
@@ -28,6 +29,7 @@ struct PS_INPUT {
     float distanceFade : TEXCOORD2;
     float materialClass : TEXCOORD3;
     float4 shadowPosition : TEXCOORD4;
+    float4 prevClip : TEXCOORD5;
 };
 
 /**
@@ -43,9 +45,9 @@ float InterleavedGradientNoise(float2 pixelPosition) {
 /**
  * @brief 芝生ピクセルシェーダーメインエントリ
  * @param input ピクセル入力情報
- * @return 両面照明・透過光適用済みピクセルカラー
+ * @return 両面照明・透過光適用済みピクセルカラーと速度
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+SceneOutput main(PS_INPUT input) {
     clip(input.distanceFade - InterleavedGradientNoise(input.position.xy));
     // カップの開口部に芝の葉を描かない
     ClipGolfCupOpening(input.worldPos);
@@ -99,5 +101,6 @@ float4 main(PS_INPUT input) : SV_TARGET {
     float3 fogColor = float3(0.75f, 0.85f, 0.95f);
     finalColor = lerp(finalColor, fogColor, fogFactor);
 
-    return float4(finalColor, 1.0f);
+    return MakeSceneOutput(float4(finalColor, 1.0f),
+                           EncodeVelocity(input.position, input.prevClip));
 }

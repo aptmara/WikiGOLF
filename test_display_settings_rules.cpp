@@ -46,9 +46,11 @@ void VerifyLoadedValues() {
   assert(data.renderScale == 1.0f);
   assert(!data.vsync);
   assert(data.fpsLimit == 0);
-  assert(data.fxaaEnabled);
+  // FXAA/MSAA/TAAが同時に有効な旧設定は、MSAAを優先して1方式へ正規化される
+  assert(!data.fxaaEnabled);
   assert(data.msaaSamples == 4);
-  assert(data.taaEnabled);
+  assert(!data.taaEnabled);
+  assert(settings.GetAntiAliasingMode() == core::AntiAliasingMode::Msaa4);
   assert(data.showFps);
   assert(data.gpuAdapterName == "Test Adapter");
 }
@@ -75,9 +77,35 @@ void VerifyCyclesWithoutInitialization() {
   settings.CycleRenderScale(1);
   assert(settings.GetData().renderScale == 0.6f);
 
-  settings.SetMsaaSamples(4);
-  settings.CycleMsaa(1);
+  settings.SetAntiAliasingMode(core::AntiAliasingMode::Msaa4);
+  settings.CycleAntiAliasing(1);
   assert(settings.GetData().msaaSamples == 8);
+
+  // TAAへ切り替えるとMSAA/FXAAは無効になる
+  settings.SetAntiAliasingMode(core::AntiAliasingMode::Taa);
+  assert(settings.GetData().taaEnabled);
+  assert(settings.GetData().msaaSamples == 1);
+  assert(!settings.GetData().fxaaEnabled);
+  settings.CycleAntiAliasing(-1);
+  assert(settings.GetAntiAliasingMode() == core::AntiAliasingMode::Fxaa);
+  assert(!settings.GetData().taaEnabled);
+
+  // GraphicsDevice未登録ではDLSSは使えないため、TAAの次はMSAAになる
+  assert(!settings.IsDlssAvailable());
+  settings.SetAntiAliasingMode(core::AntiAliasingMode::Taa);
+  settings.CycleAntiAliasing(1);
+  assert(settings.GetAntiAliasingMode() == core::AntiAliasingMode::Msaa2);
+
+  // DLSSを選ぶと描画解像度は画質モードの倍率へ揃い、◀▶もその4段階を巡回する
+  settings.SetRenderScale(0.8f);
+  settings.SetAntiAliasingMode(core::AntiAliasingMode::Dlss);
+  assert(settings.GetData().dlssEnabled);
+  assert(settings.GetData().msaaSamples == 1);
+  assert(settings.GetData().renderScale == 0.67f);
+  settings.CycleRenderScale(1);
+  assert(settings.GetData().renderScale == 1.0f);
+  settings.CycleRenderScale(1);
+  assert(settings.GetData().renderScale == 0.5f);
 
   settings.SetFpsLimit(60);
   settings.CycleFpsLimit(-1);

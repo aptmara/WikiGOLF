@@ -36,7 +36,7 @@ static const float kFrameBorder = 0.07f;
  * @param input ピクセル入力情報
  * @return 描画カラー値
  */
-float4 main(PS_INPUT input) : SV_TARGET {
+float4 ShadeMain(PS_INPUT input) {
     float2 uv = input.TexCoord;
     bool inFrame = uv.x < kFrameBorder || uv.x > 1.0f - kFrameBorder ||
                   uv.y < kFrameBorder || uv.y > 1.0f - kFrameBorder;
@@ -78,4 +78,17 @@ float4 main(PS_INPUT input) : SV_TARGET {
     clip(input.FadeFactor - threshold - 0.001f);
 
     return finalColor;
+}
+
+#include "TemporalVelocity.hlsli"
+
+/**
+ * @brief ピクセルシェーダーメインエントリ（カラー + 速度）
+ * @details 静止物のため速度は「カメラ移動のみ」とし、解決パスで深度から補完する。
+ */
+SceneOutput main(PS_INPUT input) {
+    SceneOutput output;
+    output.color = ShadeMain(input);
+    output.velocity = kCameraOnlyVelocity;
+    return output;
 }

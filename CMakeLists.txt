@@ -258,6 +258,49 @@ target_link_libraries(DX_GAME
     ${ASSIMP_LIBRARIES}
 )
 
+# NVIDIA DLSS Super Resolution（NGX SDK）。libs/DLSS に SDK
+# (https://github.com/NVIDIA/DLSS) があれば自動で組み込み、無ければ
+# DLSSを非対応として扱う（設定画面の選択肢から外れ、TAAで代替する）。
+option(WIKIGOLF_DLSS "Enable NVIDIA DLSS Super Resolution when the SDK exists" ON)
+# ON にすると開発用DLL（透かし・デバッグ表示入り。配布禁止）を配置する。
+# Ctrl+Alt+F12: 入力（モーションベクター等）の可視化、Ctrl+Alt+F9: ジッター符号の切替、
+# Ctrl+Alt+F6: 蓄積デバッグモード（DLSS Programming Guide 8章）。
+option(WIKIGOLF_DLSS_DEV_DLL "Deploy the NVIDIA DLSS development DLL with debug overlay" OFF)
+set(WIKIGOLF_DLSS_SDK_DIR "${CMAKE_SOURCE_DIR}/libs/DLSS")
+if(WIKIGOLF_DLSS AND EXISTS "${WIKIGOLF_DLSS_SDK_DIR}/include/nvsdk_ngx.h")
+    message(STATUS "NVIDIA DLSS SDK found: ${WIKIGOLF_DLSS_SDK_DIR}")
+    set(WIKIGOLF_DLSS_LIB_DIR "${WIKIGOLF_DLSS_SDK_DIR}/lib/Windows_x86_64/x64")
+    target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_DLSS=1)
+    target_include_directories(DX_GAME PRIVATE "${WIKIGOLF_DLSS_SDK_DIR}/include")
+    # ランタイムライブラリに合わせて /MT 用(_s) と /MD 用(_d) を選ぶ
+    if(WIKIGOLF_STATIC_BUILD)
+        target_link_libraries(DX_GAME
+            "$<IF:$<CONFIG:Debug>,${WIKIGOLF_DLSS_LIB_DIR}/nvsdk_ngx_s_dbg.lib,${WIKIGOLF_DLSS_LIB_DIR}/nvsdk_ngx_s.lib>")
+    else()
+        target_link_libraries(DX_GAME
+            "$<IF:$<CONFIG:Debug>,${WIKIGOLF_DLSS_LIB_DIR}/nvsdk_ngx_d_dbg.lib,${WIKIGOLF_DLSS_LIB_DIR}/nvsdk_ngx_d.lib>")
+    endif()
+    # 配布可能なのは rel 版のDLLのみ（dev 版は透かし入りで配布禁止）
+    set(WIKIGOLF_DLSS_DLL_FLAVOR rel)
+    if(WIKIGOLF_DLSS_DEV_DLL)
+        set(WIKIGOLF_DLSS_DLL_FLAVOR dev)
+        message(WARNING "DLSS development DLL is deployed. Do NOT distribute this build.")
+    endif()
+    # copy_if_different はサイズ等が違えば差し替わるため、rel/dev の切替にも追従する
+    add_custom_command(TARGET DX_GAME POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${WIKIGOLF_DLSS_SDK_DIR}/lib/Windows_x86_64/${WIKIGOLF_DLSS_DLL_FLAVOR}/nvngx_dlss.dll"
+                "$<TARGET_FILE_DIR:DX_GAME>/nvngx_dlss.dll"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:DX_GAME>/licenses"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${WIKIGOLF_DLSS_SDK_DIR}/LICENSE.txt"
+                "$<TARGET_FILE_DIR:DX_GAME>/licenses/NVIDIA-DLSS-LICENSE.txt"
+        COMMENT "Deploying NVIDIA DLSS runtime..."
+    )
+else()
+    message(STATUS "NVIDIA DLSS SDK not found; DLSS is disabled")
+endif()
+
 # 文字セットをUnicodeに設定、C++20機能有効化、エンコーディング指定
 if(MSVC)
     target_compile_definitions(DX_GAME PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -588,6 +631,16 @@ if(MSVC)
 endif()
 add_test(NAME graphics_preset COMMAND test_graphics_preset)
 
+add_executable(test_anti_aliasing_mode test_anti_aliasing_mode.cpp)
+target_precompile_headers(test_anti_aliasing_mode REUSE_FROM wikigolf_pch)
+target_include_directories(test_anti_aliasing_mode PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_anti_aliasing_mode PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                               -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_anti_aliasing_mode PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME anti_aliasing_mode COMMAND test_anti_aliasing_mode)
+
 add_executable(test_logger_warning_output test_logger_warning_output.cpp)
 target_precompile_headers(test_logger_warning_output REUSE_FROM wikigolf_pch)
 target_include_directories(test_logger_warning_output PRIVATE src)
@@ -814,6 +867,8 @@ add_executable(test_display_settings_rules
     src/graphics/GraphicsDeviceAdapter.cpp
     src/graphics/GraphicsDeviceState.cpp
     src/graphics/GraphicsDeviceTargets.cpp
+    src/graphics/GraphicsDeviceTemporal.cpp
+    src/graphics/DlssUpscaler.cpp
     src/graphics/Shader.cpp)
 target_precompile_headers(test_display_settings_rules REUSE_FROM wikigolf_pch)
 target_include_directories(test_display_settings_rules PRIVATE src)
