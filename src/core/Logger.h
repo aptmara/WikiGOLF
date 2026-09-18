@@ -87,12 +87,19 @@ private:
 // マクロ定義 (呼び出しを簡略化)
 //==============================================================================
 
-#ifdef _DEBUG
+#ifdef WIKIGOLF_DISABLE_LOGGING
+    #define LOG_DEBUG(Category, Fmt, ...) ((void)0)
+    #define LOG_INFO(Category, Fmt, ...)  ((void)0)
+    #define LOG_WARN(Category, Fmt, ...)  ((void)0)
+    #define LOG_ERROR(Category, Fmt, ...) ((void)0)
+#elif defined(_DEBUG)
     #define LOG_DEBUG(Category, Fmt, ...) core::Logger::Instance().LogFmt(core::LogLevel::Debug, Category, __FILE__, __LINE__, Fmt, __VA_ARGS__)
 #else
     #define LOG_DEBUG(Category, Fmt, ...) ((void)0)
 #endif
 
-#define LOG_INFO(Category, Fmt, ...)  core::Logger::Instance().LogFmt(core::LogLevel::Info,  Category, __FILE__, __LINE__, Fmt, __VA_ARGS__)
-#define LOG_WARN(Category, Fmt, ...)  core::Logger::Instance().LogFmt(core::LogLevel::Warning, Category, __FILE__, __LINE__, Fmt, __VA_ARGS__)
-#define LOG_ERROR(Category, Fmt, ...) core::Logger::Instance().LogFmt(core::LogLevel::Error, Category, __FILE__, __LINE__, Fmt, __VA_ARGS__)
+#ifndef WIKIGOLF_DISABLE_LOGGING
+    #define LOG_INFO(Category, Fmt, ...)  core::Logger::Instance().LogFmt(core::LogLevel::Info,  Category, __FILE__, __LINE__, Fmt, __VA_ARGS__)
+    #define LOG_WARN(Category, Fmt, ...)  core::Logger::Instance().LogFmt(core::LogLevel::Warning, Category, __FILE__, __LINE__, Fmt, __VA_ARGS__)
+    #define LOG_ERROR(Category, Fmt, ...) core::Logger::Instance().LogFmt(core::LogLevel::Error, Category, __FILE__, __LINE__, Fmt, __VA_ARGS__)
+#endif

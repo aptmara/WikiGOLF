@@ -147,6 +147,7 @@ option(WIKIGOLF_HTML_COURSES "Render course articles with litehtml" ON)
 option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
 option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
 option(WIKIGOLF_PROFILING "Enable CPU/GPU profiling and report output" OFF)
+option(WIKIGOLF_DISABLE_LOGGING "Disable all runtime log output" OFF)
 include(cmake/WikiDebugTools.cmake)
 
 if(WIKIGOLF_STATIC_BUILD)
@@ -177,6 +178,9 @@ add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp" "DX_GAME.rc")
 wikigolf_enable_debug_target(DX_GAME)
 if(WIKIGOLF_PROFILING)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_PROFILING=1)
+endif()
+if(WIKIGOLF_DISABLE_LOGGING)
+    target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_DISABLE_LOGGING=1)
 endif()
 set_target_properties(DX_GAME PROPERTIES
     OUTPUT_NAME "WikiGolf"

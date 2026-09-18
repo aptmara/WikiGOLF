@@ -26,6 +26,10 @@ Logger::~Logger() {
 }
 
 void Logger::Initialize(const std::string& filename) {
+#ifdef WIKIGOLF_DISABLE_LOGGING
+    (void)filename;
+    return;
+#else
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_initialized) return;
 
@@ -58,6 +62,7 @@ void Logger::Initialize(const std::string& filename) {
                          << " ===\n";
         }
     }
+#endif
 }
 
 void Logger::Shutdown() {
@@ -84,6 +89,14 @@ void Logger::ClearRecentEntries() {
 #endif
 
 void Logger::Log(LogLevel level, const char* category, const char* file, int line, const std::string& message) {
+#ifdef WIKIGOLF_DISABLE_LOGGING
+    (void)level;
+    (void)category;
+    (void)file;
+    (void)line;
+    (void)message;
+    return;
+#else
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
     struct tm tm_buf;
@@ -157,6 +170,7 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
         std::cout << fullMessage << std::endl;
         SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE); // Reset
     }
+#endif
 #endif
 }
 
