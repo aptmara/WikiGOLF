@@ -7,6 +7,7 @@
 
 #include "AntiAliasingMode.h"
 #include "GraphicsPreset.h"
+#include "SavePaths.h"
 #include <Windows.h>
 #include <string>
 #include <utility>
@@ -62,7 +63,7 @@ struct DisplaySettingsData {
 */
 class DisplaySettings {
 public:
-  static constexpr const char *kDefaultPath = "settings.ini";
+  static std::string DefaultPath() { return SaveFilePath("settings.ini"); }
 
   /**
    * @brief マウスでのリサイズ・最大化を禁止した、通常ウィンドウ用のスタイル。
@@ -73,10 +74,10 @@ public:
       WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 
   /** @brief 設定ファイルから読み込む（ウィンドウ/GraphicsDeviceにはまだ反映しない）*/
-  void LoadFromFile(const std::string &path = kDefaultPath);
+  void LoadFromFile(const std::string &path = DefaultPath());
 
   /** @brief 設定ファイルへ書き出す*/
-  void SaveToFile(const std::string &path = kDefaultPath) const;
+  void SaveToFile(const std::string &path = DefaultPath()) const;
 
   /**
    * @brief ウィンドウハンドルとGraphicsDeviceを登録し、以後の設定変更を反映できるようにする。
