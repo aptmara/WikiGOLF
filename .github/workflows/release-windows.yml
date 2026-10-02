@@ -47,8 +47,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           NOTES="Windows x64 release package of WikiGOLF, published from the provided Google Drive Release.zip."
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" SHA256SUMS.txt --clobber
+          if gh release view "$RELEASE_TAG" --repo aptmara/WikiGOLF >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$RELEASE_ZIP" SHA256SUMS.txt --clobber --repo aptmara/WikiGOLF
           else
-            gh release create "$RELEASE_TAG" "$RELEASE_ZIP" SHA256SUMS.txt --title "WikiGOLF $RELEASE_TAG" --notes "$NOTES"
+            gh release create "$RELEASE_TAG" "$RELEASE_ZIP" SHA256SUMS.txt --title "WikiGOLF $RELEASE_TAG" --notes "$NOTES" --repo aptmara/WikiGOLF
           fi
