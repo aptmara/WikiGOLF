@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: wikigolf-windows-release
+  cancel-in-progress: true
+
 jobs:
   release:
     runs-on: windows-latest
@@ -38,9 +42,9 @@ jobs:
           -DWIKIGOLF_DISABLE_LOGGING=ON
           -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
-      - name: Build
+      - name: Build game
         shell: pwsh
-        run: cmake --build build-static-release --config Release --parallel
+        run: cmake --build build-static-release --target DX_GAME --config Release --parallel
 
       - name: Verify package output
         shell: pwsh
