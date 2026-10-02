@@ -1,0 +1,90 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/release-windows.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      RELEASE_TAG: v0.1.0
+      RELEASE_ZIP: WikiGOLF-Windows-x64.zip
+    steps:
+      - name: Checkout source and LFS assets
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Ensure LFS objects are present
+        shell: pwsh
+        run: git lfs pull
+
+      - name: Configure static Release
+        shell: pwsh
+        run: >
+          cmake -S . -B build-static-release -A x64
+          -DWIKIGOLF_STATIC_BUILD=ON
+          -DWIKIGOLF_DEBUG_TOOLS=OFF
+          -DWIKIGOLF_PROFILING=OFF
+          -DWIKIGOLF_DISABLE_LOGGING=ON
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build-static-release --config Release --parallel
+
+      - name: Verify package output
+        shell: pwsh
+        run: |
+          $exe = ".\build-static-release\Release\WikiGolf.exe"
+          if (-not (Test-Path $exe)) {
+            throw "WikiGolf.exe was not produced at $exe"
+          }
+          Get-Item $exe | Format-List FullName,Length,LastWriteTime
+
+      - name: Package with Zip64
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ".\package\WikiGOLF" | Out-Null
+          Copy-Item ".\build-static-release\Release\*" ".\package\WikiGOLF" -Recurse -Force
+          & 7z a -tzip -mx=9 $env:RELEASE_ZIP ".\package\WikiGOLF"
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip failed with exit code $LASTEXITCODE" }
+          $size = (Get-Item $env:RELEASE_ZIP).Length
+          if ($size -ge 2147483648) {
+            throw "Release asset exceeds GitHub's 2 GiB per-file limit: $size bytes"
+          }
+          $hash = Get-FileHash $env:RELEASE_ZIP -Algorithm SHA256
+          "$($hash.Hash.ToLower())  $env:RELEASE_ZIP" | Set-Content -Encoding ascii -NoNewline SHA256SUMS.txt
+          Get-Item $env:RELEASE_ZIP | Format-List FullName,Length
+          Get-Content SHA256SUMS.txt
+
+      - name: Create or update GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = @"
+          Windows x64 static Release build of WikiGOLF.
+
+          - Built from the repository master branch
+          - Static MSVC runtime (/MT)
+          - Required game assets and third-party license notices included
+          - Runtime logging/profiling/debug tools disabled for distribution
+
+          Verify the archive with SHA256SUMS.txt.
+          "@
+          gh release view $env:RELEASE_TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:RELEASE_TAG $env:RELEASE_ZIP SHA256SUMS.txt --clobber
+          } else {
+            gh release create $env:RELEASE_TAG $env:RELEASE_ZIP SHA256SUMS.txt --title "WikiGOLF $env:RELEASE_TAG" --notes $notes
+          }
