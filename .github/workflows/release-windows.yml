@@ -21,6 +21,7 @@ jobs:
     env:
       RELEASE_TAG: v0.1.0
       RELEASE_ZIP: WikiGOLF-Windows-x64.zip
+      BUILD_DIR: build-release
     steps:
       - name: Checkout source and LFS assets
         uses: actions/checkout@v4
@@ -32,34 +33,42 @@ jobs:
         shell: pwsh
         run: git lfs pull
 
-      - name: Configure static Release
+      - name: Configure Release
         shell: pwsh
         run: >
-          cmake -S . -B build-static-release -A x64
-          -DWIKIGOLF_STATIC_BUILD=ON
+          cmake -S . -B $env:BUILD_DIR -A x64
+          -DWIKIGOLF_STATIC_BUILD=OFF
           -DWIKIGOLF_DEBUG_TOOLS=OFF
           -DWIKIGOLF_PROFILING=OFF
           -DWIKIGOLF_DISABLE_LOGGING=ON
-          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
 
       - name: Build game
         shell: pwsh
-        run: cmake --build build-static-release --target DX_GAME --config Release --parallel
+        run: cmake --build $env:BUILD_DIR --target DX_GAME --config Release --parallel
 
-      - name: Verify package output
+      - name: Prepare package
         shell: pwsh
         run: |
-          $exe = ".\build-static-release\Release\WikiGolf.exe"
-          if (-not (Test-Path $exe)) {
-            throw "WikiGolf.exe was not produced at $exe"
-          }
-          Get-Item $exe | Format-List FullName,Length,LastWriteTime
+          $out = ".\$env:BUILD_DIR\Release"
+          $exe = Join-Path $out "WikiGolf.exe"
+          $assimp = Join-Path $out "assimp-vc143-mt.dll"
+          if (-not (Test-Path $exe)) { throw "WikiGolf.exe was not produced at $exe" }
+          if (-not (Test-Path $assimp)) { throw "Assimp runtime DLL was not bundled at $assimp" }
+
+          $data = Join-Path $out "Assets\data"
+          Remove-Item (Join-Path $data "jawiki_sdow-001_part1.sqlite") -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $data "jawiki_sdow-001_part2.sqlite") -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $data "jawiki_sdow-001_part3.sqlite") -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $data "jawiki_sdow.sqlite") -Force -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $data "backup_old_db") -Recurse -Force -ErrorAction SilentlyContinue
+
+          New-Item -ItemType Directory -Force ".\package\WikiGOLF" | Out-Null
+          Copy-Item "$out\*" ".\package\WikiGOLF" -Recurse -Force
+          Get-Item $exe, $assimp | Format-Table FullName,Length
 
       - name: Package with Zip64
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force ".\package\WikiGOLF" | Out-Null
-          Copy-Item ".\build-static-release\Release\*" ".\package\WikiGOLF" -Recurse -Force
           & 7z a -tzip -mx=9 $env:RELEASE_ZIP ".\package\WikiGOLF"
           if ($LASTEXITCODE -ne 0) { throw "7-Zip failed with exit code $LASTEXITCODE" }
           $size = (Get-Item $env:RELEASE_ZIP).Length
@@ -77,10 +86,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $notes = @"
-          Windows x64 static Release build of WikiGOLF.
+          Windows x64 Release build of WikiGOLF.
 
           - Built from the repository master branch
-          - Static MSVC runtime (/MT)
+          - assimp runtime DLL bundled
           - Required game assets and third-party license notices included
           - Runtime logging/profiling/debug tools disabled for distribution
 
