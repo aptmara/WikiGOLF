@@ -158,8 +158,13 @@ void CameraController::BeginTargetFraming(
     return;
   }
 
+  float verticalFov = XMConvertToRadians(60.0f);
+  if (const auto *cam = ctx.world.Get<Camera>(m_cfg.cameraEntity)) {
+    verticalFov = cam->fov;
+  }
   const auto angles = game::utils::FindTargetCenteredOrbitAngles(
-      ball->position, groundTarget, m_cameraYaw, m_cameraPitch);
+      ball->position, groundTarget, m_cameraYaw, m_cameraPitch,
+      recommendedDistance, verticalFov);
 
   m_targetCameraDistance = recommendedDistance;
   m_distanceEaseFrom = m_cameraDistance;
