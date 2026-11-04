@@ -912,6 +912,22 @@ add_executable(test_wiki_request_policy test_wiki_request_policy.cpp)
 target_compile_features(test_wiki_request_policy PRIVATE cxx_std_20)
 add_test(NAME wiki_request_policy COMMAND test_wiki_request_policy)
 
+# 実際のWikipediaに接続する手動確認（ネットワークに依存するためctestには含めない）
+if(WIKIGOLF_HTML_COURSES)
+    add_executable(test_wiki_client_live EXCLUDE_FROM_ALL
+        test_wiki_client_live.cpp
+        src/game/systems/WikiClient.cpp
+        src/game/systems/WikiClientContent.cpp
+        src/game/systems/WikiClientLinks.cpp
+        src/game/systems/WikiClientJson.cpp
+        src/game/systems/WikiClientJsonHtml.cpp)
+    target_include_directories(test_wiki_client_live PRIVATE src)
+    target_link_libraries(test_wiki_client_live PRIVATE wikigolf_common wiki_html winhttp)
+    target_compile_features(test_wiki_client_live PRIVATE cxx_std_20)
+    target_compile_definitions(test_wiki_client_live PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_client_live PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+
 add_executable(test_display_settings_rules
     test_display_settings_rules.cpp
     src/core/DisplaySettings.cpp

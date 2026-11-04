@@ -60,6 +60,7 @@ private:
     ecs::Entity targetLabel = UINT32_MAX;
     ecs::Entity targetPage = UINT32_MAX;
     ecs::Entity targetRule = UINT32_MAX;
+    ecs::Entity attribution = UINT32_MAX;
   };
 
   Entities m_entities;

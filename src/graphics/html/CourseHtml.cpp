@@ -33,13 +33,17 @@ bool HasClass(const std::string& classes, const std::string& token) {
 }
 std::string ImageUrl(std::string src) {
     if (src.rfind("//", 0) == 0) src = "https:" + src;
-    if (src.rfind("https://upload.wikimedia.org/", 0) != 0) return {};
+    // サムネイルは thumb、原寸のまま埋め込まれた画像は upload から配信される
+    if (src.rfind("https://thumb.wikimedia.org/", 0) != 0 &&
+        src.rfind("https://upload.wikimedia.org/", 0) != 0) return {};
     if (src.find_first_of("\r\n\t\\") != std::string::npos) return {};
     return src;
 }
 struct Serializer {
     PreparedArticle result;
     std::size_t nodes = 0;
+    std::size_t maxImages = kMaxImages;
+    const std::unordered_set<std::string>* allowedImageUrls = nullptr;
     void Visit(const GumboNode* node, int depth) {
         if (++nodes > 40000 || depth > 96) throw std::runtime_error("HTML structure limit");
         if (node->type == GUMBO_NODE_TEXT || node->type == GUMBO_NODE_WHITESPACE) {
@@ -69,9 +73,10 @@ struct Serializer {
             }
             if (tag == "img") {
                 auto url = ImageUrl(Attr(e, "src"));
+                if (allowedImageUrls && allowedImageUrls->count(url) == 0) url.clear();
                 if (!url.empty()) {
                     auto it = std::find(result.imageUrls.begin(), result.imageUrls.end(), url);
-                    if (it != result.imageUrls.end() || result.imageUrls.size() < kMaxImages) {
+                    if (it != result.imageUrls.end() || result.imageUrls.size() < maxImages) {
                         if (it == result.imageUrls.end()) result.imageUrls.push_back(url);
                         result.html += " src=\"" + Escape(url) + "\"";
                     }
@@ -134,15 +139,70 @@ std::string ArticleTarget(const std::string& href) {
     }
     return out;
 }
-PreparedArticle PrepareArticle(const std::string& title, const std::string& html) {
+std::vector<std::string> ExtractImageUrls(const std::string& html) {
+    if (html.empty() || html.size() > kMaxHtmlBytes) return {};
+    auto destroy = [](GumboOutput* p) { gumbo_destroy_output(&kGumboDefaultOptions, p); };
+    std::unique_ptr<GumboOutput, decltype(destroy)> parsed(gumbo_parse(html.c_str()), destroy);
+    if (!parsed) return {};
+    Serializer s;
+    s.maxImages = kMaxImageCandidates;
+    try { s.Visit(parsed->root, 0); }
+    catch (const std::exception&) { return {}; }
+    return std::move(s.result.imageUrls);
+}
+std::string ImageFileName(const std::string& url) {
+    const std::string prefixes[] = {"https://thumb.wikimedia.org/wikipedia/",
+                                    "https://upload.wikimedia.org/wikipedia/"};
+    std::string path;
+    for (const auto& prefix : prefixes) {
+        if (url.rfind(prefix, 0) == 0) path = url.substr(prefix.size());
+    }
+    path = path.substr(0, path.find_first_of("?#"));
+    std::vector<std::string> parts;
+    for (std::size_t start = 0; start <= path.size();) {
+        const std::size_t slash = std::min(path.find('/', start), path.size());
+        parts.push_back(path.substr(start, slash - start));
+        start = slash + 1;
+    }
+    // {wiki}/[thumb/]{h}/{hh}/{ファイル名}[/{幅}px-{ファイル名}]
+    std::size_t index = 1;
+    const bool isThumb = parts.size() > index && parts[index] == "thumb";
+    if (isThumb) ++index;
+    if (parts.size() != index + (isThumb ? 4 : 3) || parts[index].size() != 1 ||
+        parts[index + 1].size() != 2) return {};
+    const std::string& encoded = parts[index + 2];
+    std::string name;
+    auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        return -1;
+    };
+    for (std::size_t i = 0; i < encoded.size(); ++i) {
+        if (encoded[i] != '%') { name += encoded[i]; continue; }
+        if (i + 2 >= encoded.size() || hex(encoded[i + 1]) < 0 || hex(encoded[i + 2]) < 0) return {};
+        name += static_cast<char>(hex(encoded[i + 1]) * 16 + hex(encoded[i + 2]));
+        i += 2;
+    }
+    return name;
+}
+PreparedArticle PrepareArticle(const std::string& title, const std::string& html,
+                               const std::unordered_set<std::string>* allowedImageUrls) {
     if (html.empty() || html.size() > kMaxHtmlBytes) return {{}, {}, "HTML size limit or empty article"};
     auto destroy = [](GumboOutput* p) { gumbo_destroy_output(&kGumboDefaultOptions, p); };
     std::unique_ptr<GumboOutput, decltype(destroy)> parsed(gumbo_parse(html.c_str()), destroy);
     if (!parsed) return {{}, {}, "HTML parse failed"};
     Serializer s;
+    s.allowedImageUrls = allowedImageUrls;
     s.result.html = "<!doctype html><html lang=\"ja\"><body><h1>" + Escape(title) + "</h1>";
     try { s.Visit(parsed->root, 0); }
     catch (const std::exception& e) { return {{}, {}, e.what()}; }
+    // CC BY-SA 4.0 の帰属表示。カップにならないようリンクにはしない。
+    std::string articlePath = title;
+    std::replace(articlePath.begin(), articlePath.end(), ' ', '_');
+    s.result.html += "<p>この記事は Wikipedia「" + Escape(title) + "」(https://ja.wikipedia.org/wiki/" +
+                     Escape(articlePath) + ") の内容を、レイアウト変更や一部省略のうえ表示しています。"
+                     "本文のライセンスは CC BY-SA 4.0 です。執筆者は上記ページの履歴で確認できます。</p>";
     s.result.html += "</body></html>";
     return std::move(s.result);
 }

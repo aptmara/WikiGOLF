@@ -124,6 +124,21 @@ void CourseInfoPanel::Initialize(core::GameContext &ctx) {
   targetRule.style.bgColor = {1.0f, 1.0f, 1.0f, 0.9f};
   targetRule.visible = true;
   targetRule.layer = game::ui::kLayerBrowser;
+
+  m_entities.attribution = m_entityOwner.Create(ctx.world);
+  auto &attribution =
+      ctx.world.Add<game::components::UIText>(m_entities.attribution);
+  attribution.text = L"記事本文: Wikipedia (CC BY-SA 4.0・改変あり)";
+  attribution.x = x;
+  attribution.y = y + kRowHeight * 2.0f + 8.0f;
+  attribution.width = kPanelWidth;
+  attribution.height = 20.0f;
+  attribution.style = graphics::TextStyle::Guide();
+  attribution.style.fontFamily = "Kiwi Maru Medium";
+  attribution.style.fontSize = 13.0f;
+  attribution.style.align = graphics::TextAlign::Right;
+  attribution.visible = true;
+  attribution.layer = game::ui::kLayerBrowser + 1;
 }
 
 void CourseInfoPanel::Update(
@@ -150,6 +165,7 @@ void CourseInfoPanel::SetVisible(core::GameContext &ctx, bool visible) {
   SetTextVisible(ctx.world, m_entities.targetLabel, visible);
   SetTextVisible(ctx.world, m_entities.targetPage, visible);
   SetTextVisible(ctx.world, m_entities.targetRule, visible);
+  SetTextVisible(ctx.world, m_entities.attribution, visible);
 }
 
 void CourseInfoPanel::SetOpacity(core::GameContext &ctx, float opacity) {

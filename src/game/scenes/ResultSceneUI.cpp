@@ -212,6 +212,11 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   routeStyle.fontSize = 22.0f;
   addUI(routeStr, 390.0f, routeStyle);
 
+  auto attributionStyle = routeStyle;
+  attributionStyle.fontSize = 15.0f;
+  addUI(L"記事本文: Wikipedia (CC BY-SA 4.0)。レイアウト変更や一部省略をしています。",
+        630.0f, attributionStyle);
+
   // 操作ボタンを追加します。
   if constexpr (core::kTrialBuild) {
     // 体験版はチュートリアル後の1プレイで終了する。

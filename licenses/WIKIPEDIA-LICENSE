@@ -6,8 +6,9 @@ in two ways:
   2. Live data fetched at runtime from the Wikimedia API while the game
      is running (article text, tables of contents and inter-article
      links via https://ja.wikipedia.org/w/api.php and
-     https://ja.wikipedia.org/api/rest_v1/, plus article images served
-     from https://upload.wikimedia.org/).
+     https://ja.wikipedia.org/api/rest_v1/ and
+     https://ja.wikipedia.org/w/rest.php/, plus article images served
+     from https://thumb.wikimedia.org/ and https://upload.wikimedia.org/).
 
 Wikipedia's text content (both the bundled data and anything fetched
 live via the API) is dual-licensed under:
@@ -19,13 +20,14 @@ live via the API) is dual-licensed under:
 
 You may reuse this content under either license, at your choice.
 
-Images loaded from upload.wikimedia.org (Wikimedia Commons) are NOT
+Images loaded from thumb.wikimedia.org and upload.wikimedia.org are NOT
 covered by the above: each file carries its own license set by its
 uploader (commonly CC BY-SA, CC0/public domain, or other free licenses,
 and occasionally non-free "fair use" licenses restricted to Wikipedia
-itself). Consult the individual file's page on commons.wikimedia.org
-for its specific license and required attribution before reusing an
-image outside of this game.
+itself). This game only displays images whose license it can confirm as
+CC0 or public domain. Consult the individual file's page on
+commons.wikimedia.org for its specific license and required attribution
+before reusing an image outside of this game.
 
 Access to the Wikimedia API is subject to the Wikimedia Foundation's
 Terms of Use (https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use)
@@ -51,9 +53,11 @@ Attribution:
     2. 実行時にウィキメディアAPIから取得するライブデータ:
        記事本文・目次・記事間リンク
        （https://ja.wikipedia.org/w/api.php および
-        https://ja.wikipedia.org/api/rest_v1/ 経由）、
+        https://ja.wikipedia.org/api/rest_v1/ および
+        https://ja.wikipedia.org/w/rest.php/ 経由）、
        ならびに記事内の画像
-       （https://upload.wikimedia.org/ から配信）。
+       （https://thumb.wikimedia.org/ および
+        https://upload.wikimedia.org/ から配信）。
 
   ウィキペディアの本文（同梱データ・API経由の取得データのいずれも）は
   Creative Commons 表示-継承 4.0 国際ライセンス (CC BY-SA 4.0) および
@@ -62,11 +66,12 @@ Attribution:
   各記事の執筆者一覧および編集履歴は、ウィキペディア日本語版の該当
   記事の「履歴表示」ページで確認できます。
 
-  upload.wikimedia.org（ウィキメディア・コモンズ）から読み込む画像は
+  thumb.wikimedia.org と upload.wikimedia.org から読み込む画像は
   上記の対象外です。各ファイルはアップロード者が設定した個別のライセ
   ンス（CC BY-SA、CC0/パブリックドメインなど自由なライセンスが多い
   一方、ウィキペディア上での利用のみに限定された「フェアユース」画像
-  も一部存在します）の下にあります。ゲーム外で画像を再利用する場合は、
+  も一部存在します）の下にあります。本ゲームは、CC0 またはパブリック
+  ドメインと確認できた画像だけを表示します。ゲーム外で画像を再利用する場合は、
   commons.wikimedia.org の該当ファイルページでライセンスと必要な
   帰属表示を必ず確認してください。
 

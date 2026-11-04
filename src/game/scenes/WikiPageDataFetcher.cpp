@@ -8,7 +8,9 @@
 #include "../../core/StringUtils.h"
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 #ifdef WIKIGOLF_HTML_COURSES
 #include "../../graphics/html/CourseHtml.h"
 #endif
@@ -76,7 +78,25 @@ PageDataAsyncResult WikiPageDataFetcher::Fetch(const std::string& pageName) {
              ElapsedMs(categoryStartedAt));
 
 #ifdef WIKIGOLF_HTML_COURSES
-    auto prepared = graphics::html::PrepareArticle(pageName, wikiClient.FetchPageHtml(pageName));
+    const std::string articleHtml = wikiClient.FetchPageHtml(pageName);
+
+    // ライセンスを確認できた画像だけを本文に残す。確認に失敗したら画像なしで表示する。
+    std::vector<game::systems::WikiImageInfo> imageCandidates;
+    for (const auto& url : graphics::html::ExtractImageUrls(articleHtml)) {
+        const std::string fileName = graphics::html::ImageFileName(url);
+        if (fileName.empty()) continue;
+        game::systems::WikiImageInfo candidate;
+        candidate.fileTitle = "ファイル:" + fileName;
+        candidate.thumbUrl = url;
+        imageCandidates.push_back(std::move(candidate));
+    }
+    wikiClient.FilterImagesByAllowedLicense(imageCandidates);
+    std::unordered_set<std::string> allowedImageUrls;
+    for (const auto& candidate : imageCandidates) {
+        allowedImageUrls.insert(candidate.thumbUrl);
+    }
+
+    auto prepared = graphics::html::PrepareArticle(pageName, articleHtml, &allowedImageUrls);
     if (!prepared.html.empty()) {
         result.articleHtml = std::move(prepared.html);
         std::size_t imageBytes = 0;

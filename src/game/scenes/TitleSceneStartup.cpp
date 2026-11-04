@@ -593,7 +593,7 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     // コピーライト
     auto ec = CreateEntity(ctx.world);
     auto &tc = ctx.world.Add<components::UIText>(ec);
-    tc.text = L"©WikiGolf v1.0.0  |  CC BY-SA 4.0";
+    tc.text = L"記事本文: Wikipedia (CC BY-SA 4.0)";
     tc.x = 860.0f; tc.y = 690.0f;
     tc.style.fontSize = 14.0f;
     tc.style.color = {0.6f, 0.6f, 0.6f, 1.0f};

@@ -51,6 +51,36 @@ int main() {
         Require(p.html.find("9000")==std::string::npos,"style stripped");
         Require(p.html.find("Edit")==std::string::npos,"edit stripped");
         Require(p.imageUrls.size()==1,"image allowlist");
+        Require(p.html.find("Wikipedia「Title &lt;test&gt;」")!=std::string::npos,"article attribution");
+        Require(p.html.find("https://ja.wikipedia.org/wiki/Title_&lt;test&gt;")!=std::string::npos,"attribution url");
+        Require(p.html.find("CC BY-SA 4.0")!=std::string::npos,"attribution license");
+        {
+            // 記事HTMLの形式（REST API）と現在の画像配信元
+            const std::string thumb="https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/Golfer_swing.jpg/250px-Golfer_swing.jpg?utm_source=a&utm_content=b";
+            const std::string raw="https://upload.wikimedia.org/wikipedia/commons/5/5a/Oda%20Kaou.jpg?utm_source=a";
+            const std::string local="https://thumb.wikimedia.org/wikipedia/ja/thumb/a/ab/Local.png/250px-Local.png";
+            const std::string rest=R"HTML(<html><head><title>x</title></head><body><section><p><a rel="mw:WikiLink" href="./Target">Target</a><a rel="mw:WikiLink" href="./Missing?action=edit&amp;redlink=1" class="new">Missing</a><sup class="mw-ref reference"><a href="./Ref">1</a></sup></p><figure typeof="mw:File/Thumb"><a href="./ファイル:Golfer_swing.jpg"><img src="//thumb.wikimedia.org/wikipedia/commons/thumb/6/6e/Golfer_swing.jpg/250px-Golfer_swing.jpg?utm_source=a&amp;utm_content=b"></a><figcaption>Caption</figcaption></figure><img src="//upload.wikimedia.org/wikipedia/commons/5/5a/Oda%20Kaou.jpg?utm_source=a"><img src="//thumb.wikimedia.org/wikipedia/ja/thumb/a/ab/Local.png/250px-Local.png"><img src="https://maps.wikimedia.org/img/x.png"></section></body></html>)HTML";
+            const auto urls=ExtractImageUrls(rest);
+            Require(urls==std::vector<std::string>{thumb,raw,local},"candidate image urls");
+            Require(ImageFileName(thumb)=="Golfer_swing.jpg","thumb file name");
+            Require(ImageFileName(raw)=="Oda Kaou.jpg","original file name");
+            Require(ImageFileName(local)=="Local.png","local file name");
+            for (const char* bad : {"https://maps.wikimedia.org/img/x.png","https://thumb.wikimedia.org/wikipedia/commons/x.png","https://upload.wikimedia.org/wikipedia/commons/temp/5/5a/x.png","https://other.test/wikipedia/commons/5/5a/x.png","https://upload.wikimedia.org/wikipedia/commons/5/5a/x%QQ.png"})
+                Require(ImageFileName(bad).empty(),"unknown image url");
+
+            // 許可されなかった画像は本文からも取得対象からも外れ、キャプションは残る
+            const std::unordered_set<std::string> allowed{thumb};
+            auto filtered=PrepareArticle("Rest",rest,&allowed);
+            Require(filtered.imageUrls==std::vector<std::string>{thumb},"license allowlist");
+            Require(filtered.html.find("Oda")==std::string::npos && filtered.html.find("Local")==std::string::npos,"rejected image removed");
+            Require(filtered.html.find("Caption")!=std::string::npos,"caption preserved");
+            const std::unordered_set<std::string> none;
+            Require(PrepareArticle("Rest",rest,&none).imageUrls.empty(),"license check failure hides images");
+
+            TestContainer restLayout;
+            Require(restLayout.Layout(filtered.html,"Target"),"rest layout");
+            Require(restLayout.Links().size()==1 && restLayout.Links()[0].target=="Target","rest links exclude redlink and reference");
+        }
         TestContainer c;
         Require(c.Layout(p.html,"Target"),"layout");
         Require(c.Links().size()==2,"only actual anchors create holes");

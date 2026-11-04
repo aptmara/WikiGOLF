@@ -1,11 +1,14 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace graphics::html {
-inline constexpr std::size_t kMaxHtmlBytes = 2 * 1024 * 1024;
+inline constexpr std::size_t kMaxHtmlBytes = 6 * 1024 * 1024;
 inline constexpr std::size_t kMaxImages = 12;
+/** ライセンス確認の対象にする画像数の上限（確認のリクエストを増やしすぎないため） */
+inline constexpr std::size_t kMaxImageCandidates = 100;
 inline constexpr std::uint64_t kMaxTexturePixels = 64ull * 1024 * 1024;
 inline constexpr int kLayoutWidth = 2048;
 
@@ -29,8 +32,19 @@ struct RasterSize {
 };
 /** @brief 記事名前空間の内部リンクを復号・正規化します。対象外は空文字を返します。 */
 std::string ArticleTarget(const std::string& href);
-/** @brief 許可した記事構造のみ保持し、外部CSS・スクリプトを除外します。 */
-PreparedArticle PrepareArticle(const std::string& title, const std::string& html);
+/**
+ * @brief 許可した記事構造のみ保持し、外部CSS・スクリプトを除外します。
+ * @param allowedImageUrls 指定すると、ここに含まれる画像だけを残します。
+ */
+PreparedArticle PrepareArticle(const std::string& title, const std::string& html,
+                               const std::unordered_set<std::string>* allowedImageUrls = nullptr);
+/** @brief ライセンス確認の対象となる画像URLを、記事内の出現順に返します。 */
+std::vector<std::string> ExtractImageUrls(const std::string& html);
+/**
+ * @brief 画像URLからファイル名を取り出します（例: "Golfer_swing.jpg"）。
+ * @return WikipediaまたはCommonsのファイルと判定できなければ空文字列
+ */
+std::string ImageFileName(const std::string& url);
 /** @brief 固定レイアウトに対する画素上限付き出力寸法を返します。 */
 RasterSize FitRaster(float width, float height,
                      std::uint64_t maxPixels = kMaxTexturePixels);
