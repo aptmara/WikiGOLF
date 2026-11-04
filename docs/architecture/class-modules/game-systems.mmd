@@ -1,0 +1,1655 @@
+%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+%% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
+%% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
+%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
+%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+classDiagram
+    direction LR
+    namespace game__systems {
+        class game__systems__AchievementCategory["AchievementCategory"] {
+            <<enumeration>>
+            Progress
+            Skill
+            Hazard
+            Daily
+            Online
+            Exploration
+        }
+        class game__systems__AchievementDef["AchievementDef"] {
+            <<struct>>
+            +AchievementId id
+            +const wchar_t #42; name
+            +const wchar_t #42; description
+            +AchievementCategory category
+            +int targetValue
+        }
+        class game__systems__AchievementEvent["AchievementEvent"] {
+            <<struct>>
+            +AchievementEventType type
+            +bool isDailyChallenge
+            +bool isTutorial
+            +bool isFreePlay
+            +int shotCount
+            +int par
+            +int clearTimeMs
+            +int hopCount
+            +game::components::ShotJudgement judgement
+            +game::components::TerrainMaterial material
+            +bool isTopRank
+        }
+        class game__systems__AchievementEventBus["AchievementEventBus"] {
+            -std::vector#lt; Listener #gt; m_listeners
+            +Subscribe(Listener listener) void
+            +Publish(const AchievementEvent #amp; event) void
+        }
+        class game__systems__AchievementEventType["AchievementEventType"] {
+            <<enumeration>>
+            RoundStarted
+            ShotJudged
+            HazardEntered
+            HoleCleared
+            DisplayNameRegistered
+            DailyRankingFetched
+        }
+        class game__systems__AchievementId["AchievementId"] {
+            <<enumeration>>
+            FirstClear
+            TenClears
+            HundredClears
+            TutorialComplete
+            FreePlayClear
+            Birdie
+            ParFirstTry
+            TripleSpecial
+            NoMiss
+            ShortestPath
+            FirstWaterHazard
+            FirstLavaHazard
+            ResilientClear
+            DailyFirst
+            DailyStreak3
+            DailyStreak7
+            DailyRankingFirst
+            DisplayNameRegistered
+            NewRecord
+            Explorer100Pages
+            Wanderer10Hops
+            Count
+        }
+        class game__systems__AchievementManager["AchievementManager"] {
+            -core::GameContext #42; m_ctx
+            -AchievementProgress m_progress
+            -RoundSessionState m_session
+            -game::controllers::hud::AchievementToastPanel m_toastPanel
+            +Initialize(core::GameContext #amp; ctx, AchievementEventBus #amp; bus) void
+            +Update(core::GameContext #amp; ctx) void
+            +Render(core::GameContext #amp; ctx, graphics::TextRenderer #amp; renderer) void
+            +Shutdown(core::GameContext #amp; ctx) void
+            +GetProgress() const AchievementProgress #amp; #123;const#125;
+            +IsUnlocked(AchievementId id) bool #123;const#125;
+            -HandleEvent(const AchievementEvent #amp; event) void
+            -OnRoundStarted(const AchievementEvent #amp; event) void
+            -OnShotJudged(const AchievementEvent #amp; event) void
+            -OnHazardEntered(const AchievementEvent #amp; event) void
+            -OnHoleCleared(const AchievementEvent #amp; event) void
+            -OnDisplayNameRegistered() void
+            -OnDailyRankingFetched(const AchievementEvent #amp; event) void
+            -TryUnlock(AchievementId id) bool
+            -SaveProgress() void
+        }
+        class game__systems__AchievementManager__RoundSessionState["AchievementManager::RoundSessionState"] {
+            <<struct>>
+            +int specialJudgementCount
+            +bool hadMissThisRound
+            +bool hadObThisRound
+        }
+        class game__systems__AchievementProgress["AchievementProgress"] {
+            <<struct>>
+            +std::vector#lt; AchievementId #gt; unlocked
+            +int totalClears
+            +int totalPagesVisited
+            +int bestStrokes
+            +int bestClearTimeMs
+            +int dailyStreak
+            +std::string lastDailyDateIso
+            +IsUnlocked(AchievementId id) bool #123;const#125;
+        }
+        class game__systems__AchievementStore["AchievementStore"] {
+            +Load()$ AchievementProgress
+            +Save(const AchievementProgress #amp; progress)$ bool
+        }
+        class game__systems__AudioSystem["AudioSystem"] {
+            +size_t MAX_ACTIVE_SE$
+            -Microsoft::WRL::ComPtr#lt; IXAudio2 #gt; m_xaudio2
+            -IXAudio2MasteringVoice #42; m_masterVoice
+            -std::vector#lt; std::unique_ptr#lt; ActiveVoice #gt; #gt; m_activeSEs
+            -std::map#lt; std::string, std::unique_ptr#lt; ActiveVoice #gt; #gt; m_loopingSEs
+            -std::map#lt; std::string, std::unique_ptr#lt; ActiveVoice #gt; #gt; m_oneShotVoices
+            -std::vector#lt; std::unique_ptr#lt; ActiveVoice #gt; #gt; m_fadingVoices
+            -std::unique_ptr#lt; ActiveVoice #gt; m_landingVoice
+            -IXAudio2SourceVoice #42; m_bgmVoice
+            -std::string m_currentBgmName
+            -VoiceCallback m_bgmCallback
+            -float m_bgmBaseVolume
+            -std::string m_bgmDuckLabel
+            -float m_bgmDuckLevel
+            -float m_bgmDuckFadeOutSpeed
+            -float m_bgmDuckFadeInSpeed
+            +AudioSystem()
+            +#126;AudioSystem()
+            +Initialize() bool
+            +Shutdown() void
+            +Update(core::GameContext #amp; ctx) void
+            +PlaySE(core::GameContext #amp; ctx, const std::string #amp; name, float volume, float pitch) void
+            +PlayOneShotFile(core::GameContext #amp; ctx, const std::string #amp; label, const std::string #amp; path, float volume, float pitch) void
+            +StopOneShot(const std::string #amp; label) void
+            +PlayBGM(core::GameContext #amp; ctx, const std::string #amp; name, float volume) void
+            +StopBGM() void
+            +PlayJingleWithBgmDuck(core::GameContext #amp; ctx, const std::string #amp; label, const std::string #amp; path, float volume, float fadeOutSeconds, float fadeInSeconds) void
+            +SetMasterVolume(float volume) void
+            +SetLoopingSE(core::GameContext #amp; ctx, const std::string #amp; label, const std::string #amp; name, float volume, float pitch) void
+            +PlayLandingSE(core::GameContext #amp; ctx, const std::string #amp; name, float volume, float pitch, float maxDuration) void
+            +StopLandingSE(float fadeSeconds) void
+            -UpdateBgmDuck(float dt) void
+        }
+        class game__systems__AudioSystem__ActiveVoice["AudioSystem::ActiveVoice"] {
+            <<struct>>
+            +IXAudio2SourceVoice #42; voice
+            +VoiceCallback callback
+            +std::string debugName
+            +std::string currentFile
+            +float currentVolume
+            +float targetVolume
+            +float fadeSpeed
+            +float durationTimer
+            +float maxDuration
+            +bool isStopping
+        }
+        class game__systems__BodyInfo["BodyInfo"] {
+            <<struct>>
+            +ecs::Entity entity
+            +Transform #42; t
+            +RigidBody #42; rb
+            +Collider #42; c
+        }
+        class game__systems__ContentFilter["ContentFilter"] {
+            +const char #42; kDefaultPath$
+            -int kAlwaysBlocked$
+            -int kSafeModeBlocked$
+            -std::unordered_map#lt; std::string, std::uint8_t #gt; m_levelByTitle
+            -std::unordered_map#lt; int, std::uint8_t #gt; m_levelById
+            -std::atomic#lt; bool #gt; m_safeMode
+            +Instance()$ ContentFilter #amp;
+            +LoadFromStream(std::istream #amp; input) std::size_t
+            +LoadFromFile(const std::string #amp; path) bool
+            +SetSafeMode(bool enabled) void
+            +IsSafeMode() bool #123;const#125;
+            +IsTitleBlocked(const std::string #amp; title) bool #123;const#125;
+            +IsPageIdBlocked(int pageId) bool #123;const#125;
+            +NormalizeTitle(std::string title)$ std::string
+            -ParseInt(std::string_view text, int #amp; value)$ bool
+            -IsLevelBlocked(std::uint8_t level) bool #123;const#125;
+        }
+        class game__systems__CourseFrame["CourseFrame"] {
+            <<struct>>
+            +float width
+            +float depth
+            +float marginX
+            +float marginZ
+        }
+        class game__systems__DailyChallengeRandom["DailyChallengeRandom"] {
+            -std::mt19937 m_rng
+            +DailyChallengeRandom(std::uint32_t seed)
+            +NextIndex(std::size_t candidateCount) std::size_t
+        }
+        class game__systems__EnvironmentParticleSystem["EnvironmentParticleSystem"] {
+            -ParticleConfig m_config
+            -std::vector#lt; Particle #gt; m_particles
+            -std::mt19937 m_rng
+            +EnvironmentParticleSystem()
+            +Configure(const ParticleConfig #amp; config) void
+            +Update(float dt, const XMFLOAT3 #amp; cameraPos, const XMFLOAT3 #amp; windDir) void
+            +GetParticles() const std::vector#lt; Particle #gt; #amp; #123;const#125;
+            +GetActiveCount() size_t #123;const#125;
+            -SpawnParticles(float dt, const XMFLOAT3 #amp; cameraPos) void
+        }
+        class game__systems__EnvironmentSoundPreset["EnvironmentSoundPreset"] {
+            <<struct>>
+            +std::string ambientPath
+            +std::string weatherPath
+            +float ambientVolume
+            +float weatherVolume
+            +bool hasWeather
+        }
+        class game__systems__EnvironmentSoundSystem["EnvironmentSoundSystem"] {
+            -AudioSystem #42; m_audioSystem
+            -graphics::SkyboxTheme m_currentTheme
+            -graphics::SkyboxTheme m_previousTheme
+            -float m_transitionProgress
+            -float m_transitionDuration
+            -bool m_isTransitioning
+            +Initialize(AudioSystem #42; audioSystem) void
+            +ChangeTheme(graphics::SkyboxTheme theme, float fadeTime) void
+            +Update(float dt) void
+            +GetCurrentTheme() graphics::SkyboxTheme #123;const#125;
+            +IsTransitioning() bool #123;const#125;
+            +GetTransitionProgress() float #123;const#125;
+        }
+        class game__systems__GameJuiceSystem["GameJuiceSystem"] {
+            -float m_shakeIntensity
+            -float m_shakeDuration
+            -float m_shakeTimer
+            -float m_shakeFrequency
+            -float m_timeScale
+            -float m_hitStopTimer
+            -float m_hitStopDuration
+            -float m_hitStopScale
+            -float m_slowMoTimer
+            -float m_slowMoDuration
+            -float m_slowMoScale
+            -float m_baseFov
+            -float m_currentFov
+            -float m_targetFov
+            -float m_fovPunchTimer
+            -float m_fovPunchDuration
+            -float m_fovPunchStrength
+            -std::vector#lt; ecs::Entity #gt; m_trailEntities
+            -std::vector#lt; ecs::Entity #gt; m_trailCoreEntities
+            -std::vector#lt; DirectX::XMFLOAT3 #gt; m_trailPositions
+            -std::vector#lt; DirectX::XMFLOAT4 #gt; m_trailBaseColors
+            -int m_trailWriteIndex
+            -float m_trailUpdateTimer
+            -DirectX::XMFLOAT3 m_lastTrailTargetPosition
+            -bool m_hasLastTrailTargetPosition
+            -float m_cupApproachTrailTimer
+            -int kTrailCount$
+            -float kTrailUpdateInterval$
+            -float kTrailMaxSpacing$
+            -std::vector#lt; ImpactParticle #gt; m_impactParticles
+            -int kImpactBurstCount$
+            -int kImpactParticleCount$
+            -std::vector#lt; EnvironmentParticle #gt; m_envParticles
+            -int m_envWriteIndex
+            -float m_envEmitTimer
+            -int kEnvParticleCount$
+            -std::vector#lt; SurfaceMark #gt; m_surfaceMarks
+            -int m_surfaceMarkWriteIndex
+            -float m_surfaceTrackTimer
+            -ecs::Entity m_surfaceCollarEntity
+            -int kSurfaceMarkCount$
+            -std::vector#lt; Ripple #gt; m_ripples
+            -int m_rippleWriteIndex
+            -int kRippleCount$
+            -ecs::EntityOwner m_entityOwner
+            +GameJuiceSystem()
+            +#126;GameJuiceSystem()
+            +GameJuiceSystem(const GameJuiceSystem #amp;)
+            +operator=(const GameJuiceSystem #amp;) GameJuiceSystem #amp;
+            +Initialize(core::GameContext #amp; ctx) void
+            +Shutdown(core::GameContext #amp; ctx) void
+            +Update(core::GameContext #amp; ctx, ecs::Entity cameraEntity, ecs::Entity targetEntity) void
+            +TriggerCameraShake(float intensity, float duration) void
+            +SetTargetFov(float fov) void
+            +ResetFov() void
+            +GetCurrentFov() float #123;const#125;
+            +TriggerHitStop(float duration, float timeScale) void
+            +TriggerSlowMotion(float duration, float scale) void
+            +ConsumeTimeScale(float unscaledDt) float
+            +TriggerImpactEffect(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; position, float power, JudgeType judge) void
+            +TriggerShotEffect(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; position, const DirectX::XMFLOAT3 #amp; direction, float power, JudgeType judge) void
+            +TriggerMaterialEffect(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; position, game::components::TerrainMaterial material, float strength) void
+            +TriggerRippleEffect(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; position, float baseRadius, float strength, game::components::TerrainMaterial material) void
+            +TriggerConfetti(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; position, float burstPower) void
+            +ResetTrail() void
+            +TriggerCupApproachTrail(float duration) void
+            -UpdateCameraShake(core::GameContext #amp; ctx, ecs::Entity cameraEntity) void
+            -UpdateFov(core::GameContext #amp; ctx, ecs::Entity cameraEntity) void
+            -UpdateTrail(core::GameContext #amp; ctx, ecs::Entity targetEntity) void
+            -UpdateImpactParticles(core::GameContext #amp; ctx) void
+            -UpdateEnvironmentParticles(core::GameContext #amp; ctx, ecs::Entity targetEntity) void
+            -UpdateSurfaceEffects(core::GameContext #amp; ctx, ecs::Entity targetEntity) void
+            -UpdateRipples(core::GameContext #amp; ctx) void
+            -UpdateFovPunch(float dt) float
+            -EmitEnvironmentParticles(core::GameContext #amp; ctx, ecs::Entity targetEntity) void
+            -CreateTrailEntities(core::GameContext #amp; ctx) void
+            -CreateImpactParticleEntities(core::GameContext #amp; ctx) void
+            -CreateEnvironmentParticleEntities(core::GameContext #amp; ctx) void
+            -CreateSurfaceEffectEntities(core::GameContext #amp; ctx) void
+            -SpawnSurfaceMark(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; position, game::components::TerrainMaterial material, float scale, float lifetime, const DirectX::XMFLOAT4 #amp; color) void
+            -CreateRippleEntities(core::GameContext #amp; ctx) void
+        }
+        class game__systems__GameJuiceSystem__EnvironmentParticle["GameJuiceSystem::EnvironmentParticle"] {
+            <<struct>>
+            +ecs::Entity entity
+            +DirectX::XMFLOAT3 velocity
+            +DirectX::XMFLOAT3 angularVelocity
+            +float lifetime
+            +float maxLifetime
+            +float baseScale
+            +float groundHeight
+            +DirectX::XMFLOAT4 baseColor
+            +EnvironmentParticleKind kind
+        }
+        class game__systems__GameJuiceSystem__EnvironmentParticleKind["GameJuiceSystem::EnvironmentParticleKind"] {
+            <<enumeration>>
+            GrassClip
+            SandDust
+            SandGrain
+            SandClump
+            IceShard
+            IceMist
+            StoneChip
+            StoneDust
+            WaterDrop
+            WaterMist
+            Ember
+            LavaSmoke
+            GenericDebris
+        }
+        class game__systems__GameJuiceSystem__ImpactParticle["GameJuiceSystem::ImpactParticle"] {
+            <<struct>>
+            +ecs::Entity entity
+            +DirectX::XMFLOAT3 velocity
+            +DirectX::XMFLOAT3 angularVelocity
+            +float lifetime
+            +float maxLifetime
+            +float baseScale
+            +DirectX::XMFLOAT4 baseColor
+            +ImpactParticleKind kind
+        }
+        class game__systems__GameJuiceSystem__ImpactParticleKind["GameJuiceSystem::ImpactParticleKind"] {
+            <<enumeration>>
+            Burst
+            Confetti
+            Star
+            Sparkle
+            Glint
+            ShotSpark
+            ShotDust
+            ShotRing
+        }
+        class game__systems__GameJuiceSystem__JudgeType["GameJuiceSystem::JudgeType"] {
+            <<enumeration>>
+            None
+            Great
+            Nice
+            Miss
+            Special
+        }
+        class game__systems__GameJuiceSystem__Ripple["GameJuiceSystem::Ripple"] {
+            <<struct>>
+            +ecs::Entity entity
+            +float lifetime
+            +float maxLifetime
+            +float startScale
+            +float expansion
+            +float thickness
+            +DirectX::XMFLOAT4 baseColor
+        }
+        class game__systems__GameJuiceSystem__SurfaceMark["GameJuiceSystem::SurfaceMark"] {
+            <<struct>>
+            +ecs::Entity entity
+            +float lifetime
+            +float maxLifetime
+            +float startScale
+            +DirectX::XMFLOAT4 baseColor
+        }
+        class game__systems__GolfCupClipConstants["GolfCupClipConstants"] {
+            <<struct>>
+            +XMFLOAT4 cups[kGolfCupClipMaxCount]
+            +XMFLOAT4 info
+        }
+        class game__systems__GrassBudgetLimits["GrassBudgetLimits"] {
+            <<struct>>
+            +float firstLodScale
+            +float minDrawScale
+        }
+        class game__systems__GrassBudgetSample["GrassBudgetSample"] {
+            <<struct>>
+            +float distance
+            +float lodSwitchDistance
+            +float maxDrawDistance
+            +uint32_t nearTriangles
+            +uint32_t lodTriangles
+        }
+        class game__systems__GrassBudgetScales["GrassBudgetScales"] {
+            <<struct>>
+            +float lodScale
+            +float drawScale
+            +uint64_t estimatedTriangles
+        }
+        class game__systems__GrassGpuLoadController["GrassGpuLoadController"] {
+            <<struct>>
+            +float smoothedGpuMs
+            +float budgetScale
+        }
+        class game__systems__GrassGpuLoadTarget["GrassGpuLoadTarget"] {
+            <<struct>>
+            +float targetGpuMs
+            +float minBudgetScale
+        }
+        class game__systems__GrassNormalSampleRange["GrassNormalSampleRange"] {
+            <<struct>>
+            +float lower
+            +float upper
+        }
+        class game__systems__GrassStreamingBounds["GrassStreamingBounds"] {
+            <<struct>>
+            +float minX
+            +float maxX
+            +float minZ
+            +float maxZ
+        }
+        class game__systems__HoleInfo["HoleInfo"] {
+            <<struct>>
+            +ecs::Entity entity
+            +XMVECTOR position
+            +XMFLOAT3 positionFloat
+            +float radius
+            +float gravity
+            +float suctionRange
+            +game::physics::GolfCupShape cup
+        }
+        class game__systems__HoleSpatialGrid["HoleSpatialGrid"] {
+            <<struct>>
+            +float cellSize
+            +std::vector#lt; HoleInfo #gt; holes
+            +std::unordered_map#lt; int64_t, std::vector#lt; uint32_t #gt; #gt; cells
+            +Build(const std::vector#lt; HoleInfo #gt; #amp; source) void
+            +Query(float x, float z, float radius, Func #amp;#amp; func) void #123;const#125;
+        }
+        class game__systems__HtmlRegionKind["HtmlRegionKind"] {
+            <<enumeration>>
+            Body
+            Heading
+            Hazard
+        }
+        class game__systems__HtmlTerrainRegion["HtmlTerrainRegion"] {
+            <<struct>>
+            +float u
+            +float v
+            +float width
+            +float height
+            +HtmlRegionKind kind
+        }
+        class game__systems__ImageObstacleLayout["ImageObstacleLayout"] {
+            <<struct>>
+            +DirectX::XMFLOAT3 position
+            +DirectX::XMFLOAT3 scale
+        }
+        class game__systems__MapInstanceData["MapInstanceData"] {
+            <<struct>>
+            +XMFLOAT4X4 world
+            +XMFLOAT4 color
+            +XMFLOAT4 flags
+        }
+        class game__systems__MapRenderInstance["MapRenderInstance"] {
+            <<struct>>
+            +XMMATRIX worldMatrix
+            +XMFLOAT4 color
+        }
+        class game__systems__MapRenderKey["MapRenderKey"] {
+            <<struct>>
+            +resources::MeshHandle mesh
+            +ID3D11ShaderResourceView #42; textureSRV
+            +components::MinimapRenderMode mode
+            +operator==(const MapRenderKey #amp; o) bool #123;const#125;
+        }
+        class game__systems__MapRenderKeyHash["MapRenderKeyHash"] {
+            <<struct>>
+            +operator#40;#41;(const MapRenderKey #amp; k) size_t #123;const#125;
+        }
+        class game__systems__MapRenderParams["MapRenderParams"] {
+            <<struct>>
+            +DirectX::XMFLOAT3 center
+            +float extent
+            +float zoom
+            +float heightScale
+            +float orthoPadding
+            +float visibleWidth
+            +float visibleDepth
+            +bool highlightBall
+            +bool cullSkybox
+        }
+        class game__systems__MapSys["MapSys"] {
+            -int m_width
+            -int m_height
+            -Microsoft::WRL::ComPtr#lt; ID3D11Texture2D #gt; m_rt
+            -Microsoft::WRL::ComPtr#lt; ID3D11RenderTargetView #gt; m_rtv
+            -Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; m_srv
+            -Microsoft::WRL::ComPtr#lt; ID3D11DepthStencilView #gt; m_dsv
+            -Microsoft::WRL::ComPtr#lt; ID3D11Texture2D #gt; m_ds
+            -D3D11_VIEWPORT m_vp
+            -Microsoft::WRL::ComPtr#lt; ID3D11Buffer #gt; m_cb
+            -Microsoft::WRL::ComPtr#lt; ID3D11SamplerState #gt; m_samp
+            -Microsoft::WRL::ComPtr#lt; ID3D11BlendState #gt; m_multiplyBlendState
+            -Microsoft::WRL::ComPtr#lt; ID3D11Buffer #gt; m_instancedBuffer
+            -Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; m_instancedSRV
+            -size_t m_instancedBufferCapacity
+            -Microsoft::WRL::ComPtr#lt; ID3D11RenderTargetView #gt; m_saveRTV
+            -Microsoft::WRL::ComPtr#lt; ID3D11DepthStencilView #gt; m_saveDSV
+            -Microsoft::WRL::ComPtr#lt; ID3D11BlendState #gt; m_saveBlendState
+            -float m_saveBlendFactor[4]
+            -UINT m_saveSampleMask
+            -D3D11_VIEWPORT m_saveVP
+            +MapSys()
+            +#126;MapSys()
+            +Initialize(ID3D11Device #42; device, int width, int height) bool
+            +Render(core::GameContext #amp; ctx, const MapRenderParams #amp; params) void
+            +RenderMinimap(core::GameContext #amp; ctx, const MapRenderParams #amp; params) void
+            +GetSRV() ID3D11ShaderResourceView #42; #123;const#125;
+            +GetViewMatrix(float cx, float cz, float h) DirectX::XMMATRIX
+            +GetProjMatrix(float w, float d) DirectX::XMMATRIX
+            -BeginRender(ID3D11DeviceContext #42; ctx) void
+            -EndRender(ID3D11DeviceContext #42; ctx) void
+            -EnsureInstanceBuffer(ID3D11Device #42; device, size_t requiredCount) bool
+        }
+        class game__systems__MapVSConst["MapVSConst"] {
+            <<struct>>
+            +XMMATRIX w
+            +XMMATRIX v
+            +XMMATRIX p
+            +XMFLOAT4 c
+            +XMFLOAT4 flags
+        }
+        class game__systems__Particle["Particle"] {
+            <<struct>>
+            +XMFLOAT3 position
+            +XMFLOAT3 velocity
+            +XMFLOAT4 color
+            +float size
+            +float life
+            +float maxLife
+            +float rotation
+            +float rotationSpeed
+        }
+        class game__systems__ParticleConfig["ParticleConfig"] {
+            <<struct>>
+            +int maxParticles
+            +float spawnRadius
+            +float spawnHeight
+            +XMFLOAT3 baseVelocity
+            +float velocityVariance
+            +float sizeMin
+            +float sizeMax
+            +float lifeMin
+            +float lifeMax
+            +XMFLOAT4 colorStart
+            +XMFLOAT4 colorEnd
+            +bool fadeInOut
+            +bool rotateParticles
+            +float gravity
+            +float windInfluence
+        }
+        class game__systems__ParticleRenderSystem["ParticleRenderSystem"] {
+            -int kMaxParticles$
+            -ID3D11Device #42; m_device
+            -ComPtr#lt; ID3D11Buffer #gt; m_constantBuffer
+            -ComPtr#lt; ID3D11Buffer #gt; m_vertexBuffer
+            -ComPtr#lt; ID3D11Buffer #gt; m_indexBuffer
+            -ComPtr#lt; ID3D11BlendState #gt; m_blendState
+            -ComPtr#lt; ID3D11DepthStencilState #gt; m_depthStencilState
+            -bool m_initialized
+            +Initialize(ID3D11Device #42; device) bool
+            +Render(ID3D11DeviceContext #42; context, const std::vector#lt; Particle #gt; #amp; particles, const XMMATRIX #amp; view, const XMMATRIX #amp; proj, const XMFLOAT3 #amp; cameraRight, const XMFLOAT3 #amp; cameraUp) void
+        }
+        class game__systems__ParticleRenderSystem__ParticleConstants["ParticleRenderSystem::ParticleConstants"] {
+            <<struct>>
+            +XMMATRIX viewProj
+        }
+        class game__systems__ParticleVertex["ParticleVertex"] {
+            <<struct>>
+            +XMFLOAT3 position
+            +XMFLOAT2 texCoord
+            +XMFLOAT4 color
+            +float size
+        }
+        class game__systems__PhysicsPerfStats["PhysicsPerfStats"] {
+            <<struct>>
+            +uint32_t terrainSamples
+            +uint32_t holeCandidates
+            +uint32_t staticCandidates
+            +uint32_t staticChecks
+        }
+        class game__systems__PhysicsSpatialCache["PhysicsSpatialCache"] {
+            <<struct>>
+            +const TerrainData #42; terrainIdentity
+            +std::string pageIdentity
+            +size_t holeCount
+            +ecs::Entity firstHole
+            +ecs::Entity lastHole
+            +HoleSpatialGrid holeGrid
+            +StaticBodySpatialGrid staticBodyGrid
+            +float maxHoleQueryRange
+        }
+        class game__systems__PhysicsUpdateContext["PhysicsUpdateContext"] {
+            <<struct>>
+            +core::GameContext #amp; gameContext
+            +float subDt
+            +int subSteps
+            +XMVECTOR gravity
+            +TerrainData #42; terrainData
+            +ecs::Entity terrainEntity
+            +GolfGameState #42; golfState
+            +ecs::Entity ballEntity
+            +const HoleSpatialGrid #amp; holeGrid
+            +const StaticBodySpatialGrid #amp; staticBodyGrid
+            +float maxHoleQueryRange
+            +std::vector#lt; BodyInfo #gt; #amp; dynamicBodies
+            +CollisionEvents #amp; events
+            +PhysicsPerfStats #amp; perfStats
+            +uint32_t #amp; jitterCursor
+            +float #amp; rollingAudioTimer
+            +float #amp; holeSlowMotionCooldown
+        }
+        class game__systems__PlayFabClient["PlayFabClient"] {
+            +const char #42; kStrokesStatistic$
+            +const char #42; kClearTimeStatistic$
+            -PlayFabProfile m_profile
+            -std::string m_sessionTicket
+            -std::string m_entityToken
+            +LoadOrCreateProfile()$ PlayFabProfile
+            +SaveDisplayName(const std::string #amp; displayName)$ bool
+            +HasDisplayName()$ bool
+            +UpdateDisplayName(const std::string #amp; displayName) PlayFabResult
+            +SubmitDailyResult(int strokes, int clearTimeMs) PlayFabResult
+            +FetchLeaderboard(const std::string #amp; statisticName, int maxResults) PlayFabLeaderboardResult
+            -Login() PlayFabResult
+            -Post(const std::wstring #amp; path, const std::string #amp; body, Authorization authorization, int #amp; statusCode) std::string
+        }
+        class game__systems__PlayFabClient__Authorization["PlayFabClient::Authorization"] {
+            <<enumeration>>
+            None
+            SessionTicket
+            EntityToken
+        }
+        class game__systems__PlayFabLeaderboardEntry["PlayFabLeaderboardEntry"] {
+            <<struct>>
+            +int position
+            +std::string playFabId
+            +std::string displayName
+            +int value
+        }
+        class game__systems__PlayFabLeaderboardResult["PlayFabLeaderboardResult"] {
+            <<struct>>
+            +std::vector#lt; PlayFabLeaderboardEntry #gt; entries
+        }
+        class game__systems__PlayFabProfile["PlayFabProfile"] {
+            <<struct>>
+            +std::string customId
+            +std::string displayName
+        }
+        class game__systems__PlayFabResult["PlayFabResult"] {
+            <<struct>>
+            +bool success
+            +std::string errorMessage
+        }
+        class game__systems__PostProcessConstants["PostProcessConstants"] {
+            <<struct>>
+            +XMFLOAT4 fogColor
+            +XMFLOAT4 fogParams
+            +XMFLOAT4 colorTint
+            +XMFLOAT4 colorParams
+            +XMFLOAT4 vignetteParams
+            +XMFLOAT4 timeParams
+        }
+        class game__systems__PostProcessSystem["PostProcessSystem"] {
+            -PostProcessConstants m_constants
+            +UpdateFromEnvironment(const components::EnvironmentState #amp; env, float time) void
+            +ResetToDefaults() void
+            +SetFog(const XMFLOAT3 #amp; color, float density, float start, float end) void
+            +SetColorGrading(const XMFLOAT3 #amp; tint, float brightness, float saturation, float contrast) void
+            +SetVignette(float intensity, float radius, float softness) void
+            +SetBloom(float intensity, float threshold, float spread) void
+            +GetConstants() const PostProcessConstants #amp; #123;const#125;
+        }
+        class game__systems__RenderFrameStats["RenderFrameStats"] {
+            <<struct>>
+            +size_t candidates
+            +size_t visibleCandidates
+            +size_t drawn
+            +size_t opaqueDrawn
+            +size_t transparentDrawn
+            +size_t texturedDrawn
+            +size_t normalMappedDrawn
+            +size_t terrainDrawn
+            +size_t holeFlagDrawn
+            +size_t invisibleSkipped
+            +size_t alphaSkipped
+            +size_t transparentDistanceSkipped
+            +size_t lodDistanceSkipped
+            +size_t frustumSkipped
+            +size_t missingResourceSkipped
+            +size_t drawCalls
+            +size_t instancedDrawCalls
+            +size_t nonInstancedDrawCalls
+            +size_t grassBatchCandidates
+            +size_t grassInstancesConsidered
+            +size_t grassInstancesDistanceSkipped
+            +size_t grassInstancesOverheadSkipped
+            +size_t grassInstancesFrustumSkipped
+            +size_t grassNearLodInstances
+            +size_t grassMidLodInstances
+            +size_t grassInstancesBudgetSkipped
+            +uint64_t grassTriangles
+        }
+        class game__systems__RenderState["RenderState"] {
+            <<struct>>
+            +ComPtr#lt; ID3D11Buffer #gt; cBuffer
+            +ComPtr#lt; ID3D11Buffer #gt; golfCupBuffer
+            +ComPtr#lt; ID3D11SamplerState #gt; sampler
+            +ComPtr#lt; ID3D11SamplerState #gt; htmlTerrainSampler
+            +ComPtr#lt; ID3D11BlendState #gt; alphaBlendState
+            +ComPtr#lt; ID3D11BlendState #gt; multiplyBlendState
+            +ComPtr#lt; ID3D11BlendState #gt; addBlendState
+            +ComPtr#lt; ID3D11RasterizerState #gt; twoSidedRasterizerState
+            +ComPtr#lt; ID3D11Buffer #gt; instancedBuffer
+            +ComPtr#lt; ID3D11ShaderResourceView #gt; instancedSRV
+            +size_t instancedBufferSize
+            +float grassLodScale
+            +float grassDrawScale
+            +GrassGpuLoadController grassGpuLoad
+            +ComPtr#lt; ID3D11Buffer #gt; temporalBuffer
+            +std::unordered_map#lt; ecs::Entity, XMFLOAT4X4 #gt; previousWorlds
+            +float previousTime
+            +float samplerMipBias
+        }
+        class game__systems__ShadowRenderState["ShadowRenderState"] {
+            <<struct>>
+            +graphics::Shader depthShader
+            +Microsoft::WRL::ComPtr#lt; ID3D11Texture2D #gt; depthTexture
+            +Microsoft::WRL::ComPtr#lt; ID3D11DepthStencilView #gt; depthView
+            +Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; shaderResourceView
+            +Microsoft::WRL::ComPtr#lt; ID3D11SamplerState #gt; comparisonSampler
+            +Microsoft::WRL::ComPtr#lt; ID3D11RasterizerState #gt; rasterizerState
+            +Microsoft::WRL::ComPtr#lt; ID3D11Buffer #gt; constantBuffer
+            +DirectX::XMMATRIX lightViewProjection
+            +bool initialized
+            +bool validThisFrame
+        }
+        class game__systems__ShortestPathResult["ShortestPathResult"] {
+            <<struct>>
+            +bool success
+            +int degrees
+            +std::vector#lt; std::string #gt; path
+            +std::string errorMessage
+        }
+        class game__systems__SkyGlobePlacement["SkyGlobePlacement"] {
+            <<struct>>
+            +DirectX::XMFLOAT3 position
+            +float scale
+            +float tilt
+            +float spinSpeed
+            +float bobPhase
+            +float bobHeight
+        }
+        class game__systems__SlopeOverlayConfig["SlopeOverlayConfig"] {
+            <<struct>>
+            +float radius
+            +float cellSize
+            +float sampleOffset
+            +float maxSlope
+            +float heightOffset
+        }
+        class game__systems__SlopeVisualizationMeshBuilder["SlopeVisualizationMeshBuilder"] {
+            +Build(const TerrainData #amp; terrain, const DirectX::XMFLOAT3 #amp; center, const SlopeOverlayConfig #amp; config)$ BuildResult
+            -SamplePoint(const TerrainData #amp; terrain, float worldX, float worldZ, const SlopeOverlayConfig #amp; config)$ SampledPoint
+            -SlopeToColor(float slope01)$ DirectX::XMFLOAT4
+        }
+        class game__systems__SlopeVisualizationMeshBuilder__BuildResult["SlopeVisualizationMeshBuilder::BuildResult"] {
+            <<struct>>
+            +std::vector#lt; graphics::Vertex #gt; vertices
+            +std::vector#lt; std::uint32_t #gt; indices
+            +IsEmpty() bool #123;const#125;
+        }
+        class game__systems__SlopeVisualizationMeshBuilder__SampledPoint["SlopeVisualizationMeshBuilder::SampledPoint"] {
+            <<struct>>
+            +float height
+            +DirectX::XMFLOAT2 downhill
+            +float slope01
+        }
+        class game__systems__SlopeVisualizationSystem["SlopeVisualizationSystem"] {
+            -float kRebuildDistance$
+            -float kFadeDuration$
+            -ecs::Entity m_overlayEntity
+            -ecs::EntityOwner m_entityOwner
+            -resources::ShaderHandle m_shader
+            -float m_fadeAlpha
+            -bool m_hasMesh
+            -DirectX::XMFLOAT3 m_lastBuildCenter
+            -SlopeOverlayConfig m_config
+            +SlopeVisualizationSystem()
+            +#126;SlopeVisualizationSystem()
+            +Initialize(core::GameContext #amp; ctx) void
+            +Shutdown(core::GameContext #amp; ctx) void
+            +Update(core::GameContext #amp; ctx, float dt, bool visible, const DirectX::XMFLOAT3 #amp; center, const WikiTerrainSystem #42; terrain) void
+            +ForceHide(core::GameContext #amp; ctx) void
+            -ApplyFade(core::GameContext #amp; ctx) void
+            -RebuildMesh(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; center, const WikiTerrainSystem #amp; terrain) void
+        }
+        class game__systems__StaticBodySpatialGrid["StaticBodySpatialGrid"] {
+            <<struct>>
+            +float cellSize
+            +std::vector#lt; ecs::Entity #gt; bodies
+            +std::unordered_map#lt; int64_t, std::vector#lt; uint32_t #gt; #gt; cells
+            +Build(ecs::World #amp; world, const std::vector#lt; ecs::Entity #gt; #amp; source) void
+            +Query(float x, float z, float radius, Func #amp;#amp; func) void #123;const#125;
+        }
+        class game__systems__SurfaceFrictionSettings["SurfaceFrictionSettings"] {
+            <<struct>>
+            +float baseRollingFriction
+            +float slowSpeedReference
+            +float slowFrictionExponent
+            +float slowFrictionMinMultiplier
+            +float highSpeedBoostStart
+            +float highSpeedBoostScale
+            +float slopeFrictionFloor
+            +float constantBrake
+            +float greenMultiplier
+            +float roughMultiplier
+            +float bunkerMultiplier
+        }
+        class game__systems__TemporalConstants["TemporalConstants"] {
+            <<struct>>
+            +XMMATRIX prevViewProjection
+            +XMFLOAT4 jitterUv
+            +XMFLOAT4 params
+        }
+        class game__systems__TerrainBackdropChunk["TerrainBackdropChunk"] {
+            <<struct>>
+            +std::vector#lt; graphics::Vertex #gt; vertices
+            +std::vector#lt; uint32_t #gt; indices
+        }
+        class game__systems__TerrainBackdropSample["TerrainBackdropSample"] {
+            <<struct>>
+            +float height
+            +uint8_t material
+            +DirectX::XMFLOAT3 color
+        }
+        class game__systems__TerrainConfig["TerrainConfig"] {
+            <<struct>>
+            +bool htmlCourse
+            +std::vector#lt; HtmlTerrainRegion #gt; htmlRegions
+            +int resolutionX
+            +int resolutionZ
+            +float worldWidth
+            +float worldDepth
+            +float baseHeight
+            +float heightScale
+            +float friction
+            +float restitution
+            +int biome
+            +float courseWidth
+            +float courseDepth
+            +bool generateExtension
+        }
+        class game__systems__TerrainData["TerrainData"] {
+            <<struct>>
+            +std::vector#lt; float #gt; heightMap
+            +std::vector#lt; uint8_t #gt; materialMap
+            +std::vector#lt; DirectX::XMFLOAT3 #gt; visualMaterialColors
+            +std::vector#lt; DirectX::XMFLOAT3 #gt; normals
+            +std::vector#lt; graphics::Vertex #gt; vertices
+            +std::vector#lt; uint32_t #gt; indices
+            +graphics::Mesh mesh
+            +TerrainConfig config
+            +std::shared_ptr#lt; const TerrainData #gt; extension
+        }
+        class game__systems__TerrainGenerator["TerrainGenerator"] {
+            +GenerateTerrain(const std::string #amp; articleText, const std::vector#lt; DirectX::XMFLOAT2 #gt; #amp; holePositions, const TerrainConfig #amp; config)$ TerrainData
+            +GenerateExtensionTerrain(const std::string #amp; articleText, const std::vector#lt; DirectX::XMFLOAT2 #gt; #amp; holePositions, const TerrainConfig #amp; courseConfig)$ TerrainData
+            +GenerateTutorialTerrain(const TerrainConfig #amp; config, const std::vector#lt; DirectX::XMFLOAT2 #gt; #amp; holePositions)$ TerrainData
+            -GenerateBaseHeightMap(TerrainData #amp; data, const std::string #amp; text, const std::vector#lt; DirectX::XMFLOAT2 #gt; #amp; holePositions)$ void
+            -CreatePlatforms(TerrainData #amp; data, const std::vector#lt; DirectX::XMFLOAT2 #gt; #amp; holePositions)$ void
+            -FlattenCupSites(TerrainData #amp; data, const std::vector#lt; DirectX::XMFLOAT2 #gt; #amp; holePositions)$ void
+            -ApplyMaterialCleanup(TerrainData #amp; data)$ void
+            -GenerateVisualMaterialColors(TerrainData #amp; data)$ void
+            -ApplySmoothing(TerrainData #amp; data, int iterations)$ void
+            -GenerateMesh(TerrainData #amp; data, const std::vector#lt; DirectX::XMFLOAT2 #gt; #amp; holePositions)$ void
+            -CalculateNormals(TerrainData #amp; data)$ void
+            -GetHeight(const TerrainData #amp; data, int x, int z)$ float
+            -SetHeight(TerrainData #amp; data, int x, int z, float h)$ void
+        }
+        class game__systems__TerrainLayoutRules["TerrainLayoutRules"] {
+            +CalculateResolution(float width, float depth)$ TerrainResolution
+            +SampleVisualMaterialColor(const TerrainData #amp; data, float u, float v)$ DirectX::XMFLOAT3
+            +BuildMinimapTerrainGrid(const std::vector#lt; graphics::Vertex #gt; #amp; source, int sourceResolutionX, int sourceResolutionZ, std::vector#lt; std::uint32_t #gt; #amp; outIndices)$ std::vector#lt; graphics::Vertex #gt;
+            +BuildMinimapOverlayQuad(float fieldWidth, float zTop, float zBottom, float flatY, std::vector#lt; std::uint32_t #gt; #amp; outIndices)$ std::vector#lt; graphics::Vertex #gt;
+            +ComputeMaxVertexHeight(const std::vector#lt; graphics::Vertex #gt; #amp; vertices)$ float
+            +DetermineBiome(const std::vector#lt; std::string #gt; #amp; categories, const std::string #amp; pageTitle)$ int
+        }
+        class game__systems__TerrainObstacleLayout["TerrainObstacleLayout"] {
+            +BuildWalls(float fieldWidth, float fieldDepth)$ std::vector#lt; WallLayout #gt;
+            +BuildImageObstacles(const graphics::WikiTextureResult #amp; texture, float fieldWidth, float fieldDepth)$ std::vector#lt; ImageObstacleLayout #gt;
+        }
+        class game__systems__TerrainResolution["TerrainResolution"] {
+            <<struct>>
+            +int x
+            +int z
+        }
+        class game__systems__TerrainSample["TerrainSample"] {
+            <<struct>>
+            +bool valid
+            +float height
+            +XMVECTOR normal
+            +uint8_t material
+        }
+        class game__systems__TimeOfDay["TimeOfDay"] {
+            <<enumeration>>
+            Night
+            Dawn
+            Morning
+            Noon
+            Afternoon
+            Sunset
+            Dusk
+            Evening
+        }
+        class game__systems__TimeOfDaySystem["TimeOfDaySystem"] {
+            -float m_currentHour
+            -float m_timeScale
+            -XMFLOAT3 m_sunDirection
+            -XMFLOAT3 m_sunColor
+            -float m_sunIntensity
+            -XMFLOAT3 m_ambientColor
+            +Initialize(float startHour, float timeScale) void
+            +Update(float dt) void
+            +OnShot(float hoursPerShot) void
+            +OnPageTransition(float hoursPerPage) void
+            +OnCupIn(float hoursPerCupIn) void
+            +NormalizeTime() void
+            +SetTime(float hour) void
+            +SetTimeScale(float scale) void
+            +GetCurrentHour() float #123;const#125;
+            +GetCurrentTimeOfDay() TimeOfDay #123;const#125;
+            +GetSunDirection() XMFLOAT3 #123;const#125;
+            +GetSunColor() XMFLOAT3 #123;const#125;
+            +GetSunIntensity() float #123;const#125;
+            +GetAmbientColor() XMFLOAT3 #123;const#125;
+            +ApplyToEnvironment(components::EnvironmentState #amp; env) void #123;const#125;
+            +IsNight() bool #123;const#125;
+            +IsGoldenHour() bool #123;const#125;
+            -UpdateSunPosition() void
+            -UpdateColors() void
+        }
+        class game__systems__UIBarGaugeRenderSystem["UIBarGaugeRenderSystem"] {
+            +operator#40;#41;(core::GameContext #amp; ctx) void
+        }
+        class game__systems__UIButtonRenderSystem["UIButtonRenderSystem"] {
+            -graphics::TextRenderer #amp; m_renderer
+            +UIButtonRenderSystem(graphics::TextRenderer #amp; renderer)
+            +operator#40;#41;(core::GameContext #amp; ctx) void
+        }
+        class game__systems__UIButtonSystem["UIButtonSystem"] {
+            -ButtonClickCallback m_callback
+            +SetClickCallback(ButtonClickCallback callback) void
+            +operator#40;#41;(core::GameContext #amp; ctx) void
+        }
+        class game__systems__UIImageRenderSystem["UIImageRenderSystem"] {
+            -graphics::TextRenderer #amp; m_renderer
+            +UIImageRenderSystem(graphics::TextRenderer #amp; renderer)
+            +operator#40;#41;(core::GameContext #amp; ctx) void
+        }
+        class game__systems__UIRenderSystem["UIRenderSystem"] {
+            -int kStableFrameThreshold$
+            -graphics::TextRenderer #amp; m_renderer
+            -std::unordered_map#lt; ecs::Entity, EntityTextState #gt; m_entityStates
+            +UIRenderSystem(graphics::TextRenderer #amp; renderer)
+            +operator#40;#41;(core::GameContext #amp; ctx) void
+            -UpdateStability(ecs::Entity entity, const std::wstring #amp; text, const graphics::TextStyle #amp; style, float width, float height) bool
+        }
+        class game__systems__UIRenderSystem__EntityTextState["UIRenderSystem::EntityTextState"] {
+            <<struct>>
+            +std::wstring text
+            +graphics::TextStyle style
+            +float width
+            +float height
+            +int stableFrames
+        }
+        class game__systems__VSConstants["VSConstants"] {
+            <<struct>>
+            +XMMATRIX world
+            +XMMATRIX view
+            +XMMATRIX projection
+            +XMFLOAT4 materialColor
+            +XMFLOAT4 materialFlags
+            +XMFLOAT4 lightDir
+            +XMFLOAT4 cameraPos
+            +XMMATRIX shadowViewProjection
+            +XMFLOAT4 shadowParams
+        }
+        class game__systems__VoiceCallback["VoiceCallback"] {
+            +bool isFinished
+            +OnStreamEnd() void STDMETHODCALLTYPE
+            +OnVoiceProcessingPassEnd() void STDMETHODCALLTYPE
+            +OnVoiceProcessingPassStart(UINT32) void STDMETHODCALLTYPE
+            +OnBufferEnd(void #42;) void STDMETHODCALLTYPE
+            +OnBufferStart(void #42;) void STDMETHODCALLTYPE
+            +OnLoopEnd(void #42;) void STDMETHODCALLTYPE
+            +OnVoiceError(void #42;, HRESULT) void STDMETHODCALLTYPE
+        }
+        class game__systems__WallLayout["WallLayout"] {
+            <<struct>>
+            +DirectX::XMFLOAT3 position
+            +DirectX::XMFLOAT3 scale
+            +DirectX::XMFLOAT4 rotation
+            +DirectX::XMFLOAT3 colliderSize
+        }
+        class game__systems__WikiClient["WikiClient"] {
+            -HINTERNET m_hSession
+            -HINTERNET m_hConnect
+            -std::unordered_map#lt; std::wstring, HINTERNET #gt; m_hostConnections
+            -std::uint32_t m_lastServerDateSeed
+            +WikiClient()
+            +#126;WikiClient()
+            +FetchRandomPageTitle() std::string
+            +GetLastServerDateSeed() std::uint32_t #123;const#125;
+            +FetchPageLinks(const std::string #amp; title, int limit) std::vector#lt; game::WikiLink #gt;
+            +FetchPageCategories(const std::string #amp; title) std::vector#lt; std::string #gt;
+            +FetchTargetPageTitle() std::string
+            +FetchTargetPage(int thumbSize) WikiTargetPage
+            +FetchPageThumbnail(const std::string #amp; title, int thumbSize) std::string
+            +FetchPageExtract(const std::string #amp; title, int lengthLimit) std::string
+            +FetchPageHtml(const std::string #amp; title) std::string
+            +FetchPageTableText(const std::string #amp; title) std::string
+            +FetchPageImages(const std::string #amp; title, int maxImages) std::vector#lt; WikiImageInfo #gt;
+            +FetchPageSections(const std::string #amp; title) std::vector#lt; WikiSectionInfo #gt;
+            +DownloadBinary(const std::string #amp; url, size_t maxBytes) std::string
+            +UrlEncode(const std::string #amp; str)$ std::string
+            +FilterImagesByAllowedLicense(std::vector#lt; WikiImageInfo #gt; #amp; images) void
+            -PerformGetRequest(const std::wstring #amp; server, const std::wstring #amp; path, size_t maxBytes) std::string
+            -SendGetRequest(HINTERNET hConnect, const std::wstring #amp; path, size_t maxBytes, bool useCompression, int #amp; status, std::wstring #amp; retryAfter) std::string
+            -GetOrCreateConnection(const std::wstring #amp; server) HINTERNET
+        }
+        class game__systems__WikiImageInfo["WikiImageInfo"] {
+            <<struct>>
+            +std::string fileTitle
+            +bool leadImage
+            +int sectionId
+            +std::string caption
+            +std::string thumbUrl
+        }
+        class game__systems__WikiSectionInfo["WikiSectionInfo"] {
+            <<struct>>
+            +int index
+            +int level
+            +std::string heading
+        }
+        class game__systems__WikiShortestPath["WikiShortestPath"] {
+            -sqlite3 #42; m_db
+            -std::vector#lt; int #gt; m_popularPageIds
+            +WikiShortestPath()
+            +#126;WikiShortestPath()
+            +WikiShortestPath(const WikiShortestPath #amp;)
+            +operator=(const WikiShortestPath #amp;) WikiShortestPath #amp;
+            +Initialize(const std::string #amp; dbPath, bool cachePopularPages) bool
+            +IsAvailable() bool #123;const#125;
+            +ResolvePageId(const std::string #amp; title) int
+            +FindShortestPath(const std::string #amp; sourceTitle, const std::string #amp; targetTitle, int maxDepth, bool logSuccess) ShortestPathResult
+            +FindShortestPath(const std::string #amp; sourceTitle, int targetId, int maxDepth, bool logSuccess) ShortestPathResult
+            +ComputeDistancesToTarget(const std::vector#lt; std::string #gt; #amp; sourceTitles, int targetId, int maxDepth, std::atomic#lt; size_t #gt; #42; progressUnits, size_t progressBase, const std::function#lt; void#40;const std::string #amp;, int#41;#gt; #amp; onResolved, const std::atomic#lt; bool #gt; #42; cancelRequested) std::unordered_map#lt; std::string, int #gt;
+            +FetchPopularPageTitle(int minIncomingLinks) std::pair#lt; std::string, int #gt;
+            +FetchPopularPageTitle(int minIncomingLinks, std::uint32_t seed) std::pair#lt; std::string, int #gt;
+            +RequestCancelAll()$ void
+            +IsCancelRequested()$ bool
+            +ClearProcessCaches()$ void
+            -FetchPageId(const std::string #amp; title) int
+            -FetchPageIdsBatch(const std::vector#lt; std::string #gt; #amp; normalizedTitles, const std::function#lt; void#40;size_t processed, size_t total#41;#gt; #amp; onChunkDone, const std::atomic#lt; bool #gt; #42; cancelRequested) std::unordered_map#lt; std::string, int #gt;
+            -FetchPageTitle(int pageId) std::string
+            -FetchOutgoingLinks(int pageId) std::string
+            -FetchIncomingLinks(int pageId) std::string
+            -FetchOutgoingLinksCount(const std::vector#lt; int #gt; #amp; pageIds) int
+            -FetchIncomingLinksCount(const std::vector#lt; int #gt; #amp; pageIds) int
+            -ReconstructPaths(const std::vector#lt; int #gt; #amp; pageIds, const std::unordered_map#lt; int, std::vector#lt; int #gt; #gt; #amp; visitedDict) std::vector#lt; std::vector#lt; int #gt; #gt;
+            -FetchPopularPageTitleWithIndexSelector(const std::function#lt; std::size_t#40;std::size_t#41;#gt; #amp; selectIndex) std::pair#lt; std::string, int #gt;
+        }
+        class game__systems__WikiTargetPage["WikiTargetPage"] {
+            <<struct>>
+            +std::string title
+            +std::string thumbnailUrl
+        }
+        class game__systems__WikiTerrainSystem["WikiTerrainSystem"] {
+            -std::vector#lt; ecs::Entity #gt; m_entities
+            -std::vector#lt; ecs::Entity #gt; m_surfaceGrassEntities
+            -std::unordered_map#lt; uint64_t, std::vector#lt; ecs::Entity #gt; #gt; m_surfaceGrassEntitiesByChunk
+            -std::deque#lt; uint64_t #gt; m_pendingSurfaceGrassChunks
+            -SurfaceGrassChunkBuildState m_surfaceGrassChunkBuild
+            -std::vector#lt; GrassPatch #gt; m_grassPatches
+            -ecs::Entity m_floorEntity
+            -std::shared_ptr#lt; TerrainData #gt; m_terrainData
+            -bool m_tutorialMode
+            -float m_grassFieldWidth
+            -float m_grassFieldDepth
+            -int m_grassViewChunkX
+            -int m_grassViewChunkZ
+            -std::deque#lt; DirectX::XMFLOAT3 #gt; m_ballTrail
+            -std::vector#lt; SkyGlobe #gt; m_skyGlobes
+            -float m_skyGlobeTime
+            -int m_biome
+            -uint32_t m_backdropSeed
+            -bool m_hasBackdrop
+            -BuildPhase m_buildPhase
+            -float m_buildProgress
+            -std::string m_buildPageTitle
+            -float m_buildFieldWidth
+            -float m_buildFieldDepth
+            -std::vector#lt; std::string #gt; m_buildPageCategories
+            -std::vector#lt; graphics::WikiTextureResult::Tile #gt; m_buildTiles
+            -std::vector#lt; graphics::LinkRegion #gt; m_buildLinks
+            -uint32_t m_buildTexWidth
+            -uint32_t m_buildTexHeight
+            -std::future#lt; TerrainData #gt; m_terrainFuture
+            -std::future#lt; std::vector#lt; TerrainBackdropChunk #gt; #gt; m_backdropFuture
+            -size_t m_buildTileIndex
+            -std::vector#lt; TileMeshCache #gt; m_tileMeshCaches
+            -resources::ShaderHandle m_buildTerrainShader
+            -resources::ShaderHandle m_buildBasicShader
+            -Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; m_buildAlbedoSRV
+            -Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; m_buildNormalSRV
+            -int m_buildResX
+            -int m_buildResZ
+            +WikiTerrainSystem()
+            +#126;WikiTerrainSystem()
+            +SetTutorialMode(bool enabled) void
+            +BuildField(core::GameContext #amp; ctx, const std::string #amp; pageTitle, const graphics::WikiTextureResult #amp; textureResult, float fieldWidth, float fieldDepth, const std::vector#lt; std::string #gt; #amp; pageCategories) void
+            +BeginBuildField(const std::string #amp; pageTitle, const graphics::WikiTextureResult #amp; textureResult, float fieldWidth, float fieldDepth, const std::vector#lt; std::string #gt; #amp; pageCategories) void
+            +StepBuildField(core::GameContext #amp; ctx) bool
+            +GetBuildProgress() float #123;const#125;
+            +GetEntities() const std::vector#lt; ecs::Entity #gt; #amp; #123;const#125;
+            +Clear(core::GameContext #amp; ctx) void
+            +GetFloorEntity() ecs::Entity #123;const#125;
+            +GetTerrainData() std::shared_ptr#lt; TerrainData #gt; #123;const#125;
+            +GetHeight(float x, float z) float #123;const#125;
+            +GetSceneryHeight(float x, float z) float #123;const#125;
+            +UpdateSurfaceResponse(core::GameContext #amp; ctx, ecs::Entity ballEntity, float dt) void
+            +UpdateSurfaceGrass(core::GameContext #amp; ctx, ecs::Entity cameraEntity) void
+            +UpdateSkyGlobes(core::GameContext #amp; ctx, float dt) void
+            -CreateFloor(core::GameContext #amp; ctx, const graphics::WikiTextureResult #amp; result, float width, float depth, const std::string #amp; pageTitle, const std::vector#lt; std::string #gt; #amp; pageCategories) void
+            -CreateWalls(core::GameContext #amp; ctx, float width, float depth) void
+            -CreateBackdrop(core::GameContext #amp; ctx, const std::string #amp; pageTitle) void
+            -PrepareBackdrop(const std::string #amp; pageTitle) uint32_t
+            -CreateBackdropMeshes(core::GameContext #amp; ctx, const std::vector#lt; TerrainBackdropChunk #gt; #amp; chunks) void
+            -CreateSkyGlobes(core::GameContext #amp; ctx, const std::string #amp; pageTitle) void
+            -CreateImageObstacles(core::GameContext #amp; ctx, const graphics::WikiTextureResult #amp; result, float fieldWidth, float fieldDepth) void
+            -CreateHeadingSteps(core::GameContext #amp; ctx, const graphics::WikiTextureResult #amp; result, float fieldWidth, float fieldDepth) void
+            -CreateDecorations(core::GameContext #amp; ctx, float fieldWidth, float fieldDepth, int biome) void
+            -CreateSurfaceGrass(core::GameContext #amp; ctx, float fieldWidth, float fieldDepth) void
+            -BeginSurfaceGrassBuild(core::GameContext #amp; ctx, float fieldWidth, float fieldDepth) void
+            -StepSurfaceGrassBuild(core::GameContext #amp; ctx) bool
+            -UpdateSurfaceGrassChunks(core::GameContext #amp; ctx, float centerX, float centerZ, size_t generationBudget) void
+            -GenerateSurfaceGrassChunk(core::GameContext #amp; ctx, int chunkX, int chunkZ, size_t instanceBudget, size_t #amp; generatedInstances) bool
+            -RemoveSurfaceGrassChunks(core::GameContext #amp; ctx, const std::vector#lt; uint64_t #gt; #amp; chunkKeys) void
+            -ClearSurfaceGrass(core::GameContext #amp; ctx) void
+        }
+        class game__systems__WikiTerrainSystem__BuildPhase["WikiTerrainSystem::BuildPhase"] {
+            <<enumeration>>
+            Idle
+            TerrainGenAsync
+            CreatePhysics
+            LoadTerrainAlbedo
+            LoadTerrainNormal
+            LoadTerrainShader
+            LoadBasicShader
+            CreateTileMesh
+            CreateTileOverlay
+            CreateWalls
+            CreateBackdrop
+            CreateDecorations
+            CreateSurfaceGrass
+            Done
+        }
+        class game__systems__WikiTerrainSystem__GrassPatch["WikiTerrainSystem::GrassPatch"] {
+            <<struct>>
+            +ecs::Entity entity
+            +size_t instanceIndex
+            +DirectX::XMFLOAT3 position
+            +DirectX::XMFLOAT2 interactionPoint
+            +float interactionYaw
+            +float response
+            +float halfExtent
+        }
+        class game__systems__WikiTerrainSystem__SkyGlobe["WikiTerrainSystem::SkyGlobe"] {
+            <<struct>>
+            +ecs::Entity entity
+            +float scale
+            +int lod
+            +DirectX::XMFLOAT3 basePosition
+            +float tilt
+            +float spinSpeed
+            +float bobPhase
+            +float bobHeight
+        }
+        class game__systems__WikiTerrainSystem__SurfaceGrassChunkBuildState["WikiTerrainSystem::SurfaceGrassChunkBuildState"] {
+            <<struct>>
+            +bool active
+            +uint64_t chunkKey
+            +size_t roughCellIndex
+            +size_t turfCellIndex
+            +std::unordered_map#lt; uint32_t, ecs::Entity #gt; batches
+        }
+        class game__systems__WikiTerrainSystem__TileMeshCache["WikiTerrainSystem::TileMeshCache"] {
+            <<struct>>
+            +std::vector#lt; graphics::Vertex #gt; vertices
+            +std::vector#lt; uint32_t #gt; indices
+            +int resX
+            +int tileResZ
+            +float vStart
+            +float vEnd
+            +float maxHeight
+        }
+        class game__systems__anonymous_namespace_ShadowRenderSystem_cpp___ShadowConstants["ShadowConstants"] {
+            <<struct>>
+            +XMMATRIX world
+            +XMMATRIX lightViewProjection
+        }
+        class game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxConstants["SkyboxConstants"] {
+            <<struct>>
+            +XMMATRIX view
+            +XMMATRIX projection
+            +XMFLOAT4 tintColor
+            +float brightness
+            +float saturation
+            +float time
+            +float padding
+            +XMFLOAT3 sunDirection
+            +float padding2
+        }
+        class game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxRenderState["SkyboxRenderState"] {
+            <<struct>>
+            +ComPtr#lt; ID3D11Buffer #gt; constantBuffer
+            +ComPtr#lt; ID3D11Buffer #gt; vertexBuffer
+            +ComPtr#lt; ID3D11Buffer #gt; indexBuffer
+            +ComPtr#lt; ID3D11SamplerState #gt; samplerState
+            +ComPtr#lt; ID3D11DepthStencilState #gt; depthStencilState
+            +ComPtr#lt; ID3D11RasterizerState #gt; rasterizerState
+            +uint32_t indexCount
+            +bool initialized
+        }
+        class game__systems__anonymous_namespace_TerrainBackdrop_cpp___BackdropStyle["BackdropStyle"] {
+            <<struct>>
+            +float amplitude
+            +float ridgeWeight
+            +float terrace
+        }
+        class game__systems__anonymous_namespace_TerrainBackdrop_cpp___GridPosition["GridPosition"] {
+            <<struct>>
+            +int x0
+            +int z0
+            +int x1
+            +int z1
+            +float tx
+            +float tz
+        }
+        class game__systems__anonymous_namespace_TerrainBackdrop_cpp___MountainBand["MountainBand"] {
+            <<struct>>
+            +float threshold
+            +uint8_t material
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Boundary["Boundary"] {
+            <<struct>>
+            +float center
+            +float halfLength
+            +float bend
+            +uint32_t seed
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ClearanceField["ClearanceField"] {
+            -float kCell$
+            -float kFar$
+            -float m_originX
+            -float m_originZ
+            -int m_width
+            -int m_depth
+            -std::vector#lt; float #gt; m_distance
+            +ClearanceField(float originX, float originZ, float width, float depth, const std::vector#lt; XMFLOAT2 #gt; #amp; points)
+            +Sample(float wx, float wz) float #123;const#125;
+            -Index(int x, int z) size_t #123;const#125;
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Cut["Cut"] {
+            <<struct>>
+            +float center
+            +float gap
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___LandformTheme["LandformTheme"] {
+            <<enumeration>>
+            Plateau
+            RollingHills
+            Dunes
+            Valley
+            Mesa
+            Ridges
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___PatternShape["PatternShape"] {
+            <<struct>>
+            +SurfacePattern pattern
+            +float scale
+            +float cosAngle
+            +float sinAngle
+            +float stretch
+            +float threshold
+            +uint32_t seed
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___RowDensity["RowDensity"] {
+            -std::vector#lt; int #gt; m_prefix
+            +RowDensity(float worldD, const std::vector#lt; XMFLOAT2 #gt; #amp; points)
+            +Occupied(int row) bool #123;const#125;
+            +Count(float center, float half) int #123;const#125;
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Section["Section"] {
+            <<struct>>
+            +float start
+            +float end
+            +float height
+            +float grade
+            +LandformTheme theme
+            +PatternShape surface
+            +uint32_t seed
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___SurfacePattern["SurfacePattern"] {
+            <<enumeration>>
+            Corridor
+            Islands
+            Stripes
+            Outcrops
+            Wasteland
+            Mosaic
+        }
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ThemeSample["ThemeSample"] {
+            <<struct>>
+            +float height
+            +float amplitude
+            +bool basin
+            +bool rocky
+            +bool sandy
+        }
+    }
+    namespace game__systems__wiki_shortest_path_detail {
+        class game__systems__wiki_shortest_path_detail__BackwardBfsCache["BackwardBfsCache"] {
+            <<struct>>
+            +std::mutex mutex
+            +int targetId
+            +std::unordered_map#lt; int, int #gt; depthByPageId
+            +std::vector#lt; int #gt; frontier
+        }
+        class game__systems__wiki_shortest_path_detail__LinkFetchChunkStats["LinkFetchChunkStats"] {
+            <<struct>>
+            +size_t chunkIndex
+            +size_t totalChunks
+            +size_t requestedPages
+            +size_t returnedRows
+            +size_t parsedLinks
+            +size_t rawBytes
+            +long long prepareMs
+            +long long stepParseMs
+            +long long elapsedMs
+        }
+        class game__systems__wiki_shortest_path_detail__LinkFetchStats["LinkFetchStats"] {
+            <<struct>>
+            +size_t requestedPages
+            +size_t returnedRows
+            +size_t parsedLinks
+            +size_t rawBytes
+            +size_t chunks
+        }
+        class game__systems__wiki_shortest_path_detail__NodeInfo["NodeInfo"] {
+            <<struct>>
+            +int parent
+            +int depth
+        }
+        class game__systems__wiki_shortest_path_detail__ResolvedDistanceCache["ResolvedDistanceCache"] {
+            <<struct>>
+            +std::mutex mutex
+            +int targetId
+            +std::unordered_map#lt; int, int #gt; distanceByPageId
+        }
+    }
+    %% 継承
+    game__systems__PlayFabResult <|-- game__systems__PlayFabLeaderboardResult
+    IXAudio2VoiceCallback <|-- game__systems__VoiceCallback
+    %% メンバー由来の関係
+    core__GameContext o-- "0..1" game__systems__AchievementEventBus : achievementEvents
+    core__GameContext o-- "0..1" game__systems__AchievementManager : achievements
+    core__GameContext o-- "0..1" game__systems__AudioSystem : audio
+    core__GameContext o-- "0..1" game__systems__PostProcessSystem : postProcess
+    game__components__TerrainCollider o-- "0..1" game__systems__TerrainData : data
+    game__components__WikiGlobalData *-- "0..1" game__systems__WikiShortestPath : pathSystem
+    game__controllers__AimPinController__UpdateParams o-- "0..1" game__systems__WikiTerrainSystem : terrainSystem
+    game__controllers__CameraController__Config o-- "0..1" game__systems__GameJuiceSystem : gameJuice
+    game__controllers__CameraController__Config o-- "0..1" game__systems__WikiTerrainSystem : terrain
+    game__controllers__ClubController o-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
+    game__controllers__MinimapController *-- "1" game__systems__MapRenderParams : m_pendingMinimapParams
+    game__controllers__MinimapController *-- "0..1" game__systems__MapSys : m_minimapRenderer
+    game__controllers__MinimapController__Config o-- "0..1" game__systems__WikiTerrainSystem : terrain
+    game__controllers__TrajectoryPredictor__Params o-- "0..1" game__systems__WikiTerrainSystem : terrainSystem
+    game__scenes__RankingScene *-- "1" game__systems__PlayFabProfile : m_profile
+    game__scenes__RankingScene__LoadData *-- "0..*" game__systems__PlayFabLeaderboardResult : strokes, clearTime
+    game__scenes__RankingScene__LoadData *-- "1" game__systems__PlayFabResult : nameUpdate
+    game__scenes__WikiGolfScene *-- "1" game__systems__EnvironmentParticleSystem : m_particleSystem
+    game__scenes__WikiGolfScene *-- "0..1" game__systems__GameJuiceSystem : m_gameJuice
+    game__scenes__WikiGolfScene *-- "1" game__systems__ParticleRenderSystem : m_particleRenderSystem
+    game__scenes__WikiGolfScene *-- "1" game__systems__SlopeVisualizationSystem : m_slopeVisualization
+    game__scenes__WikiGolfScene *-- "1" game__systems__TimeOfDaySystem : m_timeOfDay
+    game__scenes__WikiGolfScene *-- "0..1" game__systems__WikiShortestPath : m_shortestPath
+    game__scenes__WikiGolfScene *-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
+    game__scenes__WikiPageLoader o-- "0..1" game__systems__WikiShortestPath : m_shortestPath
+    game__scenes__WikiPageLoader o-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
+    game__systems__AchievementDef --> "1" game__systems__AchievementCategory : category
+    game__systems__AchievementDef --> "1" game__systems__AchievementId : id
+    game__systems__AchievementEvent --> "1" game__components__ShotJudgement : judgement
+    game__systems__AchievementEvent --> "1" game__components__TerrainMaterial : material
+    game__systems__AchievementEvent --> "1" game__systems__AchievementEventType : type
+    game__systems__AchievementManager o-- "0..1" core__GameContext : m_ctx
+    game__systems__AchievementManager *-- "1" game__controllers__hud__AchievementToastPanel : m_toastPanel
+    game__systems__AchievementManager *-- "1" game__systems__AchievementManager__RoundSessionState : m_session
+    game__systems__AchievementManager *-- "1" game__systems__AchievementProgress : m_progress
+    game__systems__AchievementProgress --> "0..*" game__systems__AchievementId : unlocked
+    game__systems__AudioSystem *-- "0..*" game__systems__AudioSystem__ActiveVoice : m_activeSEs, m_loopingSEs, m_oneShotVoices ...+2
+    game__systems__AudioSystem *-- "1" game__systems__VoiceCallback : m_bgmCallback
+    game__systems__AudioSystem__ActiveVoice *-- "1" game__systems__VoiceCallback : callback
+    game__systems__BodyInfo o-- "0..1" game__components__Collider : c
+    game__systems__BodyInfo o-- "0..1" game__components__RigidBody : rb
+    game__systems__BodyInfo o-- "0..1" game__components__Transform : t
+    game__systems__EnvironmentParticleSystem *-- "0..*" game__systems__Particle : m_particles
+    game__systems__EnvironmentParticleSystem *-- "1" game__systems__ParticleConfig : m_config
+    game__systems__EnvironmentSoundSystem o-- "0..1" game__systems__AudioSystem : m_audioSystem
+    game__systems__EnvironmentSoundSystem --> "0..*" graphics__SkyboxTheme : m_currentTheme, m_previousTheme
+    game__systems__GameJuiceSystem *-- "1" ecs__EntityOwner : m_entityOwner
+    game__systems__GameJuiceSystem *-- "0..*" game__systems__GameJuiceSystem__EnvironmentParticle : m_envParticles
+    game__systems__GameJuiceSystem *-- "0..*" game__systems__GameJuiceSystem__ImpactParticle : m_impactParticles
+    game__systems__GameJuiceSystem *-- "0..*" game__systems__GameJuiceSystem__Ripple : m_ripples
+    game__systems__GameJuiceSystem *-- "0..*" game__systems__GameJuiceSystem__SurfaceMark : m_surfaceMarks
+    game__systems__GameJuiceSystem__EnvironmentParticle --> "1" game__systems__GameJuiceSystem__EnvironmentParticleKind : kind
+    game__systems__GameJuiceSystem__ImpactParticle --> "1" game__systems__GameJuiceSystem__ImpactParticleKind : kind
+    game__systems__HoleInfo *-- "1" game__physics__GolfCupShape : cup
+    game__systems__HoleSpatialGrid *-- "0..*" game__systems__HoleInfo : holes
+    game__systems__HtmlTerrainRegion --> "1" game__systems__HtmlRegionKind : kind
+    game__systems__MapRenderKey --> "1" game__components__MinimapRenderMode : mode
+    game__systems__PhysicsSpatialCache *-- "1" game__systems__HoleSpatialGrid : holeGrid
+    game__systems__PhysicsSpatialCache *-- "1" game__systems__StaticBodySpatialGrid : staticBodyGrid
+    game__systems__PhysicsSpatialCache o-- "0..1" game__systems__TerrainData : terrainIdentity
+    game__systems__PhysicsUpdateContext o-- "0..1" core__GameContext : gameContext
+    game__systems__PhysicsUpdateContext o-- "0..1" game__components__CollisionEvents : events
+    game__systems__PhysicsUpdateContext o-- "0..1" game__components__GolfGameState : golfState
+    game__systems__PhysicsUpdateContext o-- "0..*" game__systems__BodyInfo : dynamicBodies
+    game__systems__PhysicsUpdateContext o-- "0..1" game__systems__HoleSpatialGrid : holeGrid
+    game__systems__PhysicsUpdateContext o-- "0..1" game__systems__PhysicsPerfStats : perfStats
+    game__systems__PhysicsUpdateContext o-- "0..1" game__systems__StaticBodySpatialGrid : staticBodyGrid
+    game__systems__PhysicsUpdateContext o-- "0..1" game__systems__TerrainData : terrainData
+    game__systems__PlayFabClient *-- "1" game__systems__PlayFabProfile : m_profile
+    game__systems__PlayFabLeaderboardResult *-- "0..*" game__systems__PlayFabLeaderboardEntry : entries
+    game__systems__PostProcessSystem *-- "1" game__systems__PostProcessConstants : m_constants
+    game__systems__RenderState *-- "1" game__systems__GrassGpuLoadController : grassGpuLoad
+    game__systems__ShadowRenderState *-- "1" graphics__Shader : depthShader
+    game__systems__SlopeVisualizationMeshBuilder__BuildResult *-- "0..*" graphics__Vertex : vertices
+    game__systems__SlopeVisualizationSystem *-- "1" ecs__EntityOwner : m_entityOwner
+    game__systems__SlopeVisualizationSystem *-- "1" game__systems__SlopeOverlayConfig : m_config
+    game__systems__TerrainBackdropChunk *-- "0..*" graphics__Vertex : vertices
+    game__systems__TerrainConfig *-- "0..*" game__systems__HtmlTerrainRegion : htmlRegions
+    game__systems__TerrainData *-- "1" game__systems__TerrainConfig : config
+    game__systems__TerrainData o-- "0..1" game__systems__TerrainData : extension
+    game__systems__TerrainData *-- "1" graphics__Mesh : mesh
+    game__systems__TerrainData *-- "0..*" graphics__Vertex : vertices
+    game__systems__UIButtonRenderSystem o-- "0..1" graphics__TextRenderer : m_renderer
+    game__systems__UIImageRenderSystem o-- "0..1" graphics__TextRenderer : m_renderer
+    game__systems__UIRenderSystem *-- "0..*" game__systems__UIRenderSystem__EntityTextState : m_entityStates
+    game__systems__UIRenderSystem o-- "0..1" graphics__TextRenderer : m_renderer
+    game__systems__UIRenderSystem__EntityTextState *-- "1" graphics__TextStyle : style
+    game__systems__WikiTerrainSystem *-- "0..*" game__systems__TerrainBackdropChunk : m_backdropFuture
+    game__systems__WikiTerrainSystem o-- "0..1" game__systems__TerrainData : m_terrainData
+    game__systems__WikiTerrainSystem *-- "1" game__systems__TerrainData : m_terrainFuture
+    game__systems__WikiTerrainSystem --> "1" game__systems__WikiTerrainSystem__BuildPhase : m_buildPhase
+    game__systems__WikiTerrainSystem *-- "0..*" game__systems__WikiTerrainSystem__GrassPatch : m_grassPatches
+    game__systems__WikiTerrainSystem *-- "0..*" game__systems__WikiTerrainSystem__SkyGlobe : m_skyGlobes
+    game__systems__WikiTerrainSystem *-- "1" game__systems__WikiTerrainSystem__SurfaceGrassChunkBuildState : m_surfaceGrassChunkBuild
+    game__systems__WikiTerrainSystem *-- "0..*" game__systems__WikiTerrainSystem__TileMeshCache : m_tileMeshCaches
+    game__systems__WikiTerrainSystem *-- "0..*" graphics__LinkRegion : m_buildLinks
+    game__systems__WikiTerrainSystem *-- "0..*" graphics__WikiTextureResult__Tile : m_buildTiles
+    game__systems__WikiTerrainSystem__TileMeshCache *-- "0..*" graphics__Vertex : vertices
+    game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___PatternShape --> "1" game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___SurfacePattern : pattern
+    game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Section --> "1" game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___LandformTheme : theme
+    game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Section *-- "1" game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___PatternShape : surface
+    %% ネスト型
+    game__systems__GameJuiceSystem .. game__systems__GameJuiceSystem__EnvironmentParticleKind : nested
+    game__systems__GameJuiceSystem .. game__systems__GameJuiceSystem__ImpactParticleKind : nested
+    game__systems__GameJuiceSystem .. game__systems__GameJuiceSystem__JudgeType : nested
+    game__systems__ParticleRenderSystem .. game__systems__ParticleRenderSystem__ParticleConstants : nested
+    game__systems__PlayFabClient .. game__systems__PlayFabClient__Authorization : nested
+    game__systems__SlopeVisualizationMeshBuilder .. game__systems__SlopeVisualizationMeshBuilder__BuildResult : nested
+    game__systems__SlopeVisualizationMeshBuilder .. game__systems__SlopeVisualizationMeshBuilder__SampledPoint : nested
+    %% 依存 (宣言 / 生成 / ECS)
+    game__controllers__MinimapController ..> game__systems__MapSys : 生成
+    game__controllers__ShotController ..> game__systems__TimeOfDaySystem
+    game__scenes__LoadingScene ..> game__systems__WikiShortestPath : 生成
+    game__scenes__WikiGolfScene ..> game__systems__GameJuiceSystem : ECS / 生成
+    game__scenes__WikiGolfScene ..> game__systems__WikiShortestPath : 生成
+    game__scenes__WikiGolfScene ..> game__systems__WikiTerrainSystem : 生成
+    game__scenes__WikiPageDataFetcher ..> game__systems__WikiClient
+    game__systems__AchievementEventBus ..> game__systems__AchievementEvent
+    game__systems__AchievementManager ..> game__systems__AchievementEvent
+    game__systems__AchievementManager ..> game__systems__AchievementEventBus
+    game__systems__AchievementManager ..> game__systems__AchievementId
+    game__systems__AchievementManager ..> graphics__TextRenderer
+    game__systems__AchievementStore ..> game__systems__AchievementProgress
+    game__systems__AudioSystem ..> core__GameContext
+    game__systems__AudioSystem ..> game__systems__AudioSystem__ActiveVoice : 生成
+    game__systems__GameJuiceSystem ..> core__GameContext
+    game__systems__GameJuiceSystem ..> game__components__Camera : ECS
+    game__systems__GameJuiceSystem ..> game__components__Collider : ECS
+    game__systems__GameJuiceSystem ..> game__components__GolfGameState : ECS
+    game__systems__GameJuiceSystem ..> game__components__MeshRenderer : ECS
+    game__systems__GameJuiceSystem ..> game__components__RigidBody : ECS
+    game__systems__GameJuiceSystem ..> game__components__TerrainMaterial
+    game__systems__GameJuiceSystem ..> game__components__Transform : ECS
+    game__systems__MapRenderKeyHash ..> game__systems__MapRenderKey
+    game__systems__MapSys ..> core__GameContext
+    game__systems__MapSys ..> game__components__MeshRenderer : ECS
+    game__systems__MapSys ..> game__components__Transform : ECS
+    game__systems__MapSys ..> game__systems__MapRenderParams
+    game__systems__ParticleRenderSystem ..> game__systems__Particle
+    game__systems__PlayFabClient ..> game__systems__PlayFabLeaderboardResult
+    game__systems__PlayFabClient ..> game__systems__PlayFabResult
+    game__systems__PostProcessSystem ..> game__components__EnvironmentState
+    game__systems__SlopeVisualizationMeshBuilder ..> game__systems__SlopeOverlayConfig
+    game__systems__SlopeVisualizationMeshBuilder ..> game__systems__TerrainData
+    game__systems__SlopeVisualizationSystem ..> core__GameContext
+    game__systems__SlopeVisualizationSystem ..> game__components__MeshRenderer : ECS
+    game__systems__SlopeVisualizationSystem ..> game__components__Transform : ECS
+    game__systems__SlopeVisualizationSystem ..> game__systems__WikiTerrainSystem
+    game__systems__StaticBodySpatialGrid ..> ecs__World
+    game__systems__StaticBodySpatialGrid ..> game__components__Collider : ECS
+    game__systems__StaticBodySpatialGrid ..> game__components__RigidBody : ECS
+    game__systems__StaticBodySpatialGrid ..> game__components__Transform : ECS
+    game__systems__TerrainGenerator ..> game__systems__TerrainConfig
+    game__systems__TerrainGenerator ..> game__systems__TerrainData : 生成
+    game__systems__TerrainLayoutRules ..> game__systems__TerrainData
+    game__systems__TerrainLayoutRules ..> game__systems__TerrainResolution
+    game__systems__TerrainLayoutRules ..> graphics__Vertex
+    game__systems__TerrainObstacleLayout ..> game__systems__ImageObstacleLayout
+    game__systems__TerrainObstacleLayout ..> game__systems__WallLayout
+    game__systems__TerrainObstacleLayout ..> graphics__WikiTextureResult
+    game__systems__TimeOfDaySystem ..> game__components__EnvironmentState
+    game__systems__TimeOfDaySystem ..> game__systems__TimeOfDay
+    game__systems__UIBarGaugeRenderSystem ..> core__GameContext
+    game__systems__UIBarGaugeRenderSystem ..> game__components__UIBarGauge : ECS
+    game__systems__UIButtonRenderSystem ..> core__GameContext
+    game__systems__UIButtonRenderSystem ..> game__components__UIButton : ECS
+    game__systems__UIButtonSystem ..> core__GameContext
+    game__systems__UIButtonSystem ..> game__components__UIButton : ECS
+    game__systems__UIImageRenderSystem ..> core__GameContext
+    game__systems__UIImageRenderSystem ..> game__components__UIImage : ECS
+    game__systems__UIRenderSystem ..> core__GameContext
+    game__systems__UIRenderSystem ..> game__components__UIImage : ECS
+    game__systems__UIRenderSystem ..> game__components__UIText : ECS
+    game__systems__UIRenderSystem ..> graphics__TextStyle
+    game__systems__WikiClient ..> game__WikiLink
+    game__systems__WikiClient ..> game__systems__WikiImageInfo
+    game__systems__WikiClient ..> game__systems__WikiSectionInfo
+    game__systems__WikiClient ..> game__systems__WikiTargetPage
+    game__systems__WikiShortestPath ..> game__systems__ShortestPathResult
+    game__systems__WikiTerrainSystem ..> core__GameContext
+    game__systems__WikiTerrainSystem ..> game__components__Camera : ECS
+    game__systems__WikiTerrainSystem ..> game__components__Collider : ECS
+    game__systems__WikiTerrainSystem ..> game__components__GolfGameState : ECS
+    game__systems__WikiTerrainSystem ..> game__components__GrassRenderBatch : ECS
+    game__systems__WikiTerrainSystem ..> game__components__GrassRenderSpatialIndex : ECS
+    game__systems__WikiTerrainSystem ..> game__components__MeshRenderer : ECS
+    game__systems__WikiTerrainSystem ..> game__components__RigidBody : ECS
+    game__systems__WikiTerrainSystem ..> game__components__TerrainCollider : ECS
+    game__systems__WikiTerrainSystem ..> game__components__TerrainObject : ECS
+    game__systems__WikiTerrainSystem ..> game__components__Transform : ECS
+    game__systems__WikiTerrainSystem ..> game__components__Wall : ECS
+    game__systems__WikiTerrainSystem ..> game__systems__TerrainData : 生成
+    game__systems__WikiTerrainSystem ..> graphics__WikiTextureResult
+    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
+    class core__GameContext["core::GameContext"]
+    class ecs__EntityOwner["ecs::EntityOwner"]
+    class ecs__World["ecs::World"]
+    class game__WikiLink["game::WikiLink"]
+    class game__components__Camera["game::components::Camera"]
+    class game__components__Collider["game::components::Collider"]
+    class game__components__CollisionEvents["game::components::CollisionEvents"]
+    class game__components__EnvironmentState["game::components::EnvironmentState"]
+    class game__components__GolfGameState["game::components::GolfGameState"]
+    class game__components__GrassRenderBatch["game::components::GrassRenderBatch"]
+    class game__components__GrassRenderSpatialIndex["game::components::GrassRenderSpatialIndex"]
+    class game__components__MeshRenderer["game::components::MeshRenderer"]
+    class game__components__MinimapRenderMode["game::components::MinimapRenderMode"]
+    class game__components__RigidBody["game::components::RigidBody"]
+    class game__components__ShotJudgement["game::components::ShotJudgement"]
+    class game__components__TerrainCollider["game::components::TerrainCollider"]
+    class game__components__TerrainMaterial["game::components::TerrainMaterial"]
+    class game__components__TerrainObject["game::components::TerrainObject"]
+    class game__components__Transform["game::components::Transform"]
+    class game__components__UIBarGauge["game::components::UIBarGauge"]
+    class game__components__UIButton["game::components::UIButton"]
+    class game__components__UIImage["game::components::UIImage"]
+    class game__components__UIText["game::components::UIText"]
+    class game__components__Wall["game::components::Wall"]
+    class game__components__WikiGlobalData["game::components::WikiGlobalData"]
+    class game__controllers__AimPinController__UpdateParams["game::controllers::AimPinController::UpdateParams"]
+    class game__controllers__CameraController__Config["game::controllers::CameraController::Config"]
+    class game__controllers__ClubController["game::controllers::ClubController"]
+    class game__controllers__MinimapController["game::controllers::MinimapController"]
+    class game__controllers__MinimapController__Config["game::controllers::MinimapController::Config"]
+    class game__controllers__ShotController["game::controllers::ShotController"]
+    class game__controllers__TrajectoryPredictor__Params["game::controllers::TrajectoryPredictor::Params"]
+    class game__controllers__hud__AchievementToastPanel["game::controllers::hud::AchievementToastPanel"]
+    class game__physics__GolfCupShape["game::physics::GolfCupShape"]
+    class game__scenes__LoadingScene["game::scenes::LoadingScene"]
+    class game__scenes__RankingScene["game::scenes::RankingScene"]
+    class game__scenes__RankingScene__LoadData["game::scenes::RankingScene::LoadData"]
+    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
+    class game__scenes__WikiPageDataFetcher["game::scenes::WikiPageDataFetcher"]
+    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
+    class graphics__LinkRegion["graphics::LinkRegion"]
+    class graphics__Mesh["graphics::Mesh"]
+    class graphics__Shader["graphics::Shader"]
+    class graphics__SkyboxTheme["graphics::SkyboxTheme"]
+    class graphics__TextRenderer["graphics::TextRenderer"]
+    class graphics__TextStyle["graphics::TextStyle"]
+    class graphics__Vertex["graphics::Vertex"]
+    class graphics__WikiTextureResult["graphics::WikiTextureResult"]
+    class graphics__WikiTextureResult__Tile["graphics::WikiTextureResult::Tile"]
+    %% 外部クラス (継承元のみ)
+    class IXAudio2VoiceCallback["IXAudio2VoiceCallback"] {
+        <<external>>
+    }

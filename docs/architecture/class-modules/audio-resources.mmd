@@ -1,0 +1,90 @@
+%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+%% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
+%% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
+%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
+%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+classDiagram
+    direction LR
+    namespace audio {
+        class audio__AudioClip["AudioClip"] {
+            <<struct>>
+            +std::vector#lt; uint8_t #gt; buffer
+            +std::vector#lt; uint8_t #gt; format
+            +uint32_t loopStart
+            +uint32_t loopLength
+        }
+    }
+    namespace resources {
+        class resources__ResourceManager["ResourceManager"] {
+            -graphics::GraphicsDevice #amp; m_device
+            -ResourcePool#lt; graphics::Mesh #gt; m_meshPool
+            -std::unordered_map#lt; std::string, MeshHandle #gt; m_meshCache
+            -ResourcePool#lt; graphics::Shader #gt; m_shaderPool
+            -std::unordered_map#lt; std::string, ShaderHandle #gt; m_shaderCache
+            -ResourcePool#lt; audio::AudioClip #gt; m_audioPool
+            -std::unordered_map#lt; std::string, AudioHandle #gt; m_audioCache
+            -std::unordered_map#lt; std::string, Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; #gt; m_textureCache
+            +ResourceManager(graphics::GraphicsDevice #amp; device)
+            +#126;ResourceManager()
+            +LoadMesh(const std::string #amp; path) MeshHandle
+            +CreateDynamicMesh(const std::string #amp; name, const std::vector#lt; graphics::Vertex #gt; #amp; vertices, const std::vector#lt; uint32_t #gt; #amp; indices) MeshHandle
+            +CreateDynamicSkinnedMesh(const std::vector#lt; graphics::Vertex #gt; #amp; initialVertices, const std::vector#lt; uint32_t #gt; #amp; indices) MeshHandle
+            +FindMesh(const std::string #amp; name) MeshHandle #123;const#125;
+            +GetMesh(MeshHandle handle) graphics::Mesh #42;
+            +LoadShader(const std::string #amp; name, const std::wstring #amp; vsPath, const std::wstring #amp; psPath) ShaderHandle
+            +FindShader(const std::string #amp; name) ShaderHandle #123;const#125;
+            +GetShader(ShaderHandle handle) graphics::Shader #42;
+            +LoadAudio(const std::string #amp; path) AudioHandle
+            +GetAudio(AudioHandle handle) audio::AudioClip #42;
+            +LoadTextureSRV(const std::string #amp; path) Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt;
+            +LoadTextureArraySRV(const std::string #amp; name, const std::vector#lt; std::string #gt; #amp; paths) Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt;
+            +LoadTextureSRVFromMemory(const std::string #amp; cacheKey, const void #42; data, size_t sizeBytes) Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt;
+            +LoadModelTextures(const std::string #amp; path) ModelTextures
+            +Clear() void
+            +DumpStatistics() void #123;const#125;
+        }
+        class resources__ResourceManager__ModelTextures["ResourceManager::ModelTextures"] {
+            <<struct>>
+            +Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; baseColor
+            +Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; normal
+        }
+        class resources__ResourcePool["ResourcePool#lt;T#gt;"] {
+            -std::deque#lt; Slot #gt; m_slots
+            -std::queue#lt; uint32_t #gt; m_freeIndices
+            -T m_dummy
+            +ResourcePool(T #amp;#amp; dummyFallback)
+            +ResourcePool(const ResourcePool #amp;)
+            +operator=(const ResourcePool #amp;) ResourcePool #amp;
+            +Add(T #amp;#amp; resource) Handle
+            +Get(Handle handle) T #42;
+            +Remove(Handle handle) void
+            +Clear() void
+            -HandleError(const char #42; message) T #42;
+        }
+        class resources__ResourcePool__Slot["ResourcePool::Slot"] {
+            <<struct>>
+            +T resource
+            +uint32_t generation
+            +bool isAlive
+        }
+    }
+    %% 継承
+    %% メンバー由来の関係
+    core__GameContext o-- "0..1" resources__ResourceManager : resource
+    resources__ResourceManager *-- "1" audio__AudioClip : m_audioPool
+    resources__ResourceManager o-- "0..1" graphics__GraphicsDevice : m_device
+    resources__ResourceManager *-- "1" graphics__Mesh : m_meshPool
+    resources__ResourceManager *-- "1" graphics__Shader : m_shaderPool
+    resources__ResourceManager *-- "0..*" resources__ResourcePool : m_meshPool, m_shaderPool, m_audioPool
+    resources__ResourcePool *-- "0..*" resources__ResourcePool__Slot : m_slots
+    %% ネスト型
+    resources__ResourceManager .. resources__ResourceManager__ModelTextures : nested
+    %% 依存 (宣言 / 生成 / ECS)
+    resources__ResourceManager ..> graphics__Vertex
+    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
+    class core__GameContext["core::GameContext"]
+    class graphics__GraphicsDevice["graphics::GraphicsDevice"]
+    class graphics__Mesh["graphics::Mesh"]
+    class graphics__Shader["graphics::Shader"]
+    class graphics__Vertex["graphics::Vertex"]
+    %% 外部クラス (継承元のみ)

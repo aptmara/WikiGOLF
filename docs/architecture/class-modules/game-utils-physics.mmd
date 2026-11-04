@@ -1,0 +1,301 @@
+%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+%% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
+%% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
+%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
+%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+classDiagram
+    direction LR
+    namespace game {
+        class game__WikiLink["WikiLink"] {
+            <<struct>>
+            +std::string title
+            +std::string display
+        }
+    }
+    namespace game__physics {
+        class game__physics__BallPhysicsParams["BallPhysicsParams"] {
+            <<struct>>
+            +float drag
+            +float restitution
+            +float mass
+            +float ballRadius
+            +float rollingFrictionScale
+        }
+        class game__physics__BallSimState["BallSimState"] {
+            <<struct>>
+            +DirectX::XMFLOAT3 position
+            +DirectX::XMFLOAT3 velocity
+            +bool isGrounded
+        }
+        class game__physics__CarryResult["CarryResult"] {
+            <<struct>>
+            +DirectX::XMFLOAT3 landingPosition
+            +float horizontalDistance
+            +bool settled
+        }
+        class game__physics__FlatGroundParams["FlatGroundParams"] {
+            <<struct>>
+            +bool enabled
+            +float groundY
+            +game::components::TerrainMaterial material
+        }
+        class game__physics__GolfCupContact["GolfCupContact"] {
+            <<struct>>
+            +GolfCupContactKind kind
+            +DirectX::XMFLOAT3 normal
+            +float penetration
+        }
+        class game__physics__GolfCupContactKind["GolfCupContactKind"] {
+            <<enumeration>>
+            Floor
+            Wall
+            Rim
+            Pin
+        }
+        class game__physics__GolfCupShape["GolfCupShape"] {
+            <<struct>>
+            +float centerX
+            +float centerZ
+            +float rimY
+            +float radius
+            +float depth
+            +float pinRadius
+            +float pinHeight
+        }
+        class game__physics__WindParams["WindParams"] {
+            <<struct>>
+            +float windSpeed
+            +DirectX::XMFLOAT2 windDirection
+        }
+    }
+    namespace game__utils {
+        class game__utils__AimPinClubCandidate["AimPinClubCandidate"] {
+            <<struct>>
+            +float requiredPowerRatio
+            +float baseCarryDistance
+            +bool isPutter
+        }
+        class game__utils__AimPinSolution["AimPinSolution"] {
+            <<struct>>
+            +float requiredPowerRatio
+            +float playsLikeDistance
+            +bool reachable
+        }
+        class game__utils__BlendMode["BlendMode"] {
+            <<enumeration>>
+        }
+        class game__utils__CameraFramingAngles["CameraFramingAngles"] {
+            <<struct>>
+            +float yaw
+            +float pitch
+        }
+        class game__utils__CarryDistanceTable["CarryDistanceTable"] {
+            <<struct>>
+            +std::vector#lt; float #gt; speeds
+            +std::vector#lt; float #gt; distances
+        }
+        class game__utils__CourseIntroductionHole["CourseIntroductionHole"] {
+            <<struct>>
+            +float x
+            +float y
+            +float z
+            +std::string linkTarget
+            +bool isTarget
+            +int hopsToTarget
+            +std::size_t originalIndex
+        }
+        class game__utils__FadeType["FadeType"] {
+            <<enumeration>>
+            Fade
+            CircleWipe
+            HexagonWipe
+            IrisClose
+        }
+        class game__utils__FastForwardTier["FastForwardTier"] {
+            <<enumeration>>
+            Normal
+            Speed1_5x
+            Speed2_0x
+        }
+        class game__utils__FeaturedCourseHoles["FeaturedCourseHoles"] {
+            <<struct>>
+            +std::vector#lt; CourseIntroductionHole #gt; goals
+            +std::vector#lt; CourseIntroductionHole #gt; oneHop
+        }
+        class game__utils__HeightFieldBounds["HeightFieldBounds"] {
+            <<struct>>
+            +float minX
+            +float maxX
+            +float minZ
+            +float maxZ
+        }
+        class game__utils__JudgeFeedback["JudgeFeedback"] {
+            <<struct>>
+            +std::string texturePath
+            +float displaySeconds
+            +float width
+            +float height
+            +std::string soundPath
+            +float soundVolume
+            +HasVisual() bool #123;const#125;
+            +HasSound() bool #123;const#125;
+        }
+        class game__utils__MapViewSkyboxState["MapViewSkyboxState"] {
+            <<struct>>
+            +bool previousMapViewState
+            +bool cachedVisibility
+            +Sync(bool isMapView, game::components::Skybox #amp; skybox) void
+            +Reset(bool initialVisibility) void
+        }
+        class game__utils__ProceduralFlagOptions["ProceduralFlagOptions"] {
+            <<struct>>
+            +uint32_t holeEntity
+            +bool createParticles
+            +bool large
+            +float animationWeight
+            +float poleSinkDepth
+        }
+        class game__utils__ProceduralFlagResult["ProceduralFlagResult"] {
+            <<struct>>
+            +ecs::Entity poleEntity
+            +ecs::Entity firstClothEntity
+            +float poleRadius
+            +float poleHeight
+            +std::vector#lt; ecs::Entity #gt; allEntities
+            +std::vector#lt; ecs::Entity #gt; particleEntities
+        }
+        class game__utils__ScreenFade["ScreenFade"] {
+            -resources::MeshHandle m_mesh
+            -resources::ShaderHandle m_shader
+            -bool m_isFading
+            -bool m_fadeIn
+            -float m_progress
+            -float m_duration
+            -float m_timer
+            -FadeType m_currentType
+            -DirectX::XMFLOAT3 m_color
+            -DirectX::XMFLOAT2 m_center
+            -float m_irisHoldRadius
+            -Microsoft::WRL::ComPtr#lt; ID3D11Buffer #gt; m_cbFade
+            -Microsoft::WRL::ComPtr#lt; ID3D11BlendState #gt; m_blendState
+            -Microsoft::WRL::ComPtr#lt; ID3D11DepthStencilState #gt; m_depthState
+            +ScreenFade()
+            +#126;ScreenFade()
+            +Initialize(core::GameContext #amp; ctx) void
+            +Shutdown(core::GameContext #amp; ctx) void
+            +FadeIn(float duration, FadeType type, DirectX::XMFLOAT3 color) void
+            +FadeOut(float duration, FadeType type, DirectX::XMFLOAT3 color) void
+            +Update(float dt) void
+            +Render(core::GameContext #amp; ctx) void
+            +SetCenter(float u, float v) void
+            +SetIrisHoldRadius(float radius) void
+            +IsFading() bool #123;const#125;
+            +IsFadeOutComplete() bool #123;const#125;
+        }
+        class game__utils__ScreenFade__FadeCB["ScreenFade::FadeCB"] {
+            <<struct>>
+            +DirectX::XMFLOAT4 Color
+            +DirectX::XMFLOAT4 Params1
+            +DirectX::XMFLOAT4 Params2
+            +DirectX::XMFLOAT4 Params3
+        }
+        class game__utils__ScreenRay["ScreenRay"] {
+            <<struct>>
+            +DirectX::XMFLOAT3 origin
+            +DirectX::XMFLOAT3 direction
+        }
+        class game__utils__ShotJudgement["ShotJudgement"] {
+            <<enumeration>>
+        }
+        class game__utils__StartGoalAdvance["StartGoalAdvance"] {
+            <<enumeration>>
+            RevealAll
+            FadeOut
+        }
+        class game__utils__StartGoalBodyFit["StartGoalBodyFit"] {
+            <<struct>>
+            +float fontSize
+            +std::size_t maxCharacters
+            +bool fits
+        }
+        class game__utils__StartGoalIntroductionTiming["StartGoalIntroductionTiming"] {
+            <<struct>>
+            +float kRevealDuration$
+            +float kHeaderDelay$
+            +float kStartCardDelay$
+            +float kArrowDelay$
+            +float kGoalCardDelay$
+            +float kHintDelay$
+            +float kAutoAdvanceTime$
+            +float kFadeOutDuration$
+            +FullyRevealedTime()$ float
+        }
+        class game__utils__StartTeePinResult["StartTeePinResult"] {
+            <<struct>>
+            +ecs::Entity entity
+        }
+        class game__utils__TerrainWorldBounds["TerrainWorldBounds"] {
+            <<struct>>
+            +float minX
+            +float maxX
+            +float minZ
+            +float maxZ
+            +Contains(float x, float z) bool #123;const#125;
+        }
+        class game__utils__ViewportMapping["ViewportMapping"] {
+            <<struct>>
+            +float clientWidth
+            +float clientHeight
+            +float scale
+            +float offsetX
+            +float offsetY
+            +FromClientSize(float width, float height)$ ViewportMapping
+            +VirtualToClient(float vx, float vy) DirectX::XMFLOAT2 #123;const#125;
+            +ClientToVirtual(float cx, float cy) DirectX::XMFLOAT2 #123;const#125;
+            +AspectRatio() float #123;const#125;
+        }
+    }
+    %% 継承
+    %% メンバー由来の関係
+    game__components__WikiGlobalData *-- "0..*" game__WikiLink : cachedLinks
+    game__controllers__BallFastForwardIndicator --> "1" game__utils__FastForwardTier : m_displayedTier
+    game__controllers__BallFastForwardTimer --> "1" game__utils__FastForwardTier : m_currentTier
+    game__controllers__ClubController__Club *-- "1" game__utils__CarryDistanceTable : carryTable
+    game__controllers__MinimapController *-- "1" game__utils__MapViewSkyboxState : m_mapViewSkyboxState
+    game__controllers__TrajectoryPredictor__Params o-- "0..1" game__utils__CarryDistanceTable : carryTable
+    game__physics__FlatGroundParams --> "1" game__components__TerrainMaterial : material
+    game__physics__GolfCupContact --> "1" game__physics__GolfCupContactKind : kind
+    game__scenes__CourseIntroductionData *-- "0..*" game__utils__CourseIntroductionHole : holes
+    game__scenes__PageDataAsyncResult *-- "0..*" game__WikiLink : allLinks
+    game__scenes__WikiGolfScene *-- "1" game__utils__ScreenFade : m_screenFade
+    game__scenes__WikiPageDataFetcher *-- "0..*" game__WikiLink : m_preloadedLinks
+    game__systems__HoleInfo *-- "1" game__physics__GolfCupShape : cup
+    game__utils__FeaturedCourseHoles *-- "0..*" game__utils__CourseIntroductionHole : goals, oneHop
+    game__utils__ScreenFade --> "1" game__utils__FadeType : m_currentType
+    %% ネスト型
+    game__utils__ScreenFade .. game__utils__ScreenFade__FadeCB : nested
+    %% 依存 (宣言 / 生成 / ECS)
+    game__scenes__PageLinkSelector ..> game__WikiLink
+    game__scenes__WikiPageLoader ..> game__WikiLink
+    game__systems__WikiClient ..> game__WikiLink
+    game__utils__MapViewSkyboxState ..> game__components__Skybox
+    game__utils__ScreenFade ..> core__GameContext
+    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
+    class core__GameContext["core::GameContext"]
+    class game__components__Skybox["game::components::Skybox"]
+    class game__components__TerrainMaterial["game::components::TerrainMaterial"]
+    class game__components__WikiGlobalData["game::components::WikiGlobalData"]
+    class game__controllers__BallFastForwardIndicator["game::controllers::BallFastForwardIndicator"]
+    class game__controllers__BallFastForwardTimer["game::controllers::BallFastForwardTimer"]
+    class game__controllers__ClubController__Club["game::controllers::ClubController::Club"]
+    class game__controllers__MinimapController["game::controllers::MinimapController"]
+    class game__controllers__TrajectoryPredictor__Params["game::controllers::TrajectoryPredictor::Params"]
+    class game__scenes__CourseIntroductionData["game::scenes::CourseIntroductionData"]
+    class game__scenes__PageDataAsyncResult["game::scenes::PageDataAsyncResult"]
+    class game__scenes__PageLinkSelector["game::scenes::PageLinkSelector"]
+    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
+    class game__scenes__WikiPageDataFetcher["game::scenes::WikiPageDataFetcher"]
+    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
+    class game__systems__HoleInfo["game::systems::HoleInfo"]
+    class game__systems__WikiClient["game::systems::WikiClient"]
+    %% 外部クラス (継承元のみ)
