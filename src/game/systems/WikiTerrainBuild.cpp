@@ -45,6 +45,9 @@ void WikiTerrainSystem::BeginBuildField(
   if (m_terrainFuture.valid()) {
     m_terrainFuture.get();
   }
+  if (m_backdropFuture.valid()) {
+    m_backdropFuture.get();
+  }
 
   m_buildPageTitle      = pageTitle;
   m_buildFieldWidth     = fieldWidth;
@@ -153,6 +156,19 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     }
     m_terrainData = std::make_shared<TerrainData>(m_terrainFuture.get());
     LOG_INFO("WikiTerrain", "StepBuildField: terrain data ready");
+
+    // 山並みの生成はページによって数百msかかるため別スレッドで行う。
+    // 地形データは生成後に書き換えられないので、完成後は共有して読める。
+    // 注意: Profilerはスレッドセーフではないのでワーカー内で計測しないこと。
+    {
+      const uint32_t backdropSeed = PrepareBackdrop(m_buildPageTitle);
+      std::shared_ptr<const TerrainData> terrainData = m_terrainData;
+      m_backdropFuture = std::async(
+          std::launch::async, [terrainData, backdropSeed]() {
+            return BuildTerrainBackdrop(*terrainData, backdropSeed);
+          });
+    }
+
     m_buildPhase   = BuildPhase::CreatePhysics;
     m_buildProgress = 0.10f;
     return false;
@@ -443,7 +459,21 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
   case BuildPhase::CreateWalls: {
     PROFILE_SCOPE("StepBuildField.CreateWalls");
     CreateWalls(ctx, m_buildFieldWidth, m_buildFieldDepth);
-    CreateBackdrop(ctx, m_buildPageTitle);
+    m_buildPhase   = BuildPhase::CreateBackdrop;
+    m_buildProgress = 0.92f;
+    return false;
+  }
+
+  // 山並みと空の地球儀の生成
+  case BuildPhase::CreateBackdrop: {
+    PROFILE_SCOPE("StepBuildField.CreateBackdrop");
+    if (m_backdropFuture.valid()) {
+      if (m_backdropFuture.wait_for(std::chrono::milliseconds(0)) !=
+          std::future_status::ready) {
+        return false; // まだ完成していない
+      }
+      CreateBackdropMeshes(ctx, m_backdropFuture.get());
+    }
     CreateSkyGlobes(ctx, m_buildPageTitle);
     m_buildPhase   = BuildPhase::CreateDecorations;
     m_buildProgress = 0.94f;

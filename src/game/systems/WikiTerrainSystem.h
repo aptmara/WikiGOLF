@@ -6,6 +6,7 @@
 
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../../resources/ResourceManager.h"
+#include "../systems/TerrainBackdrop.h"
 #include "../systems/TerrainGenerator.h"
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -163,6 +164,21 @@ private:
   void CreateBackdrop(core::GameContext &ctx, const std::string &pageTitle);
 
   /**
+   * @brief 山並みの種を確定し、地形の高さ取得で山並みを使うようにします。
+   * @param pageTitle 記事タイトル（山並みの形の種）
+   * @return BuildTerrainBackdrop に渡す種
+   */
+  uint32_t PrepareBackdrop(const std::string &pageTitle);
+
+  /**
+   * @brief 生成済みの山並みチャンクからメッシュとエンティティを作ります。
+   * @param ctx ゲームコンテキスト
+   * @param chunks BuildTerrainBackdrop の結果
+   */
+  void CreateBackdropMeshes(core::GameContext &ctx,
+                            const std::vector<TerrainBackdropChunk> &chunks);
+
+  /**
    * @brief 空に パズル地球儀をランダムに浮かべます（見た目専用）。
    * @param ctx ゲームコンテキスト
    * @param pageTitle 記事タイトル（配置の種）
@@ -246,6 +262,7 @@ private:
     CreateTileMesh,    /**< ビジュアルメッシュ（1タイル/ステップ）*/
     CreateTileOverlay, /**< オーバーレイ（1タイル/ステップ）*/
     CreateWalls,       /**< 壁生成*/
+    CreateBackdrop,    /**< 山並みの非同期生成を待ち、メッシュと空の地球儀を作成*/
     CreateDecorations, /**< 装飾生成*/
     CreateSurfaceGrass,/**< 草チャンク生成（複数フレーム）*/
     Done
@@ -268,6 +285,9 @@ private:
 
   // TerrainGenerator 非同期タスク
   std::future<TerrainData> m_terrainFuture;
+
+  // 山並み生成の非同期タスク（地形データの完成後に開始）
+  std::future<std::vector<TerrainBackdropChunk>> m_backdropFuture;
 
   // タイルごとのインデックス
   size_t m_buildTileIndex = 0;

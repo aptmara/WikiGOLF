@@ -47,6 +47,9 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   if (m_terrainFuture.valid()) {
     m_terrainFuture.get();
   }
+  if (m_backdropFuture.valid()) {
+    m_backdropFuture.get();
+  }
   m_buildPhase   = BuildPhase::Idle;
   m_buildProgress = 0.0f;
   m_tileMeshCaches.clear();
@@ -416,17 +419,29 @@ void WikiTerrainSystem::CreateBackdrop(core::GameContext &ctx,
   if (!m_terrainData) {
     return;
   }
+  const uint32_t seed = PrepareBackdrop(pageTitle);
+  CreateBackdropMeshes(ctx, BuildTerrainBackdrop(*m_terrainData, seed));
+}
+
+uint32_t WikiTerrainSystem::PrepareBackdrop(const std::string &pageTitle) {
   const uint32_t seed =
       static_cast<uint32_t>(std::hash<std::string>{}(pageTitle + "#backdrop"));
   m_backdropSeed = seed;
   m_hasBackdrop = true;
-  auto chunks = BuildTerrainBackdrop(*m_terrainData, seed);
+  return seed;
+}
+
+void WikiTerrainSystem::CreateBackdropMeshes(
+    core::GameContext &ctx, const std::vector<TerrainBackdropChunk> &chunks) {
+  PROFILE_SECTIONS(sections);
+  PROFILE_SECTION(sections, "Backdrop.LoadMaterials");
   const auto shader = ctx.resource.LoadShader(
       "Terrain", L"Assets/shaders/TerrainVS.hlsl", L"Assets/shaders/TerrainPS.hlsl");
   const auto albedo = ctx.resource.LoadTextureArraySRV("TerrainAlbedoArray",
                                                        TerrainAlbedoTexturePaths());
   const auto normal = ctx.resource.LoadTextureArraySRV("TerrainNormalArray",
                                                        TerrainNormalTexturePaths());
+  PROFILE_SECTION(sections, "Backdrop.CreateMeshes");
   for (size_t i = 0; i < chunks.size(); ++i) {
     auto handle = ctx.resource.CreateDynamicMesh(
         "TerrainBackdrop_" + std::to_string(i), chunks[i].vertices,
@@ -458,17 +473,21 @@ void WikiTerrainSystem::CreateSkyGlobes(core::GameContext &ctx,
   }
   const uint32_t seed =
       static_cast<uint32_t>(std::hash<std::string>{}(pageTitle + "#skyglobes"));
+  PROFILE_SECTIONS(sections);
+  PROFILE_SECTION(sections, "SkyGlobes.Layout");
   const auto layout = BuildSkyGlobeLayout(
       m_terrainData->config.worldWidth, m_terrainData->config.worldDepth, seed,
       [this](float x, float z) { return GetSceneryHeight(x, z); });
   // LOD0 はタイトル画面と同じモデル。遠いものだけ軽いモデルに切り替える。
   // プレイ中の切り替えで止まらないよう、全 LOD を先に読み込んでおく。
+  PROFILE_SECTION(sections, "SkyGlobes.LoadModels");
   for (const char *path : kGlobeLodModels) {
     ctx.resource.LoadMesh(path);
     ctx.resource.LoadModelTextures(path);
   }
   const auto shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                               L"Assets/shaders/BasicPS.hlsl");
+  PROFILE_SECTION(sections, "SkyGlobes.CreateEntities");
   m_skyGlobes.reserve(layout.size());
   for (const auto &placement : layout) {
     auto e = ctx.world.CreateEntity();

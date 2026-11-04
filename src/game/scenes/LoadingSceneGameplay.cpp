@@ -14,6 +14,7 @@
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
 #include "../components/UIText.h"
+#include "../systems/GlobeModel.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/TerrainMaterialAssets.h"
@@ -47,6 +48,26 @@ void LoadingScene::BuildGameplayPreloadQueue() {
                             L"Assets/shaders/WallPS.hlsl");
   });
 
+  // ゴルフボール（WikiGolfScene::SpawnBall で使う）
+  m_preloadTasks.emplace_back([](core::GameContext &ctx) {
+    ctx.resource.LoadMesh("Assets/models/golfball.glb");
+  });
+  m_preloadTasks.emplace_back([](core::GameContext &ctx) {
+    ctx.resource.LoadShader("GolfBall", L"Assets/shaders/BasicVS.hlsl",
+                            L"Assets/shaders/GolfBallPS.hlsl");
+  });
+  m_preloadTasks.emplace_back([](core::GameContext &ctx) {
+    ctx.resource.LoadTextureSRV("Assets/models/golfball_n.png");
+  });
+
+  // 空の地球儀（WikiTerrainSystem::CreateSkyGlobes で全LODを使う）
+  for (const char *path : game::systems::kGlobeLodModels) {
+    m_preloadTasks.emplace_back([path](core::GameContext &ctx) {
+      ctx.resource.LoadMesh(path);
+      ctx.resource.LoadModelTextures(path);
+    });
+  }
+
   // ミニマップ用アイコン、地形/判定バッジUI画像
   static const std::array<const char *, 19> kUiTextures = {
       "Assets/textures/golf_ball_icon_transparent.png",
@@ -70,8 +91,9 @@ void LoadingScene::BuildGameplayPreloadQueue() {
       "Assets/all_terrain_ui_assets/rock.png",
   };
 
-  // ショット/判定/地形/カップ/ゴール/ワープ/OB経路で実際に再生されるSE
-  static const std::array<const char *, 18> kGameplaySounds = {
+  // プレイ中のBGMと、ショット/判定/地形/カップ/ゴール/ワープ/OB経路で実際に再生されるSE
+  static const std::array<const char *, 19> kGameplaySounds = {
+      "Assets/sounds/bgm_game.mp3",
       "Assets/sounds/se_shot.mp3",
       "Assets/sounds/se_shot_hard.mp3",
       "Assets/sounds/se_shot_soft.mp3",
