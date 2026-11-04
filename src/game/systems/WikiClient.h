@@ -158,13 +158,6 @@ public:
 */
   static std::string UrlEncode(const std::string &str);
 
-private:
-  std::string PerformGetRequest(const std::wstring &server,
-                                const std::wstring &path, size_t maxBytes = 0);
-
-  /** @brief 指定ホストへの接続を取得する（未接続なら新規に確立してキャッシュする）*/
-  HINTERNET GetOrCreateConnection(const std::wstring &server);
-
   /**
    * @brief 画像一覧をCommonsのライセンス情報で絞り込みます
    * @details CC0・パブリックドメイン以外（CC BY-SA等の帰属表示必須ライセンスや
@@ -173,6 +166,19 @@ private:
    * @param images 絞り込み対象の画像一覧（該当しないものはこの場で削除される）
 */
   void FilterImagesByAllowedLicense(std::vector<WikiImageInfo> &images);
+
+private:
+  /** @brief 同時接続・間隔の制限と429/503の再試行を適用してGETします。失敗時は空文字列です。*/
+  std::string PerformGetRequest(const std::wstring &server,
+                                const std::wstring &path, size_t maxBytes = 0);
+
+  /** @brief GETを1回送ります。2xx以外は本文を読まず、statusとretryAfterだけを返します。*/
+  std::string SendGetRequest(HINTERNET hConnect, const std::wstring &path,
+                             size_t maxBytes, bool useCompression, int &status,
+                             std::wstring &retryAfter);
+
+  /** @brief 指定ホストへの接続を取得する（未接続なら新規に確立してキャッシュする）*/
+  HINTERNET GetOrCreateConnection(const std::wstring &server);
 
   HINTERNET m_hSession = nullptr;
   HINTERNET m_hConnect = nullptr; /**< ja.wikipedia.org への既定接続*/

@@ -907,6 +907,11 @@ if(MSVC)
 endif()
 add_test(NAME graphics_device_settings COMMAND test_graphics_device_settings)
 
+# Wikimediaへの再試行規則
+add_executable(test_wiki_request_policy test_wiki_request_policy.cpp)
+target_compile_features(test_wiki_request_policy PRIVATE cxx_std_20)
+add_test(NAME wiki_request_policy COMMAND test_wiki_request_policy)
+
 add_executable(test_display_settings_rules
     test_display_settings_rules.cpp
     src/core/DisplaySettings.cpp

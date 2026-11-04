@@ -6,14 +6,18 @@
 #include "WikiClient.h"
 #include "WikiClientJson.h"
 #include "DailyChallengeRules.h"
+#include "WikiRequestPolicy.h"
 #include "../../core/Logger.h"
 #include "../../core/StringUtils.h"
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <mutex>
 #include <sstream>
+#include <thread>
 #include <unordered_set>
 
 #pragma comment(lib, "winhttp.lib")
@@ -28,9 +32,11 @@ constexpr int kUnlimitedWikiLinkLimit = std::numeric_limits<int>::max();
 WikiClient::WikiClient() {
   // Wikimedia の User-Agent ポリシーに従い、連絡可能な識別情報を含める。
   // https://meta.wikimedia.org/wiki/User-Agent_policy
+  // DEFAULT_PROXY はWindowsのプロキシ設定を参照せず、会社や学校のネットワークで
+  // 接続できないことがあるため、システム設定に従う AUTOMATIC_PROXY を使う。
   m_hSession =
       WinHttpOpen(L"WikiGOLF/1.0 (https://github.com/aptmara/WikiGOLF)",
-                  WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                  WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                   WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
   if (!m_hSession) {
     LOG_ERROR("WikiClient", "Failed to open WinHttp session");
@@ -91,12 +97,77 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
   if (!hConnect)
     return "";
 
+  using Clock = std::chrono::steady_clock;
+  const bool isWikiHost = server == L"ja.wikipedia.org";
+
+  // WikiClientはスレッドごとに作られるため、同時接続の制限はプロセス全体で管理する。
+  // 記事の取得と画像の取得は別系統で、それぞれ1件ずつ順に送る。
+  struct HostGate {
+    std::mutex mutex;
+    Clock::time_point nextAllowed{};
+  };
+  static HostGate wikiGate;
+  static HostGate mediaGate;
+  HostGate &gate = isWikiHost ? wikiGate : mediaGate;
+  std::lock_guard<std::mutex> lock(gate.mutex);
+
+  const auto minInterval = std::chrono::milliseconds(
+      isWikiHost ? wiki_request::kMinWikiIntervalMilliseconds : 0);
+  const auto maxWait = std::chrono::seconds(wiki_request::kMaxRetryWaitSeconds);
+
+  for (int attempt = 0; attempt < wiki_request::kMaxAttempts; ++attempt) {
+    const auto waitTime = gate.nextAllowed - Clock::now();
+    if (waitTime > maxWait) {
+      LOG_WARN("WikiClient", "Skipped request while rate limited");
+      return "";
+    }
+    if (waitTime > Clock::duration::zero()) {
+      std::this_thread::sleep_for(waitTime);
+    }
+    gate.nextAllowed = Clock::now() + minInterval;
+
+    int status = 0;
+    std::wstring retryAfter;
+    std::string response =
+        SendGetRequest(hConnect, path, maxBytes, isWikiHost, status, retryAfter);
+    if (wiki_request::IsSuccessStatus(status)) {
+      return response;
+    }
+    if (!wiki_request::IsRetryableStatus(status)) {
+      if (status != 0) {
+        LOG_WARN("WikiClient", "Request failed with HTTP status {}", status);
+      }
+      return "";
+    }
+
+    const int delaySeconds = wiki_request::RetryDelaySeconds(retryAfter, attempt);
+    gate.nextAllowed = Clock::now() + std::chrono::seconds(delaySeconds);
+    LOG_WARN("WikiClient", "HTTP {} received, waiting {}s (attempt {})", status,
+             delaySeconds, attempt + 1);
+  }
+  return "";
+}
+
+std::string WikiClient::SendGetRequest(HINTERNET hConnect,
+                                       const std::wstring &path, size_t maxBytes,
+                                       bool useCompression, int &status,
+                                       std::wstring &retryAfter) {
+  status = 0;
+  retryAfter.clear();
+
   HINTERNET hRequest = WinHttpOpenRequest(
       hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
       WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
   if (!hRequest) {
     LOG_ERROR("WikiClient", "Failed to open request");
     return "";
+  }
+
+  if (useCompression) {
+    // gzipの付与と展開はWinHTTPが行う。失敗しても非圧縮で通信を続けられる。
+    DWORD decompression = WINHTTP_DECOMPRESSION_FLAG_ALL;
+    WinHttpSetOption(hRequest, WINHTTP_OPTION_DECOMPRESSION, &decompression,
+                     sizeof(decompression));
   }
 
   if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
@@ -108,6 +179,30 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
 
   if (!WinHttpReceiveResponse(hRequest, nullptr)) {
     LOG_ERROR("WikiClient", "Failed to receive response");
+    WinHttpCloseHandle(hRequest);
+    return "";
+  }
+
+  DWORD statusCode = 0;
+  DWORD statusSize = sizeof(statusCode);
+  if (!WinHttpQueryHeaders(hRequest,
+                           WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                           WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize,
+                           WINHTTP_NO_HEADER_INDEX)) {
+    LOG_ERROR("WikiClient", "Failed to read response status");
+    WinHttpCloseHandle(hRequest);
+    return "";
+  }
+  status = static_cast<int>(statusCode);
+
+  if (!wiki_request::IsSuccessStatus(status)) {
+    wchar_t headerValue[64] = {};
+    DWORD headerSize = sizeof(headerValue);
+    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_RETRY_AFTER,
+                            WINHTTP_HEADER_NAME_BY_INDEX, headerValue,
+                            &headerSize, WINHTTP_NO_HEADER_INDEX)) {
+      retryAfter = headerValue;
+    }
     WinHttpCloseHandle(hRequest);
     return "";
   }
@@ -143,22 +238,27 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
 }
 
 std::string WikiClient::FetchRandomPageTitle() {
-  m_lastServerDateSeed = 0;
-  std::string response = PerformGetRequest(
-      L"ja.wikipedia.org", L"/w/"
-                           L"api.php?action=query&list=random&rnnamespace=0&"
-                           L"rnlimit=1&curtimestamp=1&format=json&formatversion=2");
+  // 除外対象を引いたら引き直す。全記事の数%程度なので、連続で当たることはまず無い。
+  constexpr int kMaxAttempts = 10;
+  for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+    m_lastServerDateSeed = 0;
+    std::string response = PerformGetRequest(
+        L"ja.wikipedia.org", L"/w/"
+                             L"api.php?action=query&list=random&rnnamespace=0&"
+                             L"rnlimit=1&curtimestamp=1&format=json&formatversion=2");
 
-  constexpr std::string_view timestampField = "\"curtimestamp\":\"";
-  const size_t timestampPosition = response.find(timestampField);
-  if (timestampPosition != std::string::npos) {
-    const size_t timestampStart = timestampPosition + timestampField.size();
-    m_lastServerDateSeed = ParseDailyChallengeSeed(
-        std::string_view(response).substr(timestampStart));
-  }
+    constexpr std::string_view timestampField = "\"curtimestamp\":\"";
+    const size_t timestampPosition = response.find(timestampField);
+    if (timestampPosition != std::string::npos) {
+      const size_t timestampStart = timestampPosition + timestampField.size();
+      m_lastServerDateSeed = ParseDailyChallengeSeed(
+          std::string_view(response).substr(timestampStart));
+    }
 
-  size_t titlePos = response.find("\"title\":\"");
-  if (titlePos != std::string::npos) {
+    size_t titlePos = response.find("\"title\":\"");
+    if (titlePos == std::string::npos) {
+      return "Error";
+    }
     size_t start = titlePos + 9;
     size_t end = response.find("\"", start);
     if (end != std::string::npos) {
@@ -166,7 +266,7 @@ std::string WikiClient::FetchRandomPageTitle() {
       return title;
     }
   }
-  return "Error";
+  return "日本";
 }
 
 
@@ -204,28 +304,23 @@ WikiTargetPage WikiClient::FetchTargetPage(int thumbSize) {
     return result;
   }
   size_t bracketPos = response.find('[', pagesPos);
-  size_t objStart = std::string::npos;
-  if (bracketPos != std::string::npos) {
-    objStart = response.find('{', bracketPos);
-  }
-  if (bracketPos == std::string::npos || objStart == std::string::npos) {
+  if (bracketPos == std::string::npos) {
     return result;
   }
   const size_t arrEnd = wiki_json::SkipValue(response, bracketPos);
-  const size_t objEnd =
-      std::min(wiki_json::SkipValue(response, objStart), arrEnd);
 
   std::string title;
   size_t nextPos = 0;
   if (wiki_json::ExtractStringField(response, "\"title\":\"", objStart,
                                     objEnd, title, nextPos)) {
     result.title = title;
-  }
 
-  std::string thumbSrc;
-  if (wiki_json::ExtractStringField(response, "\"source\":\"", objStart,
-                                    objEnd, thumbSrc, nextPos)) {
-    result.thumbnailUrl = thumbSrc;
+    std::string thumbSrc;
+    if (wiki_json::ExtractStringField(response, "\"source\":\"", objStart,
+                                      objEnd, thumbSrc, nextPos)) {
+      result.thumbnailUrl = thumbSrc;
+    }
+    break;
   }
 
   LOG_INFO("WikiClient", "FetchTargetPage: title='{}' hasThumbnail={}",

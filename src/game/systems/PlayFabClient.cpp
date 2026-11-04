@@ -196,8 +196,9 @@ std::string PlayFabClient::Post(const std::wstring &path,
                                 Authorization authorization,
                                 int &statusCode) {
   statusCode = 0;
+  // DEFAULT_PROXY does not follow the Windows proxy settings, so use AUTOMATIC_PROXY.
   HINTERNET session = WinHttpOpen(
-      L"WikiGOLF/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+      L"WikiGOLF/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
       WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
   if (!session) {
     return {};

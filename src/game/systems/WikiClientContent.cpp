@@ -26,7 +26,7 @@ std::string WikiClient::FetchPageThumbnail(const std::string &title,
   std::wstring wtitle = core::ToWString(encodedTitle);
 
   std::wstring path = L"/w/api.php?action=query&titles=" + wtitle +
-                      L"&prop=pageimages&piprop=thumbnail&pithumbsize=" +
+                      L"&prop=pageimages&piprop=thumbnail%7Cname&pithumbsize=" +
                       std::to_wstring(thumbSize) +
                       L"&format=json&formatversion=2";
   std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
@@ -35,12 +35,20 @@ std::string WikiClient::FetchPageThumbnail(const std::string &title,
   }
 
   std::string thumbSrc;
+  std::string imageName;
   size_t nextPos = 0;
-  if (wiki_json::ExtractStringField(response, "\"source\":\"", 0,
-                                    response.size(), thumbSrc, nextPos)) {
-    return thumbSrc;
+  if (!wiki_json::ExtractStringField(response, "\"source\":\"", 0,
+                                     response.size(), thumbSrc, nextPos) ||
+      !wiki_json::ExtractStringField(response, "\"pageimage\":\"", 0,
+                                     response.size(), imageName, nextPos)) {
+    return "";
   }
-  return "";
+
+  // 本文の画像と同じ基準を適用する。ライセンスを確認できない画像は表示しない。
+  std::vector<WikiImageInfo> images(1);
+  images[0].fileTitle = "ファイル:" + imageName;
+  FilterImagesByAllowedLicense(images);
+  return images.empty() ? "" : thumbSrc;
 }
 
 std::string WikiClient::FetchPageExtract(const std::string &title,
@@ -106,46 +114,10 @@ std::string WikiClient::FetchPageHtml(const std::string &title) {
   std::string encodedTitle = UrlEncode(title);
   std::wstring wtitle = core::ToWString(encodedTitle);
 
-  std::wstring path = L"/w/api.php?action=parse&page=" + wtitle +
-                      L"&prop=text&redirects=1&format=json&formatversion=2";
-
-  std::string response = PerformGetRequest(L"ja.wikipedia.org", path, 8u * 1024 * 1024);
-  if (response.empty() ||
-      response.find("\"missing\":true") != std::string::npos) {
-    return "";
-  }
-
-  const std::string key = "\"text\":\"";
-  size_t pos = response.find(key);
-  if (pos == std::string::npos) {
-    return "";
-  }
-
-  const size_t start = pos + key.length();
-  size_t end = std::string::npos;
-  bool escaped = false;
-  for (size_t i = start; i < response.length(); ++i) {
-    if (escaped) {
-      escaped = false;
-    } else if (response[i] == '\\') {
-      escaped = true;
-    } else if (response[i] == '"') {
-      end = i;
-      break;
-    }
-  }
-  if (end == std::string::npos) {
-    return "";
-  }
-
-  std::string html = response.substr(start, end - start);
-  html = wiki_json::DecodeUnicodeEscape(html);
-  html = wiki_json::ReplaceAll(html, "\\n", "\n");
-  html = wiki_json::ReplaceAll(html, "\\t", "\t");
-  html = wiki_json::ReplaceAll(html, "\\\"", "\"");
-  html = wiki_json::ReplaceAll(html, "\\/", "/");
-
-  return html;
+  // Robot policyに従い、記事HTMLはAction APIではなくREST APIから取得する。
+  // 転送ページはサーバーのリダイレクトをWinHTTPがたどる。
+  const std::wstring path = L"/w/rest.php/v1/page/" + wtitle + L"/html";
+  return PerformGetRequest(L"ja.wikipedia.org", path, 8u * 1024 * 1024);
 }
 
 std::string WikiClient::FetchPageTableText(const std::string& title) {
@@ -258,62 +230,78 @@ void WikiClient::FilterImagesByAllowedLicense(std::vector<WikiImageInfo> &images
     return;
   }
 
-  std::string titlesParam;
-  for (size_t i = 0; i < images.size(); ++i) {
-    if (i > 0) {
-      titlesParam += "%7C";  // "|" のURLエンコード形
-    }
-    titlesParam += UrlEncode(images[i].fileTitle);
-  }
-
-  std::wstring path = L"/w/api.php?action=query&titles=" +
-                       core::ToWString(titlesParam) +
-                       L"&prop=imageinfo&iiprop=extmetadata&format=json&formatversion=2";
-  std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
-
   // タイトル毎の許可判定。imageinfoが取得できなかった画像は不許可のまま扱う
   // （ライセンス不明な画像を安全側に倒して非表示にするため）。
   std::unordered_map<std::string, bool> allowedByTitle;
 
-  size_t pagesPos = response.find("\"pages\":[");
-  if (pagesPos != std::string::npos) {
-    size_t arrStart = response.find('[', pagesPos);
-    size_t arrEnd = wiki_json::SkipValue(response, arrStart);
-
-    size_t pos = arrStart + 1;
-    while (pos < arrEnd) {
-      size_t objStart = response.find('{', pos);
-      if (objStart == std::string::npos || objStart >= arrEnd) {
+  // 1リクエストのタイトル数はAPIの上限（50件）とURL長の両方で区切る
+  constexpr size_t kMaxTitlesPerRequest = 50;
+  constexpr size_t kMaxTitlesParamLength = 6000;
+  size_t nextImage = 0;
+  while (nextImage < images.size()) {
+    std::string titlesParam;
+    size_t titleCount = 0;
+    while (nextImage < images.size() && titleCount < kMaxTitlesPerRequest) {
+      const std::string encoded = UrlEncode(images[nextImage].fileTitle);
+      if (titleCount > 0 &&
+          titlesParam.size() + 3 + encoded.size() > kMaxTitlesParamLength) {
         break;
       }
-      size_t objEnd = std::min(wiki_json::SkipValue(response, objStart), arrEnd);
+      if (titleCount > 0) {
+        titlesParam += "%7C";  // "|" のURLエンコード形
+      }
+      titlesParam += encoded;
+      ++titleCount;
+      ++nextImage;
+    }
 
-      std::string pageTitle;
-      size_t nextPos = 0;
-      wiki_json::ExtractStringField(response, "\"title\":\"", objStart, objEnd,
-                                    pageTitle, nextPos);
+    std::wstring path = L"/w/api.php?action=query&titles=" +
+                         core::ToWString(titlesParam) +
+                         L"&prop=imageinfo&iiprop=extmetadata"
+                         L"&iiextmetadatafilter=LicenseShortName"
+                         L"&format=json&formatversion=2";
+    std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
 
-      std::string license;
-      size_t extPos = response.find("\"extmetadata\":", objStart);
-      if (extPos != std::string::npos && extPos < objEnd) {
-        size_t extObjStart = response.find('{', extPos);
-        if (extObjStart != std::string::npos && extObjStart < objEnd) {
-          size_t extObjEnd =
-              std::min(wiki_json::SkipValue(response, extObjStart), objEnd);
-          size_t licKeyPos = response.find("\"LicenseShortName\":", extPos);
-          if (licKeyPos != std::string::npos && licKeyPos < extObjEnd) {
-            wiki_json::ExtractStringField(response, "\"value\":\"", licKeyPos,
-                                          extObjEnd, license, nextPos);
+    size_t pagesPos = response.find("\"pages\":[");
+    if (pagesPos != std::string::npos) {
+      size_t arrStart = response.find('[', pagesPos);
+      size_t arrEnd = wiki_json::SkipValue(response, arrStart);
+
+      size_t pos = arrStart + 1;
+      while (pos < arrEnd) {
+        size_t objStart = response.find('{', pos);
+        if (objStart == std::string::npos || objStart >= arrEnd) {
+          break;
+        }
+        size_t objEnd = std::min(wiki_json::SkipValue(response, objStart), arrEnd);
+
+        std::string pageTitle;
+        size_t nextPos = 0;
+        wiki_json::ExtractStringField(response, "\"title\":\"", objStart, objEnd,
+                                      pageTitle, nextPos);
+
+        std::string license;
+        size_t extPos = response.find("\"extmetadata\":", objStart);
+        if (extPos != std::string::npos && extPos < objEnd) {
+          size_t extObjStart = response.find('{', extPos);
+          if (extObjStart != std::string::npos && extObjStart < objEnd) {
+            size_t extObjEnd =
+                std::min(wiki_json::SkipValue(response, extObjStart), objEnd);
+            size_t licKeyPos = response.find("\"LicenseShortName\":", extPos);
+            if (licKeyPos != std::string::npos && licKeyPos < extObjEnd) {
+              wiki_json::ExtractStringField(response, "\"value\":\"", licKeyPos,
+                                            extObjEnd, license, nextPos);
+            }
           }
         }
-      }
 
-      if (!pageTitle.empty()) {
-        allowedByTitle[NormalizeWikiTitle(pageTitle)] =
-            IsAllowedImageLicense(license);
-      }
+        if (!pageTitle.empty()) {
+          allowedByTitle[NormalizeWikiTitle(pageTitle)] =
+              IsAllowedImageLicense(license);
+        }
 
-      pos = objEnd;
+        pos = objEnd;
+      }
     }
   }
 
