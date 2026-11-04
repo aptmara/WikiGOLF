@@ -1,5 +1,6 @@
 #include "src/audio/AudioSystem.h"
 #include "src/core/DisplaySettings.h"
+#include "src/core/FramePacer.h"
 #include "src/core/GameContext.h"
 #include "src/core/Input.h"
 #include "src/core/Logger.h"
@@ -344,6 +345,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // メインループ
   MSG msg = {0};
   auto lastTime = std::chrono::high_resolution_clock::now();
+  core::FramePacer framePacer;
   float fpsDisplaySmoothed = 0.0f; // 画面表示用の平滑化FPS（設定画面のFPS表示ON時）
 
   while (msg.message != WM_QUIT && !ctx.shouldClose) {
@@ -597,20 +599,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
       // FPS上限（0 = 無制限）。VSync ONの場合はPresentの垂直同期待ちで既に
       // 概ねフレームレートが制御されるが、無制限/高リフレッシュレート環境でも
-      // 上限を守れるようここで明示的にスリープする。
+      // 上限を守れるようここで明示的に待機する。
       {
           PROFILE_SCOPE("Frame.FpsLimitSleep");
-          const int fpsLimit = ctx.displaySettings ? ctx.displaySettings->GetData().fpsLimit : 0;
-          if (fpsLimit > 0) {
-              const double targetSeconds = 1.0 / static_cast<double>(fpsLimit);
-              const auto frameEnd = std::chrono::high_resolution_clock::now();
-              const double elapsedSeconds =
-                  std::chrono::duration<double>(frameEnd - currentTime).count();
-              if (elapsedSeconds < targetSeconds) {
-                  std::this_thread::sleep_for(
-                      std::chrono::duration<double>(targetSeconds - elapsedSeconds));
-              }
-          }
+          framePacer.Wait(ctx.displaySettings ? ctx.displaySettings->GetData().fpsLimit : 0);
       }
     }
   }

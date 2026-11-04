@@ -127,6 +127,13 @@ if(NOT WIKIGOLF_STATIC_BUILD)
     endif()
     add_test(NAME profiler_statistics COMMAND test_profiler_statistics)
 
+    add_executable(test_frame_pacer test_frame_pacer.cpp)
+    target_include_directories(test_frame_pacer PRIVATE src)
+    if(MSVC)
+        target_compile_options(test_frame_pacer PRIVATE /utf-8 /Zc:__cplusplus)
+    endif()
+    add_test(NAME frame_pacer COMMAND test_frame_pacer)
+
     add_executable(test_profiler_output
         test_profiler_output.cpp
         src/core/Profiler.cpp
