@@ -103,6 +103,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
     }
     break;
   }
+  case WM_DPICHANGED: {
+    // 解像度は実ピクセルで指定するので、DPIの違うモニターへ移っても描画サイズを保つ。
+    const RECT *suggested = reinterpret_cast<const RECT *>(lParam);
+    RECT windowRect = {};
+    GetClientRect(hWnd, &windowRect);
+    AdjustWindowRectExForDpi(
+        &windowRect, static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE)),
+        FALSE, static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE)),
+        HIWORD(wParam));
+    SetWindowPos(hWnd, nullptr, suggested->left, suggested->top,
+                 windowRect.right - windowRect.left,
+                 windowRect.bottom - windowRect.top,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    return 0;
+  }
   case WM_CLOSE:
     // Profiler::Shutdown()の同期CSV書き出しで実際のプロセス終了までは
     // 数十秒かかることがあるが、ユーザーには即座に閉じたと感じてもらうため
@@ -203,6 +218,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
       clientHeight = measuredHeight;
     }
   }
+  LOG_INFO("Main", "Window created: dpi={} client={}x{}", GetDpiForWindow(hWnd),
+           clientWidth, clientHeight);
 
   // COM初期化
   HRESULT hrCom = CoInitializeEx(nullptr, COINIT_MULTITHREADED);

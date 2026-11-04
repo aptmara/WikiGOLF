@@ -72,6 +72,8 @@ bool WikiTextureGenerator::Initialize(ID3D11Device *device) {
               static_cast<uint32_t>(hr));
     return false;
   }
+  // 記事テクスチャの大きさがOSの表示スケールで変わらないようにする。
+  m_d2dContext->SetDpi(96.0f, 96.0f);
 
   // タイトル描画用のテキストフォーマットの生成
   hr = m_dwriteFactory->CreateTextFormat(

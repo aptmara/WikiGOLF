@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <utility>
@@ -41,6 +42,19 @@ inline std::pair<int, int> FitResolutionWithinBounds(int width, int height,
       static_cast<double>(maxHeight) / static_cast<double>(height));
   return {(std::max)(1, static_cast<int>(std::floor(width * scale))),
           (std::max)(1, static_cast<int>(std::floor(height * scale)))};
+}
+
+/** @brief 指定サイズに収まる最大のプリセットを返します。収まらなければ最小プリセットを縮小します。*/
+inline std::pair<int, int> ChooseDefaultResolution(int maxWidth, int maxHeight) {
+  for (auto it = std::rbegin(kResolutionPresets);
+       it != std::rend(kResolutionPresets); ++it) {
+    if (it->first <= maxWidth && it->second <= maxHeight) {
+      return *it;
+    }
+  }
+  return FitResolutionWithinBounds(kResolutionPresets[0].first,
+                                   kResolutionPresets[0].second, maxWidth,
+                                   maxHeight);
 }
 
 std::string WideToUtf8(const std::wstring &value);

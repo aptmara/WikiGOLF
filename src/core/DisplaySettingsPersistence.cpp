@@ -151,6 +151,17 @@ void DisplaySettings::LoadFromFile(const std::string &path) {
   if (!file.is_open()) {
     LOG_INFO("DisplaySettings",
              "設定ファイルが見つからないため既定値を使用します: {}", path);
+    // 初回起動のウィンドウが枠ごと作業領域に収まるようにする。
+    RECT workArea = {};
+    RECT frame = {};
+    if (SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0) &&
+        AdjustWindowRect(&frame, kWindowedStyle, FALSE)) {
+      const auto resolution = display_settings_detail::ChooseDefaultResolution(
+          (workArea.right - workArea.left) - (frame.right - frame.left),
+          (workArea.bottom - workArea.top) - (frame.bottom - frame.top));
+      m_data.windowedWidth = resolution.first;
+      m_data.windowedHeight = resolution.second;
+    }
     return;
   }
 

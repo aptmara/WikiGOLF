@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -31,6 +32,17 @@ void WriteInputFile() {
   file << "ShowFps=1\n";
   file << "GPU=Test Adapter\n";
   file << "SafeMode=1\n";
+}
+
+void VerifyDefaultResolutionFitsWorkArea() {
+  using core::display_settings_detail::ChooseDefaultResolution;
+  using Resolution = std::pair<int, int>;
+  // 1080pの画面は枠とタスクバーの分だけ1920x1080が入らない
+  assert((ChooseDefaultResolution(1904, 1000) == Resolution{1280, 720}));
+  assert((ChooseDefaultResolution(1920, 1080) == Resolution{1920, 1080}));
+  assert((ChooseDefaultResolution(2544, 1360) == Resolution{1920, 1080}));
+  assert((ChooseDefaultResolution(3824, 2080) == Resolution{2560, 1440}));
+  assert((ChooseDefaultResolution(1000, 700) == Resolution{1000, 562}));
 }
 
 void VerifyLoadedValues() {
@@ -133,6 +145,7 @@ void VerifyResolutionFitKeepsAspectRatio() {
 } // namespace
 
 int main() {
+  VerifyDefaultResolutionFitsWorkArea();
   VerifyLoadedValues();
   VerifyRoundTrip();
   VerifyCyclesWithoutInitialization();

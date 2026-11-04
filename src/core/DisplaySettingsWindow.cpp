@@ -103,7 +103,8 @@ void DisplaySettings::ApplyToWindow() {
   case WindowMode::Windowed:
   default: {
     RECT rect = {0, 0, m_data.windowedWidth, m_data.windowedHeight};
-    AdjustWindowRect(&rect, kWindowedStyle, FALSE);
+    AdjustWindowRectExForDpi(&rect, kWindowedStyle, FALSE, 0,
+                             GetDpiForWindow(m_hwnd));
     const int windowWidth = rect.right - rect.left;
     const int windowHeight = rect.bottom - rect.top;
 
