@@ -58,6 +58,28 @@ int main() {
               game::ui::kThresholdNice * 2.0f, 0.0001f,
               "Nice visual zone covers both sides of threshold");
 
+  using game::utils::ApplyImpactSideError;
+  const DirectX::XMFLOAT3 north{0.0f, 0.0f, 1.0f};
+  const DirectX::XMFLOAT3 east{1.0f, 0.0f, 0.0f};
+  const auto straight =
+      ApplyImpactSideError(north, ShotJudgement::Great, 0.47f, 0.5f);
+  CHECK_TRUE(straight.x == 0.0f && straight.z == 1.0f,
+             "Great flies straight along the aim");
+  CHECK_TRUE(ApplyImpactSideError(north, ShotJudgement::Miss, 0.2f, 0.5f).x < 0.0f,
+             "stopping before the center pulls the ball left");
+  CHECK_TRUE(ApplyImpactSideError(north, ShotJudgement::Miss, 0.8f, 0.5f).x > 0.0f,
+             "stopping past the center pushes the ball right");
+  CHECK_TRUE(ApplyImpactSideError(east, ShotJudgement::Miss, 0.8f, 0.5f).z < 0.0f,
+             "right stays relative to the aim when facing east");
+  CHECK_TRUE(ApplyImpactSideError(east, ShotJudgement::Miss, 0.2f, 0.5f).z > 0.0f,
+             "left stays relative to the aim when facing east");
+  const auto missed = ApplyImpactSideError(north, ShotJudgement::Miss, 0.8f, 0.5f);
+  const auto niced = ApplyImpactSideError(north, ShotJudgement::Nice, 0.6f, 0.5f);
+  CHECK_TRUE(missed.x > niced.x && niced.x > 0.0f,
+             "Miss veers further than Nice");
+  CHECK_CLOSE(std::hypot(missed.x, missed.z), 1.0f, 0.0001f,
+              "side error keeps the horizontal length");
+
   const auto driverTicks = game::utils::GetRulerTicks(260.0f);
   CHECK_TRUE(driverTicks.minorYards == 10 && driverTicks.majorYards == 50,
              "driver ruler uses 10y ticks with 50y labels");

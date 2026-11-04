@@ -201,13 +201,6 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     state->shotCount++;
 
     auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
-    float curveAmount = 0.0f;
-
-    if (shot->judgement == game::components::ShotJudgement::Nice) {
-        curveAmount = 0.1f;
-    } else if (shot->judgement == game::components::ShotJudgement::Miss) {
-        curveAmount = 0.3f;
-    }
 
     // 「基本飛距離からの変位」でショットの強さを決定する。
     // ゲージ比率と判定結果を距離の倍率として基準飛距離に掛け、
@@ -225,11 +218,9 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     float vy = power * std::sin(angleRad);
     float vxz = power * std::cos(angleRad);
 
-    DirectX::XMFLOAT3 finalDir = shotDir;
-    if (curveAmount != 0.0f) {
-        // 簡易的なカーブ処理
-        finalDir.x += curveAmount;
-    }
+    const DirectX::XMFLOAT3 finalDir = game::utils::ApplyImpactSideError(
+        shotDir, shot->judgement, shot->confirmedImpact,
+        shot->impactPerfectCenter);
 
     auto* rb = ctx.world.Get<game::components::RigidBody>(ballEntity);
     if (rb) {

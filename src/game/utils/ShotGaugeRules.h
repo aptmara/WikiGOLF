@@ -53,6 +53,42 @@ inline float GetImpactZoneVisualWidth(float threshold) {
 }
 
 /**
+ * @brief インパクトのずれを反映した打球方向を返します。
+ * @details Nice/Missは、狙った方向からずれた側へ打ち出します。定規の中心より手前で
+ *          止めれば左、奥で止めれば右へ曲がり、Great以上はまっすぐ飛びます。
+ *          ずれは狙った方向に対する横方向で与え、水平成分の長さを保つので、
+ *          打つ向きによって曲がる方向や飛距離が変わりません。
+ * @param shotDir 狙った方向（左手系、水平成分は単位長さを想定）。
+ * @param center パーフェクトとみなす中心位置 (0.0〜1.0)。
+*/
+inline DirectX::XMFLOAT3 ApplyImpactSideError(
+    const DirectX::XMFLOAT3 &shotDir,
+    game::components::ShotJudgement judgement, float impactValue,
+    float center) {
+  float sideOffset = 0.0f;
+  if (judgement == game::components::ShotJudgement::Nice) {
+    sideOffset = 0.1f;
+  } else if (judgement == game::components::ShotJudgement::Miss) {
+    sideOffset = 0.3f;
+  }
+  if (sideOffset == 0.0f) {
+    return shotDir;
+  }
+  if (ClampGaugeValue(impactValue) < ClampGaugeValue(center)) {
+    sideOffset = -sideOffset;
+  }
+  const float x = shotDir.x + shotDir.z * sideOffset;
+  const float z = shotDir.z - shotDir.x * sideOffset;
+  const float aimLength = std::sqrt(shotDir.x * shotDir.x + shotDir.z * shotDir.z);
+  const float length = std::sqrt(x * x + z * z);
+  if (length <= 0.0f) {
+    return shotDir;
+  }
+  const float scale = aimLength / length;
+  return {x * scale, shotDir.y, z * scale};
+}
+
+/**
  * @brief 判定を示す色を返します。ゲージと演出で同じ規則を使います。
  * @details Wikipediaのリンク色に対応させています（Niceはリンクの青、Greatは
  *          訪問済みの紫、Missは赤リンク、Specialは秀逸な記事の金）。
