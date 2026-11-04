@@ -6,8 +6,6 @@
 
 #include "../../../ecs/World.h"
 #include "../../components/UIText.h"
-#include "../../components/WikiComponents.h"
-#include "../../utils/UIConstants.h"
 #include <DirectXMath.h>
 #include <string>
 
@@ -38,20 +36,6 @@ inline void SetTextVisible(ecs::World &world, ecs::Entity entity,
     return;
   }
   text->visible = visible;
-}
-
-inline DirectX::XMFLOAT4 GetJudgementColor(
-    game::components::ShotJudgement judgement) {
-  switch (judgement) {
-  case game::components::ShotJudgement::Special:
-    return game::ui::kColorSpecial;
-  case game::components::ShotJudgement::Great:
-    return game::ui::kColorSuccess;
-  case game::components::ShotJudgement::Nice:
-    return game::ui::kColorAccent;
-  default:
-    return game::ui::kColorError;
-  }
 }
 
 } // namespace game::controllers::hud::shot_gauge_detail

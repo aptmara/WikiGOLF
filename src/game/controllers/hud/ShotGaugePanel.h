@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file ShotGaugePanel.h
- * @brief ショット入力の二段階ゲージと判定表示を管理するHUDパネル
+ * @brief ショット入力のヤード定規ゲージと判定表示を管理するHUDパネル
 */
 
 #include "ClubSelectionPanel.h"
@@ -29,16 +29,21 @@ public:
 
   /**
    * @brief 現在のショットフェーズを表示へ反映します。
-   * @param impactCenter インパクトゲージの「パーフェクト」中心位置 (0.0〜1.0)。
-   *        通常は0.5だが、エイムピン設置時はパワー確定位置に連動して動く。
-   * @param aimPin 設置中の照準ピン。必要パワー位置をインパクトゲージへ表示する。
+   * @param impactCenter インパクトの「パーフェクト」中心位置 (0.0〜1.0)。
+   *        パワー確定位置に連動し、定規上では確定した距離の先端に当たる。
+   * @param aimPin 設置中の照準ピン。必要な距離の位置へ旗を立てる。
+   * @param swingCommitted インパクトが確定し、スイング中か。立ち上がった瞬間に
+   *        揺れや祝いの演出を始める。
 */
   void Update(core::GameContext &ctx, float deltaTime,
               game::components::ShotState::Phase phase, float currentPower,
-              float confirmedPower, float currentImpact,
-              float confirmedImpact, float impactCenter,
+              float confirmedPower, float confirmedImpact, float impactCenter,
               const ClubUIData &currentClub,
-              const game::components::AimPinState *aimPin);
+              const game::components::AimPinState *aimPin,
+              bool swingCommitted);
+
+  /** @brief 結果表示の演出中か。毎フレーム更新が必要なときにtrueを返します。*/
+  bool IsResultAnimating() const { return m_resultActive; }
 
   /** @brief 外部で計算されたゲージ位置を0～1へ正規化します。*/
   void UpdatePowerGauge(core::GameContext &ctx, float fillValue,
@@ -57,9 +62,6 @@ public:
   /** @brief インパクト判定帯の表示状態を直接変更します。*/
   void SetImpactZonesVisible(core::GameContext &ctx, bool visible);
 
-  /** @brief 通常時とショット入力時のパネル表示を切り替えます。*/
-  void SetShotPhaseVisible(core::GameContext &ctx, bool shotPhase);
-
   /** @brief HUD全体を隠すときにショット表示を確実に隠します。*/
   void SetVisible(core::GameContext &ctx, bool visible);
 
@@ -68,32 +70,32 @@ public:
 
 private:
   struct Entities {
-    ecs::Entity background = UINT32_MAX;
-    ecs::Entity step = UINT32_MAX;
-    ecs::Entity title = UINT32_MAX;
-    ecs::Entity hint = UINT32_MAX;
-    ecs::Entity powerLabel = UINT32_MAX;
-    ecs::Entity powerValue = UINT32_MAX;
-    ecs::Entity accuracyLabel = UINT32_MAX;
-    ecs::Entity accuracyValue = UINT32_MAX;
-    ecs::Entity club = UINT32_MAX;
     ecs::Entity gauge = UINT32_MAX;
     ecs::Entity judge = UINT32_MAX;
   };
 
-  void UpdatePanelContent(core::GameContext &ctx,
-                          game::components::ShotState::Phase phase,
-                          float currentPower, float confirmedPower,
-                          float currentImpact, float confirmedImpact,
-                          float impactCenter, const ClubUIData &currentClub,
-                          const game::components::AimPinState *aimPin);
+  /** @brief 打撃の反応に関わるタイマーを初期状態へ戻します。*/
+  void ResetTimers();
 
   Entities m_entities;
   ecs::EntityOwner m_entityOwner;
-  float m_phaseTransition = 1.0f;
   game::components::ShotState::Phase m_previousPhase =
       game::components::ShotState::Phase::Idle;
-  float m_dismissRemaining = 0.0f;
+  float m_entranceElapsed = 99.0f;
+  float m_zoneElapsed = 99.0f;
+  float m_confirmElapsed = 99.0f;
+
+  // インパクト確定の瞬間の値を控える。発射後にShotStateがリセットされても
+  // 演出の最後まで同じ結果を表示できるようにする。
+  bool m_resultActive = false;
+  bool m_wasCommitted = false;
+  float m_resultElapsed = 0.0f;
+  float m_resultPower = 0.0f;
+  float m_resultImpact = 0.0f;
+  float m_resultCenter = 0.5f;
+  int m_resultYards = 0;
+  game::components::ShotJudgement m_resultJudgement =
+      game::components::ShotJudgement::None;
 };
 
 } // namespace game::controllers::hud

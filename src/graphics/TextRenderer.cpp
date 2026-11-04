@@ -99,6 +99,8 @@ bool TextRenderer::Initialize(IDXGISwapChain *swapChain) {
               static_cast<uint32_t>(hr));
     return false;
   }
+  // 座標は実ピクセルで指定するので、OSの表示スケールに影響されないようにする。
+  m_d2dContext->SetDpi(96.0f, 96.0f);
 
   // バックバッファをBitmapとして取得・設定
   hr = CreateTargetBitmap(swapChain);
@@ -299,6 +301,29 @@ void TextRenderer::FillRoundedRect(const D2D1_RECT_F &rect, float radius,
     m_d2dContext->FillRoundedRectangle(
         D2D1::RoundedRect(rect, radius, radius), brush);
   }
+}
+
+void TextRenderer::FillPolygon(const D2D1_POINT_2F *points, UINT32 count,
+                               const DirectX::XMFLOAT4 &color) {
+  if (!m_d2dContext || !m_d2dFactory || !points || count < 3)
+    return;
+
+  ID2D1SolidColorBrush *brush = m_brushCache.GetBrush(color);
+  if (!brush)
+    return;
+
+  ComPtr<ID2D1PathGeometry> geometry;
+  if (FAILED(m_d2dFactory->CreatePathGeometry(&geometry)))
+    return;
+  ComPtr<ID2D1GeometrySink> sink;
+  if (FAILED(geometry->Open(&sink)))
+    return;
+  sink->BeginFigure(points[0], D2D1_FIGURE_BEGIN_FILLED);
+  sink->AddLines(points + 1, count - 1);
+  sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+  if (FAILED(sink->Close()))
+    return;
+  m_d2dContext->FillGeometry(geometry.Get(), brush);
 }
 
 void TextRenderer::DrawRoundedRect(const D2D1_RECT_F &rect, float radius,

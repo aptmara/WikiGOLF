@@ -41,7 +41,7 @@ public:
     void Update(core::GameContext& ctx, float dt,
                 const game::components::GolfGameState& state,
                 game::components::ShotState::Phase shotPhase,
-                float currentImpact,
+                bool swingCommitted,
                 float currentPower, float confirmedPower,
                 float confirmedImpact, float impactCenter,
                 float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
@@ -89,6 +89,11 @@ public:
                                  bool showCourseInfo,
                                  bool showClubSelection,
                                  bool showMinimapDecoration);
+
+    /** @brief 打撃ゲージの結果演出中か。演出が間引かれないよう毎フレーム更新します。*/
+    bool IsShotGaugeAnimating() const {
+        return m_shotGaugePanel.IsResultAnimating();
+    }
 
     /** @brief 通常HUDの現在のフェード透明度を返します。*/
     float GetNormalHudOpacity() const {

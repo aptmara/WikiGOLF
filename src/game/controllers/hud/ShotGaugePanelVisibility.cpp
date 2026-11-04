@@ -1,28 +1,28 @@
 /**
- * @file ShotGaugePanel.cpp
- * @brief ショットゲージパネルの実装
+ * @file ShotGaugePanelVisibility.cpp
+ * @brief ショットゲージパネルの表示切り替えと後始末
 */
 
 #include "ShotGaugePanel.h"
 #include "ShotGaugePanelInternals.h"
-#include "HudStyles.h"
 #include "../../../core/GameContext.h"
-#include "../../../core/StringUtils.h"
 #include "../../../ecs/World.h"
 #include "../../components/UIText.h"
-#include "../../utils/ShotGaugeRules.h"
-#include "../../utils/UIConstants.h"
-#include <algorithm>
-#include <cmath>
 
 
 namespace game::controllers::hud {
 
+void ShotGaugePanel::ResetTimers() {
+  m_entranceElapsed = 99.0f;
+  m_zoneElapsed = 99.0f;
+  m_confirmElapsed = 99.0f;
+  m_resultActive = false;
+  m_wasCommitted = false;
+  m_resultElapsed = 0.0f;
+}
+
 void ShotGaugePanel::Reset(core::GameContext &ctx) {
   UpdateJudge(ctx, L"", {1.0f, 1.0f, 1.0f, 1.0f});
-  shot_gauge_detail::SetText(ctx.world, m_entities.accuracyValue, L"---");
-  shot_gauge_detail::SetColor(ctx.world, m_entities.accuracyValue,
-           game::ui::kColorTextPrimary);
   auto *gauge =
       ctx.world.Get<game::components::UIBarGauge>(m_entities.gauge);
   if (gauge) {
@@ -31,14 +31,14 @@ void ShotGaugePanel::Reset(core::GameContext &ctx) {
     gauge->isVisible = false;
     gauge->mode = game::components::UIBarGaugeMode::Power;
     gauge->showImpactZones = false;
-    gauge->showConfirmedMarker = false;
     gauge->showAimPinMarker = false;
     gauge->aimPinValue = 0.0f;
-    gauge->confirmPulse = 0.0f;
+    gauge->resultActive = false;
+    gauge->confirmElapsed = 99.0f;
     gauge->opacity = 1.0f;
   }
-  m_dismissRemaining = 0.0f;
-  SetShotPhaseVisible(ctx, false);
+  ResetTimers();
+  m_previousPhase = game::components::ShotState::Phase::Idle;
 }
 
 void ShotGaugePanel::SetGaugeVisible(core::GameContext &ctx, bool visible) {
@@ -58,34 +58,21 @@ void ShotGaugePanel::SetImpactZonesVisible(core::GameContext &ctx,
   }
 }
 
-void ShotGaugePanel::SetShotPhaseVisible(core::GameContext &ctx,
-                                         bool shotPhase) {
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.background, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.step, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.title, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.hint, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.powerLabel, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.powerValue, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.accuracyLabel, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.accuracyValue, shotPhase);
-  shot_gauge_detail::SetTextVisible(ctx.world, m_entities.club, shotPhase);
-}
-
 void ShotGaugePanel::SetVisible(core::GameContext &ctx, bool visible) {
   if (visible) {
     return;
   }
+  // 残っている結果表示を止めないと、次の更新でゲージが再表示されてしまう。
+  m_resultActive = false;
   SetGaugeVisible(ctx, false);
   shot_gauge_detail::SetTextVisible(ctx.world, m_entities.judge, false);
-  SetShotPhaseVisible(ctx, false);
 }
 
 void ShotGaugePanel::Shutdown(core::GameContext &ctx) {
   m_entityOwner.DestroyAll(ctx.world);
   m_entities = Entities{};
-  m_phaseTransition = 1.0f;
+  ResetTimers();
   m_previousPhase = game::components::ShotState::Phase::Idle;
-  m_dismissRemaining = 0.0f;
 }
 
 } // namespace game::controllers::hud

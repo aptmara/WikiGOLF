@@ -58,6 +58,22 @@ int main() {
               game::ui::kThresholdNice * 2.0f, 0.0001f,
               "Nice visual zone covers both sides of threshold");
 
+  const auto driverTicks = game::utils::GetRulerTicks(260.0f);
+  CHECK_TRUE(driverTicks.minorYards == 10 && driverTicks.majorYards == 50,
+             "driver ruler uses 10y ticks with 50y labels");
+  const auto putterTicks = game::utils::GetRulerTicks(10.0f);
+  CHECK_TRUE(putterTicks.minorYards == 1 && putterTicks.majorYards == 2,
+             "short putter ruler uses 1y ticks with 2y labels");
+  for (float yards : {3.0f, 12.0f, 45.0f, 100.0f, 150.0f, 260.0f, 300.0f, 600.0f}) {
+    const auto ticks = game::utils::GetRulerTicks(yards);
+    CHECK_TRUE(yards / ticks.majorYards <= 6.0f,
+               "ruler keeps at most six labelled ticks");
+    CHECK_TRUE(ticks.majorYards % ticks.minorYards == 0,
+               "labelled ticks line up with minor ticks");
+  }
+  CHECK_TRUE(game::utils::GetRulerTicks(0.0f).majorYards == 0,
+             "ruler without a carry distance has no ticks");
+
   std::cout << "All shot gauge rule tests passed!\n";
   return 0;
 }

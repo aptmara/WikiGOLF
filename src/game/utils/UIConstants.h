@@ -33,7 +33,11 @@ const DirectX::XMFLOAT4 kColorClubSelected    = {0.918f, 0.949f, 1.000f, 0.980f}
 const DirectX::XMFLOAT4 kColorClubNormal      = {0.973f, 0.976f, 0.980f, 0.950f}; // kColorBgDark と同値
 const DirectX::XMFLOAT4 kColorShotBtn         = {1.000f, 1.000f, 1.000f, 1.000f}; // 実物のWikipediaボタン相当（白地+グレー枠の控えめな見た目）
 const DirectX::XMFLOAT4 kColorShotBtnBorder   = {0.635f, 0.663f, 0.694f, 0.900f}; // kColorBorder と同値
-const DirectX::XMFLOAT4 kColorGaugeTick       = {0.000f, 0.000f, 0.000f, 0.350f}; // パワーゲージの閾値目盛り線専用
+const DirectX::XMFLOAT4 kColorJudgeGreat      = {0.475f, 0.361f, 0.698f, 1.000f}; // #795cb2 訪問済みリンクの紫。Great判定専用
+const DirectX::XMFLOAT4 kColorRulerTab        = {0.902f, 0.914f, 0.925f, 1.000f}; // #e6e9ec 定規の非選択タブ
+const DirectX::XMFLOAT4 kColorRulerMinorTick  = {0.447f, 0.467f, 0.490f, 1.000f}; // #72777d 定規の細かい目盛り
+const DirectX::XMFLOAT4 kColorStarGold        = {0.949f, 0.773f, 0.192f, 1.000f}; // #f2c531 パーフェクト演出の星
+const DirectX::XMFLOAT4 kColorGlowGold        = {1.000f, 0.847f, 0.420f, 1.000f}; // #ffd86b パーフェクト演出の光
 
 // =========================================================
 // 形状トークン
@@ -86,38 +90,18 @@ constexpr float kWindValueFontSize  = 27.0f;
 constexpr float kWindLabelFontSize  = 11.0f;
 
 // =========================================================
-// ショットパネル & パワーゲージ (中央下)
+// ショットの定規ゲージ (中央下)
 // =========================================================
-constexpr float kShotPanelX         = 238.0f;
-constexpr float kShotPanelY         = 542.0f;
-constexpr float kShotPanelWidth     = 804.0f;
-constexpr float kShotPanelBgX       = 214.0f;
-constexpr float kShotPanelBgY       = 498.0f;
-constexpr float kShotPanelBgWidth   = 852.0f;
-constexpr float kShotPanelBgHeight  = 178.0f;
-constexpr float kShotStepWidth      = 68.0f;
-constexpr float kShotLabelFontSize  = 15.0f;
-constexpr float kShotValueFontSize  = 18.0f;
-constexpr float kShotTitleFontSize  = 22.0f;
-constexpr float kShotHintFontSize   = 14.0f;
-
-constexpr float kGaugeHeight        = 30.0f;
-constexpr float kGaugeBorderWidth   = 1.0f;
-constexpr float kImpactWidthGreat   = 0.04f; // 全体に対する割合
-constexpr float kImpactWidthNice    = 0.12f;
-
-// ゲージのゾーン透明度（インパクトゲージ）
-constexpr float kGaugeZoneAlphaNice    = 0.22f;
-constexpr float kGaugeZoneAlphaGreat   = 0.40f;
-constexpr float kGaugeZoneAlphaSpecial = 0.85f;
+constexpr float kShotRulerX         = 140.0f;
+constexpr float kShotRulerY         = 628.0f;
+constexpr float kShotRulerWidth     = 1000.0f;
+constexpr float kShotRulerHeight    = 50.0f;
 
 // ゲージのリアクション演出
-constexpr float kGaugeConfirmPulseDuration = 0.18f; // 確定パルスの基準時間（秒）
-constexpr float kGaugeHoldDuration         = 0.45f; // インパクト確定後、判定色つきで保持表示する時間（秒）
-constexpr float kGaugeFadeDuration         = 0.35f; // 保持表示の後、フェードアウトする時間（秒）
-constexpr float kGaugeFadeDriftY           = 8.0f;  // フェードアウト中にわずかに上へ抜ける距離（px）
-constexpr float kGaugeMarkerPulseScale     = 0.35f; // 確定パルス時のマーカー拡大率
-constexpr float kShotValuePunchFontDelta   = 6.0f;  // パーセント数値のパンチ演出量（pt）
+constexpr float kGaugeEntranceDuration = 0.13f; // ショット開始時に定規が現れる時間（秒）
+constexpr float kGaugeZoneGrowDuration = 0.13f; // 判定帯が先端から伸びる時間（秒）
+constexpr float kGaugeHoldDuration     = 1.50f; // インパクト確定後、演出と距離札を保持する時間（秒）
+constexpr float kGaugeFadeDuration     = 0.40f; // 保持表示の後、フェードアウトする時間（秒）
 
 // =========================================================
 // クラブ選択パネル (左下) - 1280x720固定
@@ -175,7 +159,7 @@ constexpr float kMapHelpPanelH       = 270.0f; ///< 操作ヘルプパネルの�
 // =========================================================
 // エイムピン距離グラフ (画面中央右・縦バー) - 1280x720固定
 // 中クリックで設置したエイムピンまでの距離を、現在クラブの最大飛距離を
-// 満尺とした縦グラフとして表示する。ショットパネル背景(kShotPanelBgY以降)
+// 満尺とした縦グラフとして表示する。定規ゲージの距離札(kShotRulerYの上)
 // と重ならないよう、画面中段の高さに収める。
 // =========================================================
 constexpr float kAimGraphX          = 760.0f;

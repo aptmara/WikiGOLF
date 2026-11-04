@@ -19,7 +19,7 @@ namespace game::controllers::hud {
 
 namespace {
 
-/** @brief バーの塗り色をパワー割合に応じて選びます（ShotGaugePanelと同じ配色規則）。*/
+/** @brief バーの塗り色をパワー割合に応じて選びます。*/
 DirectX::XMFLOAT4 FillColorForRatio(float ratio) {
   if (ratio >= 0.75f) {
     return game::ui::kColorWarning;

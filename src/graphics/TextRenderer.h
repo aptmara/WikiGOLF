@@ -82,6 +82,15 @@ public:
   void DrawRoundedRect(const D2D1_RECT_F &rect, float radius,
                        const DirectX::XMFLOAT4 &color, float width);
 
+  /**
+   * @brief 凸・凹を問わない閉じた多角形を塗りつぶします。
+   * @param points 頂点配列です（仮想解像度）。3点未満の場合は何も描画しません。
+   * @param count 頂点数です。
+   * @param color 塗り色です。
+   */
+  void FillPolygon(const D2D1_POINT_2F *points, UINT32 count,
+                   const DirectX::XMFLOAT4 &color);
+
   /** @brief 画像をロード（キャッシュ機能付き） */
   bool LoadBitmapFromFile(const std::string &filePath);
 

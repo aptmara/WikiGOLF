@@ -410,51 +410,52 @@ struct HoleFlag {
 /**
  * @brief バーゲージの表示用途です。*/
 enum class UIBarGaugeMode {
-  Power, ///< 強さ決定用の左詰めゲージ
-  Impact ///< インパクト精度用の中央合わせゲージ
+  Power, ///< 距離を決める段階（確定前の青線を伸ばす）
+  Impact ///< 確定した距離の先端に判定帯を出す段階
 };
 
 /**
- * @brief D2D描画用バーゲージコンポーネント
+ * @brief 打撃用のヤード定規ゲージ（D2D描画）
+ * @details 確定した距離の線を残し、その先端に判定帯を重ねることで、
+ *          パワーとインパクトを1本の定規上の連続した動作として見せる。
 */
 struct UIBarGauge {
-  float value = 0.0f;    ///< 現在値 (0.0 - 1.0)
-  float maxValue = 1.0f; ///< 最大値
-  UIBarGaugeMode mode = UIBarGaugeMode::Power; ///< ゲージの表示用途
-
-  DirectX::XMFLOAT4 color = {0.0f, 1.0f, 0.0f, 1.0f};       ///< バー色
-  DirectX::XMFLOAT4 bgColor = {0.0f, 0.0f, 0.0f, 0.5f};     ///< 背景色
-  DirectX::XMFLOAT4 borderColor = {1.0f, 1.0f, 1.0f, 1.0f}; ///< 枠線色
-  float borderWidth = 2.0f;
+  float value = 0.0f; ///< パワー比率 (0.0 - 1.0)
+  UIBarGaugeMode mode = UIBarGaugeMode::Power; ///< 現在の段階
 
   float x = 0.0f;
   float y = 0.0f;
   float width = 200.0f;
   float height = 20.0f;
   bool isVisible = true;
+  float opacity = 1.0f;  ///< 全体の不透明度倍率（結果表示後のフェード用）
+  float entrance = 1.0f; ///< 登場の進行度 (0.0 - 1.0)
 
-  // マーカー（現在値とは別に表示するカーソル等）
-  bool showMarker = false;
-  float markerValue = 0.0f;
-  DirectX::XMFLOAT4 markerColor = {1.0f, 1.0f, 1.0f, 1.0f};
-
-  bool showConfirmedMarker = false; ///< 確定済みの強さなどを固定マーカーで表示するか
-  float confirmedValue = 0.0f;      ///< 確定済みマーカー値 (0.0 - 1.0)
-  DirectX::XMFLOAT4 confirmedMarkerColor = {1.0f, 0.76f, 0.16f, 1.0f};
+  float markerValue = 0.0f; ///< 針の位置 (0.0 - 1.0)
 
   bool showAimPinMarker = false; ///< 照準ピンの必要パワー位置を表示するか
   float aimPinValue = 0.0f;      ///< 照準ピン位置 (0.0 - 1.0)
   DirectX::XMFLOAT4 aimPinMarkerColor = {1.0f, 0.76f, 0.16f, 1.0f};
 
-  float confirmPulse = 0.0f; ///< 確定直後のスナップ演出強度 (1.0=直後, 0.0=平常)
-  float opacity = 1.0f; ///< ゲージ全体の不透明度倍率 (フェードアウト演出用)
-
   // インパクトゾーン（ゴルフゲーム特化）
   bool showImpactZones = false;
+  float zoneGrow = 1.0f;         ///< 判定帯が先端から伸びる進行度 (0.0 - 1.0)
   float impactCenter = 0.5f;     ///< インパクト中心 (0.0-1.0)
   float impactWidthSpecial = 0.03f; ///< Specialゾーン幅 (全体に対する割合)
   float impactWidthGreat = 0.1f; ///< Greatゾーン幅 (全体に対する割合)
   float impactWidthNice = 0.3f;  ///< Niceゾーン幅
+
+  float rulerMaxYards = 0.0f; ///< 定規の右端が示す距離（クラブの基準飛距離）
+  std::wstring tabLabel;      ///< 左タブの文字（クラブ名）
+  std::wstring hintLabel;     ///< 右タブの文字（操作説明）
+  int chipYards = 0;          ///< 距離札に出すヤード数
+  float chipAnchor = 0.0f;    ///< 距離札の水平位置 (0.0 - 1.0)
+
+  // 打撃の反応。経過時間だけで描画が決まるようにして、状態を持たせない
+  bool resultActive = false; ///< インパクト確定後の結果表示中か
+  ShotJudgement judgement = ShotJudgement::None; ///< 結果表示中の判定
+  float resultElapsed = 0.0f; ///< インパクト確定からの経過秒数
+  float confirmElapsed = 99.0f; ///< パワー確定からの経過秒数
 };
 
 } // namespace game::components

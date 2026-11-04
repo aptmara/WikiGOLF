@@ -159,7 +159,7 @@ int main() {
   state.moveCount = 2;
   const std::vector<game::controllers::ClubUIData> clubs;
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
+             game::components::ShotState::Phase::Idle, false, 0.0f, 0.0f,
              0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubs, -1, 0.0f, 0.0f,
              nullptr);
 
@@ -180,7 +180,7 @@ int main() {
 
   state.currentMaterial = game::components::TerrainMaterial::Water;
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
+             game::components::ShotState::Phase::Idle, false, 0.0f, 0.0f,
              0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubs, -1, 0.0f, 0.0f,
              nullptr);
   CHECK_TRUE(FindImage(world, "Assets/all_terrain_ui_assets/water.png"),
@@ -193,7 +193,7 @@ int main() {
       {"Club 3", "Assets/textures/Clubs/SW_sand_wedge.png", "SW", "Wedge", 1.0f, 130.0f},
       {"Club 4", "Assets/textures/Clubs/PT_putter.png", "PT", "Putter", 1.0f, 140.0f}};
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
+             game::components::ShotState::Phase::Idle, false, 0.0f, 0.0f,
              0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
              0.0f, nullptr);
   CHECK_TRUE(CountComponents<game::components::UIImage>(world) ==
@@ -213,7 +213,7 @@ int main() {
 
   const std::size_t singleClubEntityCount = world.GetEntityCount();
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
+             game::components::ShotState::Phase::Idle, false, 0.0f, 0.0f,
              0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 3, 0.0f,
              0.0f, nullptr);
   CHECK_TRUE(!FindText(world, L"Club 2") && FindText(world, L"Club 3") &&
@@ -223,7 +223,7 @@ int main() {
              "クラブ切替を繰り返してもHUD Entity数を増やさない");
 
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::Idle, 0.5f, 0.0f, 0.0f,
+             game::components::ShotState::Phase::Idle, false, 0.0f, 0.0f,
              0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
              0.0f, nullptr);
 
@@ -239,7 +239,7 @@ int main() {
              "ショット中はゲージ以外の通常HUDをすべて隠す");
 
   hud.Update(context, 0.1f, state,
-             game::components::ShotState::Phase::ShowResult, 0.5f, 0.0f,
+             game::components::ShotState::Phase::ShowResult, false, 0.0f,
              0.0f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, nullptr);
   CHECK_TRUE(FindText(world, L"Club 2")->visible &&
@@ -247,7 +247,7 @@ int main() {
                  FindText(world, L"Club 2")->opacity < 1.0f,
              "打球後は通常HUDを途中透明度でフェード表示する");
   hud.Update(context, game::ui::kNormalHudFadeDuration, state,
-             game::components::ShotState::Phase::ShowResult, 0.5f, 0.0f,
+             game::components::ShotState::Phase::ShowResult, false, 0.0f,
              0.0f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, nullptr);
   CHECK_TRUE(FindText(world, L"Club 2")->opacity == 1.0f &&
@@ -260,7 +260,7 @@ int main() {
   aimPin.requiredPowerRatio = 0.72f;
   aimPin.reachable = true;
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::PowerCharging, 0.5f, 0.5f,
+             game::components::ShotState::Phase::PowerCharging, false, 0.5f,
              0.0f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, &aimPin);
   auto *gauge = FindGauge(world);
@@ -271,71 +271,103 @@ int main() {
                  SameColor(gauge->aimPinMarkerColor,
                            game::ui::kColorSpecial),
              "パワーゲージへ到達可能な照準ピン位置を黄色で表示する");
-  CHECK_TRUE(ContainsText(world, L"01 / 02") &&
-                 ContainsText(world, L"パワー調整") &&
-                 ContainsText(world, L"60y"),
-             "パワー調整中の手順と基準飛距離を表示する");
+  CHECK_TRUE(gauge->chipYards == 60 && gauge->chipAnchor == 0.5f &&
+                 gauge->rulerMaxYards == 120.0f && gauge->tabLabel == L"Club 2",
+             "パワー調整中はクラブ基準の定規と距離札を設定する");
+  CHECK_TRUE(!ContainsText(world, L"01 / 02") &&
+                 !ContainsText(world, L"パワー調整"),
+             "手順番号と見出しのパネルを表示しない");
 
   hud.UpdatePowerGauge(context, 50.0f, 30.0f, 0.0f, 100.0f);
   CHECK_TRUE(gauge->value == 0.5f && gauge->markerValue == 0.5f,
              "パワーゲージの値とマーカーを正規化する");
 
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::ImpactTiming, 0.4f, 0.5f,
-             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             game::components::ShotState::Phase::ImpactTiming, false, 0.5f,
+             0.5f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, &aimPin);
   hud.UpdatePowerGauge(context, 50.0f, 40.0f, 0.0f, 100.0f);
   CHECK_TRUE(gauge->mode == game::components::UIBarGaugeMode::Impact &&
-                 gauge->showImpactZones && gauge->markerValue == 0.4f,
-             "インパクト調整中は中央合わせゲージと判定帯を表示する");
-  CHECK_TRUE(!gauge->showAimPinMarker,
-             "インパクトゲージには照準ピン位置を表示しない");
-  CHECK_TRUE(ContainsText(world, L"02 / 02") &&
-                 ContainsText(world, L"インパクトタイミング") &&
-                 ContainsText(world, L"60y 確定") &&
-                 ContainsText(world, L"左 20%"),
-             "インパクト調整中の確定距離と左右誤差を表示する");
+                 gauge->showImpactZones && gauge->markerValue == 0.4f &&
+                 gauge->value == 0.5f,
+             "インパクト調整中は確定した距離を残して判定帯を表示する");
+  CHECK_TRUE(gauge->impactCenter == 0.5f && gauge->chipAnchor == 0.5f &&
+                 gauge->chipYards == 60,
+             "判定帯と距離札を確定した距離の先端に合わせる");
+  CHECK_TRUE(gauge->showAimPinMarker,
+             "インパクト調整中も定規へ照準ピンを立てる");
 
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::ImpactTiming, 0.4f, 0.5f,
-             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             game::components::ShotState::Phase::ImpactTiming, false, 0.5f,
+             0.5f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, nullptr);
   CHECK_TRUE(!gauge->showAimPinMarker,
-             "照準ピン未設置ならインパクトゲージへピン位置を表示しない");
+             "照準ピン未設置なら定規へピンを立てない");
 
   aimPin.requiredPowerRatio = 1.2f;
   aimPin.reachable = false;
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::PowerCharging, 0.4f, 0.5f,
-             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             game::components::ShotState::Phase::PowerCharging, false, 0.5f,
+             0.0f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, &aimPin);
   CHECK_TRUE(gauge->showAimPinMarker && gauge->aimPinValue == 1.0f &&
                  SameColor(gauge->aimPinMarkerColor, game::ui::kColorError),
-             "到達不能な照準ピン位置はパワーゲージ右端へ収めて赤色で表示する");
+             "到達不能な照準ピン位置は定規の右端へ収めて赤色で表示する");
 
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::ImpactTiming, 0.4f, 0.5f,
-             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             game::components::ShotState::Phase::ImpactTiming, false, 0.5f,
+             0.5f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, &aimPin);
-  CHECK_TRUE(!gauge->showAimPinMarker,
-             "パワーからインパクトへ移ると照準ピン位置を消す");
+  CHECK_TRUE(!gauge->resultActive, "クリック前は結果演出を始めない");
 
+  // インパクト確定: 発射前のスイング中から演出を始める。
   hud.Update(context, 0.016f, state,
-             game::components::ShotState::Phase::Executing, 0.4f, 0.5f,
-             0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
-             0.0f, 0.0f, nullptr);
-  CHECK_TRUE(gauge->isVisible && gauge->showConfirmedMarker &&
-                 !gauge->showAimPinMarker,
-             "インパクト確定直後は照準ピン位置を表示しない");
-  hud.Update(context,
-             game::ui::kGaugeHoldDuration + game::ui::kGaugeFadeDuration +
-                 0.1f,
-             state, game::components::ShotState::Phase::Executing, 0.4f,
-             0.5f, 0.5f, 0.4f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
-             0.0f, 0.0f, nullptr);
-  CHECK_TRUE(!gauge->isVisible && gauge->opacity == 1.0f &&
-                 !gauge->showAimPinMarker,
+             game::components::ShotState::Phase::ImpactTiming, true, 0.5f,
+             0.5f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, &aimPin);
+  CHECK_TRUE(gauge->resultActive && hud.IsShotGaugeAnimating() &&
+                 gauge->judgement == game::components::ShotJudgement::Special,
+             "インパクト確定の瞬間に判定付きの結果演出を始める");
+  CHECK_TRUE(gauge->chipYards == 66 && !gauge->showAimPinMarker,
+             "距離札を判定込みの最終距離へ更新し、ピンを消す");
+
+  // 発射後にShotStateが初期値へ戻っても、確定時の結果を表示し続ける。
+  hud.Update(context, 0.016f, state,
+             game::components::ShotState::Phase::Executing, false, 0.0f, 0.0f,
+             0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
+             0.0f, nullptr);
+  CHECK_TRUE(gauge->isVisible && gauge->chipYards == 66 && gauge->value == 0.5f &&
+                 gauge->markerValue == 0.5f,
+             "発射後も確定時の距離と針の位置を保持する");
+  hud.Update(context, game::ui::kGaugeHoldDuration + 0.1f, state,
+             game::components::ShotState::Phase::Executing, false, 0.0f, 0.0f,
+             0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
+             0.0f, nullptr);
+  CHECK_TRUE(gauge->isVisible && gauge->opacity > 0.0f && gauge->opacity < 1.0f,
+             "保持時間の後はフェードアウトする");
+  hud.Update(context, game::ui::kGaugeFadeDuration, state,
+             game::components::ShotState::Phase::Executing, false, 0.0f, 0.0f,
+             0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
+             0.0f, nullptr);
+  CHECK_TRUE(!gauge->isVisible && !hud.IsShotGaugeAnimating(),
              "保持時間とフェード時間の経過後にゲージを隠す");
+
+  // 演出中にHUDを隠した場合（カップインの演出など）は再表示しない。
+  hud.Update(context, 0.016f, state,
+             game::components::ShotState::Phase::ImpactTiming, false, 0.5f,
+             0.5f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, nullptr);
+  hud.Update(context, 0.016f, state,
+             game::components::ShotState::Phase::ImpactTiming, true, 0.5f,
+             0.5f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
+             0.0f, 0.0f, nullptr);
+  hud.SetVisible(context, false);
+  hud.Update(context, 0.016f, state,
+             game::components::ShotState::Phase::Executing, false, 0.0f, 0.0f,
+             0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
+             0.0f, nullptr);
+  CHECK_TRUE(!gauge->isVisible, "HUD非表示後は結果演出を再表示しない");
+  hud.SetVisible(context, true);
 
   hud.UpdateJudge(context, L"GREAT", game::ui::kColorSuccess);
   CHECK_TRUE(ContainsText(world, L"GREAT"),
@@ -343,7 +375,7 @@ int main() {
   hud.ResetShotUI(context);
   CHECK_TRUE(!gauge->isVisible && gauge->value == 0.0f &&
                  gauge->mode == game::components::UIBarGaugeMode::Power &&
-                 !gauge->showImpactZones && !gauge->showConfirmedMarker &&
+                 !gauge->showImpactZones && !gauge->resultActive &&
                  !gauge->showAimPinMarker && gauge->aimPinValue == 0.0f,
              "ショットUIのリセットでゲージを初期状態へ戻す");
 

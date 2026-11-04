@@ -97,8 +97,9 @@ void WikiGolfScene::UpdateHudAndEffects(
                                   shot.phase != game::components::ShotState::Phase::RestoringCamera);
         m_hudUpdateTimer += dt;
         const bool hudFading = m_hud->GetNormalHudOpacity() < 1.0f;
-        const bool shouldRefreshHud =
-            isShotPhase || hudFading || m_hudUpdateTimer >= 0.1f;
+        const bool gaugeAnimating = m_hud->IsShotGaugeAnimating();
+        const bool shouldRefreshHud = isShotPhase || hudFading || gaugeAnimating ||
+                                      m_hudUpdateTimer >= 0.1f;
 
         if (shouldRefreshHud) {
             // 間引き中に経過した実時間を渡す。ここで単フレームの dt を渡すと、
@@ -144,7 +145,7 @@ void WikiGolfScene::UpdateHudAndEffects(
           const auto* aimPin =
               ctx.world.GetGlobal<game::components::AimPinState>();
           m_hud->Update(ctx, hudDt, state,
-                          shot.phase, currentImpact,
+                          shot.phase, shot.swingCommitted,
                           currentPower, shot.confirmedPower,
                           shot.confirmedImpact, shot.impactPerfectCenter,
                           state.windSpeed, state.windDirection,

@@ -67,7 +67,7 @@ void WikiGolfHUD::Shutdown(core::GameContext& ctx) {
 void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
                          const game::components::GolfGameState& state,
                          game::components::ShotState::Phase shotPhase,
-                         float currentImpact,
+                         bool swingCommitted,
                          float currentPower, float confirmedPower,
                          float confirmedImpact, float impactCenter,
                          float windSpeed, const DirectX::XMFLOAT2& windDir, float cameraYaw,
@@ -88,8 +88,8 @@ void WikiGolfHUD::Update(core::GameContext& ctx, float dt,
         currentClubData = clubs[currentClubIndex];
     }
     m_shotGaugePanel.Update(ctx, dt, shotPhase, currentPower, confirmedPower,
-                            currentImpact, confirmedImpact, impactCenter,
-                            currentClubData, aimPin);
+                            confirmedImpact, impactCenter, currentClubData,
+                            aimPin, swingCommitted);
     UpdateNormalHudTransition(ctx, dt, shotPhase);
 }
 
@@ -169,7 +169,6 @@ void WikiGolfHUD::SetShotPhaseUIVisible(core::GameContext& ctx, bool shotPhase) 
         m_normalHudOpacity = 0.0f;
         ApplyNormalHudOpacity(ctx);
     }
-    m_shotGaugePanel.SetShotPhaseVisible(ctx, shotPhase);
 
 } // SetShotPhaseUIVisible
 

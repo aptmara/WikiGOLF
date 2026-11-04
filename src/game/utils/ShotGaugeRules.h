@@ -53,6 +53,51 @@ inline float GetImpactZoneVisualWidth(float threshold) {
 }
 
 /**
+ * @brief 判定を示す色を返します。ゲージと演出で同じ規則を使います。
+ * @details Wikipediaのリンク色に対応させています（Niceはリンクの青、Greatは
+ *          訪問済みの紫、Missは赤リンク、Specialは秀逸な記事の金）。
+*/
+inline DirectX::XMFLOAT4 GetJudgementColor(
+    game::components::ShotJudgement judgement) {
+  switch (judgement) {
+  case game::components::ShotJudgement::Special:
+    return game::ui::kColorSpecial;
+  case game::components::ShotJudgement::Great:
+    return game::ui::kColorJudgeGreat;
+  case game::components::ShotJudgement::Nice:
+    return game::ui::kColorAccent;
+  default:
+    return game::ui::kColorError;
+  }
+}
+
+/** @brief 定規の目盛り間隔です。どちらも0なら目盛りを描きません。*/
+struct RulerTicks {
+  int minorYards = 0; ///< 細かい目盛りの間隔
+  int majorYards = 0; ///< 数字を添える目盛りの間隔
+};
+
+/**
+ * @brief クラブの基準飛距離に合う目盛り間隔を返します。
+ * @details 数字付きの目盛りが6本程度に収まる最小の間隔を選ぶので、ドライバーでも
+ *          パターでも定規の密度が揃います。
+*/
+inline RulerTicks GetRulerTicks(float maxYards) {
+  if (maxYards <= 0.0f) {
+    return {};
+  }
+  constexpr RulerTicks kCandidates[] = {{1, 2},   {1, 5},   {2, 10},
+                                        {5, 20},  {5, 25},  {10, 50},
+                                        {20, 100}, {50, 200}, {100, 500}};
+  for (const auto &ticks : kCandidates) {
+    if (maxYards / static_cast<float>(ticks.majorYards) <= 6.0f) {
+      return ticks;
+    }
+  }
+  return {100, 500};
+}
+
+/**
  * @brief インパクト判定結果から、基本飛距離に対する倍率を返します。
  *
  * ExecuteShot(実際のショット)とHUD表示のどちらからも参照し、
