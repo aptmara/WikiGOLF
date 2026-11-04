@@ -13,6 +13,8 @@ namespace game::scenes::title_scene_detail {
 
 inline constexpr float kIntroAudioVolume = 0.8f;
 inline constexpr float kStartConnectionTimeoutSeconds = 8.0f;
+inline constexpr const wchar_t *kConnectionFailedMessage =
+    L"Wikipediaに接続できません\n\nネット接続を確認してください";
 
 /**
  * @brief 標準スタート用にWiki開始情報を初期化します。

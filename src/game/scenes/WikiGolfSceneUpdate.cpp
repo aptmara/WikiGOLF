@@ -171,6 +171,21 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
         LOG_INFO("WikiGolf", "Tutorial completed. Testing Wikipedia connection...");
         m_tutorialConnectionChecking = true;
         m_tutorialConnectionElapsed = 0.0f;
+        m_tutorialConnectionStatusEntity = CreateEntity(ctx.world);
+        auto &status = ctx.world.Add<components::UIText>(
+            m_tutorialConnectionStatusEntity);
+        status.text = L"Wikipediaへの接続を確認中...";
+        status.x = 440.0f;
+        status.y = 330.0f;
+        status.width = 400.0f;
+        status.height = 60.0f;
+        status.style.fontSize = 22.0f;
+        status.style.align = graphics::TextAlign::Center;
+        status.style.color = {1.0f, 1.0f, 1.0f, 1.0f};
+        status.style.bgColor = {0.15f, 0.2f, 0.3f, 0.95f};
+        status.style.cornerRadius = 16.0f;
+        status.layer = 2000;
+        status.visible = false;
         m_tutorialConnectionState =
             std::make_shared<TutorialConnectionState>();
         auto connectionState = m_tutorialConnectionState;
@@ -182,6 +197,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
       }
 
       m_tutorialConnectionElapsed += ctx.dt;
+      // すぐ接続できたときは表示しない。
+      if (m_tutorialConnectionElapsed >= 1.0f) {
+        if (auto *status = ctx.world.Get<components::UIText>(
+                m_tutorialConnectionStatusEntity)) {
+          status->visible = true;
+        }
+      }
       const bool connectionCompleted =
           m_tutorialConnectionState &&
           m_tutorialConnectionState->completed.load(std::memory_order_acquire);
@@ -217,7 +239,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                    "Wikipedia connection test failed after tutorial.");
         }
         auto loadingScene = std::make_unique<LoadingScene>(
-            []() { return std::make_unique<TitleScene>(); });
+            []() {
+              return std::make_unique<TitleScene>(
+                  title_scene_detail::kConnectionFailedMessage);
+            });
         ctx.sceneManager->ChangeScene(std::move(loadingScene));
       }
       return;

@@ -11,6 +11,7 @@
 #include <atomic>
 #include <vector>
 #include <string>
+#include <utility>
 #include <future>
 #include <memory>
 #include "../../graphics/VideoPlayer.h"
@@ -32,6 +33,11 @@ namespace game::scenes {
 */
 class TitleScene : public core::Scene {
 public:
+  TitleScene() = default;
+  /** @param startupNotice メニュー表示時にポップアップで知らせる文章 */
+  explicit TitleScene(std::wstring startupNotice)
+      : m_startupNotice(std::move(startupNotice)) {}
+
   const char *GetName() const override { return "TitleScene"; }
 
   void OnEnter(core::GameContext &ctx) override;
@@ -72,6 +78,8 @@ private:
   ecs::Entity m_popupBgEntity = 0;
   ecs::Entity m_popupTextEntity = 0;
   float m_popupTimer = 0.0f;
+  float m_popupDuration = 2.0f;
+  std::wstring m_startupNotice;
 
   // --- 状態とコース選択UI ---
   enum class TitleState { IntroVideo, MainMenu, CourseSelect };

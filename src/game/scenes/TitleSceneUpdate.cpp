@@ -158,9 +158,10 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
         ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.5f);
       auto *ptxt = ctx.world.Get<components::UIText>(m_popupTextEntity);
       if (ptxt) {
-        ptxt->text = L"Connection Failed\n\nWikiへの接続に失敗しました";
+        ptxt->text = title_scene_detail::kConnectionFailedMessage;
       }
-      m_popupTimer = 2.0f;
+      m_popupDuration = 2.0f;
+      m_popupTimer = m_popupDuration;
     }
   }
 
@@ -289,8 +290,8 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
   if (m_popupTimer > 0.0f) {
     m_popupTimer -= ctx.dt;
     float alpha = std::min(m_popupTimer * 2.0f, 1.0f); // 残り0.5秒でフェードアウト
-    if (m_popupTimer > 1.5f) {
-      alpha = (2.0f - m_popupTimer) * 2.0f; // 最初の0.5秒でフェードイン
+    if (m_popupTimer > m_popupDuration - 0.5f) {
+      alpha = (m_popupDuration - m_popupTimer) * 2.0f; // 最初の0.5秒でフェードイン
     }
     alpha = std::clamp(alpha, 0.0f, 1.0f);
 

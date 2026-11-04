@@ -631,6 +631,14 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
 
   CreateCourseSelectUI(ctx);
 
+  if (!m_startupNotice.empty()) {
+    if (auto *notice = ctx.world.Get<components::UIText>(m_popupTextEntity)) {
+      notice->text = m_startupNotice;
+    }
+    m_popupDuration = 6.0f;
+    m_popupTimer = m_popupDuration;
+    m_startupNotice.clear();
+  }
 }
 
 } // namespace game::scenes

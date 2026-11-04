@@ -289,6 +289,7 @@ private:
   std::shared_ptr<TutorialConnectionState> m_tutorialConnectionState;
   bool m_tutorialConnectionChecking = false;
   float m_tutorialConnectionElapsed = 0.0f;
+  ecs::Entity m_tutorialConnectionStatusEntity = 0;
 
   /** @brief ページ読み込み（WikiPageLoader へ委譲）*/
 
