@@ -189,20 +189,22 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   }
   addUI(stats, 340.0f, statStyle);
 
-  if (m_data.isDailyChallenge) {
-    m_rankingStatusEntity = CreateEntity(ctx.world);
-    auto &rankingStatus =
-        ctx.world.Add<components::UIText>(m_rankingStatusEntity);
-    rankingStatus.text = L"オンラインランキングへ送信中...";
-    rankingStatus.x = 0.0f;
-    rankingStatus.y = 445.0f;
-    rankingStatus.width = 1280.0f;
-    rankingStatus.height = 30.0f;
-    rankingStatus.style = statStyle;
-    rankingStatus.style.fontSize = 18.0f;
-    rankingStatus.style.align = graphics::TextAlign::Center;
-    rankingStatus.visible = true;
-    rankingStatus.layer = 10;
+  if constexpr (!core::kTrialBuild) {
+    if (m_data.isDailyChallenge) {
+      m_rankingStatusEntity = CreateEntity(ctx.world);
+      auto &rankingStatus =
+          ctx.world.Add<components::UIText>(m_rankingStatusEntity);
+      rankingStatus.text = L"オンラインランキングへ送信中...";
+      rankingStatus.x = 0.0f;
+      rankingStatus.y = 445.0f;
+      rankingStatus.width = 1280.0f;
+      rankingStatus.height = 30.0f;
+      rankingStatus.style = statStyle;
+      rankingStatus.style.fontSize = 18.0f;
+      rankingStatus.style.align = graphics::TextAlign::Center;
+      rankingStatus.visible = true;
+      rankingStatus.layer = 10;
+    }
   }
 
   // 遷移経路文字列のテキストを追加します。日本語の記事名を含むため丸ゴシックにする。

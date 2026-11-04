@@ -1,4 +1,5 @@
 #include "src/audio/AudioSystem.h"
+#include "src/core/BuildEdition.h"
 #include "src/core/DisplaySettings.h"
 #include "src/core/FramePacer.h"
 #include "src/core/GameContext.h"
@@ -354,9 +355,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // 実績システム（イベントバス経由でメインロジックと疎結合）
   game::systems::AchievementEventBus achievementEventBus;
   game::systems::AchievementManager achievementManager;
-  ctx.achievementEvents = &achievementEventBus;
-  ctx.achievements = &achievementManager;
-  achievementManager.Initialize(ctx, achievementEventBus);
+  // 体験版には実績がない。発行側はnullptrならイベントを送らない。
+  if constexpr (!core::kTrialBuild) {
+    ctx.achievementEvents = &achievementEventBus;
+    ctx.achievements = &achievementManager;
+    achievementManager.Initialize(ctx, achievementEventBus);
+  }
 
   // 同梱フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
   // 用途別に使い分ける（TextStyle.h の各プリセット参照）:
@@ -495,7 +499,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
           }
 
           // 実績トースト通知の更新（シーン非依存で常時動作）
-          {
+          if constexpr (!core::kTrialBuild) {
               PROFILE_SCOPE("Logic.AchievementManager");
               achievementManager.Update(ctx);
           }
@@ -622,7 +626,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.SceneOverlay");
                   sceneManager.Render(ctx);
               }
-              {
+              if constexpr (!core::kTrialBuild) {
                   // シーン独自オーバーレイ（RankingSceneの暗転矩形等）よりも
                   // 後に描画し、実績トーストを常に最前面に保つ。
                   PROFILE_SCOPE("Render.AchievementToast");
@@ -669,7 +673,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // 重い後片付けより先に画面と音を止め、経路計算へ中断を要求する。
   game::systems::WikiShortestPath::RequestCancelAll();
   ShowWindow(hWnd, SW_HIDE);
-  achievementManager.Shutdown(ctx);
+  if constexpr (!core::kTrialBuild) {
+    achievementManager.Shutdown(ctx);
+  }
   audioSystem.Shutdown();
 
 #ifdef WIKIGOLF_PROFILING

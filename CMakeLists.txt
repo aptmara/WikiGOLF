@@ -183,6 +183,10 @@ wikigolf_filter_debug_sources(SOURCES)
 # ゲーム本体は Release/ 直下に出力
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 list(FILTER SOURCES EXCLUDE REGEX "/graphics/html/.*")
+if(WIKIGOLF_TRIAL_BUILD)
+    # 体験版にはランキングと実績画面がない。呼び出しが残っていればリンクエラーで検出できる。
+    list(FILTER SOURCES EXCLUDE REGEX "/game/(scenes/(RankingScene|AchievementScene)|systems/PlayFabClient)[^/]*$")
+endif()
 add_executable(DX_GAME WIN32 ${SOURCES} "DX_GAME.cpp" "DX_GAME.rc" "DX_GAME.manifest")
 wikigolf_enable_debug_target(DX_GAME)
 if(WIKIGOLF_PROFILING)

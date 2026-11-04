@@ -562,33 +562,37 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     tb.style.bgColor = {0.0f, 0.0f, 0.0f, 0.5f};
     tb.layer = 50;
 
-    // オンラインランキング
-    auto e1 = CreateEntity(ctx.world);
-    auto &t1 = ctx.world.Add<components::UIButton>(e1);
-    t1.label = L" オンラインランキング";
-    t1.action = "ranking";
-    t1.x = 450.0f; t1.y = 685.0f;
-    t1.width = 180.0f; t1.height = 30.0f;
-    t1.textStyle.fontSize = 16.0f;
-    t1.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
-    t1.textStyle.align = graphics::TextAlign::Center;
-    t1.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
-    t1.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
-    t1.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+    // オンラインランキング (体験版にはランキングがない)
+    if constexpr (!core::kTrialBuild) {
+      auto e1 = CreateEntity(ctx.world);
+      auto &t1 = ctx.world.Add<components::UIButton>(e1);
+      t1.label = L" オンラインランキング";
+      t1.action = "ranking";
+      t1.x = 450.0f; t1.y = 685.0f;
+      t1.width = 180.0f; t1.height = 30.0f;
+      t1.textStyle.fontSize = 16.0f;
+      t1.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
+      t1.textStyle.align = graphics::TextAlign::Center;
+      t1.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
+      t1.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
+      t1.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+    }
 
-    // 実績
-    auto e2 = CreateEntity(ctx.world);
-    auto &t2 = ctx.world.Add<components::UIButton>(e2);
-    t2.label = L" 実績";
-    t2.action = "achievement";
-    t2.x = 650.0f; t2.y = 685.0f;
-    t2.width = 120.0f; t2.height = 30.0f;
-    t2.textStyle.fontSize = 16.0f;
-    t2.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
-    t2.textStyle.align = graphics::TextAlign::Center;
-    t2.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
-    t2.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
-    t2.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+    // 実績 (体験版には実績がない)
+    if constexpr (!core::kTrialBuild) {
+      auto e2 = CreateEntity(ctx.world);
+      auto &t2 = ctx.world.Add<components::UIButton>(e2);
+      t2.label = L" 実績";
+      t2.action = "achievement";
+      t2.x = 650.0f; t2.y = 685.0f;
+      t2.width = 120.0f; t2.height = 30.0f;
+      t2.textStyle.fontSize = 16.0f;
+      t2.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
+      t2.textStyle.align = graphics::TextAlign::Center;
+      t2.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
+      t2.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
+      t2.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+    }
 
     // コピーライト
     auto ec = CreateEntity(ctx.world);

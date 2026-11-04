@@ -78,18 +78,21 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
   // 豪華なUIを生成します。
   LOG_INFO("ResultScene", "Creating Luxury UI...");
   CreateLuxuryUI(ctx);
-  if (m_data.isDailyChallenge) {
-    m_rankingUploadState = std::make_shared<RankingUploadState>();
-    const auto uploadState = m_rankingUploadState;
-    const int strokes = m_data.shotCount;
-    const int clearTimeMs = m_data.clearTimeMs;
-    std::thread([uploadState, strokes, clearTimeMs]() {
-      game::systems::PlayFabClient client;
-      const auto result = client.SubmitDailyResult(strokes, clearTimeMs);
-      uploadState->success = result.success;
-      uploadState->errorMessage = result.errorMessage;
-      uploadState->completed.store(true, std::memory_order_release);
-    }).detach();
+  // 体験版にはランキングがないので送信しない。
+  if constexpr (!core::kTrialBuild) {
+    if (m_data.isDailyChallenge) {
+      m_rankingUploadState = std::make_shared<RankingUploadState>();
+      const auto uploadState = m_rankingUploadState;
+      const int strokes = m_data.shotCount;
+      const int clearTimeMs = m_data.clearTimeMs;
+      std::thread([uploadState, strokes, clearTimeMs]() {
+        game::systems::PlayFabClient client;
+        const auto result = client.SubmitDailyResult(strokes, clearTimeMs);
+        uploadState->success = result.success;
+        uploadState->errorMessage = result.errorMessage;
+        uploadState->completed.store(true, std::memory_order_release);
+      }).detach();
+    }
   }
   LOG_INFO("ResultScene", "OnEnter complete.");
 }
@@ -100,16 +103,18 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
 void ResultScene::OnUpdate(core::GameContext &ctx) {
   m_time += ctx.dt;
 
-  if (m_rankingUploadState &&
-      m_rankingUploadState->completed.load(std::memory_order_acquire)) {
-    if (auto *status =
-            ctx.world.Get<components::UIText>(m_rankingStatusEntity)) {
-      status->text = m_rankingUploadState->success
-                         ? L"オンラインランキングへ記録を送信しました"
-                         : L"ランキング送信失敗: " + core::ToWString(
-                               m_rankingUploadState->errorMessage);
+  if constexpr (!core::kTrialBuild) {
+    if (m_rankingUploadState &&
+        m_rankingUploadState->completed.load(std::memory_order_acquire)) {
+      if (auto *status =
+              ctx.world.Get<components::UIText>(m_rankingStatusEntity)) {
+        status->text = m_rankingUploadState->success
+                           ? L"オンラインランキングへ記録を送信しました"
+                           : L"ランキング送信失敗: " + core::ToWString(
+                                 m_rankingUploadState->errorMessage);
+      }
+      m_rankingUploadState.reset();
     }
-    m_rankingUploadState.reset();
   }
 
   // カメラを地球儀の周囲で回転させます。

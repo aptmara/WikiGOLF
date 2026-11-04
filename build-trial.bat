@@ -10,7 +10,7 @@ echo [WikiGOLF] Trial edition build (%BUILD_DIR%, %CONFIG%)
 
 if not exist "%BUILD_DIR%\CMakeCache.txt" (
     echo [WikiGOLF] Generating CMake build files...
-    cmake -S . -B "%BUILD_DIR%" -A x64 -DWIKIGOLF_TRIAL_BUILD=ON
+    cmake -S . -B "%BUILD_DIR%" -A x64 -DWIKIGOLF_TRIAL_BUILD=ON -DWIKIGOLF_STATIC_BUILD=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
     if errorlevel 1 (
         echo [ERROR] CMake configure failed.
         pause

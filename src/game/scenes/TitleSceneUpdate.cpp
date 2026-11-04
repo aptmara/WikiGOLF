@@ -244,11 +244,15 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
         ctx.sceneManager->PushScene(std::make_unique<SettingsScene>());
       } else if (btn.action == "ranking") {
-        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
-        ctx.sceneManager->PushScene(std::make_unique<RankingScene>());
+        if constexpr (!core::kTrialBuild) {
+          if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+          ctx.sceneManager->PushScene(std::make_unique<RankingScene>());
+        }
       } else if (btn.action == "achievement") {
-        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
-        ctx.sceneManager->PushScene(std::make_unique<AchievementScene>());
+        if constexpr (!core::kTrialBuild) {
+          if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+          ctx.sceneManager->PushScene(std::make_unique<AchievementScene>());
+        }
       } else if (btn.action == "exit") {
         exitGame = true;
       } else if (btn.action == "wikipedia") {
