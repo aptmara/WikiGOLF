@@ -5,6 +5,7 @@
 #include "src/core/Input.h"
 #include "src/core/Logger.h"
 #include "src/core/SceneManager.h"
+#include "src/core/StringUtils.h"
 #include "src/ecs/World.h"
 #include "src/game/scenes/TitleScene.h"
 #include "src/game/scenes/WikiGolfScene.h"
@@ -47,6 +48,15 @@ game::systems::AudioSystem *g_Audio = nullptr;
 // グローバルグラフィックス/テキストレンダラポインタ（WndProc用。WM_SIZEでの追従に使う）
 graphics::GraphicsDevice *g_Graphics = nullptr;
 graphics::TextRenderer *g_TextRenderer = nullptr;
+
+namespace {
+
+// 起動失敗をプレイヤーに伝える。ログ無効の配布ビルドでは、これが唯一の手掛かりになる。
+void ShowStartupError(HWND owner, const wchar_t *message) {
+  MessageBoxW(owner, message, L"WikiGolf - 起動エラー", MB_OK | MB_ICONERROR);
+}
+
+} // namespace
 
 // ウィンドウプロシージャ
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
@@ -158,6 +168,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         std::error_code(static_cast<int>(GetLastError()), std::system_category());
   }
 
+  // ログシステム初期化。以降の初期化失敗を記録できるよう、最初に行う。
+  core::Logger::Instance().Initialize("game_startup.log");
+  if (workingDirectoryError) {
+    LOG_WARN("Main", "Failed to set executable working directory: {}",
+             workingDirectoryError.message());
+  } else {
+    // path::string() はシステムの文字コードに変換できない文字で例外を投げるためUTF-8で出力する
+    LOG_INFO("Main", "Working directory fixed to executable location: '{}'",
+             core::ToString(executableDirectory.wstring()));
+  }
+
+  // ZIP内のEXEを直接実行した場合など、素材が隣に無いと以降の初期化は必ず失敗する。
+  std::error_code assetsCheckError;
+  if (!std::filesystem::is_directory("Assets/shaders", assetsCheckError)) {
+    LOG_ERROR("Main", "Assets/shaders not found next to the executable.");
+    ShowStartupError(nullptr,
+                     L"ゲームのデータ（Assets フォルダ）が見つかりません。\n\n"
+                     L"ZIP ファイルをすべて展開してから、展開先の WikiGolf.exe を"
+                     L"起動してください。");
+    return -1;
+  }
+
   // 表示設定（ウィンドウモード・解像度）の読み込み。
   // ウィンドウ作成前なので、この時点ではファイルの値のみを保持しウィンドウには反映しない。
   core::DisplaySettings displaySettings;
@@ -201,6 +233,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                      nullptr, nullptr, hInstance, nullptr);
 
   if (!hWnd) {
+    LOG_ERROR("Main", "CreateWindowEx failed: {}", GetLastError());
+    ShowStartupError(nullptr, L"ゲームのウィンドウを作成できませんでした。");
     return -1;
   }
 
@@ -224,7 +258,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // COM初期化
   HRESULT hrCom = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   if (FAILED(hrCom)) {
-    MessageBox(nullptr, L"COM Initialization Failed", L"Error", MB_OK);
+    LOG_ERROR("Main", "COM initialization failed: {:08X}",
+              static_cast<uint32_t>(hrCom));
+    ShowStartupError(hWnd, L"システムの初期化（COM）に失敗しました。");
     return -1;
   }
 
@@ -236,6 +272,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   graphics::GraphicsDevice graphics;
   if (!graphics.Initialize(hWnd, clientWidth, clientHeight,
                            displaySettings.GetGpuAdapterNameWide())) {
+    LOG_ERROR("Main", "GraphicsDevice initialization failed.");
+    ShowStartupError(hWnd,
+                     L"グラフィックス機能を初期化できませんでした。\n\n"
+                     L"DirectX 11 に対応した GPU とドライバーが使えるか、"
+                     L"Assets フォルダが欠けていないかを確認してください。");
     return -1;
   }
 
@@ -246,15 +287,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   input.SetResolution(clientWidth, clientHeight);
   g_Input = &input;
 
-  // ログシステム初期化
-  core::Logger::Instance().Initialize("game_startup.log");
-  if (workingDirectoryError) {
-    LOG_WARN("Main", "Failed to set executable working directory: {}",
-             workingDirectoryError.message());
-  } else {
-    LOG_INFO("Main", "Working directory fixed to executable location: '{}'",
-             executableDirectory.string());
-  }
   LOG_INFO("Main",
            "Graphics device: Driver={} Adapter='{}' DedicatedVRAM={:.0f}MB",
            graphics.GetDriverType() == D3D_DRIVER_TYPE_HARDWARE ? "HARDWARE"
@@ -269,6 +301,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   graphics::TextRenderer textRenderer;
   if (!textRenderer.Initialize(graphics.GetSwapChain())) {
     LOG_ERROR("Main", "TextRenderer Init failed.");
+    ShowStartupError(hWnd, L"文字描画機能（Direct2D / DirectWrite）を初期化できませんでした。");
     return -1;
   }
 
