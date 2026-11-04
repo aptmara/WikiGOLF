@@ -241,6 +241,52 @@ public:
   ScopedTimer &operator=(const ScopedTimer &) = delete;
 };
 
+/**
+ * @brief 長い関数を字下げし直さず、連続する処理区間ごとに計測します。
+ * @details 次の区間の開始時と破棄時に、開いている区間を閉じる。区間は同じブロック
+ * 階層で切り替えること（スコープの入れ子順が崩れるため）。
+*/
+class SectionTimer {
+public:
+  SectionTimer() = default;
+  ~SectionTimer() { End(); }
+
+  void Next(std::string_view name, std::string_view function,
+            std::string_view file, uint32_t line) {
+    End();
+    Profiler::Instance().BeginScope(name, function, file, line);
+    m_open = true;
+  }
+
+  SectionTimer(const SectionTimer &) = delete;
+  SectionTimer &operator=(const SectionTimer &) = delete;
+
+private:
+  void End() {
+    if (m_open) {
+      Profiler::Instance().EndScope();
+      m_open = false;
+    }
+  }
+
+  bool m_open = false;
+};
+
+/**
+ * @brief 同名のGPUスコープを1件に合算して追加します。
+ * @details バケットごとに計測するカテゴリ別スコープを、1フレーム1行で集計するため。
+*/
+inline void AccumulateGpuScope(std::vector<GpuScopeSample> &scopes,
+                               std::string_view name, double milliseconds) {
+  for (auto &scope : scopes) {
+    if (scope.name == name) {
+      scope.milliseconds += milliseconds;
+      return;
+    }
+  }
+  scopes.push_back({std::string(name), milliseconds});
+}
+
 } // namespace core
 
 #define PROFILE_JOIN_IMPL(a, b) a##b
@@ -249,6 +295,11 @@ public:
 #define PROFILE_SCOPE(name)                                                    \
   core::ScopedTimer PROFILE_JOIN(profileTimer_, __LINE__)(                     \
       name, __FUNCTION__, __FILE__, static_cast<uint32_t>(__LINE__))
+#define PROFILE_SECTIONS(timer) core::SectionTimer timer
+#define PROFILE_SECTION(timer, name)                                           \
+  timer.Next(name, __FUNCTION__, __FILE__, static_cast<uint32_t>(__LINE__))
 #else
 #define PROFILE_SCOPE(name) ((void)0)
+#define PROFILE_SECTIONS(timer) ((void)0)
+#define PROFILE_SECTION(timer, name) ((void)0)
 #endif

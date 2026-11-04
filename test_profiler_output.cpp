@@ -27,8 +27,23 @@ int main() {
   const uint64_t frameIndex = profiler.BeginFrame("TestScene", 7);
   profiler.BeginScope("Test.Scope", "TestFunction", "TestFile.cpp", 42);
   profiler.EndScope();
+  {
+    core::SectionTimer sections;
+    sections.Next("Test.SectionA", "TestFunction", "TestFile.cpp", 50);
+    sections.Next("Test.SectionB", "TestFunction", "TestFile.cpp", 51);
+  }
   profiler.SetCounter("Test.Counter", 3.0);
   profiler.EndFrame();
+
+  std::vector<core::GpuScopeSample> mergedScopes;
+  core::AccumulateGpuScope(mergedScopes, "GPU.A", 1.0);
+  core::AccumulateGpuScope(mergedScopes, "GPU.B", 2.0);
+  core::AccumulateGpuScope(mergedScopes, "GPU.A", 0.5);
+  if (mergedScopes.size() != 2 || mergedScopes[0].milliseconds != 1.5 ||
+      mergedScopes[1].milliseconds != 2.0) {
+    std::cerr << "GPU scope accumulation failed\n";
+    return 1;
+  }
 
   core::GpuFrameSample gpu;
   gpu.frameIndex = frameIndex;
@@ -44,6 +59,8 @@ int main() {
   const std::string frames = ReadFile(session / "performance_frames.csv");
   const std::string summary = ReadFile(session / "performance_summary.txt");
   if (scopes.find("Test.Scope") == std::string::npos ||
+      scopes.find("Test.SectionA") == std::string::npos ||
+      scopes.find("Test.SectionB") == std::string::npos ||
       scopes.find("TestFunction") == std::string::npos ||
       scopes.find("TestFile.cpp,42") == std::string::npos ||
       frames.find("pipeline_stats_valid") == std::string::npos ||

@@ -143,9 +143,9 @@ void GraphicsDevice::ResolveGpuProfilerQueries() {
             m_context->GetData(scope.end.Get(), &end, sizeof(end),
                                D3D11_ASYNC_GETDATA_DONOTFLUSH);
         if (startResult == S_OK && endResult == S_OK && end >= start) {
-          sample.scopes.push_back(
-              {scope.name,
-               static_cast<double>(end - start) * millisecondsPerTick});
+          core::AccumulateGpuScope(
+              sample.scopes, scope.name,
+              static_cast<double>(end - start) * millisecondsPerTick);
         }
       }
 

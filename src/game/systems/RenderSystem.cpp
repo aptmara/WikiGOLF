@@ -409,6 +409,7 @@ void RenderSystem(core::GameContext &ctx) {
   auto particleHandle = ctx.resource.FindShader("Particle");
   auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
   auto grassHandle = ctx.resource.FindShader("Grass");
+  auto terrainHandle = ctx.resource.FindShader("Terrain");
   // GolfBall は BasicVS.hlsl をそのまま使うピクセルシェーダーのみの派生なので、
   // Basic と同じくインスタンス化対応として扱う必要がある（含めないと
   // g_instances がバインドされない非インスタンス経路に落ち、実質描画されない）。
@@ -1077,13 +1078,26 @@ void RenderSystem(core::GameContext &ctx) {
     // TAA/DLSS有効時は、メッシュ描画の間だけ速度バッファへも書き込む
     ctx.graphics.BindSceneVelocityTarget();
 
+    // GPU.Meshesの内訳。同名スコープはフレーム内で合算される
+    const auto gpuCategoryOf = [&](const RenderKey &key) -> const char * {
+      if (key.usesHtmlTerrainSampler) return "GPU.Meshes.HtmlOverlay";
+      if (key.shader == terrainHandle) return "GPU.Meshes.Terrain";
+      if (key.shader == grassHandle) return "GPU.Meshes.Grass";
+      if (key.shader == flagClothHandle) return "GPU.Meshes.Flag";
+      if (key.isTransparent) return "GPU.Meshes.Transparent";
+      if (key.shader == basicHandle) return "GPU.Meshes.Basic";
+      return "GPU.Meshes.Other";
+    };
+
     // 不透明描画実行
     for (const auto &pair : opaqueBuckets) {
+      graphics::ScopedGpuTimer gpuTimer(ctx.graphics, gpuCategoryOf(pair.first));
       DrawBucket(pair.first, pair.second);
     }
 
     // 半透明描画実行
     for (const auto &pair : transparentBuckets) {
+      graphics::ScopedGpuTimer gpuTimer(ctx.graphics, gpuCategoryOf(pair.first));
       DrawBucket(pair.first, pair.second);
     }
 

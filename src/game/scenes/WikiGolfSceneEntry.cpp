@@ -65,6 +65,8 @@ const char *EntityAliveLabel(const ecs::World &world, ecs::Entity entity) {
 void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   PROFILE_SCOPE("WikiGolf.OnEnter");
   LOG_INFO("WikiGolf", "OnEnter");
+  PROFILE_SECTIONS(sections);
+  PROFILE_SECTION(sections, "OnEnter.ScreenFade");
 
   m_tutorialCupInFired = false;
   m_tutorialFairwayGuidanceApplied = false;
@@ -75,6 +77,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_screenFade.FadeIn(1.5f, game::utils::FadeType::HexagonWipe,
                       {1.0f, 1.0f, 1.0f}); // 白で明ける
 
+  PROFILE_SECTION(sections, "OnEnter.PlayBGM");
   if (ctx.audio) {
     ctx.audio->PlayBGM(ctx, "bgm_game.mp3", 0.3f);
   }
@@ -83,6 +86,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   ctx.input.SetMouseCursorLocked(false);
 
   // 残存エンティティのクリーンアップ
+  PROFILE_SECTION(sections, "OnEnter.ClearStrayEntities");
   std::vector<ecs::Entity> strayEntities;
   ctx.world.Query<components::Transform>().Each(
       [&](ecs::Entity e, components::Transform &) {
@@ -95,17 +99,22 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   }
   LOG_INFO("WikiGolf", "Cleaned up {} stray entities", strayEntities.size());
 
+  PROFILE_SECTION(sections, "OnEnter.TextureGenerator");
   m_textureGenerator = std::make_unique<graphics::WikiTextureGenerator>();
   m_textureGenerator->Initialize(ctx.graphics.GetDevice());
+  PROFILE_SECTION(sections, "OnEnter.PreloadResources");
   scene_detail::PreloadGameplayResources(ctx);
 
   // 地形システムの初期化
+  PROFILE_SECTION(sections, "OnEnter.TerrainSystem");
   m_terrainSystem = std::make_unique<game::systems::WikiTerrainSystem>();
 
   // 傾斜可視化システムの初期化（パター保持時のグリーン高低差オーバーレイ）
+  PROFILE_SECTION(sections, "OnEnter.SlopeVisualization");
   m_slopeVisualization.Initialize(ctx);
 
   // ページローダーの初期化
+  PROFILE_SECTION(sections, "OnEnter.PageLoader");
   m_pageLoader = std::make_unique<WikiPageLoader>();
 
   if (m_isTutorial) {
@@ -137,9 +146,11 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   }
 
   // フィールドの初期化
+  PROFILE_SECTION(sections, "OnEnter.CreateField");
   CreateField(ctx);
 
   // 各種エンティティの初期化
+  PROFILE_SECTION(sections, "OnEnter.CreateSceneEntities");
   m_cameraEntity = CreateEntity(ctx.world);
   auto &t = ctx.world.Add<Transform>(m_cameraEntity);
   t.position = {0.0f, 15.0f * scene_detail::kFieldScale,
@@ -182,11 +193,13 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   amr.color = {1.0f, 0.4f, 0.2f, 1.0f};
   amr.isVisible = false;
 
+  PROFILE_SECTION(sections, "OnEnter.GameJuice");
   m_gameJuice = std::make_unique<game::systems::GameJuiceSystem>();
   m_gameJuice->Initialize(ctx);
   ctx.world.SetGlobal(m_gameJuice.get());
 
   // スカイボックスシステムの初期化
+  PROFILE_SECTION(sections, "OnEnter.Skybox");
   m_skyboxGenerator = std::make_unique<graphics::SkyboxTextureGenerator>();
 
   m_skyboxEntity = CreateEntity(ctx.world);
@@ -208,11 +221,13 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   // 環境効果システムの初期化
   // ポストプロセス(霧/色調補正/ビネット/ブルーム)はctx.postProcessとしてグローバルに
   // 保持されており、記事ロード時にWikiPageLoaderがUpdateFromEnvironment()で更新する。
+  PROFILE_SECTION(sections, "OnEnter.Environment");
   m_timeOfDay.Initialize(8.0f); // 朝8時スタート
 
   m_particleRenderSystem.Initialize(ctx.graphics.GetDevice());
 
   // 地形判定UIの初期化
+  PROFILE_SECTION(sections, "OnEnter.JudgeUI");
   if (m_terrainImageEntity == UINT32_MAX) {
       m_terrainImageEntity = CreateEntity(ctx.world);
       auto& ui = ctx.world.Add<game::components::UIImage>(m_terrainImageEntity);
@@ -248,6 +263,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_fastForwardIndicator.Initialize(ctx, m_fastForwardIndicatorEntity);
   m_fastForwardTimer.Reset();
 
+  PROFILE_SECTION(sections, "OnEnter.StartupData");
   std::string targetPage;
   int targetId = -1;
   bool isUserOverride = false;
@@ -347,6 +363,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     }
   }
 
+  PROFILE_SECTION(sections, "OnEnter.ValidateTargetPath");
   if (targetId == -1 && m_shortestPath && m_shortestPath->IsAvailable() &&
       !targetPage.empty()) {
     targetId = m_shortestPath->ResolvePageId(targetPage);
@@ -423,11 +440,13 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   LOG_DEBUG("WikiGolf", "After CreateField: Cam Alive={}",
             EntityAliveLabel(ctx.world, m_cameraEntity));
 
+  PROFILE_SECTION(sections, "OnEnter.SpawnBall");
   SpawnBall(ctx);
   LOG_DEBUG("WikiGolf", "After SpawnBall: Cam Alive={}",
             EntityAliveLabel(ctx.world, m_cameraEntity));
 
 
+  PROFILE_SECTION(sections, "OnEnter.InitGameState");
   GolfGameState state;
   state.currentPage = startPage;
   state.targetPage = targetPage;
@@ -468,6 +487,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_terrainSystem->SetTutorialMode(m_isTutorial);
 
   // コントローラの初期化
+  PROFILE_SECTION(sections, "OnEnter.CameraController");
   m_cameraController = std::make_unique<game::controllers::CameraController>();
   game::controllers::CameraController::Config camCfg;
   camCfg.cameraEntity = m_cameraEntity;
@@ -478,6 +498,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   camCfg.gameJuice = m_gameJuice.get();
   m_cameraController->Initialize(camCfg);
 
+  PROFILE_SECTION(sections, "OnEnter.MinimapController");
   m_minimapController = std::make_unique<game::controllers::MinimapController>();
   game::controllers::MinimapController::Config miniCfg;
   miniCfg.cameraEntity = m_cameraEntity;
@@ -487,9 +508,11 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   m_minimapController->Initialize(miniCfg, ctx);
   m_minimapController->InitializeUI(ctx);
 
+  PROFILE_SECTION(sections, "OnEnter.HUD");
   m_hud = std::make_unique<game::controllers::WikiGolfHUD>();
   m_hud->Initialize(ctx);
 
+  PROFILE_SECTION(sections, "OnEnter.ClubController");
   m_clubController = std::make_unique<game::controllers::ClubController>();
   m_clubController->Initialize(ctx, m_terrainSystem.get());
   if (auto *state = ctx.world.GetGlobal<GolfGameState>()) {
@@ -497,9 +520,11 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
           m_clubController->GetCurrentClub().rollingFrictionScale;
   }
 
+  PROFILE_SECTION(sections, "OnEnter.TrajectoryPredictor");
   m_trajectoryPredictor = std::make_unique<game::controllers::TrajectoryPredictor>();
   m_trajectoryPredictor->Initialize(ctx, 30);
 
+  PROFILE_SECTION(sections, "OnEnter.TransitionController");
   m_shotController = std::make_unique<game::controllers::ShotController>();
   m_aimPinController = std::make_unique<game::controllers::AimPinController>();
 
