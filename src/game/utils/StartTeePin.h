@@ -24,7 +24,7 @@ struct StartTeePinResult {
 };
 
 /**
- * @brief タイトル画面でWikipediaパズル地球儀を支えるティーと同じ意匠
+ * @brief タイトル画面でパズル地球儀を支えるティーと同じ意匠
  * （白い球体を縦に伸ばして棒状に見立てたもの）のピンを、指定した地面位置に立てます。
  * @param ctx ゲームコンテキスト
  * @param groundPosition ピンの根元（地面）位置

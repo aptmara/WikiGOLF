@@ -313,7 +313,9 @@ void TrajectoryPredictor::Update(core::GameContext &ctx, const Params &params) {
     rotMat.r[2] = zAxis;
     XMStoreFloat4(&t->rotation, XMQuaternionRotationMatrix(rotMat));
 
-    mr->isVisible = XMVectorGetY(midPoint) >= 0.0f;
+    // 地形がある場合は上で地表より上へ持ち上げ済み。ワールドY=0で切ると、
+    // 標高がマイナスの谷から打つときにボール付近の区間が消えてしまう。
+    mr->isVisible = params.terrainSystem || XMVectorGetY(midPoint) >= 0.0f;
     prevPos = currentPos;
   }
 }

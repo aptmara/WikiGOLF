@@ -148,6 +148,8 @@ option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
 option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
 option(WIKIGOLF_PROFILING "Enable CPU/GPU profiling and report output" OFF)
 option(WIKIGOLF_DISABLE_LOGGING "Disable all runtime log output" OFF)
+# 体験版: タイトルからはチュートリアルのみ開始でき、チュートリアル後の1プレイで終了する。
+option(WIKIGOLF_TRIAL_BUILD "Build the trial edition (tutorial + one round only)" OFF)
 include(cmake/WikiDebugTools.cmake)
 
 if(WIKIGOLF_STATIC_BUILD)
@@ -182,6 +184,9 @@ endif()
 if(WIKIGOLF_DISABLE_LOGGING)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_DISABLE_LOGGING=1)
 endif()
+if(WIKIGOLF_TRIAL_BUILD)
+    target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_TRIAL_BUILD=1)
+endif()
 set_target_properties(DX_GAME PROPERTIES
     OUTPUT_NAME "WikiGolf"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
@@ -208,7 +213,19 @@ add_custom_command(TARGET DX_GAME POST_BUILD
             "$<TARGET_FILE_DIR:DX_GAME>/licenses/Kenney-LICENSE"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/assimp-LICENSE"
             "$<TARGET_FILE_DIR:DX_GAME>/licenses/assimp-LICENSE"
-    COMMENT "Deploying third-party license notices (Wikipedia/Kenney/assimp)..."
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/GOLFER-SWING-PHOTO-LICENSE"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/GOLFER-SWING-PHOTO-LICENSE"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/SOUNDS-LICENSE"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/SOUNDS-LICENSE"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/KiwiMaru-OFL.txt"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/KiwiMaru-OFL.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/BarlowCondensed-OFL.txt"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/BarlowCondensed-OFL.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/ShareTechMono-OFL.txt"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/ShareTechMono-OFL.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/CREDITS.md"
+            "$<TARGET_FILE_DIR:DX_GAME>/CREDITS.md"
+    COMMENT "Deploying third-party license notices (Wikipedia/Kenney/assimp/fonts/sounds)..."
     VERBATIM)
 target_precompile_headers(DX_GAME REUSE_FROM wikigolf_pch)
 
@@ -316,7 +333,6 @@ if(WIKIGOLF_STATIC_BUILD)
     add_custom_command(TARGET DX_GAME POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/Fonts $<TARGET_FILE_DIR:DX_GAME>/Assets/Fonts
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/all_terrain_ui_assets $<TARGET_FILE_DIR:DX_GAME>/Assets/all_terrain_ui_assets
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/kenney_input-images_1.5 $<TARGET_FILE_DIR:DX_GAME>/Assets/kenney_input-images_1.5
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/models $<TARGET_FILE_DIR:DX_GAME>/Assets/models
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/shaders $<TARGET_FILE_DIR:DX_GAME>/Assets/shaders
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/sounds $<TARGET_FILE_DIR:DX_GAME>/Assets/sounds
@@ -728,7 +744,8 @@ if(MSVC)
     target_compile_definitions(test_resource_manager_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_resource_manager_rules PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
-add_test(NAME resource_manager_rules COMMAND test_resource_manager_rules)
+add_test(NAME resource_manager_rules COMMAND test_resource_manager_rules
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_executable(test_mesh_primitives_rules
     test_mesh_primitives_rules.cpp

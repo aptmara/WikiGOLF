@@ -24,7 +24,7 @@ namespace game::scenes {
  * 構成要素:
  *   - GolfCourseClear スカイボックス（晴天・白雲・青空）
  *   - ゴルフコース地面（緑フェアウェイ）
- *   - Wikipedia パズル地球儀（ティー台に設置、緩やかに回転）
+ *   - パズル地球儀（ティー台に設置、緩やかに回転）
  *   - 旗エンティティ（右手側）
  *   - タイトルロゴ UI（画面上部中央）
  *   - 右パネルメニュー UI（6 項目）
@@ -46,7 +46,7 @@ private:
   ecs::Entity m_cameraEntity  = 0; /**< カメラ*/
   ecs::Entity m_skyboxEntity  = 0; /**< スカイボックス*/
   ecs::Entity m_floorEntity   = 0; /**< ゴルフコース地面*/
-  ecs::Entity m_globeEntity   = 0; /**< Wikipedia パズル地球儀*/
+  ecs::Entity m_globeEntity   = 0; /**< パズル地球儀*/
   ecs::Entity m_teeLoEntity   = 0; /**< ティー台・支柱（下）*/
   ecs::Entity m_teeHiEntity   = 0; /**< ティー台・カップ（上）*/
   ecs::Entity m_flagEntity    = 0; /**< 旗*/

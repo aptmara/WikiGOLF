@@ -171,7 +171,7 @@ void WikiPageLoader::PlaceBallAtStartTee(
     }
     const float groundY = game::physics::ToVisualSurfaceHeight(terrainHeight);
 
-    // タイトル画面でWikipediaパズル地球儀を支えるティーと同じ意匠のピンを立て、
+    // タイトル画面でパズル地球儀を支えるティーと同じ意匠のピンを立て、
     // 最初のショットを打つまでボールをその上へ固定表示する。
     // （ゴルファーの立ち位置はClubController側で地面の高さへ追従させているため、
     //   ボールがここで浮いてもゴルファーが宙に浮くことはない）

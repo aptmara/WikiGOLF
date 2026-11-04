@@ -246,7 +246,7 @@ enum class ShotJudgement {
 };
 
 /**
- * @brief ショット状態（みんなのゴルフ風パワーゲージ）
+ * @brief ショット状態（タイミング式パワーゲージ）
 */
 struct ShotState {
   /** @brief ショットフェーズ*/

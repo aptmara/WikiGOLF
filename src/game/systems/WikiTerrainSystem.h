@@ -163,7 +163,7 @@ private:
   void CreateBackdrop(core::GameContext &ctx, const std::string &pageTitle);
 
   /**
-   * @brief 空に Wikipedia パズル地球儀をランダムに浮かべます（見た目専用）。
+   * @brief 空に パズル地球儀をランダムに浮かべます（見た目専用）。
    * @param ctx ゲームコンテキスト
    * @param pageTitle 記事タイトル（配置の種）
    */
@@ -180,7 +180,6 @@ private:
     float bobHeight = 0.0f;
   };
   std::vector<SkyGlobe> m_skyGlobes; /**< 空に浮かぶ地球儀*/
-  std::array<resources::MeshHandle, 3> m_skyGlobeLodMeshes{}; /**< 地球儀の段階的 LOD メッシュ*/
   float m_skyGlobeTime = 0.0f;
 
   /**

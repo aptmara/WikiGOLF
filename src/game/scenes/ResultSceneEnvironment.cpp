@@ -22,6 +22,7 @@
 #include "../components/UIImage.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../systems/GlobeModel.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "TitleScene.h"
 #include "WikiGolfScene.h"
@@ -38,8 +39,6 @@ using namespace DirectX;
 void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   auto basicShader = ctx.resource.LoadShader(
       "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
-  auto globeMesh = ctx.resource.LoadMesh(
-      "Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
   auto planeMesh = ctx.resource.LoadMesh("builtin/plane");
   auto ringMesh = ctx.resource.LoadMesh(
       "builtin/torus");
@@ -60,9 +59,9 @@ void ResultScene::CreateVisualEnvironment(core::GameContext &ctx) {
   m_globeEntity = CreateEntity(ctx.world);
   auto &globeTr = ctx.world.Add<Transform>(m_globeEntity);
   globeTr.position = {0.0f, 2.5f, 0.0f};
-  globeTr.scale = {2.5f, 2.5f, 2.5f};
+  globeTr.scale = {2.85f, 2.85f, 2.85f};
   auto &globeMr = ctx.world.Add<MeshRenderer>(m_globeEntity);
-  globeMr.mesh = globeMesh;
+  game::systems::ApplyGlobeModel(globeMr, ctx.resource);
   globeMr.shader = basicShader;
   globeMr.color = {1.0f, 1.0f, 1.0f, 1.0f};
   globeMr.isVisible = true;

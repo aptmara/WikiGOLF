@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file SkyGlobeLayout.h
- * @brief コースの外の空に浮かべる Wikipedia パズル地球儀の配置を決めます。
+ * @brief コースの外の空に浮かべる パズル地球儀の配置を決めます。
  */
 
 #include <DirectXMath.h>
@@ -23,24 +23,12 @@ struct SkyGlobePlacement {
   float bobHeight = 0.0f;  // 上下の揺れ幅（メートル）
 };
 
-/** @brief 地球儀モデル（Wikipedia_puzzle_globe_3D_render.stl）の半径（スケール 1 のとき）。 */
-inline constexpr float kSkyGlobeModelRadius = 0.57f;
-
-/**
- * @brief 段階的 LOD のモデル（LOD1 以降は tools/build_globe_lods.py で作成）。
- * @details LOD0 はタイトル画面と同じ元のモデル。文字が画面上でつぶれて見えなくなる距離まで
- *          LOD0 を使い、そこから先で軽いモデルへ切り替える。
- */
-inline constexpr const char *kSkyGlobeLodMeshes[] = {
-    "Assets/models/Wikipedia_puzzle_globe_3D_render.stl", // 約 31 万三角形
-    "Assets/models/wiki_globe_lod1.stl", // 約 13 万三角形（文字・溝を多めに残す）
-    "Assets/models/wiki_globe_lod2.stl", // 約 3 万三角形（一律に削る）
-};
-inline constexpr int kSkyGlobeLodCount = 3;
+/** @brief 地球儀モデル（GlobeModel.h の kGlobeLodModels）の半径（スケール 1 のとき）。 */
+inline constexpr float kSkyGlobeModelRadius = 0.5f;
 
 /**
  * @brief 「距離 ÷ 地球儀の半径」から LOD を選びます。
- * @details 1080p・縦画角 60 度で、文字の線は この値が約 33 を超えると 1 ピクセル未満になる。
+ * @details 1080p・縦画角 60 度で、この値が 55 のとき地球儀の半径は画面上で約 17 ピクセル。
  *          見比べて差が出ないよう、LOD1 へは 55、LOD2 へは 110 で切り替える。
  *          current は今の LOD。境目でちらつかないよう、切り替えに約 1 割の幅を持たせる。
  */
@@ -58,8 +46,8 @@ inline int SelectSkyGlobeLod(float distance, float radius, int current) {
 }
 
 /** @brief 最小と最大のスケール。 */
-inline constexpr float kSkyGlobeMinScale = 5.0f;   // 半径 約 3m
-inline constexpr float kSkyGlobeMaxScale = 180.0f; // 半径 約 100m
+inline constexpr float kSkyGlobeMinScale = 5.7f;   // 半径 約 3m
+inline constexpr float kSkyGlobeMaxScale = 205.2f; // 半径 約 100m
 
 /** @brief コース外周の壁（TerrainObstacleLayout::BuildWalls）の厚み。 */
 inline constexpr float kSkyGlobeBarrierThickness = 6.0f;

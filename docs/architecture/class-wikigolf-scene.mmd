@@ -1,0 +1,86 @@
+%% WikiGOLF クラス図 (2/2): WikiGolfScene の内部構成
+%% WikiGolfScene.h のメンバと、WikiPageLoader 周辺のヘッダ / 呼び出しを確認して記載。
+%% 記法: *-- 所有 / o-- 非所有の参照 / ..> 利用
+classDiagram
+    direction LR
+
+    namespace controllers {
+        class CameraController
+        class ShotController
+        class ClubController
+        class TrajectoryPredictor
+        class AimPinController
+        class MinimapController
+        class ArticleTransitionController
+        class TutorialOverlayController
+        class WikiGolfHUD
+        class StartGoalIntroductionPanel
+        class HudPanels["CourseInfo / ClubSelection / MinimapDecoration / ShotGauge / Wind Panel"]
+    }
+
+    namespace loading {
+        class WikiPageLoader
+        class WikiPageDataFetcher
+        class AsyncPathEvaluator
+    }
+
+    namespace systems {
+        class GameJuiceSystem
+        class SlopeVisualizationSystem
+        class EnvironmentParticleSystem
+        class ParticleRenderSystem
+        class TimeOfDaySystem
+        class WikiTerrainSystem
+        class TerrainGenerator
+        class WikiShortestPath
+        class WikiClient
+        class MapSys
+    }
+
+    namespace engine {
+        class WikiTextureGenerator
+        class SkyboxTextureGenerator
+        class SkeletalModel
+        class ResourceManager
+    }
+
+    WikiGolfScene *-- CameraController
+    WikiGolfScene *-- ShotController
+    WikiGolfScene *-- ClubController
+    WikiGolfScene *-- TrajectoryPredictor
+    WikiGolfScene *-- AimPinController
+    WikiGolfScene *-- MinimapController
+    WikiGolfScene *-- ArticleTransitionController
+    WikiGolfScene *-- TutorialOverlayController
+    WikiGolfScene *-- WikiGolfHUD
+    WikiGolfScene *-- WikiPageLoader
+    WikiGolfScene *-- GameJuiceSystem
+    WikiGolfScene *-- SlopeVisualizationSystem
+    WikiGolfScene *-- EnvironmentParticleSystem
+    WikiGolfScene *-- ParticleRenderSystem
+    WikiGolfScene *-- TimeOfDaySystem
+    WikiGolfScene *-- WikiTerrainSystem
+    WikiGolfScene *-- WikiShortestPath
+    WikiGolfScene *-- WikiTextureGenerator
+    WikiGolfScene *-- SkyboxTextureGenerator
+
+    WikiGolfHUD *-- HudPanels
+    MinimapController *-- MapSys
+    ClubController *-- SkeletalModel
+    ClubController o-- WikiTerrainSystem
+    ArticleTransitionController *-- StartGoalIntroductionPanel
+    ArticleTransitionController o-- MinimapController
+    ArticleTransitionController ..> WikiPageLoader
+    ArticleTransitionController ..> WikiClient
+
+    WikiPageLoader *-- WikiPageDataFetcher
+    WikiPageLoader *-- AsyncPathEvaluator
+    WikiPageLoader o-- WikiTextureGenerator
+    WikiPageLoader o-- WikiTerrainSystem
+    WikiPageLoader o-- SkyboxTextureGenerator
+    WikiPageLoader o-- MinimapController
+    WikiPageDataFetcher ..> WikiClient
+    AsyncPathEvaluator ..> WikiShortestPath
+    WikiTerrainSystem ..> TerrainGenerator
+    WikiTerrainSystem ..> WikiClient
+    WikiTerrainSystem ..> ResourceManager

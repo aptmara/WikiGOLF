@@ -47,19 +47,6 @@ void LoadingScene::BuildGameplayPreloadQueue() {
                             L"Assets/shaders/WallPS.hlsl");
   });
 
-  // クラブアイコン（Club_01〜Club_09）
-  static const std::array<const char *, 9> kClubTextures = {
-      "Assets/textures/Club_01_1W_Driver.png",
-      "Assets/textures/Club_02_3W_Wood.png",
-      "Assets/textures/Club_03_5W_Wood.png",
-      "Assets/textures/Club_04_5I_Iron.png",
-      "Assets/textures/Club_05_7I_Iron.png",
-      "Assets/textures/Club_06_9I_Iron.png",
-      "Assets/textures/Club_07_PW_PitchingWedge.png",
-      "Assets/textures/Club_08_SW_SandWedge.png",
-      "Assets/textures/Club_09_PT_Putter.png",
-  };
-
   // ミニマップ用アイコン、地形/判定バッジUI画像
   static const std::array<const char *, 19> kUiTextures = {
       "Assets/textures/golf_ball_icon_transparent.png",
@@ -84,7 +71,7 @@ void LoadingScene::BuildGameplayPreloadQueue() {
   };
 
   // ショット/判定/地形/カップ/ゴール/ワープ/OB経路で実際に再生されるSE
-  static const std::array<const char *, 23> kGameplaySounds = {
+  static const std::array<const char *, 18> kGameplaySounds = {
       "Assets/sounds/se_shot.mp3",
       "Assets/sounds/se_shot_hard.mp3",
       "Assets/sounds/se_shot_soft.mp3",
@@ -94,14 +81,9 @@ void LoadingScene::BuildGameplayPreloadQueue() {
       "Assets/sounds/se_judge_great.mp3",
       "Assets/sounds/se_judge_nice.mp3",
       "Assets/sounds/se_judge_miss.mp3",
-      "Assets/sounds/se_judge_ob.mp3",
-      "Assets/sounds/judge_Bad.wav",
       "Assets/sounds/se_Fairway.wav",
-      "Assets/sounds/se_Fairway.mp3",
       "Assets/sounds/se_Rough.wav",
-      "Assets/sounds/se_Rough.mp3",
       "Assets/sounds/se_Bunker_new.mp3",
-      "Assets/sounds/se_Bunker.mp3",
       "Assets/sounds/se_Green.mp3",
       "Assets/sounds/se_OB.wav",
       "Assets/sounds/se_cupin.mp3",
@@ -109,16 +91,6 @@ void LoadingScene::BuildGameplayPreloadQueue() {
       "Assets/sounds/se_goal.mp3",
       "Assets/sounds/se_warp.mp3",
   };
-
-  for (const char *path : kClubTextures) {
-    if (!std::filesystem::exists(path))
-      continue;
-    std::string p = path;
-    m_preloadTasks.emplace_back([p](core::GameContext &ctx) {
-      if (ctx.textRenderer)
-        ctx.textRenderer->LoadBitmapFromFile(p);
-    });
-  }
 
   for (const char *path : kUiTextures) {
     if (!std::filesystem::exists(path))

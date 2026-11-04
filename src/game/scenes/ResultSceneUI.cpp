@@ -5,6 +5,7 @@
 
 #define NOMINMAX
 #include "ResultScene.h"
+#include "../../core/BuildEdition.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
@@ -55,6 +56,10 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
       float buttonCenterX = 780.0f;
       if (text == L"Play Again (R)") {
         buttonCenterX = 420.0f;
+      }
+      if constexpr (core::kTrialBuild) {
+        // 体験版は「もう一度」が無いので、タイトルへ戻るボタンを中央に置く。
+        buttonCenterX = 640.0f;
       }
       float btnX = buttonCenterX - btnW / 2.0f;
       if (btnId == "center")
@@ -208,7 +213,17 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   addUI(routeStr, 390.0f, routeStyle);
 
   // 操作ボタンを追加します。
-  addUI(L"Play Again (R)", 550.0f, btnStyle, true, "retry");
+  if constexpr (core::kTrialBuild) {
+    // 体験版はチュートリアル後の1プレイで終了する。
+    auto trialStyle = statStyle;
+    trialStyle.fontFamily = "Kiwi Maru Medium";
+    trialStyle.align = graphics::TextAlign::Center;
+    trialStyle.color = {1.0f, 0.9f, 0.3f, 1.0f};
+    addUI(L"体験版はここまでです。遊んでいただきありがとうございました！",
+          490.0f, trialStyle);
+  } else {
+    addUI(L"Play Again (R)", 550.0f, btnStyle, true, "retry");
+  }
   addUI(L"Title Screen", 550.0f, btnStyle, true, "title");
 }
 

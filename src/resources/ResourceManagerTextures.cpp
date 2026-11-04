@@ -7,7 +7,9 @@
 #include "ResourceManagerInternals.h"
 #include "../core/Logger.h"
 #include "../core/Profiler.h"
+#include "../graphics/FbxLoader.h"
 #include "../graphics/GraphicsDevice.h"
+#include <algorithm>
 #include <chrono>
 #include <vector>
 #include <wincodec.h>
@@ -359,22 +361,51 @@ ResourceManager::LoadTextureSRVFromMemory(const std::string &cacheKey,
     return {};
   }
 
+  // ロード用スレッドからも呼べるよう、即時コンテキストが要る GenerateMips は使わず
+  // CPU で全段のミップを作って初期データとして渡す。
+  std::vector<std::vector<BYTE>> mips;
+  std::vector<D3D11_SUBRESOURCE_DATA> initData;
+  mips.push_back(std::move(pixels));
+  initData.push_back({nullptr, width * 4, 0});
+  for (UINT w = width, h = height; w > 1 || h > 1;) {
+    const UINT nextW = (std::max)(w / 2, 1u);
+    const UINT nextH = (std::max)(h / 2, 1u);
+    std::vector<BYTE> next(static_cast<size_t>(nextW) * nextH * 4);
+    const std::vector<BYTE> &src = mips.back();
+    for (UINT y = 0; y < nextH; ++y) {
+      const UINT y0 = y * 2;
+      const UINT y1 = (std::min)(y0 + 1, h - 1);
+      for (UINT x = 0; x < nextW; ++x) {
+        const UINT x0 = x * 2;
+        const UINT x1 = (std::min)(x0 + 1, w - 1);
+        for (UINT c = 0; c < 4; ++c) {
+          const UINT sum = src[(y0 * w + x0) * 4 + c] + src[(y0 * w + x1) * 4 + c] +
+                           src[(y1 * w + x0) * 4 + c] + src[(y1 * w + x1) * 4 + c];
+          next[(y * nextW + x) * 4 + c] = static_cast<BYTE>((sum + 2) / 4);
+        }
+      }
+    }
+    mips.push_back(std::move(next));
+    initData.push_back({nullptr, nextW * 4, 0});
+    w = nextW;
+    h = nextH;
+  }
+  for (size_t level = 0; level < mips.size(); ++level) {
+    initData[level].pSysMem = mips[level].data();
+  }
+
   D3D11_TEXTURE2D_DESC desc = {};
   desc.Width = width;
   desc.Height = height;
-  desc.MipLevels = 1;
+  desc.MipLevels = static_cast<UINT>(mips.size());
   desc.ArraySize = 1;
   desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
   desc.SampleDesc.Count = 1;
   desc.Usage = D3D11_USAGE_DEFAULT;
   desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
-  D3D11_SUBRESOURCE_DATA initData = {};
-  initData.pSysMem = pixels.data();
-  initData.SysMemPitch = stride;
-
   Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-  hr = m_device.GetDevice()->CreateTexture2D(&desc, &initData, &texture);
+  hr = m_device.GetDevice()->CreateTexture2D(&desc, initData.data(), &texture);
   if (FAILED(hr)) {
     LOG_ERROR("Resource", "CreateTexture2D failed for {} (hr=0x{:08X})",
               cacheKey, static_cast<uint32_t>(hr));
@@ -385,7 +416,7 @@ ResourceManager::LoadTextureSRVFromMemory(const std::string &cacheKey,
   srvDesc.Format = desc.Format;
   srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
   srvDesc.Texture2D.MostDetailedMip = 0;
-  srvDesc.Texture2D.MipLevels = 1;
+  srvDesc.Texture2D.MipLevels = desc.MipLevels;
 
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
   hr = m_device.GetDevice()->CreateShaderResourceView(texture.Get(), &srvDesc,
@@ -398,9 +429,38 @@ ResourceManager::LoadTextureSRVFromMemory(const std::string &cacheKey,
   }
 
   m_textureCache[cacheKey] = srv;
-  LOG_INFO("Resource", "Loaded In-Memory Texture: {} ({}x{})", cacheKey, width,
-          height);
+  LOG_INFO("Resource", "Loaded In-Memory Texture: {} ({}x{}, {} mips)", cacheKey,
+           width, height, desc.MipLevels);
   return srv;
+}
+
+ResourceManager::ModelTextures
+ResourceManager::LoadModelTextures(const std::string &path) {
+  const std::string baseColorKey = path + "#baseColor";
+  const std::string normalKey = path + "#normal";
+
+  const auto baseColorIt = m_textureCache.find(baseColorKey);
+  const auto normalIt = m_textureCache.find(normalKey);
+  if (baseColorIt != m_textureCache.end() && normalIt != m_textureCache.end()) {
+    return {baseColorIt->second, normalIt->second};
+  }
+
+  graphics::EmbeddedModelTextures images;
+  if (!graphics::FbxLoader::LoadEmbeddedTextures(path, images)) {
+    LOG_ERROR("Resource", "Failed to read embedded textures: {}", path);
+    return {};
+  }
+  if (images.baseColor.empty() || images.normal.empty()) {
+    LOG_WARN("Resource", "Model is missing embedded textures: {} (baseColor={}, normal={})",
+             path, images.baseColor.size(), images.normal.size());
+  }
+
+  ModelTextures textures;
+  textures.baseColor = LoadTextureSRVFromMemory(baseColorKey, images.baseColor.data(),
+                                                images.baseColor.size());
+  textures.normal = LoadTextureSRVFromMemory(normalKey, images.normal.data(),
+                                             images.normal.size());
+  return textures;
 }
 
 } // namespace resources

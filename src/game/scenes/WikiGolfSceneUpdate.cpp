@@ -572,11 +572,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   state->isOB = false;
 
                   if (ctx.audio) {
-                      if (std::filesystem::exists("Assets/sounds/se_OB.wav")) {
-                          ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);
-                      } else {
-                          ctx.audio->PlaySE(ctx, "se_judge_ob.mp3", 0.8f);
-                      }
+                      ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);
                   }
               } else {
                   switch (state->currentMaterial) {
@@ -617,11 +613,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                           ballT->position.y += 0.5f;
                       }
                       if (ctx.audio) {
-                          if (std::filesystem::exists("Assets/sounds/se_OB.wav")) {
-                              ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);
-                          } else {
-                              ctx.audio->PlaySE(ctx, "se_judge_ob.mp3", 0.8f);
-                          }
+                          ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);
                       }
                   }
               }
@@ -657,45 +649,22 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                           std::string seName = "";
                           switch (state->currentMaterial) {
                           case game::components::TerrainMaterial::Fairway:
-                              if (std::filesystem::exists("Assets/sounds/se_Fairway.wav")) {
-                                  seName = "se_Fairway.wav";
-                              } else {
-                                  seName = "se_Fairway.mp3";
-                              }
+                              seName = "se_Fairway.wav";
                               break;
                           case game::components::TerrainMaterial::Rough:
-                              if (std::filesystem::exists("Assets/sounds/se_Rough.wav")) {
-                                  seName = "se_Rough.wav";
-                              } else {
-                                  seName = "se_Rough.mp3";
-                              }
+                              seName = "se_Rough.wav";
                               break;
                           case game::components::TerrainMaterial::Bunker:
-                              if (std::filesystem::exists("Assets/sounds/se_Bunker_new.mp3")) {
-                                  seName = "se_Bunker_new.mp3";
-                              } else {
-                                  seName = "se_Bunker.mp3";
-                              }
+                              seName = "se_Bunker_new.mp3";
                               break;
                           case game::components::TerrainMaterial::Green:
-                              if (std::filesystem::exists("Assets/sounds/se_Green.mp3")) {
-                                  seName = "se_Green.mp3";
-                              } else if (std::filesystem::exists("Assets/sounds/se_Fairway.wav")) {
-                                  seName = "se_Fairway.wav";
-                              } else {
-                                  seName = "se_Fairway.mp3";
-                              }
+                              seName = "se_Green.mp3";
                               break;
                           default: break;
                           }
 
-                          if (!seName.empty() && std::filesystem::exists("Assets/sounds/" + seName)) {
+                          if (!seName.empty()) {
                               ctx.audio->PlaySE(ctx, seName, 0.8f);
-                          } else {
-                              // フォールバック: 新SEが見つからない場合のみ従来音を検討
-                              bool isGood = (state->currentMaterial == game::components::TerrainMaterial::Fairway ||
-                                             state->currentMaterial == game::components::TerrainMaterial::Green);
-                              if (!isGood) ctx.audio->PlaySE(ctx, "judge_Bad.wav", 0.8f);
                           }
                       }
                   }

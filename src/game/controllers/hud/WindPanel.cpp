@@ -113,9 +113,9 @@ void WindPanel::Initialize(core::GameContext &ctx) {
   m_surfaceTexture = m_entityOwner.Create(ctx.world);
   auto &surface = ctx.world.Add<game::components::UIImage>(m_surfaceTexture);
   surface = game::components::UIImage::Create(
-      "Assets/all_terrain_ui_assets/fairway.png", x + 44.0f, y);
-  surface.width = 72.0f;
-  surface.height = 72.0f;
+      "Assets/all_terrain_ui_assets/fairway.png", x + 29.0f, y - 5.0f);
+  surface.width = 100.0f;
+  surface.height = 94.0f;
   surface.layer = game::ui::kLayerWind + 1;
 
   m_label = m_entityOwner.Create(ctx.world);

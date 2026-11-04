@@ -222,7 +222,7 @@ function(wikigolf_add_debug_tests)
             test_debug_japanese_font.cpp
             src/game/devtools/DebugFontLoader.cpp)
         target_compile_definitions(test_debug_japanese_font PRIVATE
-            WIKIGOLF_TEST_FONT_PATH="${CMAKE_SOURCE_DIR}/Assets/Fonts/Mamelon-5-Hi-Regular.otf")
+            WIKIGOLF_TEST_FONT_PATH="${CMAKE_SOURCE_DIR}/Assets/Fonts/Kiwi_Maru/KiwiMaru-Medium.ttf")
         target_link_libraries(test_debug_japanese_font PRIVATE wikigolf_imgui)
         wikigolf_configure_debug_test(test_debug_japanese_font)
     endif()

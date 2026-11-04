@@ -19,7 +19,7 @@ enum class TextVAlign { Top, Middle, Bottom };
 struct TextStyle {
   // 既定値は汎用サンセリフ。用途に応じて各プリセット関数側で
   // Barlow Condensed(ラベル/本文)・Share Tech Mono(数値)・
-  // Kiwi Maru(日本語文章)・Mamelon 5 Hi(装飾見出し)を使い分ける。
+  // Kiwi Maru(日本語文章・装飾見出し)を使い分ける。
   std::string fontFamily = "Barlow Condensed";
   float fontSize = 24.0f;
   DirectX::XMFLOAT4 color = {0.1f, 0.1f, 0.1f, 1.0f}; // 黒/ダークグレー基調
@@ -177,7 +177,7 @@ struct TextStyle {
   /** @brief タイトル用スタイル（大きめ、中央揃え） */
   static TextStyle Title() {
     TextStyle s;
-    s.fontFamily = "Mamelon 5 Hi";
+    s.fontFamily = "Kiwi Maru Medium";
     s.fontSize = 48.0f;
     s.align = TextAlign::Center;
     s.valign = TextVAlign::Middle;
@@ -272,7 +272,7 @@ struct TextStyle {
   /** @brief クラブ名テキスト（カード内・紙面上の本文色・中央揃え） */
   static TextStyle ClubName() {
     TextStyle s;
-    s.fontFamily = "Mamelon 5 Hi";
+    s.fontFamily = "Kiwi Maru Medium";
     s.fontSize = 16.0f;
     s.color = {0.125f, 0.129f, 0.133f, 1.0f}; // #202122
     s.align = TextAlign::Center;

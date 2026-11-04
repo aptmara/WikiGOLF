@@ -21,6 +21,7 @@
 #include "../components/WikiComponents.h"
 #include "TerrainGenerator.h"
 #include "TerrainLayoutRules.h"
+#include "GlobeModel.h"
 #include "SkyGlobeLayout.h"
 #include "TerrainBackdrop.h"
 #include "TerrainObstacleLayout.h"
@@ -446,7 +447,7 @@ void WikiTerrainSystem::CreateBackdrop(core::GameContext &ctx,
 }
 
 /**
- * @brief 空に Wikipedia パズル地球儀をランダムに浮かべます。
+ * @brief 空に パズル地球儀をランダムに浮かべます。
  * @details タイトル画面・ロード画面と同じモデルを使う。物理は持たない。
 */
 void WikiTerrainSystem::CreateSkyGlobes(core::GameContext &ctx,
@@ -460,9 +461,11 @@ void WikiTerrainSystem::CreateSkyGlobes(core::GameContext &ctx,
   const auto layout = BuildSkyGlobeLayout(
       m_terrainData->config.worldWidth, m_terrainData->config.worldDepth, seed,
       [this](float x, float z) { return GetSceneryHeight(x, z); });
-  // LOD0 はタイトル画面と同じ元のモデル。遠いものだけ軽いモデルに切り替える。
-  for (int lod = 0; lod < kSkyGlobeLodCount; ++lod) {
-    m_skyGlobeLodMeshes[lod] = ctx.resource.LoadMesh(kSkyGlobeLodMeshes[lod]);
+  // LOD0 はタイトル画面と同じモデル。遠いものだけ軽いモデルに切り替える。
+  // プレイ中の切り替えで止まらないよう、全 LOD を先に読み込んでおく。
+  for (const char *path : kGlobeLodModels) {
+    ctx.resource.LoadMesh(path);
+    ctx.resource.LoadModelTextures(path);
   }
   const auto shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl",
                                               L"Assets/shaders/BasicPS.hlsl");
@@ -475,7 +478,7 @@ void WikiTerrainSystem::CreateSkyGlobes(core::GameContext &ctx,
     XMStoreFloat4(&transform.rotation,
                   XMQuaternionRotationRollPitchYaw(placement.tilt, placement.bobPhase, 0.0f));
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = m_skyGlobeLodMeshes[0];
+    ApplyGlobeModel(mr, ctx.resource);
     mr.shader = shader;
     mr.color = {0.95f, 0.95f, 0.98f, 1.0f}; // タイトル画面の地球儀と同じ白
     mr.isVisible = true;
@@ -527,7 +530,7 @@ void WikiTerrainSystem::UpdateSkyGlobes(core::GameContext &ctx, float dt) {
                                         globe.lod);
       if (lod != globe.lod) {
         if (auto *renderer = ctx.world.Get<MeshRenderer>(globe.entity)) {
-          renderer->mesh = m_skyGlobeLodMeshes[lod];
+          ApplyGlobeModel(*renderer, ctx.resource, lod);
         }
         globe.lod = lod;
       }

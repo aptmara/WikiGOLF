@@ -5,10 +5,17 @@
 */
 
 #include "Mesh.h"
+#include <cstdint>
 #include <string>
 #include <vector>
 
 namespace graphics {
+
+/** @brief モデルに埋め込まれた画像（png/jpg 等の圧縮バイト列のまま）。 */
+struct EmbeddedModelTextures {
+  std::vector<uint8_t> baseColor;
+  std::vector<uint8_t> normal;
+};
 
 /**
  * @brief Assimpを使用したモデルローダー
@@ -25,6 +32,15 @@ public:
    */
   static bool Load(const std::string &path, std::vector<Vertex> &outVertices,
                    std::vector<uint32_t> &outIndices);
+
+  /**
+   * @brief GLB 等に埋め込まれたベースカラーと法線マップの画像を取り出す
+   * @param path ファイルパス
+   * @param out 画像の出力先（モデルが持たない種類は空のまま）
+   * @return ファイルを読めたら true
+   */
+  static bool LoadEmbeddedTextures(const std::string &path,
+                                   EmbeddedModelTextures &out);
 };
 
 } // namespace graphics

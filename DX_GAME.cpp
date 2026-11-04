@@ -301,7 +301,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   // 同梱フォントを登録し、ゲーム中HUDの文字描画を環境依存にしない。山内陽
   // 用途別に使い分ける（TextStyle.h の各プリセット参照）:
-  //   Mamelon 5 Hi        - 見出し・特別演出用の装飾フォント
   //   Barlow Condensed *  - ラベル/本文用の引き締まったサンセリフ（UIの主力）
   //   Share Tech Mono     - 風速/距離/パワー等、数値読み取り用のデジタル等幅
   //   Kiwi Maru Medium    - 記事名・クラブ名など日本語文章用の丸ゴシック
@@ -310,7 +309,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // 静かにフォールバックしてしまう）。
   struct BundledFont { const char* family; const char* path; };
   const BundledFont kBundledFonts[] = {
-      {"Mamelon 5 Hi",             "Assets/Fonts/Mamelon-5-Hi-Regular.otf"},
       {"Barlow Condensed",         "Assets/Fonts/Barlow_Condensed/BarlowCondensed-Regular.ttf"},
       {"Barlow Condensed Medium",  "Assets/Fonts/Barlow_Condensed/BarlowCondensed-Medium.ttf"},
       {"Barlow Condensed SemiBold","Assets/Fonts/Barlow_Condensed/BarlowCondensed-SemiBold.ttf"},

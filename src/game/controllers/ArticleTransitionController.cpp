@@ -16,6 +16,7 @@
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "hud/HudStyles.h"
+#include "../systems/GlobeModel.h"
 #include "../systems/WikiClient.h"
 #include "../utils/StartGoalIntroductionRules.h"
 #include "../utils/UIConstants.h"
@@ -199,9 +200,9 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     m_globeEntity = m_entityOwner.Create(ctx.world);
     auto& globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
     globeTr.position = {0.0f, 5000.0f, 0.0f};
-    globeTr.scale = {2.0f, 2.0f, 2.0f};
+    globeTr.scale = {2.28f, 2.28f, 2.28f};
     auto& globeMr = ctx.world.Add<components::MeshRenderer>(m_globeEntity);
-    globeMr.mesh = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
+    game::systems::ApplyGlobeModel(globeMr, ctx.resource);
     globeMr.shader = shaderHandle;
     globeMr.color = {0.9f, 0.9f, 0.95f, 0.0f}; // 初期アルファ0
     globeMr.isTransparent = true;
@@ -572,7 +573,7 @@ void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
         L"このTipsは現在、ノートページで「削除すべきかどうか」が議論されています。表示されていれば、まだ生き残っています。",
         L"ロード中にTipsを生成しています。 つまり、あなたは今、ロード待ちのロード待ちをしています。",
         L"このTipsを読み終わる頃にはロードが完了しているはずです。（出典なし）",
-        L"このロード画面はCCライセンスで公開されています。改変・再配布は自由ですが、出典を明記してください。",
+        L"このロード画面は「独自研究」の疑いで差し戻されました。再ロード中です。",
         L"このゲームは存在しますが、Wikipediaの記事がないため、公式には存在していません。",
         L"ゲームを起動したあなたの行動は、すでに「最近の更新」に記録されました。",
         L"「赤リンク」から生成された地形には、まだ何もありません。何があるかは誰も知りません。",

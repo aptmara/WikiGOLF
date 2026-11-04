@@ -202,7 +202,7 @@ int main() {
   CHECK_TRUE(!FindText(world, L"Club 1") && FindText(world, L"Club 2") &&
                  !FindText(world, L"Club 3"),
              "選択中クラブ1件だけを表示用Entityとして生成する");
-  CHECK_TRUE(FindText(world, L"Club 2")->style.fontFamily == "Mamelon 5 Hi" &&
+  CHECK_TRUE(FindText(world, L"Club 2")->style.fontFamily == "Kiwi Maru Medium" &&
                  FindText(world, L"中クリック  照準ピン設置")
                          ->style.fontFamily == "Kiwi Maru Medium" &&
                  FindText(world, L"CURRENT")->style.fontFamily ==

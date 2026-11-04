@@ -1,0 +1,83 @@
+%% WikiGOLF モジュール依存関係図
+%% 根拠: src/ と DX_GAME.cpp の #include "..." を集計 (数字はファイル単位の include 数)。前方宣言は含まない。
+%% 太線 = 主な下向き依存 / 赤の点線 = 下位から上位への逆流・循環
+%% 見やすさのため、src/game からエンジン層・基盤への依存はそれぞれ1本にまとめている。
+flowchart TD
+    entry["DX_GAME.cpp<br/>エントリポイント / メインループ"]
+
+    subgraph game["src/game"]
+        scenes["scenes<br/>シーン / WikiPageLoader"]
+        devtools["devtools<br/>ImGui デバッグツール<br/>WIKIGOLF_DEBUG_TOOLS 時のみ"]
+        controllers["controllers + hud<br/>カメラ / ショット / HUD"]
+        systems["systems<br/>地形 / Wiki / 描画 / 実績"]
+        utils["utils<br/>純粋ルール / 定数"]
+        components["components<br/>ECS コンポーネント"]
+    end
+
+    subgraph engine["エンジン層"]
+        audio["audio<br/>AudioSystem"]
+        resources["resources<br/>ResourceManager"]
+        graphics["graphics<br/>D3D11 / D2D / メッシュ"]
+        html["graphics/html<br/>litehtml 記事描画<br/>別ターゲット wiki_html"]
+    end
+
+    subgraph foundation["基盤"]
+        core["core<br/>GameContext / Scene / Input / Logger"]
+        ecs["ecs<br/>World / Entity"]
+    end
+
+    entry ==> scenes
+    entry ==> systems
+    entry -.->|デバッグ時| devtools
+    entry --> foundation
+
+    devtools --> scenes
+    devtools --> components
+    devtools --> systems
+
+    scenes ==>|28| controllers
+    scenes ==>|81| systems
+    scenes ==>|204| components
+    scenes -->|44| utils
+
+    controllers ==>|99| components
+    controllers ==>|55| utils
+    controllers -->|11| systems
+
+    systems ==>|103| components
+    systems -->|15| utils
+
+    utils -->|13| components
+
+    resources -->|8| graphics
+    graphics -->|1| html
+
+    game ==> engine
+    game ==> foundation
+    engine --> foundation
+
+    %% 逆流・循環
+    controllers -.->|2| scenes
+    systems -.->|1 AchievementManager.h| controllers
+    components -.->|3 WikiComponents.h| systems
+    utils -.->|4| systems
+    components -.->|1 GolfCupPhysics.h| utils
+    resources -.->|1 AudioClip.h| audio
+    audio -.->|3| resources
+    core -.->|3 DisplaySettings| graphics
+    core -.->|2 Scene.h| ecs
+    ecs -.->|3| core
+
+    classDef entryNode fill:#1f2937,stroke:#111827,color:#ffffff
+    classDef gameNode fill:#dbeafe,stroke:#2563eb,color:#111827
+    classDef debugNode fill:#f3f4f6,stroke:#6b7280,color:#111827,stroke-dasharray:4 3
+    classDef engineNode fill:#dcfce7,stroke:#16a34a,color:#111827
+    classDef baseNode fill:#fef3c7,stroke:#d97706,color:#111827
+    class entry entryNode
+    class scenes,controllers,systems,utils,components gameNode
+    class devtools debugNode
+    class audio,resources,graphics,html engineNode
+    class core,ecs baseNode
+
+    %% 逆流エッジ (上の「逆流・循環」ブロックの順番に対応)
+    linkStyle 22,23,24,25,26,27,28,29,30,31 stroke:#dc2626,stroke-width:2px

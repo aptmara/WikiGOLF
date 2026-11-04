@@ -103,7 +103,7 @@ WikiGOLF/
 ├── .Agents/                       # AIエージェント向けドキュメント・仕様書
 │   └── README.md                  # 本仕様書
 ├── Assets/                        # ゲーム内リソース
-│   ├── Fonts/                     # 同梱フォント (Barlow, Mamelon, Kiwi Maru, Share Tech Mono)
+│   ├── Fonts/                     # 同梱フォント (Barlow, Kiwi Maru, Share Tech Mono)
 │   ├── data/                      # WikipediaリンクグラフDB (jawiki_sdow-001_part*.sqlite)
 │   ├── models/                    # 3Dモデル (ピンフラッグ, ゴルフボール, 小物等)
 │   ├── shaders/                   # HLSLシェーダー (Terrain, Skybox, Grass, PostProcess, UI)
@@ -165,7 +165,7 @@ WikiGOLF/
 - **`game::scenes::WikiGolfScene`**:
   ゴルフゲームの中心となるシーン。打球、移動、カップイン、カメラ遷移、演出等の全状態を統括。
 - **`game::controllers::ShotController` & `game::utils::ShotGaugeRules`**:
-  みんなのゴルフライクな3クリック式ショットゲージ。
+  3クリック式のタイミングショットゲージ。
   1. 第1クリック: ゲージ始動
   2. 第2クリック: パワー（飛距離）の決定
   3. 第3クリック: インパクトゾーンでのタイミング合わせ

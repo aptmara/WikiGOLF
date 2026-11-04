@@ -6,6 +6,7 @@
 #include "ResultScene.h"
 #include "TitleScene.h"
 #include "TitleSceneSupport.h"
+#include "../../core/BuildEdition.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
@@ -52,8 +53,9 @@ using namespace DirectX;
  * @brief シーンの毎フレーム更新処理を行います。
 */
 void TitleScene::OnUpdate(core::GameContext &ctx) {
-  // Cheat code to force transition to ResultScene
-  if (ctx.input.GetKey(VK_CONTROL) &&
+  // Cheat code to force transition to ResultScene (体験版では無効)
+  if (!core::kTrialBuild &&
+      ctx.input.GetKey(VK_CONTROL) &&
       ctx.input.GetKey('Z') &&
       ctx.input.GetKey('X') &&
       ctx.input.GetKey('C') &&

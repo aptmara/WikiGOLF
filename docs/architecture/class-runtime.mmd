@@ -1,0 +1,86 @@
+%% WikiGOLF クラス図 (1/2): 起動時の配線とシーン構造
+%% 主要クラスのみ。ヘッダのメンバ / 継承 / make_unique の呼び出しを確認して記載。デバッグ用の遷移は省略。
+%% 記法: <|-- 継承 / *-- 所有 / o-- 非所有の参照 / ..> 利用・生成
+classDiagram
+    direction LR
+
+    class Main["DX_GAME.cpp (WinMain)"]
+
+    class GameContext {
+        <<全シーンへ渡す共有コンテキスト>>
+    }
+    class SceneManager {
+        +PushScene(scene)
+        +PopScene()
+        +ChangeScene(scene)
+        +ResetToScene(scene)
+    }
+    class Scene {
+        <<abstract>>
+        +OnEnter(ctx)*
+        +OnExit(ctx)
+        +OnUpdate(ctx)
+        +Render(ctx)
+    }
+
+    Main *-- GameContext : 生成して配線
+    Main *-- SceneManager
+
+    GameContext o-- ResourceManager
+    GameContext o-- World
+    GameContext o-- GraphicsDevice
+    GameContext o-- Input
+    GameContext o-- AudioSystem
+    GameContext o-- SceneManager
+    GameContext o-- DisplaySettings
+    GameContext o-- TextRenderer
+    GameContext o-- PostProcessSystem
+    GameContext o-- AchievementEventBus
+    GameContext o-- AchievementManager
+
+    SceneManager *-- "0..*" Scene : スタック
+    Scene ..> GameContext
+    Scene *-- EntityOwner
+    EntityOwner ..> World
+    World *-- "0..*" IComponentPool
+    IComponentPool <|-- ComponentPool~T~
+
+    GraphicsDevice *-- DlssUpscaler
+    TextRenderer *-- FontManager
+    TextRenderer *-- BrushCache
+    ResourceManager o-- GraphicsDevice
+    ResourceManager ..> Mesh
+    ResourceManager ..> Shader
+    ResourceManager ..> AudioClip
+    AudioSystem ..> ResourceManager
+
+    AchievementManager ..> AchievementEventBus : 購読
+    AchievementManager ..> AchievementStore
+    AchievementManager *-- AchievementToastPanel
+
+    Scene <|-- TitleScene
+    Scene <|-- LoadingScene
+    Scene <|-- WikiGolfScene
+    Scene <|-- PauseScene
+    Scene <|-- ResultScene
+    Scene <|-- SettingsScene
+    Scene <|-- RankingScene
+    Scene <|-- AchievementScene
+
+    TitleScene ..> LoadingScene : 通常開始
+    TitleScene ..> WikiGolfScene : チュートリアル
+    TitleScene ..> SettingsScene : Push
+    TitleScene ..> RankingScene : Push
+    TitleScene ..> AchievementScene : Push
+    LoadingScene ..> WikiGolfScene : factory で生成
+    WikiGolfScene ..> LoadingScene : Change
+    WikiGolfScene ..> PauseScene : Push
+    WikiGolfScene ..> ResultScene : Change
+    ResultScene ..> LoadingScene : 再プレイ
+    ResultScene ..> TitleScene : Change
+    PauseScene ..> TitleScene : Reset
+
+    TitleScene *-- VideoPlayer
+    TitleScene ..> TerrainGenerator
+    RankingScene ..> PlayFabClient
+    ResultScene ..> PlayFabClient

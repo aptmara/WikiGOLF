@@ -25,6 +25,7 @@
 #include "../components/UIText.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../systems/GlobeModel.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/TerrainGenerator.h"
 #include "../systems/WikiClient.h"
@@ -93,7 +94,8 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
         ctx.resource.LoadMesh("builtin/sphere");
 
         LOG_INFO("TitleScene", "Step 6: LoadMesh globe");
-        ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
+        ctx.resource.LoadMesh(game::systems::kGlobeLodModels[0]);
+        ctx.resource.LoadModelTextures(game::systems::kGlobeLodModels[0]);
 
         LOG_INFO("TitleScene", "Step 7: LoadMesh ultra grass variants");
         for (int variant = 0; variant < 4; ++variant) {

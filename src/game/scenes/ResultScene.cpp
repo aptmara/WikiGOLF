@@ -6,6 +6,7 @@
 #define NOMINMAX
 #include "ResultScene.h"
 #include "../../audio/AudioSystem.h"
+#include "../../core/BuildEdition.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
@@ -219,7 +220,7 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
     // ボタンのクリック操作を処理します。
     if (btn && hover && ctx.input.GetMouseButtonDown(0)) {
       // プレイし直すボタンの処理を行います。
-      if (elem.text == L"Play Again (R)") {
+      if (!core::kTrialBuild && elem.text == L"Play Again (R)") {
         std::vector<ecs::Entity> toDestroy;
         ctx.world.Query<game::components::TerrainObject>().Each(
             [&](ecs::Entity e, game::components::TerrainObject &) {
@@ -248,8 +249,8 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
     }
   }
 
-  // ショートカットキー入力を処理します。
-  if (ctx.input.GetKeyDown('R')) {
+  // ショートカットキー入力を処理します。(体験版ではリトライ不可)
+  if (!core::kTrialBuild && ctx.input.GetKeyDown('R')) {
     if (m_data.isDailyChallenge) {
       title_scene_detail::ResetDailyChallengeStartData(ctx);
       auto loadingScene = std::make_unique<LoadingScene>(

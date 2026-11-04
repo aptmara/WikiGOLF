@@ -6,6 +6,7 @@
 #include "ResultScene.h"
 #include "TitleScene.h"
 #include "TitleSceneSupport.h"
+#include "../../core/BuildEdition.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
@@ -26,6 +27,7 @@
 #include "../components/UIText.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../systems/GlobeModel.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/TerrainGenerator.h"
 #include "../systems/WikiClient.h"
@@ -35,7 +37,9 @@
 #include "WikiGolfScene.h"
 #include <filesystem>
 #include <fstream>
+#include <string_view>
 #include <thread>
+#include <vector>
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
@@ -62,7 +66,6 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   auto basicShader = ctx.resource.LoadShader(
       "Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
   auto sphereMesh = ctx.resource.LoadMesh("builtin/sphere");
-  auto globeMesh  = ctx.resource.LoadMesh("Assets/models/Wikipedia_puzzle_globe_3D_render.stl");
 
   // スカイボックスの生成
   m_skyboxEntity = CreateEntity(ctx.world);
@@ -226,12 +229,12 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
   m_globeEntity = CreateEntity(ctx.world);
   auto &globeTr = ctx.world.Add<components::Transform>(m_globeEntity);
   globeTr.position = {0.0f, 2.7f, 0.0f};
-  globeTr.scale    = {3.0f, 3.0f, 3.0f}; // 大きく
+  globeTr.scale    = {3.42f, 3.42f, 3.42f}; // 大きく
   XMVECTOR gq = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(15.0f), 0.0f, 0.0f);
   XMStoreFloat4(&globeTr.rotation, gq);
 
   auto &globeMr = ctx.world.Add<components::MeshRenderer>(m_globeEntity);
-  globeMr.mesh = globeMesh;
+  game::systems::ApplyGlobeModel(globeMr, ctx.resource);
   globeMr.shader = basicShader;
   globeMr.color = {0.95f, 0.95f, 0.98f, 1.0f}; // 少し白く
   globeMr.isVisible = true;
@@ -454,16 +457,28 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     if (tutorialDone) {
       tutorialLabel = L"  チュートリアル";
     }
-    const struct { const wchar_t* label; const char* action; } menuItems[] = {
-        {L"▶  はじめから",   "new_game"},
-        {tutorialLabel, "tutorial"},
-        {L"↺  デイリーチャレンジ", "daily"},
-        {L"⚑  コース選択",   "course"},
-        {L"⚙  オプション",     "option"},
-        {L"  終了",         "exit"},
-    };
+    struct MenuItem { const wchar_t* label; const char* action; };
+    std::vector<MenuItem> menuItems;
+    if constexpr (core::kTrialBuild) {
+      // 体験版: チュートリアル (完了後に1プレイへ進む) のみ開始できる。
+      menuItems = {
+          {L"▶  チュートリアルから遊ぶ", "tutorial"},
+          {L"⚙  オプション",     "option"},
+          {L"  終了",         "exit"},
+      };
+    } else {
+      menuItems = {
+          {L"▶  はじめから",   "new_game"},
+          {tutorialLabel, "tutorial"},
+          {L"↺  デイリーチャレンジ", "daily"},
+          {L"⚑  コース選択",   "course"},
+          {L"⚙  オプション",     "option"},
+          {L"  終了",         "exit"},
+      };
+    }
+    const int menuCount = static_cast<int>(menuItems.size());
 
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < menuCount; ++i) {
       auto eb = CreateEntity(ctx.world);
       auto &btn = ctx.world.Add<components::UIButton>(eb);
       btn.label = menuItems[i].label;
@@ -483,13 +498,15 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
       btn.textStyle.color = {0.95f, 0.95f, 0.95f, 1.0f};
       btn.textStyle.align = graphics::TextAlign::Left;
 
-      if (i == 1 && !tutorialDone) {
+      const bool isTutorialItem =
+          std::string_view(menuItems[i].action) == "tutorial";
+      if (isTutorialItem && (!tutorialDone || core::kTrialBuild)) {
           btn.normalColor  = {0.8f,  0.6f,  0.1f,  0.2f};
           btn.textStyle.color = {1.0f, 0.9f, 0.3f, 1.0f};
       }
 
       // セパレータ（最後以外）
-      if (i < 5) {
+      if (i < menuCount - 1) {
         auto es = CreateEntity(ctx.world);
         auto &ts = ctx.world.Add<components::UIText>(es);
         ts.text = L"────────────────────────";
@@ -519,6 +536,19 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     btnLink.textStyle.color = {0.4f, 0.6f, 0.9f, 1.0f};
     btnLink.textStyle.align = graphics::TextAlign::Center;
     m_menuEntries.push_back({eLink, 0, L"Go to Wikipedia", btnLink.y, false});
+
+    if constexpr (core::kTrialBuild) {
+      // 体験版の案内文 (メニュー項目が少ないぶん空いた領域に表示する)
+      auto eTrial = CreateEntity(ctx.world);
+      auto &tt = ctx.world.Add<components::UIText>(eTrial);
+      tt.text = L"体験版\nチュートリアルと、その後の\n1プレイを遊べます";
+      tt.x = 890.0f; tt.y = 470.0f;
+      tt.width = 340.0f;
+      tt.style.fontSize = 20.0f;
+      tt.style.color = {1.0f, 0.9f, 0.3f, 1.0f};
+      tt.style.align = graphics::TextAlign::Center;
+      tt.layer = 11;
+    }
   }
 
   // 下部ナビゲーションの生成

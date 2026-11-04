@@ -131,4 +131,48 @@ bool FbxLoader::Load(const std::string &path, std::vector<Vertex> &outVertices,
   return true;
 }
 
+/**
+ * @brief マテリアルが参照する埋め込み画像のバイト列を返す
+ * @return 見つからない、または外部ファイル参照なら空
+ */
+static std::vector<uint8_t> ExtractEmbeddedImage(const aiScene *scene,
+                                                 const aiMaterial *material,
+                                                 aiTextureType type) {
+  aiString texPath;
+  if (material->GetTexture(type, 0, &texPath) != AI_SUCCESS) {
+    return {};
+  }
+  const aiTexture *tex = scene->GetEmbeddedTexture(texPath.C_Str());
+  // mHeight==0 は png/jpg 等の圧縮バイト列がそのまま入っていることを示す
+  if (!tex || tex->mHeight != 0 || !tex->pcData) {
+    return {};
+  }
+  const auto *bytes = reinterpret_cast<const uint8_t *>(tex->pcData);
+  return std::vector<uint8_t>(bytes, bytes + tex->mWidth);
+}
+
+bool FbxLoader::LoadEmbeddedTextures(const std::string &path,
+                                     EmbeddedModelTextures &out) {
+  Assimp::Importer importer;
+  const aiScene *scene = importer.ReadFile(path, 0);
+  if (!scene) {
+    LOG_ERROR("FbxLoader", "Assimpエラー: {}", importer.GetErrorString());
+    return false;
+  }
+
+  for (unsigned int i = 0; i < scene->mNumMaterials; ++i) {
+    const aiMaterial *material = scene->mMaterials[i];
+    if (out.baseColor.empty()) {
+      out.baseColor = ExtractEmbeddedImage(scene, material, aiTextureType_BASE_COLOR);
+    }
+    if (out.baseColor.empty()) {
+      out.baseColor = ExtractEmbeddedImage(scene, material, aiTextureType_DIFFUSE);
+    }
+    if (out.normal.empty()) {
+      out.normal = ExtractEmbeddedImage(scene, material, aiTextureType_NORMALS);
+    }
+  }
+  return true;
+}
+
 } // namespace graphics

@@ -112,7 +112,7 @@ void ClubSelectionPanel::RebuildSelectedClub(core::GameContext &ctx,
   name.width = 205.0f;
   name.height = 32.0f;
   name.style = graphics::TextStyle::Guide();
-  name.style.fontFamily = "Mamelon 5 Hi";
+  name.style.fontFamily = "Kiwi Maru Medium";
   name.style.fontSize = 27.0f;
   name.style.align = graphics::TextAlign::Left;
   name.layer = game::ui::kLayerClubSelect + 2;

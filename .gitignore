@@ -32,12 +32,14 @@
 !build-debugtools.bat
 !build-static-release.bat
 !build-vs2026.bat
+!build-trial.bat
 
 # --- Blacklist: Specific exclusions (override whitelist) ---
 # Build & Temp directories (just in case they matched above patterns)
 .vs/
 .vscode/
 build/
+build-trial/
 out/
 Debug/
 Release/

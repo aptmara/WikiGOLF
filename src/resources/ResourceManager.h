@@ -82,11 +82,21 @@ public:
   /**
    * @brief メモリ上の画像バイト列(png/jpg等)からテクスチャをSRVとしてロード（キャッシュ付き）
    * @details GLB等に埋め込まれたテクスチャをファイルに書き出さずそのまま読み込む用途。
+   *          縮小時のちらつきを防ぐため、全段のミップマップを持たせる。
    * @param cacheKey キャッシュキー（同じキーなら再デコードしない）
   */
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
   LoadTextureSRVFromMemory(const std::string &cacheKey, const void *data,
                           size_t sizeBytes);
+
+  /** @brief モデルに埋め込まれたテクスチャ（モデルが持たないものは null）。 */
+  struct ModelTextures {
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> baseColor;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> normal;
+  };
+
+  /** @brief GLB 等に埋め込まれたベースカラーと法線マップをロード（キャッシュ付き） */
+  ModelTextures LoadModelTextures(const std::string &path);
 
   /** @brief 全リソースを解放（シーン遷移用） */
   void Clear();

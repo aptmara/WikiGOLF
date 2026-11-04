@@ -1,0 +1,35 @@
+Sound effects and music in Assets/sounds/ are taken (and in some cases
+edited) from the following free sound libraries.
+
+OtoLogic
+  https://otologic.jp/
+  Licensed under the Creative Commons Attribution 4.0 International
+  License (CC BY 4.0) - https://creativecommons.org/licenses/by/4.0/
+  Credit: OtoLogic (https://otologic.jp) CC BY 4.0
+  Some sounds have been edited (trimmed / mixed / re-encoded).
+
+効果音ラボ (Sound Effect Lab)
+  https://soundeffect-lab.info/
+  Used under the site's terms of use
+  (https://soundeffect-lab.info/agreement/). Credit is not required.
+  The sound files are bundled only as part of this game; extracting them
+  for redistribution as standalone material is prohibited by the
+  original terms.
+
+The intro video and its audio (Assets/videos/aptma_intro.mp4) are original
+works by the WikiGOLF developer.
+
+  --------------------------------------------------------------------
+  Assets/sounds/ の効果音・BGMは、以下のフリー素材サイトの素材を
+  使用（一部加工）しています。
+
+  OtoLogic（https://otologic.jp）CC BY 4.0
+    一部の音源はトリミング・ミックス・再エンコード等の加工をしています。
+
+  効果音ラボ（https://soundeffect-lab.info/）
+    同サイトの利用規約に基づいて使用しています（クレジット表記は任意）。
+    音源ファイルは本ゲームの一部としてのみ同梱しています。素材として
+    取り出して再配布することは、配布元の規約で禁止されています。
+
+  起動時のロゴ動画とその音声（Assets/videos/aptma_intro.mp4）は
+  WikiGOLF 開発者の自作です。

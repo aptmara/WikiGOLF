@@ -6,7 +6,7 @@ struct ImFontAtlas;
 namespace game::debug {
 
 inline constexpr char kJapaneseFontPath[] =
-    "Assets/Fonts/Mamelon-5-Hi-Regular.otf";
+    "Assets/Fonts/Kiwi_Maru/KiwiMaru-Medium.ttf";
 inline constexpr float kJapaneseFontSize = 18.0f;
 
 ImFont *LoadJapaneseFont(ImFontAtlas &atlas, const char *fontPath);
