@@ -4,6 +4,7 @@
 */
 
 #include "WikiShortestPath.h"
+#include "ContentFilter.h"
 #include "DailyChallengeRules.h"
 #include "WikiShortestPathInternals.h"
 #include "../../core/Logger.h"
@@ -57,7 +58,7 @@ WikiShortestPath::FetchPopularPageTitleWithIndexSelector(
 
     // フィルタリング
     bool isIgnored = false;
-    if (title.empty())
+    if (title.empty() || ContentFilter::Instance().IsPageIdBlocked(pageId))
       isIgnored = true;
     if (std::all_of(title.begin(), title.end(),
                     [](unsigned char c) { return std::isdigit(c); }))

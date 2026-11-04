@@ -5,6 +5,7 @@
 
 #include "PageLinkSelector.h"
 #include "../../core/StringUtils.h"
+#include "../systems/ContentFilter.h"
 #include <algorithm>
 #include <cctype>
 
@@ -66,7 +67,7 @@ PageLinkSelectionResult PageLinkSelector::Select(
 }
 
 bool PageLinkSelector::IsIgnored(const std::string& title) const {
-    if (title.empty()) {
+    if (title.empty() || game::systems::ContentFilter::Instance().IsTitleBlocked(title)) {
         return true;
     }
     if (title.size() >= 3) {

@@ -30,6 +30,7 @@ void WriteInputFile() {
   file << "TAA=true\n";
   file << "ShowFps=1\n";
   file << "GPU=Test Adapter\n";
+  file << "SafeMode=1\n";
 }
 
 void VerifyLoadedValues() {
@@ -53,6 +54,7 @@ void VerifyLoadedValues() {
   assert(settings.GetAntiAliasingMode() == core::AntiAliasingMode::Msaa4);
   assert(data.showFps);
   assert(data.gpuAdapterName == "Test Adapter");
+  assert(data.safeMode);
 }
 
 void VerifyRoundTrip() {
@@ -67,10 +69,12 @@ void VerifyRoundTrip() {
   assert(data.graphicsPreset == core::GraphicsPreset::High);
   assert(data.renderScale == 1.0f);
   assert(data.gpuAdapterName == "Test Adapter");
+  assert(data.safeMode);
 }
 
 void VerifyCyclesWithoutInitialization() {
   core::DisplaySettings settings;
+  assert(!settings.GetData().safeMode);
   settings.SetRenderScale(0.5f);
   assert(settings.GetData().renderScale == 0.5f);
 

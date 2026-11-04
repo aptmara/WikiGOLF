@@ -348,6 +348,7 @@ if(WIKIGOLF_STATIC_BUILD)
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/videos $<TARGET_FILE_DIR:DX_GAME>/Assets/videos
         COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/data
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001.sqlite $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001.sqlite
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/content_filter.tsv $<TARGET_FILE_DIR:DX_GAME>/Assets/data/content_filter.tsv
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part1.sqlite"
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part2.sqlite"
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part3.sqlite"
@@ -927,6 +928,20 @@ if(WIKIGOLF_HTML_COURSES)
     target_compile_definitions(test_wiki_client_live PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_client_live PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
+
+# 記事フィルターの判定とカップ選択への適用
+add_executable(test_content_filter
+    test_content_filter.cpp
+    src/game/scenes/PageLinkSelector.cpp)
+target_precompile_headers(test_content_filter REUSE_FROM wikigolf_pch)
+target_include_directories(test_content_filter PRIVATE src)
+target_link_libraries(test_content_filter PRIVATE wikigolf_common)
+if(MSVC)
+    target_compile_definitions(test_content_filter PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_content_filter PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME content_filter COMMAND test_content_filter
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_executable(test_display_settings_rules
     test_display_settings_rules.cpp

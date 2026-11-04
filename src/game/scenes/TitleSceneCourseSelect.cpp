@@ -26,6 +26,7 @@
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "../systems/SkyboxRenderSystem.h"
+#include "../systems/ContentFilter.h"
 #include "../systems/TerrainGenerator.h"
 #include "../systems/WikiClient.h"
 #include "../../core/StringUtils.h"
@@ -332,6 +333,14 @@ void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
 
           if (startUtf8 == goalUtf8) {
             if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"スタートとゴールに同じ記事は指定できません。";
+            m_readyToStart = false;
+          } else if (game::systems::ContentFilter::Instance().IsTitleBlocked(startUtf8) ||
+                     game::systems::ContentFilter::Instance().IsTitleBlocked(goalUtf8)) {
+            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) {
+              p->text = game::systems::ContentFilter::Instance().IsSafeMode()
+                            ? L"指定した記事は、セーフモードまたは内容の制限により使用できません。"
+                            : L"指定した記事は、内容の制限により使用できません。";
+            }
             m_readyToStart = false;
           } else {
             m_checking = true;

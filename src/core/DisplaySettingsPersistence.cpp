@@ -200,6 +200,8 @@ void DisplaySettings::LoadFromFile(const std::string &path) {
       m_data.showFps = display_settings_detail::ParseBool(value, false);
     } else if (key == "GPU") {
       m_data.gpuAdapterName = value;
+    } else if (key == "SafeMode") {
+      m_data.safeMode = display_settings_detail::ParseBool(value, false);
     }
   }
 
@@ -266,6 +268,8 @@ void DisplaySettings::SaveToFile(const std::string &path) const {
   file << "ShowFps=" << display_settings_detail::BoolToInt(m_data.showFps)
        << "\n";
   file << "GPU=" << m_data.gpuAdapterName << "\n";
+  file << "SafeMode=" << display_settings_detail::BoolToInt(m_data.safeMode)
+       << "\n";
 }
 
 std::wstring DisplaySettings::GetGpuAdapterNameWide() const {

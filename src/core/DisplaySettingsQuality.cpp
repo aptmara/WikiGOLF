@@ -200,6 +200,14 @@ void DisplaySettings::SetShowFps(bool enabled) {
   SaveToFile();
 }
 
+void DisplaySettings::SetSafeMode(bool enabled) {
+  if (m_data.safeMode == enabled) {
+    return;
+  }
+  m_data.safeMode = enabled;
+  SaveToFile();
+}
+
 void DisplaySettings::SetGpuAdapter(const std::string &adapterName) {
   if (m_data.gpuAdapterName == adapterName) {
     return;

@@ -2,8 +2,8 @@
 /**
  * @file SettingsScene.h
  * @brief 表示・画質設定（「画面」: ウィンドウモード/解像度/VSync/FPS上限/FPS表示、
- *        「画質」: 画質テンプレート/描画解像度/アンチエイリアス/利用GPU）を
- *        変更する設定画面
+ *        「画質」: 画質テンプレート/描画解像度/アンチエイリアス/利用GPU、
+ *        「コンテンツ」: セーフモード）を変更する設定画面
 */
 
 #include "../../core/GameContext.h"
@@ -42,11 +42,15 @@ private:
     RenderScale,
     AntiAliasing,
     Gpu,
+    // コンテンツ
+    SafeMode,
     Count,
   };
   static constexpr size_t kRowCount = static_cast<size_t>(RowId::Count);
   static constexpr size_t kFirstQualityRow =
       static_cast<size_t>(RowId::GraphicsPreset);
+  static constexpr size_t kFirstContentRow =
+      static_cast<size_t>(RowId::SafeMode);
 
   /** @brief セクション見出し（「画面」「画質」）を生成する*/
   void CreateSectionHeader(core::GameContext &ctx, const std::wstring &label,
@@ -62,6 +66,23 @@ private:
 
   /** @brief 現在の設定値に合わせて各行の値表示・有効/無効を更新する*/
   void RefreshDisplay(core::GameContext &ctx);
+
+  /** @brief セーフモード切り替えの確認ダイアログ（非表示状態）を生成する*/
+  void CreateSafeModeConfirm(core::GameContext &ctx);
+  /** @brief 影響を警告する確認ダイアログを開く。変更はまだ適用しない*/
+  void ShowSafeModeConfirm(core::GameContext &ctx, bool enabled);
+  /** @brief 確認ダイアログを閉じ、他のボタンを元に戻す*/
+  void HideSafeModeConfirm(core::GameContext &ctx);
+  /** @brief 確認ダイアログの操作を処理する*/
+  void UpdateSafeModeConfirm(core::GameContext &ctx);
+
+  bool m_confirmVisible = false;
+  bool m_pendingSafeMode = false;
+  ecs::Entity m_confirmPanel = 0;
+  ecs::Entity m_confirmTitle = 0;
+  ecs::Entity m_confirmBody = 0;
+  ecs::Entity m_confirmApplyButton = 0;
+  ecs::Entity m_confirmCancelButton = 0;
 
   std::array<ecs::Entity, kRowCount> m_prevButtons{};
   std::array<ecs::Entity, kRowCount> m_nextButtons{};

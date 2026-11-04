@@ -5,6 +5,7 @@
 
 #include "WikiClient.h"
 #include "WikiClientJson.h"
+#include "ContentFilter.h"
 #include "DailyChallengeRules.h"
 #include "WikiRequestPolicy.h"
 #include "../../core/Logger.h"
@@ -261,8 +262,11 @@ std::string WikiClient::FetchRandomPageTitle() {
     }
     size_t start = titlePos + 9;
     size_t end = response.find("\"", start);
-    if (end != std::string::npos) {
-      std::string title = response.substr(start, end - start);
+    if (end == std::string::npos) {
+      return "Error";
+    }
+    std::string title = response.substr(start, end - start);
+    if (!ContentFilter::Instance().IsTitleBlocked(title)) {
       return title;
     }
   }
@@ -309,10 +313,24 @@ WikiTargetPage WikiClient::FetchTargetPage(int thumbSize) {
   }
   const size_t arrEnd = wiki_json::SkipValue(response, bracketPos);
 
-  std::string title;
-  size_t nextPos = 0;
-  if (wiki_json::ExtractStringField(response, "\"title\":\"", objStart,
-                                    objEnd, title, nextPos)) {
+  // 取得した候補のうち、除外対象ではない最初の記事を使う
+  size_t pos = bracketPos + 1;
+  while (pos < arrEnd) {
+    const size_t objStart = response.find('{', pos);
+    if (objStart == std::string::npos || objStart >= arrEnd) {
+      break;
+    }
+    const size_t objEnd =
+        std::min(wiki_json::SkipValue(response, objStart), arrEnd);
+    pos = objEnd;
+
+    std::string title;
+    size_t nextPos = 0;
+    if (!wiki_json::ExtractStringField(response, "\"title\":\"", objStart,
+                                       objEnd, title, nextPos) ||
+        ContentFilter::Instance().IsTitleBlocked(title)) {
+      continue;
+    }
     result.title = title;
 
     std::string thumbSrc;

@@ -4,6 +4,7 @@
  * @brief WikiShortestPathが共有するSQLite/BFS内部処理です。
 */
 
+#include "ContentFilter.h"
 #include "WikiShortestPath.h"
 #include "../../core/Logger.h"
 #include <algorithm>
@@ -85,13 +86,22 @@ inline std::vector<int> ParseLinks(const unsigned char *text) {
   if (!text)
     return links;
 
+  // 除外した記事はカップに出ないため、最短経路やパーの計算でも通らない
+  const ContentFilter &filter = ContentFilter::Instance();
+  const auto appendLink = [&](const char *value) {
+    const int pageId = static_cast<int>(std::strtol(value, nullptr, 10));
+    if (!filter.IsPageIdBlocked(pageId)) {
+      links.push_back(pageId);
+    }
+  };
+
   const char *ptr = reinterpret_cast<const char *>(text);
   const char *start = ptr;
 
   while (*ptr) {
     if (*ptr == '|') {
       if (ptr > start) {
-        links.push_back(static_cast<int>(std::strtol(start, nullptr, 10)));
+        appendLink(start);
       }
       start = ptr + 1;
     }
@@ -99,7 +109,7 @@ inline std::vector<int> ParseLinks(const unsigned char *text) {
   }
 
   if (ptr > start) {
-    links.push_back(static_cast<int>(std::strtol(start, nullptr, 10)));
+    appendLink(start);
   }
 
   return links;

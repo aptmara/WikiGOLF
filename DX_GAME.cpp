@@ -11,6 +11,7 @@
 #include "src/game/components/Camera.h"
 #include "src/game/systems/AchievementEventBus.h"
 #include "src/game/systems/AchievementManager.h"
+#include "src/game/systems/ContentFilter.h"
 #include "src/game/systems/PostProcessSystem.h"
 #include "src/game/systems/RenderSystem.h"
 #include "src/game/systems/ShadowRenderSystem.h"
@@ -146,6 +147,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // ウィンドウ作成前なので、この時点ではファイルの値のみを保持しウィンドウには反映しない。
   core::DisplaySettings displaySettings;
   displaySettings.LoadFromFile();
+
+  auto &contentFilter = game::systems::ContentFilter::Instance();
+  if (!contentFilter.LoadFromFile()) {
+    LOG_WARN("Main", "Content filter list could not be loaded: {}",
+             game::systems::ContentFilter::kDefaultPath);
+  }
+  contentFilter.SetSafeMode(displaySettings.GetData().safeMode);
   const int initialWidth = displaySettings.GetData().windowedWidth;
   const int initialHeight = displaySettings.GetData().windowedHeight;
 

@@ -11,6 +11,8 @@
 #include "../../graphics/GraphicsDevice.h"
 #include "../components/UIButton.h"
 #include "../components/UIText.h"
+#include "../systems/ContentFilter.h"
+#include "../systems/WikiShortestPath.h"
 #include "ModalSceneRender.h"
 #include <cstdlib>
 #include <string>
@@ -20,31 +22,58 @@ namespace game::scenes {
 namespace {
 constexpr int kOverlayLayer = 900;
 constexpr float kPanelX = 240.0f;
-constexpr float kPanelY = 20.0f;
+constexpr float kPanelY = 10.0f;
 constexpr float kPanelWidth = 800.0f;
-constexpr float kPanelHeight = 680.0f;
+constexpr float kPanelHeight = 700.0f;
 
 constexpr float kSectionX = kPanelX + 40.0f;
 constexpr float kSectionWidth = kPanelWidth - 80.0f;
 constexpr float kLabelWidth = 220.0f;
 constexpr float kArrowWidth = 44.0f;
 constexpr float kValueWidth = kSectionWidth - kLabelWidth - kArrowWidth * 2.0f;
-constexpr float kRowHeight = 36.0f;
-constexpr float kRowStep = 43.0f;
+constexpr float kRowHeight = 33.0f;
+constexpr float kRowStep = 38.0f;
 constexpr float kSectionHeaderHeight = 30.0f;
 constexpr float kSectionHeaderGap = 6.0f;  ///< 見出しと最初の行の間
 constexpr float kSectionSpacing = 12.0f;   ///< 前セクション末尾と次の見出しの間
-constexpr float kContentTopY = kPanelY + 74.0f;
+constexpr float kContentTopY = kPanelY + 62.0f;
 constexpr float kHintHeight = 22.0f;
-constexpr float kCloseHeight = 48.0f;
+constexpr float kCloseHeight = 44.0f;
 
 /** @brief 「画面」セクションの見出しY */
 constexpr float kDisplayHeaderY = kContentTopY;
-/** @brief 「画質」セクションの見出しY（画面セクションの行数から決まる） */
-constexpr float QualityHeaderY(size_t displayRowCount) {
-  return kDisplayHeaderY + kSectionHeaderHeight + kSectionHeaderGap +
-         static_cast<float>(displayRowCount) * kRowStep + kSectionSpacing;
+/** @brief 指定行数のセクションに続く、次の見出しのY */
+constexpr float NextHeaderY(float headerY, size_t rowCount) {
+  return headerY + kSectionHeaderHeight + kSectionHeaderGap +
+         static_cast<float>(rowCount) * kRowStep + kSectionSpacing;
 }
+
+constexpr float kConfirmX = kPanelX + 50.0f;
+constexpr float kConfirmY = 95.0f;
+constexpr float kConfirmWidth = kPanelWidth - 100.0f;
+constexpr float kConfirmHeight = 530.0f;
+constexpr float kConfirmPadding = 32.0f;
+constexpr float kConfirmButtonHeight = 48.0f;
+constexpr float kConfirmButtonGap = 20.0f;
+constexpr int kConfirmLayer = kOverlayLayer + 10;
+
+const wchar_t *const kSafeModeOnWarning =
+    L"性的・暴力的な話題を含む記事を、通常より広く除外します。\n"
+    L"ゲームプレイに次の影響があります。\n\n"
+    L"・カップになるリンクが減り、コースの形が変わることがあります\n"
+    L"・最短経路とパーが変わり、記事によっては進める先が少なくなります\n"
+    L"・デイリーチャレンジの記録を、通常の条件と同じように比べられなくなります\n"
+    L"・内容に問題のない記事が一緒に除外されることがあります\n\n"
+    L"すべての記事や文章を除外できるわけではありません。\n"
+    L"次に開始するゲームから反映されます。";
+
+const wchar_t *const kSafeModeOffWarning =
+    L"除外を通常の範囲（明確に性的な記事のみ）に戻します。\n"
+    L"ゲームプレイに次の影響があります。\n\n"
+    L"・暴力や犯罪などの話題を含む記事が表示されるようになります\n"
+    L"・カップになるリンクが増え、コースの形が変わることがあります\n"
+    L"・最短経路とパーが変わることがあります\n\n"
+    L"次に開始するゲームから反映されます。";
 
 const DirectX::XMFLOAT4 kNormalColor = {0.12f, 0.19f, 0.30f, 1.0f};
 const DirectX::XMFLOAT4 kHoverColor = {0.75f, 0.58f, 0.18f, 1.0f};
@@ -287,7 +316,7 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
   auto &title = ctx.world.Add<components::UIText>(titleEntity);
   title.text = L"設定";
   title.x = kPanelX;
-  title.y = kPanelY + 20.0f;
+  title.y = kPanelY + 8.0f;
   title.width = kPanelWidth;
   title.height = 50.0f;
   title.style.fontFamily = "Times New Roman";
@@ -302,19 +331,27 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
       L"ウィンドウモード", L"解像度",     L"VSync",
       L"FPS上限",         L"FPS表示",    L"画質テンプレート",
       L"描画解像度",       L"アンチエイリアス", L"利用GPU",
+      L"セーフモード",
   };
 
-  const float qualityHeaderY = QualityHeaderY(kFirstQualityRow);
+  const float qualityHeaderY = NextHeaderY(kDisplayHeaderY, kFirstQualityRow);
+  const float contentHeaderY =
+      NextHeaderY(qualityHeaderY, kFirstContentRow - kFirstQualityRow);
   CreateSectionHeader(ctx, L"画面", kDisplayHeaderY);
   CreateSectionHeader(ctx, L"画質", qualityHeaderY);
+  CreateSectionHeader(ctx, L"コンテンツ", contentHeaderY);
 
   const float displayRowsY =
       kDisplayHeaderY + kSectionHeaderHeight + kSectionHeaderGap;
   const float qualityRowsY =
       qualityHeaderY + kSectionHeaderHeight + kSectionHeaderGap;
+  const float contentRowsY =
+      contentHeaderY + kSectionHeaderHeight + kSectionHeaderGap;
   for (size_t index = 0; index < kRowCount; ++index) {
     float y = displayRowsY + static_cast<float>(index) * kRowStep;
-    if (index >= kFirstQualityRow) {
+    if (index >= kFirstContentRow) {
+      y = contentRowsY + static_cast<float>(index - kFirstContentRow) * kRowStep;
+    } else if (index >= kFirstQualityRow) {
       y = qualityRowsY + static_cast<float>(index - kFirstQualityRow) * kRowStep;
     }
     CreateSettingRow(ctx, index, kRowLabels[index], y);
@@ -337,12 +374,12 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
     return entity;
   };
 
-  const float hintsY = qualityRowsY +
-                       static_cast<float>(kRowCount - kFirstQualityRow) * kRowStep;
+  const float hintsY = contentRowsY +
+                       static_cast<float>(kRowCount - kFirstContentRow) * kRowStep;
   m_antiAliasingHint = createHint(L"", hintsY);
   createHint(L"※GPU設定の変更は次回起動時に反映されます", hintsY + kHintHeight);
 
-  const float closeY = hintsY + kHintHeight * 2.0f + 12.0f;
+  const float closeY = hintsY + kHintHeight * 2.0f + 8.0f;
   m_closeButton = CreateArrowButton(ctx, L"閉じる", "close", kSectionX, closeY,
                                     kSectionWidth, kCloseHeight);
   if (auto *btn = ctx.world.Get<components::UIButton>(m_closeButton)) {
@@ -357,7 +394,137 @@ void SettingsScene::OnEnter(core::GameContext &ctx) {
         }
       });
 
+  CreateSafeModeConfirm(ctx);
   RefreshDisplay(ctx);
+}
+
+void SettingsScene::CreateSafeModeConfirm(core::GameContext &ctx) {
+  m_confirmPanel = CreateEntity(ctx.world);
+  auto &panel = ctx.world.Add<components::UIText>(m_confirmPanel);
+  panel.text = L"";
+  panel.x = kConfirmX;
+  panel.y = kConfirmY;
+  panel.width = kConfirmWidth;
+  panel.height = kConfirmHeight;
+  panel.style.bgColor = {0.04f, 0.09f, 0.17f, 1.0f};
+  panel.style.borderColor = {1.0f, 0.72f, 0.3f, 1.0f};
+  panel.style.borderWidth = 2.0f;
+  panel.style.cornerRadius = 14.0f;
+  panel.visible = false;
+  panel.layer = kConfirmLayer;
+
+  m_confirmTitle = CreateEntity(ctx.world);
+  auto &title = ctx.world.Add<components::UIText>(m_confirmTitle);
+  title.x = kConfirmX + kConfirmPadding;
+  title.y = kConfirmY + 22.0f;
+  title.width = kConfirmWidth - kConfirmPadding * 2.0f;
+  title.height = 36.0f;
+  title.style.fontSize = 24.0f;
+  title.style.color = {1.0f, 0.72f, 0.3f, 1.0f};
+  title.style.align = graphics::TextAlign::Center;
+  title.visible = false;
+  title.layer = kConfirmLayer + 1;
+
+  m_confirmBody = CreateEntity(ctx.world);
+  auto &body = ctx.world.Add<components::UIText>(m_confirmBody);
+  body.x = kConfirmX + kConfirmPadding;
+  body.y = kConfirmY + 72.0f;
+  body.width = kConfirmWidth - kConfirmPadding * 2.0f;
+  body.height = kConfirmHeight - 72.0f - kConfirmButtonHeight - 36.0f;
+  body.style.fontSize = 17.0f;
+  body.style.color = {0.92f, 0.94f, 0.97f, 1.0f};
+  body.visible = false;
+  body.layer = kConfirmLayer + 1;
+
+  const float buttonWidth =
+      (kConfirmWidth - kConfirmPadding * 2.0f - kConfirmButtonGap) / 2.0f;
+  const float buttonY =
+      kConfirmY + kConfirmHeight - kConfirmButtonHeight - 20.0f;
+  m_confirmCancelButton = CreateArrowButton(
+      ctx, L"キャンセル", "safe_cancel", kConfirmX + kConfirmPadding, buttonY,
+      buttonWidth, kConfirmButtonHeight);
+  m_confirmApplyButton = CreateArrowButton(
+      ctx, L"変更する", "safe_apply",
+      kConfirmX + kConfirmPadding + buttonWidth + kConfirmButtonGap, buttonY,
+      buttonWidth, kConfirmButtonHeight);
+  for (const ecs::Entity entity : {m_confirmCancelButton, m_confirmApplyButton}) {
+    if (auto *button = ctx.world.Get<components::UIButton>(entity)) {
+      button->visible = false;
+    }
+  }
+}
+
+void SettingsScene::ShowSafeModeConfirm(core::GameContext &ctx, bool enabled) {
+  m_pendingSafeMode = enabled;
+  m_confirmVisible = true;
+
+  ctx.world.Query<components::UIButton>().Each(
+      [&](ecs::Entity entity, components::UIButton &button) {
+        if (OwnsEntity(entity)) {
+          button.visible =
+              entity == m_confirmCancelButton || entity == m_confirmApplyButton;
+        }
+      });
+  for (const ecs::Entity entity : {m_confirmPanel, m_confirmTitle, m_confirmBody}) {
+    if (auto *text = ctx.world.Get<components::UIText>(entity)) {
+      text->visible = true;
+    }
+  }
+  if (auto *title = ctx.world.Get<components::UIText>(m_confirmTitle)) {
+    title->text = enabled ? L"セーフモードをONにしますか？"
+                          : L"セーフモードをOFFにしますか？";
+  }
+  if (auto *body = ctx.world.Get<components::UIText>(m_confirmBody)) {
+    body->text = enabled ? kSafeModeOnWarning : kSafeModeOffWarning;
+  }
+}
+
+void SettingsScene::HideSafeModeConfirm(core::GameContext &ctx) {
+  m_confirmVisible = false;
+  ctx.world.Query<components::UIButton>().Each(
+      [&](ecs::Entity entity, components::UIButton &button) {
+        if (OwnsEntity(entity)) {
+          button.visible =
+              entity != m_confirmCancelButton && entity != m_confirmApplyButton;
+        }
+      });
+  for (const ecs::Entity entity : {m_confirmPanel, m_confirmTitle, m_confirmBody}) {
+    if (auto *text = ctx.world.Get<components::UIText>(entity)) {
+      text->visible = false;
+    }
+  }
+}
+
+void SettingsScene::UpdateSafeModeConfirm(core::GameContext &ctx) {
+  bool apply = false;
+  bool cancel = ctx.input.GetKeyDown(VK_ESCAPE);
+  ctx.world.Query<components::UIButton>().Each(
+      [&](ecs::Entity entity, components::UIButton &button) {
+        if (!OwnsEntity(entity) || !button.visible ||
+            button.state != components::ButtonState::Pressed ||
+            !ctx.input.GetMouseButtonDown(0)) {
+          return;
+        }
+        apply = apply || button.action == "safe_apply";
+        cancel = cancel || button.action == "safe_cancel";
+      });
+
+  if (apply) {
+    ctx.displaySettings->SetSafeMode(m_pendingSafeMode);
+    game::systems::ContentFilter::Instance().SetSafeMode(m_pendingSafeMode);
+    // 確定済みの距離は切り替え前の除外範囲で計算されているため使わない
+    game::systems::WikiShortestPath::ClearProcessCaches();
+    if (ctx.audio) {
+      ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.4f);
+    }
+    HideSafeModeConfirm(ctx);
+    RefreshDisplay(ctx);
+  } else if (cancel) {
+    if (ctx.audio) {
+      ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.45f);
+    }
+    HideSafeModeConfirm(ctx);
+  }
 }
 
 void SettingsScene::RefreshDisplay(core::GameContext &ctx) {
@@ -391,6 +558,7 @@ void SettingsScene::RefreshDisplay(core::GameContext &ctx) {
   setValue(RowId::AntiAliasing, FormatAntiAliasing(antiAliasing));
   setValue(RowId::ShowFps, FormatOnOff(data.showFps));
   setValue(RowId::Gpu, FormatGpu(data.gpuAdapterName, ctx.graphics.GetAdapterName()));
+  setValue(RowId::SafeMode, FormatOnOff(data.safeMode));
 
   if (auto *hint = ctx.world.Get<components::UIText>(m_antiAliasingHint)) {
     const bool dlssAvailable = ctx.displaySettings->IsDlssAvailable();
@@ -415,6 +583,11 @@ void SettingsScene::RefreshDisplay(core::GameContext &ctx) {
 
 void SettingsScene::OnUpdate(core::GameContext &ctx) {
   if (!ctx.sceneManager || !ctx.displaySettings) {
+    return;
+  }
+
+  if (m_confirmVisible) {
+    UpdateSafeModeConfirm(ctx);
     return;
   }
 
@@ -448,6 +621,7 @@ void SettingsScene::OnUpdate(core::GameContext &ctx) {
 
   bool settingsChanged = false;
   bool closeRequested = false;
+  bool safeModeToggleRequested = false;
 
   ctx.world.Query<components::UIButton>().Each(
       [&](ecs::Entity entity, components::UIButton &button) {
@@ -501,11 +675,23 @@ void SettingsScene::OnUpdate(core::GameContext &ctx) {
         case RowId::Gpu:
           ds->CycleGpu(direction);
           break;
+        case RowId::SafeMode:
+          // ゲームプレイに影響するため、確認ダイアログで同意を得てから適用する
+          safeModeToggleRequested = true;
+          return;
         default:
           break;
         }
         settingsChanged = true;
       });
+
+  if (safeModeToggleRequested) {
+    if (ctx.audio) {
+      ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.4f);
+    }
+    ShowSafeModeConfirm(ctx, !ctx.displaySettings->GetData().safeMode);
+    return;
+  }
 
   if (settingsChanged) {
     if (ctx.audio) {

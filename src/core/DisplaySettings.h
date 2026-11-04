@@ -52,6 +52,8 @@ struct DisplaySettingsData {
   // 利用GPU（DXGI_ADAPTER_DESC1::Descriptionと一致させて選択する）。
   // 空文字列 = 自動選択（高性能優先）。デバイス再生成が必要なため、変更は次回起動時に反映される。
   std::string gpuAdapterName;
+
+  bool safeMode = false; ///< 性的・暴力的な話題の記事を広めに除外する
 };
 
 /**
@@ -135,6 +137,7 @@ public:
 
   /** @brief 画面右上のFPS表示の有効/無効を設定する*/
   void SetShowFps(bool enabled);
+  void SetSafeMode(bool enabled);
 
   /**
    * @brief 利用GPUを設定し保存する。空文字列で自動選択に戻す。
