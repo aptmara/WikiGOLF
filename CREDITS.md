@@ -7,6 +7,7 @@
 - ロボットゴルファー `Assets/models/G01_Robot_Golfer_Phases.glb`
   （自作のプロシージャル生成スクリプトで作成。スクリプトの修正に LLM を使用。後述の「生成AIの使用」を参照）
 - ゴルフクラブ・ボールのモデル `golf_club.glb` / `golfball.glb`
+- パズルゴルフボールのモデル `golf_puzzle_baked_lod0〜2.glb`
 - 起動ロゴ動画とその音声 `Assets/videos/aptma_intro.mp4`
 - 実行時に生成するスカイボックス `Assets/textures/runtime_skybox/*`（`SkyboxTextureGenerator` による手続き生成）
 
