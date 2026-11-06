@@ -1,4 +1,5 @@
 #include "src/audio/AudioSystem.h"
+#include "src/core/DisplaySettingsInternals.h"
 #include "src/core/BuildEdition.h"
 #include "src/core/DisplaySettings.h"
 #include "src/core/FramePacer.h"
@@ -116,16 +117,37 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
   }
   case WM_DPICHANGED: {
     // 解像度は実ピクセルで指定するので、DPIの違うモニターへ移っても描画サイズを保つ。
+    // ただし移った先のモニターに入らないときは、枠ごと作業領域へ収める。
     const RECT *suggested = reinterpret_cast<const RECT *>(lParam);
-    RECT windowRect = {};
-    GetClientRect(hWnd, &windowRect);
+    RECT frame = {};
     AdjustWindowRectExForDpi(
-        &windowRect, static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE)),
-        FALSE, static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE)),
+        &frame, static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE)), FALSE,
+        static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE)),
         HIWORD(wParam));
-    SetWindowPos(hWnd, nullptr, suggested->left, suggested->top,
-                 windowRect.right - windowRect.left,
-                 windowRect.bottom - windowRect.top,
+    const int frameWidth = frame.right - frame.left;
+    const int frameHeight = frame.bottom - frame.top;
+
+    RECT client = {};
+    GetClientRect(hWnd, &client);
+    MONITORINFO monitor = {};
+    monitor.cbSize = sizeof(monitor);
+    GetMonitorInfoW(MonitorFromRect(suggested, MONITOR_DEFAULTTONEAREST),
+                    &monitor);
+    const RECT &work = monitor.rcWork;
+    const auto fitted = core::display_settings_detail::FitResolutionWithinBounds(
+        client.right, client.bottom, work.right - work.left - frameWidth,
+        work.bottom - work.top - frameHeight);
+    const int windowWidth = fitted.first + frameWidth;
+    const int windowHeight = fitted.second + frameHeight;
+    const int x = (std::max)(
+        static_cast<int>(work.left),
+        (std::min)(static_cast<int>(suggested->left),
+                   static_cast<int>(work.right) - windowWidth));
+    const int y = (std::max)(
+        static_cast<int>(work.top),
+        (std::min)(static_cast<int>(suggested->top),
+                   static_cast<int>(work.bottom) - windowHeight));
+    SetWindowPos(hWnd, nullptr, x, y, windowWidth, windowHeight,
                  SWP_NOZORDER | SWP_NOACTIVATE);
     return 0;
   }
@@ -325,10 +347,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // 今ここで切り替える。ここまでにgraphics/textRenderer/inputが揃っているため、
   // 発生するWM_SIZEでスワップチェーン等が正しく追従する。
   displaySettings.Initialize(hWnd, &graphics);
-  if (displaySettings.GetData().mode == core::WindowMode::Borderless ||
-      displaySettings.GetData().mode == core::WindowMode::Fullscreen) {
-    displaySettings.ApplyToWindow();
-  }
+  // ウィンドウモードでも、実際に出たモニターへ収めて中央に置く
+  displaySettings.ApplyToWindow();
 
   // オーディオシステム初期化
   game::systems::AudioSystem audioSystem;

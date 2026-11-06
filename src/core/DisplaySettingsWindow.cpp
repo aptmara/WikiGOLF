@@ -61,6 +61,15 @@ void DisplaySettings::RefreshCurrentResolution() {
     return;
   }
 
+  // ウィンドウモードはモニターへ収めるため、設定値より小さいことがある
+  RECT client = {};
+  if (m_data.mode == WindowMode::Windowed && m_hwnd &&
+      GetClientRect(m_hwnd, &client) && client.right > 0 && client.bottom > 0) {
+    m_currentWidth = client.right;
+    m_currentHeight = client.bottom;
+    return;
+  }
+
   m_currentWidth = m_data.windowedWidth;
   m_currentHeight = m_data.windowedHeight;
 }
@@ -102,15 +111,23 @@ void DisplaySettings::ApplyToWindow() {
   }
   case WindowMode::Windowed:
   default: {
-    RECT rect = {0, 0, m_data.windowedWidth, m_data.windowedHeight};
-    AdjustWindowRectExForDpi(&rect, kWindowedStyle, FALSE, 0,
+    RECT frame = {};
+    AdjustWindowRectExForDpi(&frame, kWindowedStyle, FALSE, 0,
                              GetDpiForWindow(m_hwnd));
-    const int windowWidth = rect.right - rect.left;
-    const int windowHeight = rect.bottom - rect.top;
+    const int frameWidth = frame.right - frame.left;
+    const int frameHeight = frame.bottom - frame.top;
 
     const RECT workRect = GetMonitorRect(true);
     const int workWidth = workRect.right - workRect.left;
     const int workHeight = workRect.bottom - workRect.top;
+
+    // 主モニターより狭いモニターでも、枠ごと作業領域へ収める。
+    // 設定の解像度は変えないので、広いモニターで起動すれば元の大きさに戻る。
+    const auto fitted = display_settings_detail::FitResolutionWithinBounds(
+        m_data.windowedWidth, m_data.windowedHeight, workWidth - frameWidth,
+        workHeight - frameHeight);
+    const int windowWidth = fitted.first + frameWidth;
+    const int windowHeight = fitted.second + frameHeight;
     const int x = workRect.left + std::max(0, (workWidth - windowWidth) / 2);
     const int y = workRect.top + std::max(0, (workHeight - windowHeight) / 2);
 
@@ -119,7 +136,7 @@ void DisplaySettings::ApplyToWindow() {
     SetWindowPos(m_hwnd, HWND_TOP, x, y, windowWidth, windowHeight,
                  SWP_FRAMECHANGED | SWP_NOACTIVATE);
     LOG_INFO("DisplaySettings", "ウィンドウモードを適用しました ({}x{})",
-             m_data.windowedWidth, m_data.windowedHeight);
+             fitted.first, fitted.second);
     break;
   }
   }
