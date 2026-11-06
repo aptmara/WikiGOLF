@@ -4,6 +4,7 @@
 */
 #include "WikiShortestPathInternals.h"
 #include "WikiShortestPath.h"
+#include "WikiTitleLookup.h"
 #include "../../core/Logger.h"
 #include <algorithm>
 #include <chrono>
@@ -120,7 +121,9 @@ bool WikiShortestPath::Initialize(const std::string &dbPath,
     return false;
   }
 
-  LOG_INFO("WikiShortestPath", "Database initialized: {}", targetPath);
+  m_hasRedirects = wiki_title_lookup::HasRedirectsTable(m_db);
+  LOG_INFO("WikiShortestPath", "Database initialized: {} (redirects={})",
+           targetPath, m_hasRedirects);
   RegisterActiveDb(m_db);
 
   if (!cachePopularPages) {
@@ -174,27 +177,16 @@ int WikiShortestPath::FetchPageId(const std::string &title) {
   // スペースをアンダースコアに変換
   std::string normalized = title;
   std::replace(normalized.begin(), normalized.end(), ' ', '_');
-  // DB内のタイトルは末尾の')'が削除されているため、検索時も末尾の')'を取り除く
-  if (!normalized.empty() && normalized.back() == ')') {
-    normalized.pop_back();
+
+  const auto candidates = wiki_title_lookup::TitleCandidates(normalized);
+  const auto found =
+      wiki_title_lookup::LookupResolvedIds(m_db, candidates, m_hasRedirects);
+  for (const auto &candidate : candidates) {
+    if (const auto it = found.find(candidate); it != found.end()) {
+      return it->second;
+    }
   }
-
-  const char *sql = "SELECT id FROM pages WHERE title = ? COLLATE NOCASE";
-  sqlite3_stmt *stmt;
-
-  if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
-    return -1;
-  }
-
-  sqlite3_bind_text(stmt, 1, normalized.c_str(), -1, SQLITE_TRANSIENT);
-
-  int pageId = -1;
-  if (sqlite3_step(stmt) == SQLITE_ROW) {
-    pageId = sqlite3_column_int(stmt, 0);
-  }
-
-  sqlite3_finalize(stmt);
-  return pageId;
+  return -1;
 }
 
 std::unordered_map<std::string, int>
@@ -207,97 +199,39 @@ WikiShortestPath::FetchPageIdsBatch(
     return result;
   }
 
-  result.reserve(normalizedTitles.size());
   const auto batchStartedAt = std::chrono::steady_clock::now();
 
   std::lock_guard<std::recursive_mutex> lock(g_sqliteMutex);
 
-  size_t index = 0;
-  size_t totalHits = 0;
-  while (index < normalizedTitles.size()) {
-    if (WikiShortestPath::IsCancelRequested() ||
-        (cancelRequested &&
-         cancelRequested->load(std::memory_order_relaxed))) {
-      LOG_WARN("WikiShortestPath",
-               "FetchPageIdsBatch cancelled at {}/{}", index,
-               normalizedTitles.size());
-      break;
-    }
-    const size_t count =
-        std::min(kLinkChunkSize, normalizedTitles.size() - index);
-
-    // IN句で複数タイトルを一括検索します。
-    // COLLATE NOCASE は FetchPageId の既存挙動と合わせています。
-    std::string sql =
-        "SELECT id, title FROM pages WHERE title COLLATE NOCASE IN (";
-    for (size_t i = 0; i < count; ++i) {
-      if (i > 0) sql += ",";
-      sql += "?";
-    }
-    sql += ")";
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql.c_str(), -1, &stmt, nullptr) !=
-        SQLITE_OK) {
-      LOG_ERROR("WikiShortestPath",
-                "FetchPageIdsBatch prepare failed chunk={}/{}: {}",
-                index / kLinkChunkSize + 1,
-                (normalizedTitles.size() + kLinkChunkSize - 1) / kLinkChunkSize,
-                sqlite3_errmsg(m_db));
-      return result;
-    }
-
-    // バインドするタイトル文字列は sqlite3_finalize まで生存します。
-    std::unordered_map<std::string, std::string> dbToOriginal;
-    std::vector<std::string> chunkTitles;
-    chunkTitles.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-      std::string orig = normalizedTitles[index + i];
-      std::string dbTitle = orig;
-      // DB内のタイトルは末尾の')'が削除されているため、検索時も末尾の')'を取り除く
-      if (!dbTitle.empty() && dbTitle.back() == ')') {
-        dbTitle.pop_back();
-      }
-      chunkTitles.push_back(dbTitle);
-      dbToOriginal[dbTitle] = orig;
-    }
-
-    for (size_t i = 0; i < count; ++i) {
-      sqlite3_bind_text(
-          stmt, static_cast<int>(i + 1),
-          chunkTitles[i].c_str(), -1, SQLITE_STATIC);
-    }
-
-    size_t chunkHits = 0;
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-      const int pageId = sqlite3_column_int(stmt, 0);
-      const char* storedTitle =
-          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-      if (storedTitle) {
-        std::string sTitle = storedTitle;
-        auto it = dbToOriginal.find(sTitle);
-        if (it != dbToOriginal.end()) {
-          result[it->second] = pageId;
-        } else {
-          result[sTitle] = pageId;
+  size_t processed = 0;
+  bool ok = true;
+  // IN句で複数タイトルを一括検索します（1タイトルにつき候補は最大2つ）。
+  result = wiki_title_lookup::ResolveTitles(
+      m_db, normalizedTitles, m_hasRedirects, kLinkChunkSize,
+      [&](size_t done, size_t total) {
+        processed = done;
+        // 呼び出し元の ComputeDistancesToTarget が storeProgress を更新します。
+        if (onChunkDone) {
+          onChunkDone(done, total);
         }
-        ++chunkHits;
-      }
-    }
-    sqlite3_finalize(stmt);
-    totalHits += chunkHits;
-    index += count;
+      },
+      [&]() {
+        return WikiShortestPath::IsCancelRequested() ||
+               (cancelRequested &&
+                cancelRequested->load(std::memory_order_relaxed));
+      },
+      &ok);
 
-    // チャンク完了ごとに進捗を報告します。
-    // 呼び出し元の ComputeDistancesToTarget が storeProgress を更新します。
-    if (onChunkDone) {
-      onChunkDone(index, normalizedTitles.size());
-    }
+  if (!ok) {
+    LOG_ERROR("WikiShortestPath", "FetchPageIdsBatch query failed: {}",
+              sqlite3_errmsg(m_db));
+  } else if (processed < normalizedTitles.size()) {
+    LOG_WARN("WikiShortestPath", "FetchPageIdsBatch cancelled at {}/{}",
+             processed, normalizedTitles.size());
   }
-
   LOG_INFO("WikiShortestPath",
            "FetchPageIdsBatch: requested={} found={} elapsed={}ms",
-           normalizedTitles.size(), totalHits,
+           normalizedTitles.size(), result.size(),
            ElapsedMs(batchStartedAt));
   return result;
 }
@@ -323,10 +257,6 @@ std::string WikiShortestPath::FetchPageTitle(int pageId) {
       title = text;
       // アンダースコアをスペースに変換
       std::replace(title.begin(), title.end(), '_', ' ');
-      // DB内のタイトルは末尾の')'が削除されているため、'('があって')'がない場合は復元する
-      if (title.find('(') != std::string::npos && title.find(')') == std::string::npos) {
-        title += ')';
-      }
     }
   }
 

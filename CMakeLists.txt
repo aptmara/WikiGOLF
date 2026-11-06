@@ -947,6 +947,17 @@ endif()
 add_test(NAME content_filter COMMAND test_content_filter
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
+# 記事タイトルからページIDを引く処理（括弧・大文字小文字・転送）のテスト
+add_executable(test_wiki_title_lookup
+    test_wiki_title_lookup.cpp
+    src/thirdparty/sqlite3/sqlite3.c)
+target_include_directories(test_wiki_title_lookup PRIVATE src src/thirdparty/sqlite3)
+if(MSVC)
+    target_compile_definitions(test_wiki_title_lookup PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_title_lookup PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME wiki_title_lookup COMMAND test_wiki_title_lookup)
+
 add_executable(test_display_settings_rules
     test_display_settings_rules.cpp
     src/core/DisplaySettings.cpp

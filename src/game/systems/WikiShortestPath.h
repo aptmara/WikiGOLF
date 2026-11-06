@@ -198,6 +198,7 @@ private:
       const std::function<std::size_t(std::size_t)> &selectIndex);
 
   sqlite3 *m_db = nullptr;
+  bool m_hasRedirects = false; /**< 転送ページを転送先に置き換えられるか*/
   std::vector<int> m_popularPageIds; /**< 人気記事IDのキャッシュ*/
 };
 
