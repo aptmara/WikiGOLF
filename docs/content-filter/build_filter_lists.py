@@ -258,6 +258,40 @@ class CategoryClient:
         self.cache[category] = (pages, subcategories)
         return self.cache[category]
 
+    def redirects(self, page_ids):
+        """記事への転送ページ名を [(転送名, 転送先の page_id)] で返します。"""
+        found = []
+        ids = sorted(page_ids)
+        for start in range(0, len(ids), 50):
+            continuation = {}
+            while True:
+                if self.request_count >= MAX_REQUESTS:
+                    raise RuntimeError("APIリクエスト数の上限に達しました")
+                query = {
+                    "action": "query",
+                    "pageids": "|".join(map(str, ids[start:start + 50])),
+                    "prop": "redirects",
+                    "rdprop": "title",
+                    "rdnamespace": "0",
+                    "rdlimit": "max",
+                    "format": "json",
+                    "formatversion": "2",
+                    **continuation,
+                }
+                request = urllib.request.Request(
+                    API + urllib.parse.urlencode(query), headers=HEADERS
+                )
+                data = self.fetch(request)
+                self.request_count += 1
+                time.sleep(REQUEST_INTERVAL_SECONDS)
+                for page in data["query"]["pages"]:
+                    for redirect in page.get("redirects", []):
+                        found.append((normalize(redirect["title"]), page["pageid"]))
+                if "continue" not in data:
+                    break
+                continuation = data["continue"]
+        return found
+
 
 def normalize(title):
     return title.replace(" ", "_")
@@ -340,15 +374,22 @@ def main():
     # カップのリンクや手入力はリダイレクト名で来ることがあるため展開する。
     # リンクグラフは転送ページの page_id を持たないので、転送先の page_id で書く
     # （ゲームは page_id では転送先を、タイトルでは転送ページ名を判定する）。
-    redirect_rows = []
+    # 常時除外の記事はリンクグラフに入っていない（転送名も無い）ので、API で転送名を取る。
+    redirect_rows = set()
+    for title, target_page_id in client.redirects(level1):
+        redirect_rows.add((1, target_page_id, title))
     for title, target_page_id in graph["redirects"]:
         level = level_by_id.get(target_page_id)
         if level is not None:
-            redirect_rows.append((level, target_page_id, title))
+            redirect_rows.add((level, target_page_id, title))
+    titles_in_rows = {title for _, title in rows.values()}
+    redirect_rows = {r for r in redirect_rows if r[2] not in titles_in_rows}
 
     popular = set(graph["popular"])
     with OUTPUT_PATH.open("w", encoding="utf-8", newline="\n") as output:
         for page_id, (level, title) in sorted(rows.items(), key=lambda r: (r[1][0], r[0])):
+            output.write(f"{level}\t{page_id}\t{title}\n")
+        for level, page_id, title in sorted(redirect_rows):
             output.write(f"{level}\t{page_id}\t{title}\n")
 
     real_pages = graph["articles"]
