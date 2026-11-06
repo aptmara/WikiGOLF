@@ -352,6 +352,20 @@ endif()
 # テスト・開発ツール等の実行ファイルは tests/ に出力
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
+# シェーダーをビルド時にコンパイルしておき、起動・ロードのたびのコンパイル（計約2秒）を省く。
+# 出力先へコピーした後に動かす。ソースが前回と同じなら何もしない（ShaderPrecompiled.h）。
+add_executable(tool_shader_precompile tool_shader_precompile.cpp)
+target_link_libraries(tool_shader_precompile PRIVATE d3dcompiler)
+if(MSVC)
+    target_compile_definitions(tool_shader_precompile PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(tool_shader_precompile PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_dependencies(DX_GAME tool_shader_precompile)
+add_custom_command(TARGET DX_GAME POST_BUILD
+    COMMAND $<TARGET_FILE:tool_shader_precompile> "$<TARGET_FILE_DIR:DX_GAME>/Assets/shaders"
+    COMMENT "Precompiling shaders..."
+)
+
 if(EXISTS "${CMAKE_SOURCE_DIR}/tools/SkyboxGen.cpp")
     add_executable(SkyboxGen tools/SkyboxGen.cpp src/graphics/SkyboxTextureGenerator.cpp)
     target_precompile_headers(SkyboxGen REUSE_FROM wikigolf_pch)

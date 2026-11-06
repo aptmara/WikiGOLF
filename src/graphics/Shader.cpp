@@ -5,8 +5,33 @@
 
 #include "Shader.h"
 #include "../core/Logger.h"
+#include "ShaderPrecompiled.h"
+#include <cstring>
 
 namespace graphics {
+namespace {
+
+/**
+ * @brief シェーダーのバイトコードを得る。ビルド時にコンパイル済みのものがあればそれを使う。
+ * @details 済みのものはゲームと同じ関数・同じフラグで作っているので中身は同じ。
+ *          デバッグビルドはフラグが違うので常にコンパイルする。
+ */
+HRESULT CompileOrLoad(const std::wstring &path, const std::string &entry,
+                      const char *profile, UINT flags, ComPtr<ID3DBlob> &blob,
+                      ComPtr<ID3DBlob> &errorBlob) {
+#ifndef _DEBUG
+  if (auto bytes = shader_precompiled::Load(path, entry)) {
+    if (SUCCEEDED(D3DCreateBlob(bytes->size(), &blob))) {
+      std::memcpy(blob->GetBufferPointer(), bytes->data(), bytes->size());
+      return S_OK;
+    }
+  }
+#endif
+  return D3DCompileFromFile(path.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+                            entry.c_str(), profile, flags, 0, &blob, &errorBlob);
+}
+
+} // namespace
 
 bool Shader::LoadFromFile(
     ID3D11Device *device, const std::wstring &vsPath,
@@ -21,9 +46,8 @@ bool Shader::LoadFromFile(
   // 頂点シェーダーコンパイル
   ComPtr<ID3DBlob> vsBlob;
   ComPtr<ID3DBlob> errorBlob;
-  HRESULT hr = D3DCompileFromFile(
-      vsPath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-      vsEntry.c_str(), "vs_5_0", compileFlags, 0, &vsBlob, &errorBlob);
+  HRESULT hr =
+      CompileOrLoad(vsPath, vsEntry, "vs_5_0", compileFlags, vsBlob, errorBlob);
   if (FAILED(hr)) {
     if (errorBlob) {
       LOG_ERROR("Shader", "VS Compile Error: {}",
@@ -40,9 +64,7 @@ bool Shader::LoadFromFile(
 
   // ピクセルシェーダーコンパイル
   ComPtr<ID3DBlob> psBlob;
-  hr = D3DCompileFromFile(psPath.c_str(), nullptr,
-                          D3D_COMPILE_STANDARD_FILE_INCLUDE, psEntry.c_str(),
-                          "ps_5_0", compileFlags, 0, &psBlob, &errorBlob);
+  hr = CompileOrLoad(psPath, psEntry, "ps_5_0", compileFlags, psBlob, errorBlob);
   if (FAILED(hr)) {
     if (errorBlob) {
       LOG_ERROR("Shader", "PS Compile Error: {}",
