@@ -541,10 +541,11 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
         if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
       }
       m_slopeVisualization.ForceHide(ctx);
-      if (!m_isTutorial) {
-        // ラウンド開始時だけ、コース紹介の前にスタート/ゴール記事を紹介する
-        m_transitionController->RequestStartGoalIntroduction(startPage,
-                                                             targetPage);
+      if (m_isTutorial) {
+        m_transitionController->RequestDirectArrival();
+      } else {
+        // ラウンド開始時だけ、ゴールを案内してコースを巡回する
+        m_transitionController->RequestGoalNotice(targetPage);
       }
       m_transitionController->StartTransition(ctx, startPage, m_pageLoader.get(), m_ballEntity, m_cameraEntity, m_skyboxEntity, m_minimapController.get());
   }

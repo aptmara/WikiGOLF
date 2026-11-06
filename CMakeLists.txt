@@ -475,16 +475,16 @@ if(MSVC)
 endif()
 add_test(NAME course_introduction_rules COMMAND test_course_introduction_rules)
 
-# ラウンド開始時のスタート/ゴール紹介演出の規則テスト
-add_executable(test_start_goal_introduction_rules test_start_goal_introduction_rules.cpp)
-target_precompile_headers(test_start_goal_introduction_rules REUSE_FROM wikigolf_pch)
-target_include_directories(test_start_goal_introduction_rules PRIVATE src)
+# 記事到着時の紙とゴール案内の規則テスト
+add_executable(test_goal_notice_rules test_goal_notice_rules.cpp)
+target_precompile_headers(test_goal_notice_rules REUSE_FROM wikigolf_pch)
+target_include_directories(test_goal_notice_rules PRIVATE src)
 if(MSVC)
-    target_compile_definitions(test_start_goal_introduction_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+    target_compile_definitions(test_goal_notice_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
                                                                           -DWIN32_LEAN_AND_MEAN)
-    target_compile_options(test_start_goal_introduction_rules PRIVATE /utf-8 /Zc:__cplusplus)
+    target_compile_options(test_goal_notice_rules PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
-add_test(NAME start_goal_introduction_rules COMMAND test_start_goal_introduction_rules)
+add_test(NAME goal_notice_rules COMMAND test_goal_notice_rules)
 
 # 文字列トリミングテスト
 add_executable(test_string_utils_trim test_string_utils_trim.cpp)

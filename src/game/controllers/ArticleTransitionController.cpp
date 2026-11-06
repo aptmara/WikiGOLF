@@ -9,6 +9,7 @@
 
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
+#include "../../graphics/GraphicsDevice.h"
 #include "../../graphics/TextRenderer.h"
 #include "../components/Camera.h"
 #include "../components/MeshRenderer.h"
@@ -17,8 +18,7 @@
 #include "../components/WikiComponents.h"
 #include "hud/HudStyles.h"
 #include "../systems/GlobeModel.h"
-#include "../systems/WikiClient.h"
-#include "../utils/StartGoalIntroductionRules.h"
+#include "../utils/GoalNoticeRules.h"
 #include "../utils/UIConstants.h"
 #include <algorithm>
 #include <array>
@@ -38,6 +38,15 @@ constexpr float kIntroductionSkipY = 646.0f;
 constexpr float kIntroductionSkipWidth = 240.0f;
 constexpr float kIntroductionSkipHeight = 48.0f;
 
+// 巡回中のホール名の枠（1280x720 の仮想解像度）
+constexpr float kShotCaptionX = 48.0f;
+constexpr float kShotCaptionY = 574.0f;
+constexpr float kShotCaptionWidth = 560.0f;
+constexpr float kShotCaptionHeight = 110.0f;
+constexpr float kShotCaptionPadding = 20.0f;
+constexpr std::size_t kMaximumFeaturedOneHopHoles = 3;
+constexpr std::size_t kLongShotTitleCharacters = 18;
+
 /**
  * @brief 開始時刻からの経過時間をミリ秒で返します。
 */
@@ -56,29 +65,24 @@ ArticleTransitionController::ArticleTransitionController() = default;
 ArticleTransitionController::~ArticleTransitionController() = default;
 
 bool ArticleTransitionController::IsCourseIntroductionActive() const {
-    return m_phase == Phase::StartGoalIntroduction ||
+    return m_phase == Phase::ArticleArrival ||
            m_phase == Phase::CourseIntroduction;
 }
 
-void ArticleTransitionController::RequestStartGoalIntroduction(
-    const std::string& startPage, const std::string& goalPage) {
-    m_startGoalIntroductionRequested = true;
-    m_startGoalStartPage = startPage;
-    m_startGoalGoalPage = goalPage;
-    if (goalPage.empty()) {
-        return;
-    }
-    // 地形構築中に並行してゴール記事の概要だけ取得しておく
-    m_goalExtractTask = std::async(std::launch::async, [goalPage]() {
-        systems::WikiClient client;
-        std::string extract = client.FetchPageExtract(goalPage);
-        return extract == "ERROR" ? std::string() : extract;
-    });
+void ArticleTransitionController::RequestGoalNotice(
+    const std::string& goalPage) {
+    m_goalNoticeRequested = true;
+    m_goalNoticePage = goalPage;
+}
+
+void ArticleTransitionController::RequestDirectArrival() {
+    m_directArrivalRequested = true;
 }
 
 void ArticleTransitionController::Initialize(core::GameContext& ctx) {
     // UIスタイルの構築
     m_primaryStyle = graphics::TextStyle::Title();
+    m_primaryStyle.fontFamily = "Kiwi Maru Medium";
     m_primaryStyle.fontSize = 46.0f;
     m_primaryStyle.align = graphics::TextAlign::Center;
     m_primaryStyle.color = {0.96f, 0.98f, 1.0f, 0.0f}; // 最初は透明
@@ -90,6 +94,7 @@ void ArticleTransitionController::Initialize(core::GameContext& ctx) {
     m_primaryStyle.shadowOffsetY = 2.5f;
 
     m_progressStyle = graphics::TextStyle::ModernBlack();
+    m_progressStyle.fontFamily = "Kiwi Maru Medium";
     m_progressStyle.fontSize = 28.0f;
     m_progressStyle.align = graphics::TextAlign::Center;
     m_progressStyle.color = {0.1f, 0.45f, 0.6f, 0.0f};
@@ -223,7 +228,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     // UIテキストエンティティの生成
     m_textEntity = m_entityOwner.Create(ctx.world);
     auto& titleText = ctx.world.Add<components::UIText>(m_textEntity);
-    titleText.text = L"Traveling to " + core::ToWString(m_targetPage) + L"...";
+    titleText.text = L"「" + core::ToWString(m_targetPage) + L"」へ移動中…";
     titleText.x = 0.0f;
     titleText.y = 100.0f;
     titleText.width = 1280.0f;
@@ -243,7 +248,7 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
 
     m_captionTextEntity = m_entityOwner.Create(ctx.world);
     auto& capText = ctx.world.Add<components::UIText>(m_captionTextEntity);
-    capText.text = L"Loading Wiki Data...";
+    capText.text = L"記事を読み込んでいます…";
     capText.x = 0.0f;
     capText.y = 600.0f;
     capText.width = 1280.0f;
@@ -253,20 +258,20 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
 
     m_introductionPanelEntity = m_entityOwner.Create(ctx.world);
     auto& introPanel = ctx.world.Add<components::UIText>(m_introductionPanelEntity);
-    introPanel.x = 54.0f;
-    introPanel.y = 48.0f;
-    introPanel.width = 610.0f;
-    introPanel.height = 286.0f;
+    introPanel.x = kShotCaptionX;
+    introPanel.y = kShotCaptionY;
+    introPanel.width = kShotCaptionWidth;
+    introPanel.height = kShotCaptionHeight;
     game::controllers::hud::ApplySurfaceStyle(introPanel.style);
     introPanel.visible = false;
     introPanel.layer = 30;
 
     m_introductionDetailEntity = m_entityOwner.Create(ctx.world);
     auto& introDetail = ctx.world.Add<components::UIText>(m_introductionDetailEntity);
-    introDetail.x = 82.0f;
-    introDetail.y = 285.0f;
-    introDetail.width = 554.0f;
-    introDetail.height = 28.0f;
+    introDetail.x = kShotCaptionX + kShotCaptionPadding;
+    introDetail.y = kShotCaptionY + 78.0f;
+    introDetail.width = kShotCaptionWidth - kShotCaptionPadding * 2.0f;
+    introDetail.height = 24.0f;
     introDetail.visible = false;
     introDetail.layer = 32;
 
@@ -283,7 +288,9 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
 
 void ArticleTransitionController::DestroyEntities(core::GameContext& ctx) {
     RestoreMainCamera(ctx);
-    m_startGoalPanel.Shutdown(ctx);
+    m_goalNoticePanel.Shutdown(ctx);
+    m_goalRoute.Shutdown(ctx);
+    m_articlePaper.Shutdown(ctx);
 
     m_entityOwner.DestroyAll(ctx.world);
 
@@ -399,7 +406,7 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                 m_phase = Phase::Loading;
                 m_hasError = false;
                 if (auto* text = ctx.world.Get<components::UIText>(m_textEntity)) {
-                    text->text = L"Traveling to " + core::ToWString(m_targetPage) + L"...";
+                    text->text = L"「" + core::ToWString(m_targetPage) + L"」へ移動中…";
                 }
             }
             break;
@@ -431,8 +438,8 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
             }
             break;
 
-        case Phase::StartGoalIntroduction:
-            UpdateStartGoalIntroduction(ctx, dt);
+        case Phase::ArticleArrival:
+            UpdateArticleArrival(ctx, dt);
             break;
 
         case Phase::CourseIntroduction:
@@ -505,13 +512,13 @@ void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
         int percent = static_cast<int>(m_displayProgress * 100.0f);
 
         if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
-            text->text = L"Loading... " + std::to_wstring(percent) + L"%";
+            text->text = L"読み込み中 " + std::to_wstring(percent) + L"%";
             auto style = m_progressStyle;
             style.color.w = m_fadeAlpha;
             text->style = style;
         }
         if (auto* text = ctx.world.Get<components::UIText>(m_textEntity)) {
-            text->text = L"Traveling to " + core::ToWString(m_targetPage) + L"...";
+            text->text = L"「" + core::ToWString(m_targetPage) + L"」へ移動中…";
             auto style = m_primaryStyle;
             style.color.w = m_fadeAlpha;
             text->style = style;
@@ -619,12 +626,11 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     const DirectX::XMFLOAT3 teeFocusPosition = {
         playerX, focusGroundHeight + 1.0f, focusZ};
     const auto featured = game::utils::SelectFeaturedCourseHoles(
-        data.holes, playerX, playerZ, 5);
+        data.holes, playerX, playerZ, kMaximumFeaturedOneHopHoles);
     LOG_INFO("Transition",
-             "Course introduction page='{}' abstractChars={} holes={} goals={} "
-             "oneHopFeatured={}",
-             data.pageName, data.abstractText.size(), data.holes.size(),
-             featured.goals.size(), featured.oneHop.size());
+             "Course introduction page='{}' holes={} goals={} oneHopFeatured={}",
+             data.pageName, data.holes.size(), featured.goals.size(),
+             featured.oneHop.size());
 
     m_introductionShots.clear();
     IntroductionShot overview;
@@ -636,17 +642,14 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
                                -data.fieldDepth * 0.15f};
     overview.focusPosition = {
         0.0f, m_pageLoader->GetTerrainVisualHeight(0.0f, 0.0f), 0.0f};
-    overview.label = L"ABOUT THIS COURSE";
+    overview.label = L"コース全体";
     overview.title = core::ToWString(data.pageName);
-    overview.body = data.abstractText;
     std::wostringstream courseStats;
-    courseStats << L"PAR " << data.par << L"   HOLES " << data.holes.size()
-                << L"   SIZE " << static_cast<int>(std::round(data.fieldWidth))
-                << L" × " << static_cast<int>(std::round(data.fieldDepth))
-                << L"   WIND " << std::fixed << std::setprecision(1)
+    courseStats << L"パー" << data.par << L"   ホール" << data.holes.size()
+                << L"   風 " << std::fixed << std::setprecision(1)
                 << data.windSpeed << L" m/s";
     overview.detail = courseStats.str();
-    overview.duration = 7.0f;
+    overview.duration = 3.0f;
     m_introductionShots.push_back(std::move(overview));
 
     if (featured.goals.size() <= 3) {
@@ -657,12 +660,13 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
             goal.cameraPosition = {hole.x + 12.0f, hole.y + 15.0f,
                                    hole.z - 18.0f};
             goal.focusPosition = {hole.x, hole.y + 1.5f, hole.z};
-            goal.label = L"DIRECT GOAL";
+            goal.label = L"ゴールへ直接つながるホール";
             goal.title = core::ToWString(hole.linkTarget);
-            goal.body = L"このホールから目的記事へ直接到達できます。";
-            goal.detail = L"GOAL HOLE " + std::to_wstring(index + 1) + L" / " +
-                          std::to_wstring(featured.goals.size());
-            goal.duration = 3.0f;
+            if (featured.goals.size() > 1) {
+                goal.detail = std::to_wstring(index + 1) + L" / " +
+                              std::to_wstring(featured.goals.size());
+            }
+            goal.duration = 2.4f;
             m_introductionShots.push_back(std::move(goal));
         }
     } else {
@@ -691,12 +695,10 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
                                 centerY + std::max(35.0f, radius * 1.25f),
                                 centerZ - distance};
         goals.focusPosition = {centerX, centerY + 1.5f, centerZ};
-        goals.label = L"DIRECT GOALS";
-        goals.title = L"ゴールホール " +
-                      std::to_wstring(featured.goals.size()) + L"カ所";
-        goals.body = L"赤い旗は、どれも目的記事へ直接つながっています。";
-        goals.detail = L"ALL GOAL HOLES";
-        goals.duration = 4.5f;
+        goals.label = L"ゴールへ直接つながるホール";
+        goals.title = std::to_wstring(featured.goals.size()) + L"カ所";
+        goals.detail = L"赤い旗が目印です";
+        goals.duration = 3.0f;
         m_introductionShots.push_back(std::move(goals));
     }
 
@@ -708,12 +710,11 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
             oneHop.cameraPosition = {hole.x + 11.0f, hole.y + 14.0f,
                                      hole.z - 17.0f};
             oneHop.focusPosition = {hole.x, hole.y + 1.5f, hole.z};
-            oneHop.label = L"PRIORITY HOLE · 1 HOP";
+            oneHop.label = L"あと1回の移動でゴール";
             oneHop.title = core::ToWString(hole.linkTarget);
-            oneHop.body = L"このリンク先から、あと1回の移動で目的記事へ到達できます。";
-            oneHop.detail = L"RECOMMENDED " + std::to_wstring(index + 1) + L" / " +
+            oneHop.detail = std::to_wstring(index + 1) + L" / " +
                             std::to_wstring(featured.oneHop.size());
-            oneHop.duration = 2.8f;
+            oneHop.duration = 2.2f;
             m_introductionShots.push_back(std::move(oneHop));
         }
     }
@@ -722,11 +723,7 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     ready.kind = IntroductionShotKind::ReturnToTee;
     ready.cameraPosition = teeCameraPosition;
     ready.focusPosition = teeFocusPosition;
-    ready.label = L"READY";
-    ready.title = L"TEE OFF";
-    ready.body = L"価値の高いホールを狙って、目的記事を目指しましょう。";
-    ready.detail = L"PLAY";
-    ready.duration = 2.5f;
+    ready.duration = 1.8f;
     m_introductionShots.push_back(std::move(ready));
 
     const auto cameraWaypoint = [&](std::size_t waypointIndex) {
@@ -811,20 +808,22 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     ctx.input.SetMouseCursorVisible(true);
     ctx.input.SetMouseCursorLocked(false);
 
-    if (m_startGoalIntroductionRequested) {
-        // ラウンド開始時は、ティー位置のカメラのままスタート/ゴール記事を紹介してから飛ぶ
-        m_startGoalIntroductionRequested = false;
-        BeginStartGoalIntroduction(ctx, data);
+    if (m_directArrivalRequested) {
+        // チュートリアルは案内なしでティーへ直行する
+        m_directArrivalRequested = false;
+        m_goalNoticeRequested = false;
+        FinishCourseIntroduction(ctx);
         return;
     }
 
-    m_phase = Phase::CourseIntroduction;
-    ApplyCourseIntroductionShot(ctx);
+    BeginArticleArrival(ctx, data, teeCameraPosition, teeFocusPosition);
 }
 
-void ArticleTransitionController::BeginStartGoalIntroduction(
-    core::GameContext& ctx, const scenes::CourseIntroductionData& data) {
-    // ロード画面の文字はコース紹介で再利用するまで隠す
+void ArticleTransitionController::BeginArticleArrival(
+    core::GameContext& ctx, const scenes::CourseIntroductionData& data,
+    const DirectX::XMFLOAT3& cameraPosition,
+    const DirectX::XMFLOAT3& focusPosition) {
+    // ロード画面の文字は巡回で再利用するまで隠す
     const std::array<ecs::Entity, 3> loadingUi = {
         m_textEntity, m_progressTextEntity, m_captionTextEntity};
     for (ecs::Entity entity : loadingUi) {
@@ -833,52 +832,112 @@ void ArticleTransitionController::BeginStartGoalIntroduction(
         }
     }
 
-    StartGoalIntroductionPanel::Content content;
-    content.startTitle = core::ToWString(
-        m_startGoalStartPage.empty() ? data.pageName : m_startGoalStartPage);
-    content.startAbstract = data.abstractText;
-    content.goalTitle = core::ToWString(m_startGoalGoalPage);
-    std::vector<int> holeHops;
-    holeHops.reserve(data.holes.size());
-    for (const auto& hole : data.holes) {
-        holeHops.push_back(hole.hopsToTarget);
-    }
-    content.hops = game::utils::CalculateStartToGoalHops(holeHops);
-    if (m_pageLoader) {
-        content.goalThumbnail = m_pageLoader->GetTargetThumbnailSRV();
-        content.goalThumbnailAspect = m_pageLoader->GetTargetThumbnailAspect();
-    }
-    m_startGoalPanel.Initialize(ctx, content);
-    ShowIntroductionSkipButton(ctx);
+    // ラウンド開始時だけゴールを案内して巡回する。2記事目以降は紙が倒れるだけ
+    m_arrivalIsRoundStart = m_goalNoticeRequested;
+    m_goalNoticeRequested = false;
+    m_arrivalTiming = m_arrivalIsRoundStart ? game::utils::kRoundStartArrival
+                                            : game::utils::kShortArrival;
+    m_arrivalElapsed = 0.0f;
 
-    LOG_INFO("Transition", "Start/goal introduction start='{}' goal='{}'",
-             m_startGoalStartPage, m_startGoalGoalPage);
-    m_phase = Phase::StartGoalIntroduction;
-}
-
-void ArticleTransitionController::UpdateStartGoalIntroduction(
-    core::GameContext& ctx, float dt) {
-    if (m_goalExtractTask.valid() &&
-        m_goalExtractTask.wait_for(std::chrono::milliseconds(0)) ==
-            std::future_status::ready) {
-        m_startGoalPanel.SetGoalExtract(
-            ctx, core::ToWString(m_goalExtractTask.get()));
+    ArticlePaperEffect::Setup paper;
+    if (const auto* tiles = m_pageLoader->GetArticleTiles()) {
+        for (const auto& tile : *tiles) {
+            if (!tile.srv) {
+                break;
+            }
+            paper.tiles.push_back({tile.srv.Get(),
+                                   static_cast<float>(tile.width),
+                                   static_cast<float>(tile.height)});
+        }
     }
+    paper.cameraPosition = cameraPosition;
+    paper.focusPosition = focusPosition;
+    if (const auto* camera = ctx.world.Get<components::Camera>(m_targetCam)) {
+        paper.cameraFov = camera->fov;
+    }
+    // カメラの値は生成時のままなので、描画と同じ実際の縦横比を使う
+    paper.cameraAspect = ctx.graphics.GetAspectRatio();
+    paper.groundHeight = [loader = m_pageLoader](float x, float z) {
+        return loader->GetTerrainVisualHeight(x, z);
+    };
+    const bool hasPaper = m_articlePaper.Spawn(ctx, paper);
 
-    if (UpdateIntroductionSkipButton(ctx)) {
-        m_startGoalPanel.Shutdown(ctx);
+    if (!hasPaper && !m_arrivalIsRoundStart) {
         FinishCourseIntroduction(ctx);
         return;
     }
 
-    const bool advanceRequested = ctx.input.GetMouseButtonDown(0) ||
-                                  ctx.input.GetKeyDown(VK_RETURN) ||
-                                  ctx.input.GetKeyDown(VK_SPACE);
-    if (!m_startGoalPanel.Update(ctx, dt, advanceRequested)) {
+    GoalNoticePanel::Content content;
+    content.useVeil = !hasPaper;
+    content.currentTitle = core::ToWString(data.pageName);
+    content.goalTitle = core::ToWString(m_goalNoticePage);
+    if (const auto* state =
+            ctx.world.GetGlobal<components::GolfGameState>();
+        state && !state->targetPage.empty()) {
+        content.goalTitle = core::ToWString(state->targetPage);
+    }
+    if (m_arrivalIsRoundStart) {
+
+        // スタートからゴールまでの道のりと、たどる順の旗を紙に描く
+        GoalRouteEffect::Content route;
+        route.startTitle = core::ToWString(data.pageName);
+        route.goalTitle = content.goalTitle;
+        route.par = data.par;
+        std::vector<int> holeHops;
+        holeHops.reserve(data.holes.size());
+        for (const auto& hole : data.holes) {
+            holeHops.push_back(hole.hopsToTarget);
+        }
+        route.hops = game::utils::CalculateStartToGoalHops(holeHops);
+        m_goalRoute.Spawn(ctx, route, m_articlePaper);
+        ShowIntroductionSkipButton(ctx);
+    }
+    m_goalNoticePanel.Initialize(ctx, content);
+    m_goalNoticePanel.Update(ctx, 0.0f, m_arrivalTiming);
+    m_goalRoute.Update(ctx, 0.0f, m_arrivalTiming, m_articlePaper);
+    m_articlePaper.Update(ctx, 0.0f, 1.0f);
+
+    LOG_INFO("Transition", "Article arrival page='{}' roundStart={} paper={}",
+             data.pageName, m_arrivalIsRoundStart, hasPaper);
+    m_phase = Phase::ArticleArrival;
+}
+
+void ArticleTransitionController::UpdateArticleArrival(
+    core::GameContext& ctx, float dt) {
+    if (m_arrivalIsRoundStart) {
+        if (UpdateIntroductionSkipButton(ctx)) {
+            FinishCourseIntroduction(ctx);
+            return;
+        }
+    }
+
+    m_arrivalElapsed += dt;
+    if (m_arrivalIsRoundStart &&
+        (ctx.input.GetMouseButtonDown(0) || ctx.input.GetKeyDown(VK_RETURN) ||
+         ctx.input.GetKeyDown(VK_SPACE))) {
+        m_arrivalElapsed = game::utils::ResolveGoalNoticeAdvance(
+            m_arrivalElapsed, m_arrivalTiming);
+    }
+
+    m_goalRoute.Update(ctx, m_arrivalElapsed, m_arrivalTiming, m_articlePaper);
+    m_articlePaper.Update(
+        ctx,
+        game::utils::CalculatePaperFallProgress(m_arrivalElapsed,
+                                                m_arrivalTiming),
+        game::utils::CalculatePaperOpacity(m_arrivalElapsed, m_arrivalTiming));
+    m_goalNoticePanel.Update(ctx, m_arrivalElapsed, m_arrivalTiming);
+
+    if (m_arrivalElapsed < m_arrivalTiming.End()) {
         return;
     }
 
-    m_startGoalPanel.Shutdown(ctx);
+    m_goalRoute.Shutdown(ctx);
+    m_articlePaper.Shutdown(ctx);
+    if (!m_arrivalIsRoundStart) {
+        FinishCourseIntroduction(ctx);
+        return;
+    }
+    // 右上のゴール表示と帰属表示は巡回の間も残す
     m_introductionShotIndex = 0;
     m_introductionShotTimer = 0.0f;
     m_phase = Phase::CourseIntroduction;
@@ -1028,66 +1087,64 @@ void ArticleTransitionController::UpdateCourseIntroduction(
 void ArticleTransitionController::ApplyCourseIntroductionShot(
     core::GameContext& ctx) {
     const IntroductionShot& shot = m_introductionShots[m_introductionShotIndex];
+    // ティーへ戻るショットは説明を出さず、景色だけを見せる
+    const bool hasCaption = !shot.title.empty();
+    const float textX = kShotCaptionX + kShotCaptionPadding;
+    const float textWidth = kShotCaptionWidth - kShotCaptionPadding * 2.0f;
 
     if (auto* panel = ctx.world.Get<components::UIText>(m_introductionPanelEntity)) {
-        panel->visible = true;
+        panel->visible = hasCaption;
     }
     if (auto* label = ctx.world.Get<components::UIText>(m_progressTextEntity)) {
-        label->text = L"WIKI  ·  " + shot.label;
-        label->x = 82.0f;
-        label->y = 72.0f;
-        label->width = 554.0f;
+        label->text = shot.label;
+        label->x = textX;
+        label->y = kShotCaptionY + 10.0f;
+        label->width = textWidth;
         label->height = 24.0f;
-        label->style = graphics::TextStyle::CardLabel();
-        label->style.fontSize = 14.0f;
-        label->style.color = game::ui::kColorAccent;
-        label->visible = true;
+        label->style = graphics::TextStyle::BrowserSub();
+        label->style.fontFamily = "Kiwi Maru Medium";
+        label->style.fontSize = 15.0f;
+        label->style.color = game::ui::kColorTextSub;
+        label->style.align = graphics::TextAlign::Left;
+        label->visible = hasCaption;
         label->layer = 32;
     }
     if (auto* title = ctx.world.Get<components::UIText>(m_textEntity)) {
         title->text = shot.title;
-        title->x = 82.0f;
-        title->y = 101.0f;
-        title->width = 554.0f;
-        title->height = 58.0f;
+        title->x = textX;
+        title->y = kShotCaptionY + 34.0f;
+        title->width = textWidth;
+        title->height = 42.0f;
         if (shot.kind == IntroductionShotKind::Goal ||
             shot.kind == IntroductionShotKind::GoalGroup) {
             title->style = graphics::TextStyle::GoalHighlight();
         } else {
             title->style = graphics::TextStyle::BrowserURL();
+            title->style.color = game::ui::kColorTextPrimary;
         }
-        title->style.fontSize = 32.0f;
+        title->style.fontSize =
+            shot.title.size() > kLongShotTitleCharacters ? 20.0f : 28.0f;
         title->style.align = graphics::TextAlign::Left;
-        title->visible = true;
+        title->visible = hasCaption;
         title->layer = 32;
-    }
-    if (auto* body = ctx.world.Get<components::UIText>(m_captionTextEntity)) {
-        body->text = shot.body;
-        body->x = 82.0f;
-        body->y = 166.0f;
-        body->width = 554.0f;
-        body->height = 104.0f;
-        body->style = graphics::TextStyle::BrowserURL();
-        body->style.fontSize = 16.0f;
-        body->style.color = game::ui::kColorTextPrimary;
-        body->style.align = graphics::TextAlign::Left;
-        body->visible = true;
-        body->layer = 32;
     }
     if (auto* detail = ctx.world.Get<components::UIText>(m_introductionDetailEntity)) {
         detail->text = shot.detail;
         detail->style = graphics::TextStyle::BrowserSub();
-        detail->style.fontFamily = "Share Tech Mono";
+        detail->style.fontFamily = "Kiwi Maru Medium";
         detail->style.fontSize = 14.0f;
         detail->style.color = game::ui::kColorTextSub;
         detail->style.align = graphics::TextAlign::Left;
-        detail->visible = true;
+        detail->visible = hasCaption && !shot.detail.empty();
     }
     ShowIntroductionSkipButton(ctx);
 }
 
 void ArticleTransitionController::FinishCourseIntroduction(
     core::GameContext& ctx) {
+    m_goalNoticePanel.Shutdown(ctx);
+    m_goalRoute.Shutdown(ctx);
+    m_articlePaper.Shutdown(ctx);
     const std::array<ecs::Entity, 6> introductionUi = {
         m_textEntity, m_progressTextEntity, m_captionTextEntity,
         m_introductionPanelEntity, m_introductionDetailEntity,

@@ -85,6 +85,11 @@ public:
   /** @brief 地形データを取得（物理パラメータ参照用）*/
   std::shared_ptr<TerrainData> GetTerrainData() const { return m_terrainData; }
 
+  /** @brief 記事のタイルを上から順に取得*/
+  const std::vector<graphics::WikiTextureResult::Tile> &GetArticleTiles() const {
+    return m_buildTiles;
+  }
+
   /** @brief 指定座標の地形高さを取得*/
   float GetHeight(float x, float z) const;
 

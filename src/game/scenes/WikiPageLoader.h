@@ -67,7 +67,6 @@ struct PageLoadResult {
 /** @brief 構築済みコースの紹介演出に使用する読み取り専用データです。*/
 struct CourseIntroductionData {
     std::string pageName;
-    std::wstring abstractText;
     float fieldWidth = 80.0f;
     float fieldDepth = 120.0f;
     float windSpeed = 0.0f;
@@ -260,6 +259,11 @@ public:
     /** @brief 目的記事の代表サムネイルの幅/高さ比を取得します。*/
     float GetTargetThumbnailAspect() const { return m_targetThumbnailAspect; }
 
+    /** @brief 構築済みコースの記事タイルを上から順に取得します（なければ nullptr）。*/
+    const std::vector<graphics::WikiTextureResult::Tile>* GetArticleTiles() const {
+        return m_terrainSystem ? &m_terrainSystem->GetArticleTiles() : nullptr;
+    }
+
     /** @brief 最後に構築を完了したコースの紹介用データを取得します。*/
     const CourseIntroductionData& GetCourseIntroductionData() const {
         return m_courseIntroductionData;
@@ -425,7 +429,7 @@ private:
 
     /** @brief 現在の構築結果をコース紹介用のスナップショットへ保存します。*/
     void CaptureCourseIntroductionData(
-        const std::string& pageName, const std::string& articleText,
+        const std::string& pageName,
         const game::components::GolfGameState& state);
 
     BuildStep m_buildStep = BuildStep::None;

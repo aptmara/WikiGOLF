@@ -531,8 +531,7 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
     }
 
     case BuildStep::Finish:
-        CaptureCourseIntroductionData(m_buildData.pageName,
-                                      m_buildData.articleText, *state);
+        CaptureCourseIntroductionData(m_buildData.pageName, *state);
         LOG_INFO("WikiPageLoader",
                  "BuildPage loadId={} finished page='{}' total={}ms "
                  "field={:.1f}x{:.1f} holes={} mapIcons={} par={}",

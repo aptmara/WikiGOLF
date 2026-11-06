@@ -297,7 +297,7 @@ PageLoadResult WikiPageLoader::BuildPageSync(
         result.calculatedPar = calculatedPar;
     }
 
-    CaptureCourseIntroductionData(pageName, articleText, *state);
+    CaptureCourseIntroductionData(pageName, *state);
 
     result.fieldWidth = fieldWidth;
     result.fieldDepth = fieldDepth;

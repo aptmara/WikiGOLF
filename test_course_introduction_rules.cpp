@@ -4,17 +4,7 @@
 int main() {
   using game::utils::CourseIntroductionHole;
   using game::utils::CalculateCourseIntroductionDuration;
-  using game::utils::FormatCourseAbstract;
   using game::utils::SelectFeaturedCourseHoles;
-
-  assert(FormatCourseAbstract(L"  最初の  文です。\n続きです。\n\n次の段落") ==
-         L"最初の 文です。 続きです。");
-  assert(FormatCourseAbstract(L"概要です。\n== 表・インフォボックス ==\n値") ==
-         L"概要です。");
-  assert(FormatCourseAbstract(L"1234567890", 6) == L"12345…");
-  assert(FormatCourseAbstract(
-             L"[[ゴルフ|競技]]は''球技''です。{{読み仮名|不要}}") ==
-         L"競技は球技です。");
 
   const std::vector<CourseIntroductionHole> holes = {
       {0.0f, 0.0f, 10.0f, "goal", true, 0, 0},
@@ -50,9 +40,9 @@ int main() {
   assert(CalculateCourseIntroductionDuration(
              origin, {10.0f, 0.0f, 0.0f}, 3.0f) == 3.0f);
   assert(CalculateCourseIntroductionDuration(
-             origin, {1400.0f, 0.0f, 0.0f}, 3.0f) == 10.0f);
+             origin, {700.0f, 0.0f, 0.0f}, 3.0f) == 5.0f);
   assert(CalculateCourseIntroductionDuration(
-             origin, {10000.0f, 0.0f, 0.0f}, 3.0f) == 24.0f);
+             origin, {10000.0f, 0.0f, 0.0f}, 3.0f) == 8.0f);
 
   return 0;
 }

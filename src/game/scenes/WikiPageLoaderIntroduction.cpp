@@ -1,18 +1,15 @@
 #include "WikiPageLoader.h"
 
-#include "../../core/StringUtils.h"
 #include "../components/WikiComponents.h"
 #include "../utils/GameplayPhysicsConstants.h"
 
 namespace game::scenes {
 
 void WikiPageLoader::CaptureCourseIntroductionData(
-    const std::string& pageName, const std::string& articleText,
+    const std::string& pageName,
     const game::components::GolfGameState& state) {
   CourseIntroductionData data;
   data.pageName = pageName;
-  data.abstractText = game::utils::FormatCourseAbstract(
-      core::ToWString(articleText));
   data.fieldWidth = state.fieldWidth;
   data.fieldDepth = state.fieldDepth;
   data.windSpeed = state.windSpeed;

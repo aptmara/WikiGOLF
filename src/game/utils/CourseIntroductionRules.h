@@ -4,10 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-#include <cwctype>
 #include <limits>
 #include <string>
-#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -32,95 +30,13 @@ inline float CalculateCourseIntroductionDuration(
     const DirectX::XMFLOAT3 &start, const DirectX::XMFLOAT3 &end,
     float minimumDuration) {
   constexpr float kTravelSpeed = 140.0f;
-  constexpr float kMaximumDuration = 24.0f;
+  constexpr float kMaximumDuration = 8.0f;
   const float dx = end.x - start.x;
   const float dy = end.y - start.y;
   const float dz = end.z - start.z;
   const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
   return std::clamp(distance / kTravelSpeed, minimumDuration,
                     kMaximumDuration);
-}
-
-inline std::wstring FormatCourseAbstract(std::wstring_view source,
-                                         std::size_t maxCharacters = 180) {
-  if (maxCharacters == 0) {
-    return {};
-  }
-
-  std::size_t end = source.size();
-  const std::size_t paragraphEnd = source.find(L"\n\n");
-  if (paragraphEnd != std::wstring_view::npos) {
-    end = std::min(end, paragraphEnd);
-  }
-  const std::size_t tableSection = source.find(L"\n==");
-  if (tableSection != std::wstring_view::npos) {
-    end = std::min(end, tableSection);
-  }
-
-  std::wstring normalized;
-  normalized.reserve(std::min(end, maxCharacters));
-  bool pendingSpace = false;
-  for (std::size_t index = 0; index < end; ++index) {
-    if (index + 1 < end && source[index] == L'[' &&
-        source[index + 1] == L'[') {
-      const std::size_t close = source.find(L"]]", index + 2);
-      if (close != std::wstring_view::npos && close < end) {
-        const std::wstring_view link = source.substr(index + 2,
-                                                      close - index - 2);
-        const std::size_t separator = link.find_last_of(L'|');
-        const std::wstring_view label = separator == std::wstring_view::npos
-                                            ? link
-                                            : link.substr(separator + 1);
-        if (pendingSpace && !normalized.empty()) {
-          normalized.push_back(L' ');
-          pendingSpace = false;
-        }
-        normalized.append(label);
-        index = close + 1;
-        continue;
-      }
-    }
-    if (index + 1 < end && source[index] == L'{' &&
-        source[index + 1] == L'{') {
-      const std::size_t close = source.find(L"}}", index + 2);
-      if (close != std::wstring_view::npos && close < end) {
-        index = close + 1;
-        continue;
-      }
-    }
-    const wchar_t character = source[index];
-    if (std::iswspace(character)) {
-      pendingSpace = !normalized.empty();
-      continue;
-    }
-    if (pendingSpace) {
-      normalized.push_back(L' ');
-      pendingSpace = false;
-    }
-    if (character == L'\'') {
-      continue;
-    }
-    normalized.push_back(character);
-  }
-
-  if (normalized.size() <= maxCharacters) {
-    return normalized;
-  }
-
-  std::wstring shortened = normalized.substr(0, maxCharacters);
-  const std::size_t sentenceEnd = shortened.find_last_of(L"。！？.!?");
-  if (sentenceEnd != std::wstring::npos &&
-      sentenceEnd >= maxCharacters / 2) {
-    shortened.resize(sentenceEnd + 1);
-    return shortened;
-  }
-
-  if (maxCharacters == 1) {
-    return L"…";
-  }
-  shortened.resize(maxCharacters - 1);
-  shortened.push_back(L'…');
-  return shortened;
 }
 
 inline FeaturedCourseHoles SelectFeaturedCourseHoles(

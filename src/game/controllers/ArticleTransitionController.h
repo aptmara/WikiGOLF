@@ -8,9 +8,12 @@
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
 #include "../../graphics/TextStyle.h"
-#include "StartGoalIntroductionPanel.h"
+#include "ArticlePaperEffect.h"
+#include "GoalNoticePanel.h"
+#include "GoalRouteEffect.h"
 #include "WikiGolfHUD.h" // HUDなどへのアクセス用
 #include "../scenes/WikiPageLoader.h"
+#include "../utils/GoalNoticeRules.h"
 #include <DirectXMath.h>
 #include <atomic>
 #include <chrono>
@@ -47,12 +50,15 @@ public:
     bool IsActive() const { return m_isActive; }
 
     /**
-     * @brief 次のトランジション完了時に、コース紹介の前へスタート/ゴール記事紹介を挟む
-     * @details ラウンド開始時の1回だけ呼ぶ想定。ゴール記事の概要取得を裏で開始する。
+     * @brief 次のトランジション完了時に、ゴールの案内とコース巡回を再生する
+     * @details ラウンド開始時の1回だけ呼ぶ想定。呼ばなければ紙が倒れるだけの短縮版になる。
     */
-    void RequestStartGoalIntroduction(const std::string& startPage, const std::string& goalPage);
+    void RequestGoalNotice(const std::string& goalPage);
 
-    /** @brief コース上での紹介演出（スタート/ゴール紹介・コース紹介カメラ）の再生中かどうか*/
+    /** @brief 次のトランジション完了時に、演出なしでティーへ直行する（チュートリアル用）*/
+    void RequestDirectArrival();
+
+    /** @brief コース上での紹介演出（紙とゴール案内・コース巡回）の再生中かどうか*/
     bool IsCourseIntroductionActive() const;
 
 private:
@@ -68,8 +74,11 @@ private:
     void UpdateCourseIntroduction(core::GameContext& ctx, float dt);
     void ApplyCourseIntroductionShot(core::GameContext& ctx);
     void FinishCourseIntroduction(core::GameContext& ctx);
-    void BeginStartGoalIntroduction(core::GameContext& ctx, const scenes::CourseIntroductionData& data);
-    void UpdateStartGoalIntroduction(core::GameContext& ctx, float dt);
+    /** @brief 記事の紙を立て、ラウンド開始時ならゴール案内も出す*/
+    void BeginArticleArrival(core::GameContext& ctx, const scenes::CourseIntroductionData& data,
+                             const DirectX::XMFLOAT3& cameraPosition,
+                             const DirectX::XMFLOAT3& focusPosition);
+    void UpdateArticleArrival(core::GameContext& ctx, float dt);
     /** @brief スキップボタンを紹介演出用の見た目にする*/
     void ShowIntroductionSkipButton(core::GameContext& ctx);
     /** @brief スキップボタンのホバー表示を更新し、クリックされたら true を返す*/
@@ -85,7 +94,7 @@ private:
         Loading,
         ErrorWait,
         Building,
-        StartGoalIntroduction,
+        ArticleArrival,
         CourseIntroduction,
         FadeOut
     };
@@ -136,7 +145,6 @@ private:
         DirectX::XMFLOAT3 focusPosition{};
         std::wstring label;
         std::wstring title;
-        std::wstring body;
         std::wstring detail;
         float duration = 1.0f;
         float cameraControlHeight = 0.0f;
@@ -148,12 +156,16 @@ private:
     DirectX::XMFLOAT3 m_introductionCameraStart{};
     DirectX::XMFLOAT3 m_introductionFocusStart{};
 
-    // ラウンド開始時のスタート/ゴール記事紹介
-    bool m_startGoalIntroductionRequested = false;
-    std::string m_startGoalStartPage;
-    std::string m_startGoalGoalPage;
-    std::future<std::string> m_goalExtractTask; ///< ゴール記事概要の非同期取得
-    StartGoalIntroductionPanel m_startGoalPanel;
+    // 記事到着時の紙とゴール案内
+    bool m_goalNoticeRequested = false;
+    bool m_directArrivalRequested = false;
+    std::string m_goalNoticePage;
+    bool m_arrivalIsRoundStart = false;
+    float m_arrivalElapsed = 0.0f;
+    game::utils::ArticleArrivalTiming m_arrivalTiming{};
+    GoalNoticePanel m_goalNoticePanel;
+    GoalRouteEffect m_goalRoute;
+    ArticlePaperEffect m_articlePaper;
 
     // エンティティ
     ecs::Entity m_globeEntity = UINT32_MAX;
