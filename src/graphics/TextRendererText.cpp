@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <d2d1_1.h>
+#include <vector>
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
@@ -16,6 +17,110 @@
 namespace graphics {
 
 using text_renderer_detail::FloatBits;
+
+namespace {
+
+/**
+ * @brief テキストレイアウトのグリフ輪郭をD2Dジオメトリとして集めるレンダラー
+ * @details ずらし描きの重ね合わせではなく輪郭そのものをストロークするため、
+ *          半透明色でも濃さのムラや斜め方向の欠けが出ない。
+ */
+class GlyphOutlineCollector final : public IDWriteTextRenderer {
+public:
+  explicit GlyphOutlineCollector(ID2D1Factory *factory) : m_factory(factory) {}
+
+  /// 集めた輪郭を1つのジオメトリグループにまとめる（無ければ nullptr）
+  ComPtr<ID2D1GeometryGroup> BuildGroup() const {
+    if (!m_factory || m_geometries.empty()) return nullptr;
+    std::vector<ID2D1Geometry *> raw;
+    raw.reserve(m_geometries.size());
+    for (const auto &g : m_geometries) raw.push_back(g.Get());
+    ComPtr<ID2D1GeometryGroup> group;
+    if (FAILED(m_factory->CreateGeometryGroup(D2D1_FILL_MODE_WINDING, raw.data(),
+                                              static_cast<UINT32>(raw.size()),
+                                              &group))) {
+      return nullptr;
+    }
+    return group;
+  }
+
+  // IUnknown（スタック上でのみ使うため参照カウントは形だけ）
+  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void **obj) override {
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(IDWritePixelSnapping) ||
+        riid == __uuidof(IDWriteTextRenderer)) {
+      *obj = static_cast<IDWriteTextRenderer *>(this);
+      return S_OK;
+    }
+    *obj = nullptr;
+    return E_NOINTERFACE;
+  }
+  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
+  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+
+  // IDWritePixelSnapping
+  HRESULT STDMETHODCALLTYPE IsPixelSnappingDisabled(void *, BOOL *disabled) override {
+    *disabled = TRUE;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE GetCurrentTransform(void *,
+                                                DWRITE_MATRIX *transform) override {
+    *transform = DWRITE_MATRIX{1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE GetPixelsPerDip(void *, FLOAT *ppd) override {
+    *ppd = 1.0f;
+    return S_OK;
+  }
+
+  // IDWriteTextRenderer
+  HRESULT STDMETHODCALLTYPE DrawGlyphRun(
+      void *, FLOAT baselineOriginX, FLOAT baselineOriginY, DWRITE_MEASURING_MODE,
+      const DWRITE_GLYPH_RUN *glyphRun, const DWRITE_GLYPH_RUN_DESCRIPTION *,
+      IUnknown *) override {
+    if (!glyphRun || !glyphRun->fontFace || glyphRun->glyphCount == 0) return S_OK;
+
+    ComPtr<ID2D1PathGeometry> path;
+    if (FAILED(m_factory->CreatePathGeometry(&path))) return S_OK;
+    ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(path->Open(&sink))) return S_OK;
+    HRESULT hr = glyphRun->fontFace->GetGlyphRunOutline(
+        glyphRun->fontEmSize, glyphRun->glyphIndices, glyphRun->glyphAdvances,
+        glyphRun->glyphOffsets, glyphRun->glyphCount, glyphRun->isSideways,
+        (glyphRun->bidiLevel % 2) != 0, sink.Get());
+    sink->Close();
+    if (FAILED(hr)) return S_OK;
+
+    ComPtr<ID2D1TransformedGeometry> placed;
+    if (SUCCEEDED(m_factory->CreateTransformedGeometry(
+            path.Get(),
+            D2D1::Matrix3x2F::Translation(baselineOriginX, baselineOriginY),
+            &placed))) {
+      m_geometries.push_back(placed);
+    }
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE DrawUnderline(void *, FLOAT, FLOAT,
+                                          const DWRITE_UNDERLINE *,
+                                          IUnknown *) override {
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE DrawStrikethrough(void *, FLOAT, FLOAT,
+                                              const DWRITE_STRIKETHROUGH *,
+                                              IUnknown *) override {
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE DrawInlineObject(void *, FLOAT, FLOAT,
+                                             IDWriteInlineObject *, BOOL, BOOL,
+                                             IUnknown *) override {
+    return S_OK;
+  }
+
+private:
+  ID2D1Factory *m_factory = nullptr;
+  std::vector<ComPtr<ID2D1Geometry>> m_geometries;
+};
+
+} // namespace
 
 void TextRenderer::RenderText(const std::wstring &text, const D2D1_RECT_F &rect,
                               const TextStyle &style) {
@@ -241,8 +346,35 @@ void TextRenderer::DrawTextCore(const std::wstring &text,
     }
   }
 
-  // アウトラインの描画（8方向にずらして描画する簡易実装）
-  if (style.hasOutline) {
+  // アウトラインの描画: グリフ輪郭を太さ2倍でストロークし、外側半分を縁取りにする。
+  // 本体は後から上に塗るので内側半分は隠れる。
+  bool outlineDrawn = false;
+  if (style.hasOutline && layout && m_d2dFactory && style.outlineWidth > 0.0f) {
+    ID2D1SolidColorBrush *outlineBrush =
+        m_brushCache.GetBrush(style.outlineColor);
+    if (outlineBrush) {
+      GlyphOutlineCollector collector(m_d2dFactory.Get());
+      if (SUCCEEDED(layout->Draw(nullptr, &collector, rect.left, rect.top))) {
+        if (!m_outlineStrokeStyle) {
+          m_d2dFactory->CreateStrokeStyle(
+              D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND,
+                                          D2D1_CAP_STYLE_ROUND,
+                                          D2D1_CAP_STYLE_ROUND,
+                                          D2D1_LINE_JOIN_ROUND),
+              nullptr, 0, &m_outlineStrokeStyle);
+        }
+        if (auto group = collector.BuildGroup()) {
+          m_d2dContext->DrawGeometry(group.Get(), outlineBrush,
+                                     style.outlineWidth * 2.0f,
+                                     m_outlineStrokeStyle.Get());
+        }
+        outlineDrawn = true;
+      }
+    }
+  }
+
+  // フォールバック: レイアウトが無い場合は8方向にずらして描画する簡易実装
+  if (style.hasOutline && !outlineDrawn) {
     ID2D1SolidColorBrush *outlineBrush =
         m_brushCache.GetBrush(style.outlineColor);
     if (outlineBrush) {

@@ -197,6 +197,7 @@ private:
   ComPtr<ID2D1Effect> m_imageColorMatrixEffect;
   ComPtr<IDWriteFactory> m_dwriteFactory;
   ComPtr<IWICImagingFactory> m_wicFactory; // WIC
+  ComPtr<ID2D1StrokeStyle> m_outlineStrokeStyle; ///< 文字縁取り用（丸結合）
 
   // 画像キャッシュ
   std::map<std::string, ComPtr<ID2D1Bitmap1>> m_bitmapCache;
