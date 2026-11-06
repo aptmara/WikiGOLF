@@ -9,6 +9,8 @@
 #include "../../graphics/TangentGenerator.h"
 #include <algorithm>
 #include <cmath>
+#include <future>
+#include <span>
 
 namespace game::systems {
 namespace {
@@ -114,12 +116,18 @@ struct MountainBand {
   uint8_t material;
 };
 
-std::vector<MountainBand> MountainBands(int biome) {
+// 頂点ごとに何度も引くので、毎回 vector を作らず固定の表を返す。
+constexpr MountainBand kDesertBands[] = {{0.0f, kSand}, {0.7f, kStone}};
+constexpr MountainBand kIceBands[] = {{0.0f, kRough}, {0.2f, kStone}, {0.38f, kIce}};
+constexpr MountainBand kRockBands[] = {{0.0f, kRough}, {0.12f, kStone}};
+constexpr MountainBand kGrassBands[] = {{0.0f, kRough}, {0.62f, kStone}};
+
+std::span<const MountainBand> MountainBands(int biome) {
   switch (biome) {
-  case 1: return {{0.0f, kSand}, {0.7f, kStone}};
-  case 2: return {{0.0f, kRough}, {0.2f, kStone}, {0.38f, kIce}};
-  case 3: return {{0.0f, kRough}, {0.12f, kStone}};
-  default: return {{0.0f, kRough}, {0.62f, kStone}};
+  case 1: return kDesertBands;
+  case 2: return kIceBands;
+  case 3: return kRockBands;
+  default: return kGrassBands;
   }
 }
 
@@ -155,10 +163,13 @@ DirectX::XMFLOAT3 MountainColor(int biome, float relative, bool riser) {
   return color;
 }
 
-} // namespace
-
-TerrainBackdropSample SampleTerrainBackdrop(const TerrainData &data, float worldX,
-                                            float worldZ, uint32_t seed) {
+/**
+ * @brief SampleTerrainBackdrop の本体。withSurface が false なら標高だけを求める。
+ * @details 法線用の近傍の標高を取るときに地表と色の計算を省くため。標高の計算は
+ *          どちらでも同じ式なので結果は一致する。
+ */
+TerrainBackdropSample SampleBackdrop(const TerrainData &data, float worldX,
+                                     float worldZ, uint32_t seed, bool withSurface) {
   TerrainBackdropSample sample;
   const float halfW = data.config.worldWidth * 0.5f;
   const float halfD = data.config.worldDepth * 0.5f;
@@ -171,6 +182,7 @@ TerrainBackdropSample SampleTerrainBackdrop(const TerrainData &data, float world
   const float distance = std::sqrt(offX * offX + offZ * offZ);
   if (distance <= 0.0f) {
     sample.height = CourseHeight(data, worldX, worldZ);
+    if (!withSurface) return sample;
     sample.material = CourseMaterial(data, worldX, worldZ);
     sample.color = CourseColor(data, worldX, worldZ);
     return sample;
@@ -181,11 +193,17 @@ TerrainBackdropSample SampleTerrainBackdrop(const TerrainData &data, float world
   const float seamFade = 1.0f - SmoothStep(0.0f, kTerrainBackdropSeam, distance);
   const TerrainData *extension = data.extension.get();
   float ground = CourseHeight(data, edgeX, edgeZ);
-  uint8_t groundMaterial = CourseMaterial(data, edgeX, edgeZ);
-  DirectX::XMFLOAT3 groundColor = CourseColor(data, edgeX, edgeZ);
+  uint8_t groundMaterial = 0;
+  DirectX::XMFLOAT3 groundColor = {};
+  if (withSurface) {
+    groundMaterial = CourseMaterial(data, edgeX, edgeZ);
+    groundColor = CourseColor(data, edgeX, edgeZ);
+  }
   if (extension) {
     const float edgeOffset = ground - CourseHeight(*extension, edgeX, edgeZ);
     ground = CourseHeight(*extension, worldX, worldZ) + edgeOffset * seamFade;
+  }
+  if (extension && withSurface) {
     const DirectX::XMFLOAT3 extensionEdge = CourseColor(*extension, edgeX, edgeZ);
     const DirectX::XMFLOAT3 extensionHere = CourseColor(*extension, worldX, worldZ);
     groundColor = {extensionHere.x + (groundColor.x - extensionEdge.x) * seamFade,
@@ -226,6 +244,7 @@ TerrainBackdropSample SampleTerrainBackdrop(const TerrainData &data, float world
     mountain = (floorLevel + SmoothStep(0.72f, 1.0f, frac)) * style.terrace;
   }
   sample.height = ground + mountain;
+  if (!withSurface) return sample;
 
   // 地表: 低いところは延長地形の地表、山が高くなるほど山の地表（岩・雪など）にする。
   const float relative = mountain / std::max(style.amplitude, 1.0f);
@@ -247,6 +266,13 @@ TerrainBackdropSample SampleTerrainBackdrop(const TerrainData &data, float world
                   Lerp(groundColor.y, mountainColor.y, mountainMix),
                   Lerp(groundColor.z, mountainColor.z, mountainMix)};
   return sample;
+}
+
+} // namespace
+
+TerrainBackdropSample SampleTerrainBackdrop(const TerrainData &data, float worldX,
+                                            float worldZ, uint32_t seed) {
+  return SampleBackdrop(data, worldX, worldZ, seed, true);
 }
 
 std::vector<TerrainBackdropChunk> BuildTerrainBackdrop(const TerrainData &data,
@@ -300,7 +326,7 @@ std::vector<TerrainBackdropChunk> BuildTerrainBackdrop(const TerrainData &data,
   fullX.insert(fullX.end(), rightX.begin(), rightX.end());
 
   auto buildGrid = [&](const std::vector<float> &xs, const std::vector<float> &zs,
-                       size_t rowBegin, size_t rowEnd) {
+                       size_t rowBegin, size_t rowEnd) -> TerrainBackdropChunk {
     TerrainBackdropChunk chunk;
     const size_t columns = xs.size();
     const size_t rows = rowEnd - rowBegin + 1;
@@ -308,12 +334,15 @@ std::vector<TerrainBackdropChunk> BuildTerrainBackdrop(const TerrainData &data,
     for (size_t r = rowBegin; r <= rowEnd; ++r) {
       const float worldZ = zs[r];
       for (float worldX : xs) {
-        const TerrainBackdropSample s = SampleTerrainBackdrop(data, worldX, worldZ, seed);
+        const TerrainBackdropSample s = SampleBackdrop(data, worldX, worldZ, seed, true);
         constexpr float kProbe = 1.0f;
-        const float hX0 = SampleTerrainBackdrop(data, worldX - kProbe, worldZ, seed).height;
-        const float hX1 = SampleTerrainBackdrop(data, worldX + kProbe, worldZ, seed).height;
-        const float hZ0 = SampleTerrainBackdrop(data, worldX, worldZ - kProbe, seed).height;
-        const float hZ1 = SampleTerrainBackdrop(data, worldX, worldZ + kProbe, seed).height;
+        auto heightAt = [&](float x, float z) {
+          return SampleBackdrop(data, x, z, seed, false).height;
+        };
+        const float hX0 = heightAt(worldX - kProbe, worldZ);
+        const float hX1 = heightAt(worldX + kProbe, worldZ);
+        const float hZ0 = heightAt(worldX, worldZ - kProbe);
+        const float hZ1 = heightAt(worldX, worldZ + kProbe);
         DirectX::XMVECTOR n =
             DirectX::XMVectorSet(-(hX1 - hX0), 2.0f * kProbe, -(hZ1 - hZ0), 0.0f);
         n = DirectX::XMVector3Normalize(n);
@@ -341,19 +370,41 @@ std::vector<TerrainBackdropChunk> BuildTerrainBackdrop(const TerrainData &data,
       }
     }
     graphics::ComputeTangents(chunk.vertices, chunk.indices);
-    chunks.push_back(std::move(chunk));
+    return chunk;
   };
 
+  struct GridJob {
+    const std::vector<float> *xs;
+    const std::vector<float> *zs;
+    size_t rowBegin, rowEnd;
+  };
+  std::vector<GridJob> jobs;
   // 左右の帯（コースの奥行きの範囲）。奥行き方向に分割する。
   constexpr size_t kRowsPerChunk = 120;
   for (const auto *xs : {&leftX, &rightX}) {
     for (size_t row = 0; row + 1 < interiorZ.size(); row += kRowsPerChunk) {
-      buildGrid(*xs, interiorZ, row, std::min(interiorZ.size() - 1, row + kRowsPerChunk));
+      jobs.push_back({xs, &interiorZ, row,
+                      std::min(interiorZ.size() - 1, row + kRowsPerChunk)});
     }
   }
   // 手前と奥の帯（角を含む全幅）
-  buildGrid(fullX, backZ, 0, backZ.size() - 1);
-  buildGrid(fullX, frontZ, 0, frontZ.size() - 1);
+  jobs.push_back({&fullX, &backZ, 0, backZ.size() - 1});
+  jobs.push_back({&fullX, &frontZ, 0, frontZ.size() - 1});
+
+  // チャンクどうしは独立なので並列に作る。並びは元の順のまま返す。
+  std::vector<std::future<TerrainBackdropChunk>> pending;
+  pending.reserve(jobs.size());
+  for (size_t i = 1; i < jobs.size(); ++i) {
+    const GridJob job = jobs[i];
+    pending.push_back(std::async(std::launch::async, [&buildGrid, job]() {
+      return buildGrid(*job.xs, *job.zs, job.rowBegin, job.rowEnd);
+    }));
+  }
+  chunks.reserve(jobs.size());
+  chunks.push_back(buildGrid(*jobs[0].xs, *jobs[0].zs, jobs[0].rowBegin, jobs[0].rowEnd));
+  for (auto &f : pending) {
+    chunks.push_back(f.get());
+  }
   return chunks;
 }
 
