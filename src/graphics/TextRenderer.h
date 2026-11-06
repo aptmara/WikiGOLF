@@ -250,7 +250,18 @@ private:
   struct TextLayoutEntry {
     ComPtr<IDWriteTextLayout> layout;
     uint64_t lastUsedFrame = 0;
+    // 縁取り用のグリフ輪郭。描いた位置（左上）が同じなら作り直さずに使う。
+    ComPtr<ID2D1Geometry> outline;
+    uint32_t outlineXBits = 0;
+    uint32_t outlineYBits = 0;
+    bool hasOutline = false;
   };
+  /** @brief キャッシュの項目ごと取得（なければ作成）。失敗時は nullptr */
+  TextLayoutEntry *GetOrCreateTextLayoutEntry(const std::wstring &text,
+                                              IDWriteTextFormat *format,
+                                              const std::string &fontFamily,
+                                              float fontSize, TextAlign align,
+                                              float maxWidth, float maxHeight);
   std::unordered_map<TextLayoutKey, TextLayoutEntry, TextLayoutKeyHash>
       m_layoutCache;
   static constexpr size_t kMaxLayoutCacheEntries = 512;

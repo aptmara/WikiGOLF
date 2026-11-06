@@ -131,6 +131,15 @@ IDWriteTextLayout *TextRenderer::GetOrCreateTextLayout(
     const std::wstring &text, IDWriteTextFormat *format,
     const std::string &fontFamily, float fontSize, TextAlign align,
     float maxWidth, float maxHeight) {
+  TextLayoutEntry *entry = GetOrCreateTextLayoutEntry(
+      text, format, fontFamily, fontSize, align, maxWidth, maxHeight);
+  return entry ? entry->layout.Get() : nullptr;
+}
+
+TextRenderer::TextLayoutEntry *TextRenderer::GetOrCreateTextLayoutEntry(
+    const std::wstring &text, IDWriteTextFormat *format,
+    const std::string &fontFamily, float fontSize, TextAlign align,
+    float maxWidth, float maxHeight) {
   if (!m_dwriteFactory || !format)
     return nullptr;
 
@@ -145,7 +154,7 @@ IDWriteTextLayout *TextRenderer::GetOrCreateTextLayout(
   auto it = m_layoutCache.find(key);
   if (it != m_layoutCache.end()) {
     it->second.lastUsedFrame = m_frameCounter;
-    return it->second.layout.Get();
+    return &it->second;
   }
 
   ComPtr<IDWriteTextLayout> layout;
@@ -161,7 +170,7 @@ IDWriteTextLayout *TextRenderer::GetOrCreateTextLayout(
   entry.layout = layout;
   entry.lastUsedFrame = m_frameCounter;
   auto res = m_layoutCache.emplace(std::move(key), std::move(entry));
-  return res.first->second.layout.Get();
+  return &res.first->second;
 }
 
 float TextRenderer::MeasureTextHeight(const std::wstring &text,
@@ -210,13 +219,15 @@ void TextRenderer::DrawTextCore(const std::wstring &text,
 
   IDWriteTextFormat *format = nullptr;
   IDWriteTextLayout *layout = nullptr;
+  TextLayoutEntry *layoutEntry = nullptr;
   if (!text.empty()) {
     format =
         m_fontManager.GetFormat(style.fontFamily, style.fontSize, style.align);
     if (format) {
-      layout = GetOrCreateTextLayout(text, format, style.fontFamily,
-                                     style.fontSize, style.align, maxWidth,
-                                     maxHeight);
+      layoutEntry = GetOrCreateTextLayoutEntry(text, format, style.fontFamily,
+                                               style.fontSize, style.align,
+                                               maxWidth, maxHeight);
+      layout = layoutEntry ? layoutEntry->layout.Get() : nullptr;
     }
   }
 
@@ -353,8 +364,31 @@ void TextRenderer::DrawTextCore(const std::wstring &text,
     ID2D1SolidColorBrush *outlineBrush =
         m_brushCache.GetBrush(style.outlineColor);
     if (outlineBrush) {
-      GlyphOutlineCollector collector(m_d2dFactory.Get());
-      if (SUCCEEDED(layout->Draw(nullptr, &collector, rect.left, rect.top))) {
+      // 輪郭の作成（グリフごとのパス生成）は重いので、同じ位置なら前回の結果を使う。
+      // 作り方は毎回と同じなので、描かれる線は変わらない。
+      const uint32_t xBits = FloatBits(rect.left);
+      const uint32_t yBits = FloatBits(rect.top);
+      ComPtr<ID2D1Geometry> outline;
+      bool haveOutline = false;
+      if (layoutEntry && layoutEntry->hasOutline &&
+          layoutEntry->outlineXBits == xBits &&
+          layoutEntry->outlineYBits == yBits) {
+        outline = layoutEntry->outline;
+        haveOutline = true;
+      } else {
+        GlyphOutlineCollector collector(m_d2dFactory.Get());
+        if (SUCCEEDED(layout->Draw(nullptr, &collector, rect.left, rect.top))) {
+          outline = collector.BuildGroup();
+          haveOutline = true;
+          if (layoutEntry) {
+            layoutEntry->outline = outline;
+            layoutEntry->outlineXBits = xBits;
+            layoutEntry->outlineYBits = yBits;
+            layoutEntry->hasOutline = true;
+          }
+        }
+      }
+      if (haveOutline) {
         if (!m_outlineStrokeStyle) {
           m_d2dFactory->CreateStrokeStyle(
               D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND,
@@ -363,8 +397,8 @@ void TextRenderer::DrawTextCore(const std::wstring &text,
                                           D2D1_LINE_JOIN_ROUND),
               nullptr, 0, &m_outlineStrokeStyle);
         }
-        if (auto group = collector.BuildGroup()) {
-          m_d2dContext->DrawGeometry(group.Get(), outlineBrush,
+        if (outline) {
+          m_d2dContext->DrawGeometry(outline.Get(), outlineBrush,
                                      style.outlineWidth * 2.0f,
                                      m_outlineStrokeStyle.Get());
         }
