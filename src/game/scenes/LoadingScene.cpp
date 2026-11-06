@@ -147,7 +147,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     const auto dbStartedAt = std::chrono::steady_clock::now();
     data->pathSystem = std::make_unique<game::systems::WikiShortestPath>();
     bool dbLoaded =
-        data->pathSystem->Initialize("Assets/data/jawiki_sdow-001.sqlite");
+        data->pathSystem->Initialize();
     setProgress(0.3f);
     const char *dbLoadedLabel = "false";
     if (dbLoaded) {

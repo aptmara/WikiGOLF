@@ -1,7 +1,7 @@
 WikiGOLF uses content from Japanese Wikipedia (https://ja.wikipedia.org/)
 in two ways:
 
-  1. Bundled data: Assets/data/jawiki_sdow-*.sqlite (article titles/links
+  1. Bundled data: Assets/data/jawiki.linkgraph (article titles/links
      used for course generation).
   2. Live data fetched at runtime from the Wikimedia API while the game
      is running (article text, tables of contents and inter-article
@@ -48,7 +48,7 @@ Attribution:
   このプロダクトは、ウィキペディア日本語版 (https://ja.wikipedia.org/)
   のコンテンツを次の2通りの方法で利用しています。
 
-    1. 同梱データ: Assets/data/jawiki_sdow-*.sqlite
+    1. 同梱データ: Assets/data/jawiki.linkgraph
        （コース生成に使う記事タイトル・リンク情報）
     2. 実行時にウィキメディアAPIから取得するライブデータ:
        記事本文・目次・記事間リンク

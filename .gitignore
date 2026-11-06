@@ -46,7 +46,11 @@ Release/
 x64/
 tmp/
 dumps/
-tools/
+!tools/
+tools/*
+# リンクグラフを作る道具は管理する
+!tools/linkgraph/
+!tools/linkgraph/**
 .gemini/
 .claude/
 libs/assimp-6.0.2/static/
@@ -75,8 +79,6 @@ libs/DLSS/
 
 # --- Explicitly Include ---
 !CMakeLists.txt
-!Assets/data/*.sqlite
-Assets/data/jawiki_sdow-001.sqlite
 
 # Doxygen の生成物は設定ファイルと分離し、Git管理へ含めない
 docs/doxygen/

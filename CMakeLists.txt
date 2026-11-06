@@ -240,33 +240,11 @@ add_custom_command(TARGET DX_GAME POST_BUILD
     VERBATIM)
 target_precompile_headers(DX_GAME REUSE_FROM wikigolf_pch)
 
-# データベースの分割ファイルを自動的に結合するターゲット
-if(WIN32)
-    add_custom_command(
-        OUTPUT "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001.sqlite"
-        COMMAND cmd /c copy /b jawiki_sdow-001_part1.sqlite+jawiki_sdow-001_part2.sqlite+jawiki_sdow-001_part3.sqlite jawiki_sdow-001.sqlite
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Assets/data"
-        DEPENDS "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001_part1.sqlite"
-                "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001_part2.sqlite"
-                "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001_part3.sqlite"
-        COMMENT "Combining database part files into jawiki_sdow-001.sqlite..."
-    )
-    add_custom_target(combine_db ALL
-        DEPENDS "${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001.sqlite"
-    )
-    add_dependencies(DX_GAME combine_db)
-endif()
-
 # インクルードディレクトリの設定
 target_include_directories(DX_GAME PRIVATE 
     src 
-    src/thirdparty/sqlite3
     libs/assimp-6.0.2/include
 )
-
-# SQLite3 amalgamation（ソースとして直接コンパイル）
-set_source_files_properties("${CMAKE_SOURCE_DIR}/src/thirdparty/sqlite3/sqlite3.c" PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_sources(DX_GAME PRIVATE src/thirdparty/sqlite3/sqlite3.c)
 
 # Assimpライブラリディレクトリ
 target_link_directories(DX_GAME PRIVATE libs/assimp-6.0.2 libs/assimp-6.0.2/static)
@@ -351,8 +329,9 @@ if(WIKIGOLF_STATIC_BUILD)
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/ui $<TARGET_FILE_DIR:DX_GAME>/Assets/ui
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/Assets/videos $<TARGET_FILE_DIR:DX_GAME>/Assets/videos
         COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:DX_GAME>/Assets/data
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/jawiki_sdow-001.sqlite $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001.sqlite
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/jawiki.linkgraph $<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki.linkgraph
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/Assets/data/content_filter.tsv $<TARGET_FILE_DIR:DX_GAME>/Assets/data/content_filter.tsv
+        COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001.sqlite"
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part1.sqlite"
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part2.sqlite"
         COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:DX_GAME>/Assets/data/jawiki_sdow-001_part3.sqlite"
@@ -845,9 +824,9 @@ add_executable(test_wiki_page_layout
     src/game/systems/WikiShortestPathSearch.cpp
     src/game/systems/WikiShortestPathDistances.cpp
     src/game/systems/WikiShortestPathPopular.cpp
-    src/thirdparty/sqlite3/sqlite3.c)
+    src/game/systems/WikiLinkGraph.cpp)
 target_precompile_headers(test_wiki_page_layout REUSE_FROM wikigolf_pch)
-target_include_directories(test_wiki_page_layout PRIVATE src src/thirdparty/sqlite3)
+target_include_directories(test_wiki_page_layout PRIVATE src)
 target_link_libraries(test_wiki_page_layout PRIVATE wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_wiki_page_layout PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
@@ -947,16 +926,25 @@ endif()
 add_test(NAME content_filter COMMAND test_content_filter
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
-# 記事タイトルからページIDを引く処理（括弧・大文字小文字・転送）のテスト
-add_executable(test_wiki_title_lookup
-    test_wiki_title_lookup.cpp
-    src/thirdparty/sqlite3/sqlite3.c)
-target_include_directories(test_wiki_title_lookup PRIVATE src src/thirdparty/sqlite3)
+# リンクグラフ（読み込み・タイトル検索・手数の計算）と最短経路のテスト
+add_executable(test_wiki_link_graph
+    test_wiki_link_graph.cpp
+    src/game/systems/WikiLinkGraph.cpp
+    src/game/systems/WikiShortestPath.cpp
+    src/game/systems/WikiShortestPathSearch.cpp
+    src/game/systems/WikiShortestPathDistances.cpp
+    src/game/systems/WikiShortestPathPopular.cpp)
+target_include_directories(test_wiki_link_graph PRIVATE src)
+target_link_libraries(test_wiki_link_graph PRIVATE wikigolf_common)
 if(MSVC)
-    target_compile_definitions(test_wiki_title_lookup PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
-    target_compile_options(test_wiki_title_lookup PRIVATE /utf-8 /Zc:__cplusplus)
+    target_compile_definitions(test_wiki_link_graph PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_wiki_link_graph PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
-add_test(NAME wiki_title_lookup COMMAND test_wiki_title_lookup)
+add_test(NAME wiki_link_graph COMMAND test_wiki_link_graph)
+# 同梱の実データでゲームと同じ呼び方を試す（LFS の実体が無ければ飛ばす）
+add_test(NAME wiki_link_graph_real_data
+         COMMAND test_wiki_link_graph Assets/data/jawiki.linkgraph
+         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 add_executable(test_display_settings_rules
     test_display_settings_rules.cpp

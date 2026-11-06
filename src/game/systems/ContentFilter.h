@@ -96,6 +96,15 @@ public:
     return it != m_levelById.end() && IsLevelBlocked(it->second);
   }
 
+  /** @brief 今の設定で除外対象になる記事IDを fn(pageId) で全部渡します。*/
+  template <class Fn> void ForEachBlockedPageId(Fn &&fn) const {
+    for (const auto &[pageId, level] : m_levelById) {
+      if (IsLevelBlocked(level)) {
+        fn(pageId);
+      }
+    }
+  }
+
   /** @brief 空白/アンダースコアとASCII大文字小文字の表記ゆれを吸収します。*/
   static std::string NormalizeTitle(std::string title) {
     std::transform(title.begin(), title.end(), title.begin(),

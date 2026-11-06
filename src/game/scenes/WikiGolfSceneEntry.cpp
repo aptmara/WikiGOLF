@@ -319,8 +319,8 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
     if (!m_shortestPath) {
       m_shortestPath = std::make_unique<game::systems::WikiShortestPath>();
-      if (!m_shortestPath->Initialize("Assets/data/jawiki_sdow-001.sqlite")) {
-        LOG_WARN("WikiGolf", "SDOW DB not found for target selection");
+      if (!m_shortestPath->Initialize()) {
+        LOG_WARN("WikiGolf", "Link graph not found for target selection");
         m_shortestPath.reset();
       }
     }

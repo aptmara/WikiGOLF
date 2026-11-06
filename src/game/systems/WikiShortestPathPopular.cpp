@@ -1,21 +1,19 @@
 /**
  * @file WikiShortestPathPopular.cpp
- * @brief WikiShortestPathの責務別実装です。
+ * @brief ゴール候補にする人気記事の選択
 */
 
 #include "WikiShortestPath.h"
 #include "ContentFilter.h"
 #include "DailyChallengeRules.h"
-#include "WikiShortestPathInternals.h"
+#include "WikiLinkGraph.h"
 #include "../../core/Logger.h"
+
 #include <algorithm>
-#include <queue>
-#include <sqlite3.h>
-#include <sstream>
+#include <cctype>
+#include <cstdlib>
 
 namespace game::systems {
-
-using namespace wiki_shortest_path_detail;
 
 std::pair<std::string, int>
 WikiShortestPath::FetchPopularPageTitle(int minIncomingLinks) {
@@ -40,21 +38,20 @@ WikiShortestPath::FetchPopularPageTitle(int minIncomingLinks,
 std::pair<std::string, int>
 WikiShortestPath::FetchPopularPageTitleWithIndexSelector(
     const std::function<std::size_t(std::size_t)> &selectIndex) {
-  if (!m_db)
+  if (!m_graph) {
     return {"", -1};
-
-  // キャッシュからランダムに選ぶ
-  if (m_popularPageIds.empty()) {
+  }
+  if (m_popularArticles.empty()) {
     LOG_WARN("WikiShortestPath", "No popular pages cached.");
     return {"", -1};
   }
 
   // 10回リトライ（フィルタリング用）
   for (int i = 0; i < 10; ++i) {
-    const std::size_t index = selectIndex(m_popularPageIds.size());
-    int pageId = m_popularPageIds[index];
-
-    std::string title = FetchPageTitle(pageId);
+    const std::size_t index = selectIndex(m_popularArticles.size());
+    const std::uint32_t article = m_popularArticles[index];
+    const int pageId = static_cast<int>(m_graph->WikiPageId(article));
+    const std::string title = ArticleTitle(article);
 
     // フィルタリング
     bool isIgnored = false;
@@ -64,7 +61,7 @@ WikiShortestPath::FetchPopularPageTitleWithIndexSelector(
                     [](unsigned char c) { return std::isdigit(c); }))
       isIgnored = true;
     if (title.size() >= 3) {
-      std::string suffix = title.substr(title.size() - 3);
+      const std::string suffix = title.substr(title.size() - 3);
       if (suffix == "年" || suffix == "月" || suffix == "日")
         isIgnored = true;
     }
@@ -97,4 +94,3 @@ WikiShortestPath::FetchPopularPageTitleWithIndexSelector(
 }
 
 } // namespace game::systems
-

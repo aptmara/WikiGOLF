@@ -102,7 +102,7 @@ public:
      * @param textureGen  テクスチャジェネレータ（非 null 必須）
      * @param terrainSys  地形システム（非 null 必須）
      * @param skyboxGen   スカイボックスジェネレータ（非 null 必須）
-     * @param shortestPath SDOW 最短パスシステム（null 許容）
+     * @param shortestPath 最短リンク数の計算（null 許容）
 */
     void SetSystems(graphics::WikiTextureGenerator* textureGen,
                     game::systems::WikiTerrainSystem* terrainSys,

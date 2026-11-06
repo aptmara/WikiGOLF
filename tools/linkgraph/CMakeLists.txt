@@ -1,0 +1,13 @@
+# リンクグラフ生成ツール（build_linkgraph.py が自動でビルドします）
+cmake_minimum_required(VERSION 3.20)
+project(linkgraph_tools CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_executable(linkgraph_order linkgraph_order.cpp)
+if(MSVC)
+  target_compile_options(linkgraph_order PRIVATE /O2 /utf-8 /W4 /D_CRT_SECURE_NO_WARNINGS)
+else()
+  target_compile_options(linkgraph_order PRIVATE -O3 -march=native)
+  find_package(Threads REQUIRED)
+  target_link_libraries(linkgraph_order PRIVATE Threads::Threads)
+endif()

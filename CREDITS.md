@@ -14,7 +14,7 @@
 ## 第三者素材
 | 素材 | 作者・配布元 | ライセンス |
 |---|---|---|
-| Wikipedia 記事データ（同梱DB・実行時取得） | Wikipedia 執筆者 | CC BY-SA 4.0 / GFDL（`licenses/WIKIPEDIA-LICENSE`） |
+| Wikipedia 記事データ（同梱のリンクグラフ・実行時取得） | Wikipedia 執筆者 | CC BY-SA 4.0 / GFDL（`licenses/WIKIPEDIA-LICENSE`） |
 | タイトル画面の写真 `Golfer_swing.jpg` | Lilrizz（Wikimedia Commons） | CC0 1.0（`licenses/GOLFER-SWING-PHOTO-LICENSE`） |
 | 効果音・BGM `Assets/sounds/*` | OtoLogic（https://otologic.jp） | CC BY 4.0（`licenses/SOUNDS-LICENSE`） |
 | 効果音 `Assets/sounds/*` | 効果音ラボ（https://soundeffect-lab.info/） | 同サイトの利用規約（`licenses/SOUNDS-LICENSE`） |
@@ -28,7 +28,6 @@
 |---|---|
 | Assimp 6.0.2 | BSD 3-Clause（`licenses/assimp-LICENSE`） |
 | litehtml / gumbo | BSD 3-Clause / Apache 2.0（ビルド時に `licenses/` へ同梱） |
-| SQLite | パブリックドメイン |
 | stb_image_write | パブリックドメイン / MIT |
 | Dear ImGui（デバッグビルドのみ） | MIT |
 

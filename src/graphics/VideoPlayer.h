@@ -4,7 +4,7 @@
  * @brief VideoPlayer クラスおよびグラフィックス/リソース関連定義
  */
 
-#include "../../core/Logger.h"
+#include "../core/Logger.h"
 #include <d3d11.h>
 #include <mfapi.h>
 #include <mfidl.h>

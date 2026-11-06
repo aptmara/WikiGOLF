@@ -80,7 +80,7 @@ void AsyncPathEvaluator::Start(
 
         game::systems::WikiShortestPath pathSystem;
         const auto databaseStartedAt = std::chrono::steady_clock::now();
-        if (!pathSystem.Initialize("Assets/data/jawiki_sdow-001.sqlite",
+        if (!pathSystem.Initialize(game::systems::WikiShortestPath::kDefaultGraphPath,
                                    false)) {
           progress->store(total->load(std::memory_order_relaxed),
                           std::memory_order_relaxed);

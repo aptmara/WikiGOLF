@@ -42,7 +42,7 @@
 - **シェーダー言語**: HLSL (Vertex Shader, Pixel Shader, PostProcess, Procedural Grass)
 - **3Dアセット / モデル**: 自作プロシージャルメッシュ生成 + Assimp 6.0.2 (OBJ/FBXロード)
 - **物理エンジン**: 自作物理シミュレータ（ハイトマップ衝突、OBB/AABB、芝転がり摩擦、静止摩擦、傾斜加速、空気抵抗）
-- **データベース**: SQLite3 (Amalgamation) - 日本語Wikipediaのリンクグラフ（SDOW: Six Degrees of Wikipedia）を内蔵し、双方向BFSによる最短経路探索を実行
+- **リンクグラフ**: 日本語Wikipediaの記事間リンクを独自形式（`Assets/data/jawiki.linkgraph`、`tools/linkgraph` で生成）で内蔵し、ゴールからの逆向きBFSで全記事の最短手数を求める
 - **ネットワーク**: WinHTTP (Wikipedia REST API / Action API による記事・画像取得)
 - **オーディオ**: 自作オーディオシステム (Media Foundation / XAudio2 / winmm)
 - **アーキテクチャ**: 自作軽量ECS (Entity Component System) + シーンステートマシン
@@ -89,7 +89,7 @@ graph TD
     end
 
     subgraph "External Resources & DB"
-        ShortestPath --> SQLite[(jawiki_sdow.sqlite)]
+        ShortestPath --> LinkGraph[(jawiki.linkgraph)]
         PageLoader --> WikiAPI[Wikipedia REST API]
     end
 ```
@@ -104,7 +104,7 @@ WikiGOLF/
 │   └── README.md                  # 本仕様書
 ├── Assets/                        # ゲーム内リソース
 │   ├── Fonts/                     # 同梱フォント (Barlow, Kiwi Maru, Share Tech Mono)
-│   ├── data/                      # WikipediaリンクグラフDB (jawiki_sdow-001_part*.sqlite)
+│   ├── data/                      # Wikipediaリンクグラフ (jawiki.linkgraph, Git LFS)
 │   ├── models/                    # 3Dモデル (ピンフラッグ, ゴルフボール, 小物等)
 │   ├── shaders/                   # HLSLシェーダー (Terrain, Skybox, Grass, PostProcess, UI)
 │   ├── sounds/                    # 効果音 (ショット音, カップイン, 判定音, 歓声, 環境音)
@@ -124,7 +124,7 @@ WikiGOLF/
 │   │   └── utils/                 # 算術・物理・ルール補助関数 (TrajectorySimulation, ParRules等)
 │   ├── graphics/                  # レンダリング基盤 (GraphicsDevice, Mesh, Shader, TextRenderer)
 │   ├── resources/                 # アセット管理 (ResourceManager, Handle管理)
-│   ├── thirdparty/                # サードパーティソース (sqlite3 amalgamation)
+│   ├── thirdparty/                # サードパーティソース
 │   └── pch.h                      # プリコンパイル済みヘッダー
 ├── tools/                         # 補助ツール (SkyboxGen, WikiImagePreview, dbbuildスクリプト)
 ├── test_*.cpp                     # ユニットテスト (物理、弾道、地形、UI、ルール等)
@@ -158,7 +158,7 @@ WikiGOLF/
   - **インクリメンタルビルド**: 画面フリーズを防ぐため、`std::async` で地形データを事前計算し、メインスレッド上でフレームごとに1タイルずつメッシュ化 (`StepBuildField`)。
   - **動的プロシージャル芝**: ラフおよびフェアウェイ上に千鳥配置で高密度の草パッチメッシュをインスタンシング配置。ボール通過時のなぎ倒し物理インタラクション (`UpdateSurfaceResponse`) をHLSL (`GrassVS.hlsl`) 経由で実行。
 - **`game::systems::WikiShortestPath`**:
-  jawikiリンクグラフDB (`Assets/data/jawiki_sdow-001.sqlite`) に対し、双方向幅優先探索（Bidirectional BFS）を実行。現在地からゴール記事までの最短ホップ数をリアルタイムに算出。
+  リンクグラフ (`Assets/data/jawiki.linkgraph`) をプロセス内で1度だけ読み込み、ゴールごとに逆向き幅優先探索（全コアで並列）で全記事の手数表を作る。現在地や各リンクからゴールまでの最短ホップ数は表を引くだけで求まる。
   - 記事内の全リンクについてゴールまでの残りホップ数を一括計算し、ホールの旗（ゴール直通、1ホップ、2ホップ等）の配色・大型化に反映。
 
 ### 4.3 ゴルフゲームプレイ (Golf Gameplay Engine)
@@ -248,10 +248,9 @@ cmake -B build -G "Visual Studio 17 2022" -A x64
 # 2. プロジェクトのビルド (Release構成)
 cmake --build build --config Release -j
 
-# 3. データベースの自動結合
-# CMakeLists.txt 内の custom_command により、初回ビルド時に
-# Assets/data/jawiki_sdow-001_part*.sqlite が結合されて
-# jawiki_sdow-001.sqlite が自動生成されます。
+# 3. リンクグラフ
+# Assets/data/jawiki.linkgraph（Git LFS）がそのまま使われます。
+# 作り直すときは tools/linkgraph/README.md を参照。
 ```
 
 ### 5.3 成果物の配置
@@ -308,7 +307,7 @@ ctest -C Release --output-on-failure
    - COMオブジェクトには必ず `Microsoft::WRL::ComPtr<T>` を使用し、手動の `Release()` 漏れを防ぐこと。
    - スワップチェーンのリサイズ時は、Direct2Dレンダーターゲット (`TextRenderer::ReleaseTargetForResize()`) を先に解放してから `ResizeBuffers` を呼ぶこと。
 2. **スレッド安全性と非同期処理**:
-   - Wikipedia APIの通信や最短経路探索 (SQLite) は必ずワーカースレッド (`std::async`, `std::jthread`) で非同期に行い、メインスレッドのレンダリングループを決してブロックしないこと。
+   - Wikipedia APIの通信や最短経路探索（リンクグラフの読み込み・BFS） は必ずワーカースレッド (`std::async`, `std::jthread`) で非同期に行い、メインスレッドのレンダリングループを決してブロックしないこと。
    - スレッド終了やシーン破棄時には `RequestCancelAll()` 等の中断フラグを正しく処理し、ハングアップを回避すること。
 3. **ECSの分離原則**:
    - `components/` には純粋なデータ（POD構造体またはステート）のみを定義し、処理ロジックを持たせないこと。
