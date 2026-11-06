@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """記事フィルター Assets/data/content_filter.tsv を生成します。
 
-日本語版Wikipediaのカテゴリをたどって除外候補を集め、同梱DBからリダイレクトも
-展開します。ネットワーク接続と Assets/data/jawiki_sdow-001.sqlite が必要です。
+日本語版Wikipediaのカテゴリをたどって除外候補を集め、同梱のリンクグラフ
+（Assets/data/jawiki.linkgraph）からリダイレクトも展開します。ネットワーク接続と
+リンクグラフの実体（Git LFS）が必要です。
 
     python docs/content-filter/build_filter_lists.py
 
@@ -17,7 +18,6 @@ SAFE_MODE_ONLY_TITLES に追加します。変更後は、被リンク数の多�
 """
 
 import json
-import sqlite3
 import sys
 import time
 import urllib.error
@@ -31,7 +31,8 @@ HEADERS = {
     "(https://github.com/aptmara/WikiGOLF)"
 }
 ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "Assets" / "data" / "jawiki_sdow-001.sqlite"
+GRAPH_PATH = ROOT / "Assets" / "data" / "jawiki.linkgraph"
+sys.path.insert(0, str(ROOT / "tools" / "linkgraph"))
 OUTPUT_PATH = ROOT / "Assets" / "data" / "content_filter.tsv"
 
 # (カテゴリ名, 下位カテゴリをたどる深さ)
@@ -283,6 +284,31 @@ def collect(client, seeds):
     return pages, empty, len(best_depth)
 
 
+def load_graph():
+    """リンクグラフからタイトル辞書と人気記事を読みます。"""
+    import numpy as np
+    from verify_linkgraph import LinkGraph, decode_titles
+
+    graph = LinkGraph(GRAPH_PATH)
+    meta = json.loads(graph.raw("meta"))
+    titles, redirect = decode_titles(graph.raw("titles"))
+    planes = np.frombuffer(graph.raw("title_ids"), np.uint8).reshape(3, -1).astype(np.uint32)
+    title_ids = planes[0] | planes[1] << 8 | planes[2] << 16
+    wiki_ids = np.frombuffer(graph.raw("wiki_ids"), np.uint32)
+    popular_raw = graph.raw("popular")
+    count = int.from_bytes(popular_raw[:4], "little")
+    pairs = np.frombuffer(popular_raw, np.uint32, offset=4).reshape(count, 2)
+    popular = [int(wiki_ids[a]) for a, indeg in pairs if indeg >= 10000][:2000]
+    redirects = [(t.decode("utf-8", "surrogateescape"), int(wiki_ids[title_ids[i]]))
+                 for i, t in enumerate(titles) if redirect[i]]
+    return {
+        "articles": meta["articles"],
+        "redirects": redirects,
+        "redirect_titles": {t for t, _ in redirects},
+        "popular": popular,
+    }
+
+
 def main():
     client = CategoryClient()
     level1, empty1, categories1 = collect(client, LEVEL1)
@@ -296,12 +322,11 @@ def main():
     level1 = {i: t for i, t in level1.items() if t not in allow and t not in safe_mode_only}
     level2 = {i: t for i, t in level2.items() if t not in allow}
 
-    database = sqlite3.connect(f"file:{DB_PATH.as_posix()}?mode=ro&immutable=1", uri=True)
+    graph = load_graph()
     # 転送ページ自体がカテゴリに入っていることがある（別会社の旧サービス名など）。
     # 転送先の記事が対象のときだけ、下の展開で除外する。
-    redirect_ids = {row[0] for row in database.execute("SELECT id FROM pages WHERE is_redirect = 1")}
-    level1 = {i: t for i, t in level1.items() if i not in redirect_ids}
-    level2 = {i: t for i, t in level2.items() if i not in redirect_ids}
+    level1 = {i: t for i, t in level1.items() if t not in graph["redirect_titles"]}
+    level2 = {i: t for i, t in level2.items() if t not in graph["redirect_titles"]}
 
     level_by_id = {i: 1 for i in level1}
     level_by_id.update({i: 2 for i in level2})
@@ -312,37 +337,21 @@ def main():
     for page_id, title in level2.items():
         rows[page_id] = (2, title)
 
-    # カップのリンクや手入力はリダイレクト名で来ることがあるため展開する
-    redirect_count = 0
-    for source_id, target_id in database.execute(
-        "SELECT source_id, target_id FROM redirects"
-    ):
-        level = level_by_id.get(target_id)
-        if level is None or source_id in rows:
-            continue
-        found = database.execute(
-            "SELECT title FROM pages WHERE id = ?", (source_id,)
-        ).fetchone()
-        if found:
-            rows[source_id] = (level, found[0])
-            redirect_count += 1
+    # カップのリンクや手入力はリダイレクト名で来ることがあるため展開する。
+    # リンクグラフは転送ページの page_id を持たないので、転送先の page_id で書く
+    # （ゲームは page_id では転送先を、タイトルでは転送ページ名を判定する）。
+    redirect_rows = []
+    for title, target_page_id in graph["redirects"]:
+        level = level_by_id.get(target_page_id)
+        if level is not None:
+            redirect_rows.append((level, target_page_id, title))
 
-    popular = {
-        row[0]
-        for row in database.execute(
-            "SELECT p.id FROM pages p JOIN links l ON p.id = l.id "
-            "WHERE l.incoming_links_count >= 10000 AND p.is_redirect = 0 "
-            "ORDER BY l.incoming_links_count DESC LIMIT 2000"
-        )
-    }
-
+    popular = set(graph["popular"])
     with OUTPUT_PATH.open("w", encoding="utf-8", newline="\n") as output:
         for page_id, (level, title) in sorted(rows.items(), key=lambda r: (r[1][0], r[0])):
             output.write(f"{level}\t{page_id}\t{title}\n")
 
-    real_pages = database.execute(
-        "SELECT COUNT(*) FROM pages WHERE is_redirect = 0"
-    ).fetchone()[0]
+    real_pages = graph["articles"]
     hits = {
         level: [rows[i][1] for i in popular if i in rows and rows[i][0] == level]
         for level in (1, 2)
@@ -351,8 +360,8 @@ def main():
         "requests": client.request_count,
         "level1_articles": len(level1),
         "level2_articles": len(level2),
-        "redirects": redirect_count,
-        "rows": len(rows),
+        "redirects": len(redirect_rows),
+        "rows": len(rows) + len(redirect_rows),
         "db_articles": real_pages,
         "level1_percent": round(len(level1) / real_pages * 100, 3),
         "level1_and_2_percent": round((len(level1) + len(level2)) / real_pages * 100, 3),
