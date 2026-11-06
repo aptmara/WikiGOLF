@@ -11,6 +11,7 @@
 #include "../graphics/GraphicsDevice.h"
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <vector>
 #include <wincodec.h>
 #include <windows.h>
@@ -161,53 +162,91 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
                      IID_PPV_ARGS(&s_factory));
   }
 
-  UINT commonWidth = 0;
-  UINT commonHeight = 0;
-  std::vector<const std::string *> validPaths;
-
-  for (const auto &path : paths) {
-    int size_needed =
-        MultiByteToWideChar(CP_UTF8, 0, &path[0], (int)path.size(), NULL, 0);
-    std::wstring wpath(size_needed, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &path[0], (int)path.size(), &wpath[0],
-                        size_needed);
-
-    Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
-    if (FAILED(s_factory->CreateDecoderFromFilename(
-            wpath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad,
-            &decoder))) {
-      LOG_ERROR("Resource", "Array: Failed to decode {}", path);
-      continue;
+  // 各層の PNG 展開は重い（1枚 30ms 前後）ので並列に行う。GPU への転送は順に行う。
+  struct DecodedLayer {
+    bool hasFrame = false;  // デコーダーとフレームが得られた
+    bool converted = false; // RGBA へ変換できた
+    UINT width = 0;
+    UINT height = 0;
+    std::vector<BYTE> pixels;
+  };
+  std::vector<DecodedLayer> layers(paths.size());
+  IWICImagingFactory *factory = s_factory.Get();
+  auto decodeLayer = [&paths, &layers, factory](size_t index) {
+    const HRESULT coInit = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    {
+      const std::string &path = paths[index];
+      DecodedLayer &layer = layers[index];
+      int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, path.data(),
+                                           static_cast<int>(path.size()), nullptr, 0);
+      std::wstring widePath(sizeNeeded, 0);
+      MultiByteToWideChar(CP_UTF8, 0, path.data(), static_cast<int>(path.size()),
+                          widePath.data(), sizeNeeded);
+      Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+      Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+      if (factory &&
+          SUCCEEDED(factory->CreateDecoderFromFilename(
+              widePath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad,
+              &decoder)) &&
+          SUCCEEDED(decoder->GetFrame(0, &frame))) {
+        layer.hasFrame = true;
+        frame->GetSize(&layer.width, &layer.height);
+        Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+        layer.pixels.resize(static_cast<size_t>(layer.width) * layer.height * 4);
+        layer.converted =
+            SUCCEEDED(factory->CreateFormatConverter(&converter)) &&
+            SUCCEEDED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
+                                            WICBitmapDitherTypeNone, nullptr, 0.0,
+                                            WICBitmapPaletteTypeMedianCut)) &&
+            SUCCEEDED(converter->CopyPixels(nullptr, layer.width * 4,
+                                            static_cast<UINT>(layer.pixels.size()),
+                                            layer.pixels.data()));
+      }
     }
-
-    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
-    if (FAILED(decoder->GetFrame(0, &frame))) {
-      LOG_ERROR("Resource", "Array: Failed to read frame {}", path);
-      continue;
+    if (SUCCEEDED(coInit)) {
+      CoUninitialize();
     }
-
-    UINT w = 0;
-    UINT h = 0;
-    frame->GetSize(&w, &h);
-
-    if (commonWidth == 0) {
-      commonWidth = w;
-      commonHeight = h;
-    } else if (w != commonWidth || h != commonHeight) {
-      LOG_ERROR("Resource", "Array: Size mismatch in {}. Expected {}x{}, got {}x{}", path, commonWidth, commonHeight, w, h);
-      continue;
+  };
+  {
+    std::vector<std::thread> workers;
+    workers.reserve(paths.size());
+    for (size_t i = 1; i < paths.size(); ++i) {
+      workers.emplace_back(decodeLayer, i);
     }
-    validPaths.push_back(&path);
+    decodeLayer(0);
+    for (auto &worker : workers) {
+      worker.join();
+    }
   }
 
-  if (validPaths.empty())
+  UINT commonWidth = 0;
+  UINT commonHeight = 0;
+  std::vector<size_t> validLayers;
+  for (size_t i = 0; i < layers.size(); ++i) {
+    const DecodedLayer &layer = layers[i];
+    if (!layer.hasFrame) {
+      LOG_ERROR("Resource", "Array: Failed to decode {}", paths[i]);
+      continue;
+    }
+    if (commonWidth == 0) {
+      commonWidth = layer.width;
+      commonHeight = layer.height;
+    } else if (layer.width != commonWidth || layer.height != commonHeight) {
+      LOG_ERROR("Resource", "Array: Size mismatch in {}. Expected {}x{}, got {}x{}",
+                paths[i], commonWidth, commonHeight, layer.width, layer.height);
+      continue;
+    }
+    validLayers.push_back(i);
+  }
+
+  if (validLayers.empty())
     return {};
 
   D3D11_TEXTURE2D_DESC desc = {};
   desc.Width = commonWidth;
   desc.Height = commonHeight;
   desc.MipLevels = 1;
-  desc.ArraySize = static_cast<UINT>(validPaths.size());
+  desc.ArraySize = static_cast<UINT>(validLayers.size());
   desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
   desc.SampleDesc.Count = 1;
   desc.Usage = D3D11_USAGE_DEFAULT;
@@ -220,40 +259,17 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
     return {};
   }
 
-  std::vector<BYTE> pixels;
-  pixels.resize(static_cast<size_t>(commonWidth) * commonHeight * 4);
-  for (size_t layer = 0; layer < validPaths.size(); ++layer) {
-    const auto &path = *validPaths[layer];
-    int sizeNeeded =
-        MultiByteToWideChar(CP_UTF8, 0, path.data(),
-                            static_cast<int>(path.size()), nullptr, 0);
-    std::wstring widePath(sizeNeeded, 0);
-    MultiByteToWideChar(CP_UTF8, 0, path.data(),
-                        static_cast<int>(path.size()), widePath.data(),
-                        sizeNeeded);
-
-    Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
-    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
-    Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
-    if (FAILED(s_factory->CreateDecoderFromFilename(
-            widePath.c_str(), nullptr, GENERIC_READ,
-            WICDecodeMetadataCacheOnLoad, &decoder)) ||
-        FAILED(decoder->GetFrame(0, &frame)) ||
-        FAILED(s_factory->CreateFormatConverter(&converter)) ||
-        FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA,
-                                     WICBitmapDitherTypeNone, nullptr, 0.0,
-                                     WICBitmapPaletteTypeMedianCut)) ||
-        FAILED(converter->CopyPixels(
-            nullptr, commonWidth * 4, static_cast<UINT>(pixels.size()),
-            pixels.data()))) {
-      LOG_ERROR("Resource", "Array: Failed to upload layer {}", path);
+  for (size_t layer = 0; layer < validLayers.size(); ++layer) {
+    const DecodedLayer &decoded = layers[validLayers[layer]];
+    if (!decoded.converted) {
+      LOG_ERROR("Resource", "Array: Failed to upload layer {}", paths[validLayers[layer]]);
       return {};
     }
     const UINT subresource =
         D3D11CalcSubresource(0, static_cast<UINT>(layer), 1);
     m_device.GetContext()->UpdateSubresource(
-        texture.Get(), subresource, nullptr, pixels.data(), commonWidth * 4,
-        static_cast<UINT>(pixels.size()));
+        texture.Get(), subresource, nullptr, decoded.pixels.data(), commonWidth * 4,
+        static_cast<UINT>(decoded.pixels.size()));
   }
 
   D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -273,7 +289,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
 
   m_textureCache[name] = srv;
   LOG_INFO("Resource", "Loaded TextureArray: {} (Layers:{}, {}x{})", name,
-           static_cast<int>(validPaths.size()), commonWidth, commonHeight);
+           static_cast<int>(validLayers.size()), commonWidth, commonHeight);
   return srv;
 }
 
