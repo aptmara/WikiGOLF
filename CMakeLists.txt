@@ -110,6 +110,23 @@ if(MSVC)
     target_compile_options(wiki_client_json_common PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 
+# リンクグラフ（Assets/data/jawiki.linkgraph）の展開に使う zstd（展開部分だけ, v1.5.7, BSD）。
+# 取り込み方は libs/zstd-1.5.7/README.md。
+add_library(wikigolf_zstd STATIC
+    libs/zstd-1.5.7/common/debug.c
+    libs/zstd-1.5.7/common/entropy_common.c
+    libs/zstd-1.5.7/common/error_private.c
+    libs/zstd-1.5.7/common/fse_decompress.c
+    libs/zstd-1.5.7/common/xxhash.c
+    libs/zstd-1.5.7/common/zstd_common.c
+    libs/zstd-1.5.7/decompress/huf_decompress.c
+    libs/zstd-1.5.7/decompress/zstd_ddict.c
+    libs/zstd-1.5.7/decompress/zstd_decompress.c
+    libs/zstd-1.5.7/decompress/zstd_decompress_block.c)
+target_include_directories(wikigolf_zstd PUBLIC libs/zstd-1.5.7)
+# MSVC はアセンブリ版（.S）を扱えない。旧形式の展開は使わない
+target_compile_definitions(wikigolf_zstd PRIVATE ZSTD_DISABLE_ASM ZSTD_LEGACY_SUPPORT=0)
+
 if(CMAKE_BINARY_DIR MATCHES "static" OR CMAKE_MSVC_RUNTIME_LIBRARY MATCHES "MultiThreaded$")
     set(WIKIGOLF_STATIC_BUILD_DEFAULT ON)
 else()
@@ -224,6 +241,8 @@ add_custom_command(TARGET DX_GAME POST_BUILD
             "$<TARGET_FILE_DIR:DX_GAME>/licenses/Kenney-LICENSE"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/assimp-LICENSE"
             "$<TARGET_FILE_DIR:DX_GAME>/licenses/assimp-LICENSE"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/zstd-LICENSE"
+            "$<TARGET_FILE_DIR:DX_GAME>/licenses/zstd-LICENSE"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/GOLFER-SWING-PHOTO-LICENSE"
             "$<TARGET_FILE_DIR:DX_GAME>/licenses/GOLFER-SWING-PHOTO-LICENSE"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/licenses/SOUNDS-LICENSE"
@@ -251,6 +270,7 @@ target_link_directories(DX_GAME PRIVATE libs/assimp-6.0.2 libs/assimp-6.0.2/stat
 
 # リンクするライブラリの設定
 target_link_libraries(DX_GAME 
+    wikigolf_zstd
     d3d11
     d2d1
     dwrite
@@ -841,7 +861,7 @@ add_executable(test_wiki_page_layout
     src/game/systems/WikiLinkGraph.cpp)
 target_precompile_headers(test_wiki_page_layout REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_page_layout PRIVATE src)
-target_link_libraries(test_wiki_page_layout PRIVATE wikigolf_common)
+target_link_libraries(test_wiki_page_layout PRIVATE wikigolf_common wikigolf_zstd)
 if(MSVC)
     target_compile_definitions(test_wiki_page_layout PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_page_layout PRIVATE /utf-8 /Zc:__cplusplus)
@@ -949,7 +969,7 @@ add_executable(test_wiki_link_graph
     src/game/systems/WikiShortestPathDistances.cpp
     src/game/systems/WikiShortestPathPopular.cpp)
 target_include_directories(test_wiki_link_graph PRIVATE src)
-target_link_libraries(test_wiki_link_graph PRIVATE wikigolf_common)
+target_link_libraries(test_wiki_link_graph PRIVATE wikigolf_common wikigolf_zstd)
 if(MSVC)
     target_compile_definitions(test_wiki_link_graph PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_link_graph PRIVATE /utf-8 /Zc:__cplusplus)

@@ -14,6 +14,8 @@
 #include <compressapi.h>
 #pragma comment(lib, "Cabinet.lib")
 
+#include <zstd.h>
+
 #include <algorithm>
 #include <atomic>
 #include <cstring>
@@ -26,6 +28,11 @@
 namespace game::systems {
 
 namespace {
+
+// セクションの圧縮方式（tools/linkgraph/frames.py と同じ値）
+constexpr std::uint32_t kCodecNone = 0;
+constexpr std::uint32_t kCodecLzms = 2; // 以前の版。今は zstd で書く
+constexpr std::uint32_t kCodecZstd = 3;
 
 struct Section {
   std::uint64_t offset = 0;
@@ -165,7 +172,8 @@ WikiLinkGraph::Load(const std::string &path, std::string *error,
     section.codec = ReadLe<std::uint32_t>(entry + 40);
     section.frameSize = ReadLe<std::uint32_t>(entry + 44);
     if (section.offset + section.size > fileSize ||
-        (section.codec != 0 && section.codec != 2)) {
+        (section.codec != kCodecNone && section.codec != kCodecLzms &&
+         section.codec != kCodecZstd)) {
       return fail("セクション " + name + " が壊れています");
     }
     sections[name] = section;
@@ -184,7 +192,7 @@ WikiLinkGraph::Load(const std::string &path, std::string *error,
     std::size_t srcSize;
     std::uint8_t *dst;
     std::size_t dstSize;
-    bool compressed;
+    std::uint32_t codec;
   };
   std::vector<Job> jobs;
   const auto addJobs = [&](const Section &s, std::uint8_t *dst) {
@@ -194,7 +202,7 @@ WikiLinkGraph::Load(const std::string &path, std::string *error,
         return false;
       }
       jobs.push_back({src, static_cast<std::size_t>(s.size), dst,
-                      static_cast<std::size_t>(s.rawSize), false});
+                      static_cast<std::size_t>(s.rawSize), kCodecNone});
       return true;
     }
     if (s.size < 8) {
@@ -217,7 +225,7 @@ WikiLinkGraph::Load(const std::string &path, std::string *error,
         return false;
       }
       jobs.push_back({src + pos, static_cast<std::size_t>(compressed), dst + dstOffset,
-                      static_cast<std::size_t>(rawSize), true});
+                      static_cast<std::size_t>(rawSize), s.codec});
       pos += compressed;
     }
     return pos == s.size;
@@ -255,8 +263,15 @@ WikiLinkGraph::Load(const std::string &path, std::string *error,
       ok = false;
       return;
     }
-    if (!job.compressed) {
+    if (job.codec == kCodecNone) {
       std::memcpy(job.dst, job.src, job.srcSize);
+      return;
+    }
+    if (job.codec == kCodecZstd) {
+      const std::size_t got = ZSTD_decompress(job.dst, job.dstSize, job.src, job.srcSize);
+      if (ZSTD_isError(got) || got != job.dstSize) {
+        ok = false;
+      }
       return;
     }
     DECOMPRESSOR_HANDLE handle = nullptr;

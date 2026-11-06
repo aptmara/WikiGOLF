@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-from lzms import decompress_section
+from frames import decompress_section
 
 
 def fail(msg: str) -> None:
@@ -50,12 +50,10 @@ class LinkGraph:
     def raw(self, name: str, pool=None) -> bytes:
         off, size, raw, codec, frame = self.sections[name]
         blob = self.data[off:off + size]
-        if codec == 2:
-            out = decompress_section(blob, raw, frame, pool)
-        elif codec == 0:
-            out = blob
-        else:
-            fail(f'{name} の圧縮方式 {codec} は扱えない')
+        try:
+            out = decompress_section(blob, raw, frame, codec, pool)
+        except ValueError as e:
+            fail(f'{name}: {e}')
         if len(out) != raw:
             fail(f'{name} の展開後サイズが {len(out)}（表では {raw}）')
         return out

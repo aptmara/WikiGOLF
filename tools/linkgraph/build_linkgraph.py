@@ -12,20 +12,21 @@
      レベル1）の記事を取り除く
   4. linkgraph_order（C++）で重複除去・ID の振り直し（再帰的グラフ二分割）・
      入リンク一覧の符号化を行う
-  5. タイトル辞書などと合わせ、LZMS で圧縮して1ファイルに書き出す
+  5. タイトル辞書などと合わせ、zstd で圧縮して1ファイルに書き出す
 
-必要なもの: Windows、Python 3.10 以降、numpy、CMake と C++ コンパイラ。
+必要なもの: Windows、Python 3.14 以降（標準の compression.zstd を使う）、numpy、
+CMake と C++ コンパイラ。
 
-圧縮は Windows 標準の Compression API（cabinet.dll）の LZMS を使う。ゲーム側も
-同じ API で展開するので、外部ライブラリが要らない（zstd -19 より 5% ほど大きい）。
+圧縮は zstd のレベル 22。ゲーム側は libs/zstd-1.5.7 の展開部分で読む。
+以前の版は LZMS（Windows 標準の Compression API）で、ゲームはそちらも読める。
 
 出力ファイルの形式（リトルエンディアン）:
   ヘッダ 32 バイト: b'WGLG', u32 版=2, u32 セクション数, u32 予約, u64 ファイル長, u64 予約
   セクション表（48 バイト x セクション数）:
-      char 名前[16], u64 位置, u64 格納サイズ, u64 展開後サイズ, u32 圧縮(0=なし,2=LZMS),
+      char 名前[16], u64 位置, u64 格納サイズ, u64 展開後サイズ, u32 圧縮(0=なし,2=LZMS,3=zstd),
       u32 フレームの展開後サイズ（0 ならセクション全体で1フレーム）
   圧縮したセクションの中身: u32 フレーム数, u32 予約, u64 各フレームの圧縮後サイズ[フレーム数],
-      続いて各フレーム（LZMS のバッファ形式）。各フレームは独立していて並列に展開できる。
+      続いて各フレーム（zstd のフレーム。LZMS ならそのバッファ形式）。各フレームは独立していて並列に展開できる。
   セクション:
     meta        JSON（元ダンプの日付・件数・作成日時など）
     in_lists    記事ごとの入リンク一覧を ID 順に連結したもの。各一覧は昇順の ID を
@@ -67,7 +68,7 @@ from pathlib import Path
 
 import numpy as np
 
-from lzms import compress_frames
+from frames import CODEC_NONE, CODEC_ZSTD, compress_frames
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = Path(__file__).resolve().parent
@@ -78,7 +79,7 @@ JOBS = {'page': 'pagetable', 'redirect': 'redirecttable',
         'linktarget': 'linktargettable', 'pagelinks': 'pagelinkstable'}
 BLOCK_BYTES = 32 << 20
 FRAME_BYTES = 16 << 20
-TITLE_FRAME_BYTES = 4 << 20
+TITLE_FRAME_BYTES = 0  # zstd は展開が速いので1フレームのほうが小さく済む
 POPULAR_MIN_INCOMING = 5000
 T0 = time.time()
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -448,11 +449,11 @@ def write_file(out_path: Path, date: str, work: Path, article_wiki, article_titl
     with ThreadPoolExecutor(threads) as pool:
         compressed = compress_frames({k: v for k, v in raw.items()}, pool)
 
-    sections = [('meta', meta, len(meta), 0, 0)]
+    sections = [('meta', meta, len(meta), CODEC_NONE, 0)]
     for name in ('in_lists', 'in_len', 'titles', 'title_ids', 'wiki_ids'):
         data, frame = raw[name]
-        sections.append((name, compressed[name], len(data), 2, frame))
-    sections.append(('popular', popular, len(popular), 0, 0))
+        sections.append((name, compressed[name], len(data), CODEC_ZSTD, frame))
+    sections.append(('popular', popular, len(popular), CODEC_NONE, 0))
     header_size = 32 + 48 * len(sections)
     offset = header_size
     table = b''

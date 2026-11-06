@@ -27,6 +27,7 @@
 | ライブラリ | ライセンス |
 |---|---|
 | Assimp 6.0.2 | BSD 3-Clause（`licenses/assimp-LICENSE`） |
+| Zstandard (zstd) 1.5.7 | BSD 3-Clause（`licenses/zstd-LICENSE`） |
 | litehtml / gumbo | BSD 3-Clause / Apache 2.0（ビルド時に `licenses/` へ同梱） |
 | stb_image_write | パブリックドメイン / MIT |
 | Dear ImGui（デバッグビルドのみ） | MIT |
