@@ -53,4 +53,25 @@ void ApplyRowStyle(graphics::TextStyle &style) {
   style.shadowOffsetY = game::ui::kShadowOffsetY;
 }
 
+void ApplyCourseInfoLabelStyle(graphics::TextStyle &style) {
+  style = graphics::TextStyle::Guide();
+  style.fontFamily = "Kiwi Maru Medium";
+  style.fontSize = 16.0f;
+  style.align = graphics::TextAlign::Left;
+}
+
+void ApplyCourseInfoNameStyle(graphics::TextStyle &style) {
+  style = graphics::TextStyle::Guide();
+  style.fontFamily = "Kiwi Maru Medium";
+  style.fontSize = 22.0f;
+  style.align = graphics::TextAlign::Right;
+}
+
+void ApplyCourseInfoAttributionStyle(graphics::TextStyle &style) {
+  style = graphics::TextStyle::Guide();
+  style.fontFamily = "Kiwi Maru Medium";
+  style.fontSize = 13.0f;
+  style.align = graphics::TextAlign::Right;
+}
+
 } // namespace game::controllers::hud

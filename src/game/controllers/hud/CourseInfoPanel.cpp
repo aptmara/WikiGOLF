@@ -4,6 +4,7 @@
 */
 
 #include "CourseInfoPanel.h"
+#include "HudStyles.h"
 #include "../../../core/GameContext.h"
 #include "../../../core/StringUtils.h"
 #include "../../../ecs/World.h"
@@ -39,9 +40,9 @@ void SetTextVisible(ecs::World &world, ecs::Entity entity, bool visible) {
 void CourseInfoPanel::Initialize(core::GameContext &ctx) {
   const float x = game::ui::kBrowserHudX;
   const float y = game::ui::kBrowserHudY;
-  constexpr float kPanelWidth = 440.0f;
-  constexpr float kLabelWidth = 92.0f;
-  constexpr float kRowHeight = 34.0f;
+  constexpr float kPanelWidth = game::ui::kBrowserHudWidth;
+  constexpr float kLabelWidth = game::ui::kBrowserLabelWidth;
+  constexpr float kRowHeight = game::ui::kBrowserRowHeight;
 
   m_entities.currentRule = m_entityOwner.Create(ctx.world);
   auto &currentRule =
@@ -57,60 +58,48 @@ void CourseInfoPanel::Initialize(core::GameContext &ctx) {
   m_entities.currentLabel = m_entityOwner.Create(ctx.world);
   auto &currentLabel =
       ctx.world.Add<game::components::UIText>(m_entities.currentLabel);
-  currentLabel.text = L"CURRENT";
+  currentLabel.text = L"現在";
   currentLabel.x = x;
   currentLabel.y = y + 4.0f;
   currentLabel.width = kLabelWidth;
   currentLabel.height = 26.0f;
-  currentLabel.style = graphics::TextStyle::Guide();
-  currentLabel.style.fontFamily = "Barlow Condensed Black";
-  currentLabel.style.fontSize = 17.0f;
-  currentLabel.style.align = graphics::TextAlign::Left;
+  ApplyCourseInfoLabelStyle(currentLabel.style);
   currentLabel.visible = true;
   currentLabel.layer = game::ui::kLayerBrowser + 1;
 
   m_entities.currentPage = m_entityOwner.Create(ctx.world);
   auto &currentPage =
       ctx.world.Add<game::components::UIText>(m_entities.currentPage);
-  currentPage.text = L"Loading...";
+  currentPage.text = L"読み込み中…";
   currentPage.x = x + kLabelWidth;
   currentPage.y = y;
   currentPage.width = kPanelWidth - kLabelWidth;
   currentPage.height = 30.0f;
-  currentPage.style = graphics::TextStyle::Guide();
-  currentPage.style.fontFamily = "Kiwi Maru Medium";
-  currentPage.style.fontSize = 22.0f;
-  currentPage.style.align = graphics::TextAlign::Right;
+  ApplyCourseInfoNameStyle(currentPage.style);
   currentPage.visible = true;
   currentPage.layer = game::ui::kLayerBrowser + 1;
 
   m_entities.targetLabel = m_entityOwner.Create(ctx.world);
   auto &targetLabel =
       ctx.world.Add<game::components::UIText>(m_entities.targetLabel);
-  targetLabel.text = L"TARGET";
+  targetLabel.text = L"ゴール";
   targetLabel.x = x;
   targetLabel.y = y + kRowHeight + 8.0f;
   targetLabel.width = kLabelWidth;
   targetLabel.height = 26.0f;
-  targetLabel.style = graphics::TextStyle::Guide();
-  targetLabel.style.fontFamily = "Barlow Condensed Black";
-  targetLabel.style.fontSize = 17.0f;
-  targetLabel.style.align = graphics::TextAlign::Left;
+  ApplyCourseInfoLabelStyle(targetLabel.style);
   targetLabel.visible = true;
   targetLabel.layer = game::ui::kLayerBrowser + 1;
 
   m_entities.targetPage = m_entityOwner.Create(ctx.world);
   auto &targetPage =
       ctx.world.Add<game::components::UIText>(m_entities.targetPage);
-  targetPage.text = L"Target page...";
+  targetPage.text = L"読み込み中…";
   targetPage.x = x + kLabelWidth;
   targetPage.y = y + kRowHeight + 4.0f;
   targetPage.width = kPanelWidth - kLabelWidth;
   targetPage.height = 30.0f;
-  targetPage.style = graphics::TextStyle::Guide();
-  targetPage.style.fontFamily = "Kiwi Maru Medium";
-  targetPage.style.fontSize = 22.0f;
-  targetPage.style.align = graphics::TextAlign::Right;
+  ApplyCourseInfoNameStyle(targetPage.style);
   targetPage.visible = true;
   targetPage.layer = game::ui::kLayerBrowser + 1;
 
@@ -128,15 +117,12 @@ void CourseInfoPanel::Initialize(core::GameContext &ctx) {
   m_entities.attribution = m_entityOwner.Create(ctx.world);
   auto &attribution =
       ctx.world.Add<game::components::UIText>(m_entities.attribution);
-  attribution.text = L"記事本文: Wikipedia (CC BY-SA 4.0・改変あり)";
+  attribution.text = game::ui::kArticleAttribution;
   attribution.x = x;
   attribution.y = y + kRowHeight * 2.0f + 8.0f;
   attribution.width = kPanelWidth;
   attribution.height = 20.0f;
-  attribution.style = graphics::TextStyle::Guide();
-  attribution.style.fontFamily = "Kiwi Maru Medium";
-  attribution.style.fontSize = 13.0f;
-  attribution.style.align = graphics::TextAlign::Right;
+  ApplyCourseInfoAttributionStyle(attribution.style);
   attribution.visible = true;
   attribution.layer = game::ui::kLayerBrowser + 1;
 }
@@ -144,18 +130,21 @@ void CourseInfoPanel::Initialize(core::GameContext &ctx) {
 void CourseInfoPanel::Update(
     core::GameContext &ctx,
     const game::components::GolfGameState &state) {
-  auto *currentPage =
-      ctx.world.Get<game::components::UIText>(m_entities.currentPage);
-  if (currentPage) {
-    SetTextIfChanged(*currentPage, core::ToWString(state.currentPage));
-  }
+  SetPages(ctx, core::ToWString(state.currentPage),
+           core::ToWString(state.targetPage));
+}
 
-  auto *targetPage =
-      ctx.world.Get<game::components::UIText>(m_entities.targetPage);
-  if (targetPage) {
-    SetTextIfChanged(*targetPage, core::ToWString(state.targetPage));
+void CourseInfoPanel::SetPages(core::GameContext &ctx,
+                               const std::wstring &currentPage,
+                               const std::wstring &targetPage) {
+  if (auto *text =
+          ctx.world.Get<game::components::UIText>(m_entities.currentPage)) {
+    SetTextIfChanged(*text, currentPage);
   }
-
+  if (auto *text =
+          ctx.world.Get<game::components::UIText>(m_entities.targetPage)) {
+    SetTextIfChanged(*text, targetPage);
+  }
 }
 
 void CourseInfoPanel::SetVisible(core::GameContext &ctx, bool visible) {

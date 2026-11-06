@@ -57,12 +57,12 @@ void LiePanel::Update(core::GameContext &ctx,
     break;
   case game::components::TerrainMaterial::Water:
     value = L"ウォーター";
-    condition = L"OUT OF BOUNDS";
+    condition = L"OBになる";
     color = game::ui::kColorError;
     break;
   case game::components::TerrainMaterial::Lava:
     value = L"溶岩";
-    condition = L"OUT OF BOUNDS";
+    condition = L"OBになる";
     color = game::ui::kColorError;
     break;
   case game::components::TerrainMaterial::Stone:
@@ -144,7 +144,9 @@ void LiePanel::Initialize(core::GameContext &ctx) {
 
   createText(m_label, kPanelX + 18.0f, kPanelY + 12.0f, 18.0f, 11.0f,
              game::ui::kColorTextSub);
-  ctx.world.Get<game::components::UIText>(m_label)->text = L"BALL LIE";
+  ctx.world.Get<game::components::UIText>(m_label)->text = L"ライ";
+  ctx.world.Get<game::components::UIText>(m_label)->style.fontFamily =
+      "Kiwi Maru Medium";
 
   createText(m_value, kPanelX + 18.0f, kPanelY + 32.0f, 25.0f, 20.0f,
              game::ui::kColorSuccess);

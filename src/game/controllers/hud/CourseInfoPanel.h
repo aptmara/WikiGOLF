@@ -6,6 +6,7 @@
 
 #include "../../../ecs/Entity.h"
 #include "../../../ecs/EntityOwner.h"
+#include <string>
 
 namespace core {
 struct GameContext;
@@ -35,6 +36,13 @@ public:
 */
   void Update(core::GameContext &ctx,
               const game::components::GolfGameState &state);
+
+  /**
+   * @brief 現在記事と目的記事の名前を表示へ反映します。
+   * @details ゲーム状態がまだ切り替わっていない記事到着の演出中にも使います。
+*/
+  void SetPages(core::GameContext &ctx, const std::wstring &currentPage,
+                const std::wstring &targetPage);
 
   /**
    * @brief パネル全体の表示状態を変更します。

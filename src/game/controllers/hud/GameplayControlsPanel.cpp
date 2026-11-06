@@ -43,7 +43,7 @@ void GameplayControlsPanel::Initialize(core::GameContext &ctx) {
   m_shotButtonText = m_entityOwner.Create(ctx.world);
   auto &buttonText =
       ctx.world.Add<game::components::UIText>(m_shotButtonText);
-  buttonText.text = L"SHOT   CLICK";
+  buttonText.text = L"クリックでショット";
   buttonText.x = game::ui::kShotBtnX;
   buttonText.y = game::ui::kShotBtnY + 22.0f;
   buttonText.width = game::ui::kShotBtnW;

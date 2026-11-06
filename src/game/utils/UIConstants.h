@@ -69,10 +69,16 @@ constexpr int kLayerOverlay     = 200;
 constexpr int kLayerMinimapHover = kLayerOverlay + 20;
 
 // =========================================================
-// 記事HUD (右上) - 参考HUDの残距離表示位置をCURRENT/TARGETへ転用
+// 記事HUD (右上) - 参考HUDの残距離表示位置を現在/ゴールへ転用
 // =========================================================
 constexpr float kBrowserHudX         = 800.0f;
 constexpr float kBrowserHudY         = 24.0f;
+constexpr float kBrowserHudWidth     = 440.0f;
+constexpr float kBrowserLabelWidth   = 92.0f;
+constexpr float kBrowserRowHeight    = 34.0f;
+/** @brief 記事本文の帰属表示（CC BY-SA）。記事が見えている間は常に出します。*/
+inline constexpr const wchar_t *kArticleAttribution =
+    L"記事本文: Wikipedia (CC BY-SA 4.0・改変あり)";
 constexpr float kBrowserIconWidth    = 48.0f;
 constexpr float kBrowserUrlWidth     = 280.0f;
 constexpr float kBrowserFontSize     = 18.0f;

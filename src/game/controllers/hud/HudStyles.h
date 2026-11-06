@@ -35,4 +35,13 @@ void ApplyActiveRowStyle(graphics::TextStyle &style);
 */
 void ApplyRowStyle(graphics::TextStyle &style);
 
+/** @brief 右上の記事表示の見出し（現在/ゴール）のスタイルを設定します。*/
+void ApplyCourseInfoLabelStyle(graphics::TextStyle &style);
+
+/** @brief 右上の記事表示の記事名のスタイルを設定します。*/
+void ApplyCourseInfoNameStyle(graphics::TextStyle &style);
+
+/** @brief 右上の記事表示の帰属表示のスタイルを設定します。*/
+void ApplyCourseInfoAttributionStyle(graphics::TextStyle &style);
+
 } // namespace game::controllers::hud

@@ -134,11 +134,11 @@ int main() {
              "HUDがテキストComponentを生成する");
   CHECK_TRUE(CountComponents<game::components::UIBarGauge>(world) == 1,
              "HUDがショットゲージを1個生成する");
-  CHECK_TRUE(ContainsText(world, L"CURRENT"),
+  CHECK_TRUE(ContainsText(world, L"現在"),
              "現在記事ラベルを生成する");
-  CHECK_TRUE(ContainsText(world, L"TARGET"),
+  CHECK_TRUE(ContainsText(world, L"ゴール"),
              "目的記事ラベルを生成する");
-  CHECK_TRUE(!ContainsText(world, L"SHOT   CLICK"),
+  CHECK_TRUE(!ContainsText(world, L"クリックでショット"),
              "通常HUDに独立したショットボタンを生成しない");
   CHECK_TRUE(ContainsText(world, L"中クリック  照準ピン設置"),
              "照準ピン操作を左下に生成する");
@@ -205,8 +205,8 @@ int main() {
   CHECK_TRUE(FindText(world, L"Club 2")->style.fontFamily == "Kiwi Maru Medium" &&
                  FindText(world, L"中クリック  照準ピン設置")
                          ->style.fontFamily == "Kiwi Maru Medium" &&
-                 FindText(world, L"CURRENT")->style.fontFamily ==
-                     "Barlow Condensed Black",
+                 FindText(world, L"現在")->style.fontFamily ==
+                     "Kiwi Maru Medium",
              "通常HUDで用途別の同梱フォントを使用する");
   CHECK_TRUE(FindImage(world, "Assets/textures/Clubs/7I_iron.png"),
              "選択中クラブ固有の画像を使用する");
@@ -233,7 +233,7 @@ int main() {
   CHECK_TRUE(!FindText(world, L"中クリック  照準ピン設置")->visible,
              "ショット中は照準ピン操作説明を隠す");
   auto *surfaceText = FindText(world, L"ウォーター");
-  CHECK_TRUE(!FindText(world, L"CURRENT")->visible &&
+  CHECK_TRUE(!FindText(world, L"現在")->visible &&
                  surfaceText && !surfaceText->visible &&
                  !FindText(world, L"N\n▲")->visible,
              "ショット中はゲージ以外の通常HUDをすべて隠す");
@@ -251,7 +251,7 @@ int main() {
              0.0f, 0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2,
              0.0f, 0.0f, nullptr);
   CHECK_TRUE(FindText(world, L"Club 2")->opacity == 1.0f &&
-                 FindText(world, L"CURRENT")->opacity == 1.0f,
+                 FindText(world, L"現在")->opacity == 1.0f,
              "フェード時間経過後に通常HUDを完全表示する");
 
   hud.SetShotPhaseUIVisible(context, true);
