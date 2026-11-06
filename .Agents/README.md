@@ -256,6 +256,7 @@ cmake --build build --config Release -j
 ### 5.3 成果物の配置
 - 実行ファイル: `build/Release/DX_GAME.exe`
 - ポストビルド処理により、`Assets/` ディレクトリおよび `libs/assimp-6.0.2/assimp-vc143-mt.dll` が自動的に出力ディレクトリへコピーされます。
+- 続いて `tool_shader_precompile` が出力先の `Assets/shaders/` で各 `*VS.hlsl` / `*PS.hlsl` を `.cso` にコンパイルし、ソース全体のハッシュを `precompiled_shaders.hash` に書きます。ゲーム（Release）はハッシュが一致するときだけ `.cso` を使い、違えば従来どおり実行時にコンパイルします（`src/graphics/ShaderPrecompiled.h`）。出力先のシェーダーを直接書き換えて試す場合も、ハッシュが変わるので古い `.cso` は使われません。
 
 ---
 
