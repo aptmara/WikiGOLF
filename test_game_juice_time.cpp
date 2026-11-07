@@ -1,4 +1,5 @@
 #include "src/game/systems/GameJuiceSystem.h"
+#include "src/game/systems/GameJuiceSurfaceRules.h"
 #include "src/resources/ResourceManager.h"
 #include <cmath>
 #include <cstdlib>
@@ -31,6 +32,34 @@ ResourceManager::LoadShader(const std::string &, const std::wstring &,
 } // namespace resources
 
 int main() {
+  using namespace DirectX;
+  using namespace game::systems::juice_detail;
+  game::systems::TerrainData slope;
+  slope.config.resolutionX = 3;
+  slope.config.resolutionZ = 3;
+  slope.config.worldWidth = 4.0f;
+  slope.config.worldDepth = 4.0f;
+  for (int z = 0; z < 3; ++z) {
+    for (int x = 0; x < 3; ++x) {
+      slope.heightMap.push_back(0.4f * (x * 2.0f - 2.0f) -
+                                0.2f * (2.0f - z * 2.0f));
+    }
+  }
+  for (const XMFLOAT3 point : {XMFLOAT3{0.3f, 9.0f, -0.7f},
+                              XMFLOAT3{1.98f, 9.0f, 1.98f}}) {
+    const auto surface = SampleEffectSurface(&slope, point);
+    CHECK_CLOSE(surface.position.y, 0.4f * point.x - 0.2f * point.z + 0.02f,
+                0.0001f, "地面の跡は移動先の地形高と描画面オフセットへ追従します");
+    const auto expected = XMVector3Normalize(XMVectorSet(-0.4f, 1.0f, 0.2f, 0));
+    for (float yaw : {0.0f, 1.2f, 3.0f}) {
+      const auto rotation = SurfaceRotation(surface.normal, yaw);
+      const auto up = XMVector3Rotate(XMVectorSet(0, 1, 0, 0), XMLoadFloat4(&rotation));
+      CHECK_CLOSE(XMVectorGetX(XMVector3Dot(up, expected)), 1.0f, 0.0001f,
+                  "輪の向きは接平面内で回しても坂の法線を保ちます");
+    }
+  }
+  const auto absent = SampleEffectSurface(nullptr, {1, 2, 3});
+  CHECK_CLOSE(absent.position.y, 2.0f, 0.0001f, "地形のない演出は指定位置を維持します");
   game::systems::GameJuiceSystem system;
 
   CHECK_CLOSE(system.ConsumeTimeScale(0.0f), 1.0f, 0.0001f,

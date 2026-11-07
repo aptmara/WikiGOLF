@@ -63,12 +63,32 @@ VS_OUTPUT main(VS_INPUT input) {
     float4 worldPos = mul(float4(input.position, 1.0f), inst.World);
     
     float4 viewPos = mul(worldPos, View);
+    if (inst.Flags.x > 0.5) {
+        float3 axisX = inst.World[0].xyz;
+        float3 axisY = inst.World[1].xyz;
+        float3 axisZ = inst.World[2].xyz;
+        float2 size = float2(length(axisX), max(length(axisY), length(axisZ)));
+        if (inst.Flags.z > 5.5 && inst.Flags.z < 6.5) {
+            size.y = length(axisZ);
+        }
+        float roll = atan2(axisX.y, axisX.x);
+        float sn, cs;
+        sincos(roll, sn, cs);
+        float2 offset = input.position.xy * size;
+        offset = float2(offset.x * cs - offset.y * sn,
+                        offset.x * sn + offset.y * cs);
+        viewPos = mul(float4(inst.World[3].xyz, 1.0), View);
+        viewPos.xy += offset;
+    }
     output.position = mul(viewPos, Projection);
     
     output.normal = mul(input.normal, (float3x3)inst.World);
     output.texCoord = input.texCoord;
     
     output.color = input.color * inst.Color;
+    if (inst.Flags.z > 4.5 && inst.Flags.z < 5.5) {
+        output.color.a *= saturate(input.normal.y);
+    }
     output.materialFlags = inst.Flags;
     
     return output;

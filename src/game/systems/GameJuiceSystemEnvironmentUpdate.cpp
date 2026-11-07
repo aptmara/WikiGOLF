@@ -30,6 +30,7 @@ using namespace juice_detail;
 
 void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
                                                  ecs::Entity targetEntity) {
+  const auto *terrain = FindEffectTerrain(ctx);
   const float gravity = 9.8f;
   const float effectDt =
       std::min(ctx.dt, game::physics::kMaxSimulationDeltaTime);
@@ -124,6 +125,9 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
         rot = XMQuaternionMultiply(rot, deltaRot);
         XMStoreFloat4(&t->rotation, rot);
 
+        const auto surface = SampleEffectSurface(terrain,
+            {t->position.x, p.groundHeight, t->position.z});
+        p.groundHeight = surface.position.y;
         if (t->position.y < p.groundHeight) {
           t->position.y = p.groundHeight + 0.002f;
           if ((p.kind == EnvironmentParticleKind::SandGrain ||
@@ -142,6 +146,7 @@ void GameJuiceSystem::UpdateEnvironmentParticles(core::GameContext &ctx,
             p.velocity.z *= 0.48f + rebound * 0.55f;
           } else if (p.kind == EnvironmentParticleKind::WaterDrop) {
             p.velocity = {0, 0, 0};
+            t->rotation = SurfaceRotation(surface.normal);
             t->scale.x *= 1.7f;
             t->scale.y *= 0.18f;
             t->scale.z *= 1.7f;

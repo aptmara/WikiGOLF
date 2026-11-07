@@ -5,11 +5,36 @@
 */
 
 #include "GameJuiceSystem.h"
+#include "GameJuiceSurfaceRules.h"
+#include "../../core/GameContext.h"
+#include "../../ecs/World.h"
+#include "../components/Transform.h"
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cstdlib>
 
 namespace game::systems::juice_detail {
+
+inline const TerrainData *FindEffectTerrain(core::GameContext &ctx) {
+  const TerrainData *terrain = nullptr;
+  ctx.world.Query<game::components::TerrainCollider>().Each(
+      [&](ecs::Entity, game::components::TerrainCollider &collider) {
+        if (collider.data) {
+          terrain = collider.data.get();
+        }
+      });
+  return terrain;
+}
+
+inline void PlaceOnEffectSurface(game::components::Transform &transform,
+                                  const EffectSurface &surface, float offset,
+                                  float yaw = 0.0f) {
+  transform.position = {surface.position.x + surface.normal.x * offset,
+                        surface.position.y + surface.normal.y * offset,
+                        surface.position.z + surface.normal.z * offset};
+  transform.rotation = SurfaceRotation(surface.normal, yaw);
+}
+
 
 /** @brief 0.0から1.0の乱数を返します。*/
 inline float Rand01() {

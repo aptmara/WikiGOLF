@@ -913,6 +913,15 @@ endif()
 target_link_libraries(test_game_juice_time d3d11 d2d1 dwrite windowscodecs dxguid dinput8 user32 gdi32 ole32 shlwapi winmm game_juice_time_impl)
 add_test(NAME game_juice_time COMMAND test_game_juice_time)
 
+add_executable(test_particle_rendering test_particle_rendering.cpp)
+target_link_libraries(test_particle_rendering PRIVATE d3d11 d3dcompiler)
+if(MSVC)
+    target_compile_definitions(test_particle_rendering PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_compile_options(test_particle_rendering PRIVATE /utf-8)
+endif()
+add_test(NAME particle_rendering COMMAND test_particle_rendering
+    "${CMAKE_SOURCE_DIR}/Assets/shaders" "${CMAKE_BINARY_DIR}/particle-preview.bmp")
+
 add_executable(test_physics_system_rules
     test_physics_system_rules.cpp
     src/game/systems/PhysicsSystemCollision.cpp

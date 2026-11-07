@@ -44,11 +44,12 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
     t.scale = {0.08f, 0.08f, 0.08f};
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = ctx.resource.LoadMesh("builtin/sphere");
+    mr.mesh = ctx.resource.LoadMesh("builtin/quad");
     mr.shader = ctx.resource.LoadShader("Trail", L"shaders/TrailVS.hlsl",
                                         L"shaders/ParticlePS.hlsl");
     mr.isTransparent = true;
     mr.blendMode = BlendMode::Add;
+    mr.customFlags = {8.0f, 0.0f, 0.0f, 0.0f};
 
     // 白い先端からシアン、青紫へ移る一本の彗星状トレイル。
     float ratio = (float)i / (float)(kTrailCount - 1);
@@ -75,6 +76,7 @@ void GameJuiceSystem::CreateTrailEntities(core::GameContext &ctx) {
     auto &coreRenderer = ctx.world.Add<MeshRenderer>(coreEntity);
     coreRenderer.mesh = mr.mesh;
     coreRenderer.shader = mr.shader;
+    coreRenderer.customFlags = mr.customFlags;
     coreRenderer.isTransparent = true;
     coreRenderer.blendMode = BlendMode::Add;
     coreRenderer.color = {1.8f, 1.75f, 1.45f, 0.0f};
@@ -145,7 +147,7 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
     for (auto e : m_trailEntities) {
       auto *mr = ctx.world.Get<MeshRenderer>(e);
       if (mr) {
-        mr->color.w *= 0.85f;
+        mr->color.w *= std::exp(-12.0f * effectDt);
         if (mr->color.w < 0.02f) {
           mr->isVisible = false;
         }
@@ -154,7 +156,7 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
     for (auto e : m_trailCoreEntities) {
       auto *mr = ctx.world.Get<MeshRenderer>(e);
       if (mr) {
-        mr->color.w *= 0.78f;
+        mr->color.w *= std::exp(-17.0f * effectDt);
         if (mr->color.w < 0.02f) {
           mr->isVisible = false;
         }
@@ -265,7 +267,7 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
         XMStoreFloat4(&t->rotation,
                       XMQuaternionRotationRollPitchYaw(pitch, yaw, 0.0f));
         t->scale = {scaleBase, scaleBase,
-                    std::max(scaleBase, segmentLength * 0.56f)};
+                    std::max(scaleBase, segmentLength * 1.30f)};
       } else {
         t->position = pos;
         t->scale = {scaleBase, scaleBase, scaleBase};
@@ -291,11 +293,11 @@ void GameJuiceSystem::UpdateTrail(core::GameContext &ctx,
       coreT->scale = {t->scale.x * 0.34f, t->scale.y * 0.34f,
                       t->scale.z * 0.92f};
       coreMr->color = {2.1f, 1.95f, 1.55f,
-                       mr->color.w * std::pow(1.0f - ratio, 0.55f)};
+                       mr->color.w * 0.48f * std::pow(1.0f - ratio, 0.55f)};
 
       // 画面外でなければ表示
       mr->isVisible = (pos.y > -50.0f);
-      coreMr->isVisible = cupApproachTrail && mr->isVisible;
+      coreMr->isVisible = mr->isVisible;
     }
   }
 }

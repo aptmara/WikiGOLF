@@ -90,13 +90,11 @@ void GameJuiceSystem::SpawnSurfaceMark(core::GameContext &ctx,
                             material == TerrainMaterial::Lava;
 
   if (auto *transform = ctx.world.Get<Transform>(imprint.entity)) {
-    transform->position = position;
-    transform->position.y += 0.0025f;
+    const auto surface = SampleEffectSurface(FindEffectTerrain(ctx), position);
+    PlaceOnEffectSurface(*transform, surface, 0.003f, Rand01() * XM_2PI);
     transform->scale = {imprint.startScale, isEnergyMark ? 0.012f : 0.55f,
                         imprint.startScale * (0.82f + Rand01() * 0.24f)};
-    XMStoreFloat4(&transform->rotation,
-                  XMQuaternionRotationRollPitchYaw(0.0f, Rand01() * XM_2PI,
-                                                   0.0f));
+
   }
   if (auto *renderer = ctx.world.Get<MeshRenderer>(imprint.entity)) {
     if (isEnergyMark) {
@@ -216,9 +214,9 @@ void GameJuiceSystem::UpdateSurfaceEffects(core::GameContext &ctx,
       break;
     }
 
-    collarTransform->position = {ballTransform->position.x,
-                                 surfaceHeight + 0.003f,
-                                 ballTransform->position.z};
+    const auto surface = SampleEffectSurface(FindEffectTerrain(ctx),
+        {ballTransform->position.x, surfaceHeight, ballTransform->position.z});
+    PlaceOnEffectSurface(*collarTransform, surface, 0.004f);
     collarTransform->scale = {collarScale, collarThickness, collarScale};
     if (useEnergyRing) {
       collarRenderer->mesh = ctx.resource.LoadMesh("builtin/cylinder");

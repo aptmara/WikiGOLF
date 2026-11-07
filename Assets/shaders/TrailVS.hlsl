@@ -58,8 +58,20 @@ VS_OUTPUT main(VS_INPUT input) {
     VS_OUTPUT output;
     InstanceData inst = g_instances[input.instanceID];
 
-    float4 worldPos = mul(float4(input.position, 1.0f), inst.World);
-    output.position = mul(mul(worldPos, View), Projection);
+    float4 center = mul(float4(inst.World[3].xyz, 1.0), View);
+    float3 axis = mul(float4(inst.World[2].xyz, 0.0), View).xyz;
+    float width = length(inst.World[0].xyz);
+    float projectedLength = length(axis.xy);
+    float2 along = float2(0.0, 1.0);
+    if (projectedLength > 0.0001) {
+        along = axis.xy / projectedLength;
+    }
+    float2 across = float2(along.y, -along.x);
+    float4 viewPos = center;
+    viewPos.xy += along * input.position.y * max(projectedLength, width);
+    viewPos.xy += across * input.position.x * width;
+    viewPos.z += axis.z * input.position.y;
+    output.position = mul(viewPos, Projection);
     output.normal = mul(input.normal, (float3x3)inst.World);
     output.texCoord = input.texCoord;
     output.color = input.color * inst.Color;

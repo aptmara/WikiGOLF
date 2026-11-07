@@ -31,6 +31,8 @@ using namespace juice_detail;
 void GameJuiceSystem::TriggerMaterialEffect(
     core::GameContext &ctx, const DirectX::XMFLOAT3 &position,
     game::components::TerrainMaterial material, float strength) {
+  const auto surface = SampleEffectSurface(FindEffectTerrain(ctx), position);
+  const auto surfaceRotation = SurfaceRotation(surface.normal);
   const bool isBunker = material == TerrainMaterial::Bunker;
   int count = 34 + static_cast<int>(strength * 24.0f);
   switch (material) {
@@ -152,13 +154,13 @@ void GameJuiceSystem::TriggerMaterialEffect(
 
     p.lifetime = 0.5f + Rand01() * 0.5f;
     p.maxLifetime = p.lifetime;
-    p.groundHeight = position.y;
+    p.groundHeight = surface.position.y;
 
     auto *t = ctx.world.Get<Transform>(p.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
 
     if (t && mr) {
-      t->position = position;
+      t->position = surface.position;
       if (isBunker) {
         t->position.y += 0.012f;
       } else {
@@ -186,7 +188,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
 
         if (makeDust) {
           p.kind = EnvironmentParticleKind::SandDust;
-          mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+          mr->mesh = ctx.resource.LoadMesh("builtin/quad");
           mr->shader = particleShader;
           mr->isTransparent = true;
           mr->blendMode = BlendMode::Alpha;
@@ -255,11 +257,11 @@ void GameJuiceSystem::TriggerMaterialEffect(
       case TerrainMaterial::Green: {
         // 芝・葉っぱ
         p.kind = EnvironmentParticleKind::GrassClip;
-        mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+        mr->mesh = ctx.resource.LoadMesh("builtin/quad");
         mr->shader = particleShader;
         mr->isTransparent = true;
         mr->blendMode = BlendMode::Alpha;
-        mr->customFlags.x = 0.0f;
+        mr->customFlags.x = 6.0f;
         mr->customFlags.y = 0.0f;
 
         if (material == game::components::TerrainMaterial::Rough) {
@@ -300,7 +302,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
         const bool mist = (k % 4) == 0;
         p.kind = mist ? EnvironmentParticleKind::IceMist
                       : EnvironmentParticleKind::IceShard;
-        mr->mesh = ctx.resource.LoadMesh(mist ? "builtin/sphere" : "builtin/cube");
+        mr->mesh = ctx.resource.LoadMesh("builtin/quad");
         mr->shader = particleShader;
         mr->isTransparent = true;
         mr->blendMode = mist ? BlendMode::Alpha : BlendMode::Add;
@@ -330,7 +332,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
         const bool dust = (k % 5) == 0;
         p.kind = dust ? EnvironmentParticleKind::StoneDust
                       : EnvironmentParticleKind::StoneChip;
-        mr->mesh = ctx.resource.LoadMesh(dust ? "builtin/sphere" : "builtin/rock");
+        mr->mesh = ctx.resource.LoadMesh(dust ? "builtin/quad" : "builtin/rock");
         mr->shader = dust ? particleShader : basicShader;
         mr->isTransparent = dust;
         mr->blendMode = dust ? BlendMode::Alpha : BlendMode::Opaque;
@@ -363,7 +365,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
         const bool mist = (k % 4) == 0;
         p.kind = mist ? EnvironmentParticleKind::WaterMist
                       : EnvironmentParticleKind::WaterDrop;
-        mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+        mr->mesh = ctx.resource.LoadMesh("builtin/quad");
         mr->shader = particleShader;
         mr->isTransparent = true;
         mr->blendMode = mist ? BlendMode::Alpha : BlendMode::Add;
@@ -392,7 +394,7 @@ void GameJuiceSystem::TriggerMaterialEffect(
         const bool smoke = (k % 4) == 0;
         p.kind = smoke ? EnvironmentParticleKind::LavaSmoke
                        : EnvironmentParticleKind::Ember;
-        mr->mesh = ctx.resource.LoadMesh(smoke ? "builtin/sphere" : "builtin/cube");
+        mr->mesh = ctx.resource.LoadMesh("builtin/quad");
         mr->shader = particleShader;
         mr->isTransparent = true;
         mr->blendMode = smoke ? BlendMode::Alpha : BlendMode::Add;
@@ -435,6 +437,9 @@ void GameJuiceSystem::TriggerMaterialEffect(
         p.maxLifetime = p.lifetime;
         break;
       }
+
+      XMStoreFloat3(&p.velocity, XMVector3Rotate(
+          XMLoadFloat3(&p.velocity), XMLoadFloat4(&surfaceRotation)));
 
       if (!isBunker && material != TerrainMaterial::None) {
         t->scale.x *= 1.30f;
@@ -579,7 +584,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           const bool makeClump = !makeDust && speed01 > 0.35f && (k % 5) == 0;
           if (makeDust) {
             p.kind = EnvironmentParticleKind::SandDust;
-            mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+            mr->mesh = ctx.resource.LoadMesh("builtin/quad");
             mr->shader = ctx.resource.LoadShader(
                 "Particle", L"shaders/ParticleVS.hlsl",
                 L"shaders/ParticlePS.hlsl");
@@ -642,11 +647,11 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
         case TerrainMaterial::Fairway: {
           // 芝片: 立方体(薄く)、緑、弾ける、回転
           p.kind = EnvironmentParticleKind::GrassClip;
-          mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+          mr->mesh = ctx.resource.LoadMesh("builtin/quad");
           mr->shader = ctx.resource.LoadShader(
               "Particle", L"shaders/ParticleVS.hlsl",
               L"shaders/ParticlePS.hlsl");
-          mr->customFlags.x = 0.0f; // 芝は通常の四角
+          mr->customFlags.x = 6.0f; // 葉の輪郭
           mr->customFlags.y = 0.0f;
           if (state->currentMaterial == TerrainMaterial::Rough) {
             p.baseColor = {0.08f, 0.34f + Rand01() * 0.08f, 0.08f, 1.0f};
@@ -680,13 +685,13 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
         case TerrainMaterial::Green: {
           // グリーン: 細かい削れ粉だけを控えめに出す
           p.kind = EnvironmentParticleKind::GrassClip;
-          mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+          mr->mesh = ctx.resource.LoadMesh("builtin/quad");
           mr->shader = ctx.resource.LoadShader(
               "Particle", L"shaders/ParticleVS.hlsl",
               L"shaders/ParticlePS.hlsl");
           p.baseColor = {0.28f, 0.72f, 0.26f, 0.95f};
           mr->color = p.baseColor;
-          mr->customFlags.x = 0.0f;
+          mr->customFlags.x = 6.0f;
           mr->customFlags.y = 0.0f;
           p.baseScale = 0.035f + Rand01() * 0.025f;
           t->scale = {p.baseScale * 2.0f, p.baseScale * 0.12f,
@@ -709,7 +714,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           const bool mist = (k % 3) == 0;
           p.kind = mist ? EnvironmentParticleKind::IceMist
                         : EnvironmentParticleKind::IceShard;
-          mr->mesh = ctx.resource.LoadMesh(mist ? "builtin/sphere" : "builtin/cube");
+          mr->mesh = ctx.resource.LoadMesh("builtin/quad");
           mr->shader = ctx.resource.LoadShader(
               "Particle", L"shaders/ParticleVS.hlsl",
               L"shaders/ParticlePS.hlsl");
@@ -741,7 +746,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           const bool dust = speed01 < 0.45f || (k % 3) == 0;
           p.kind = dust ? EnvironmentParticleKind::StoneDust
                         : EnvironmentParticleKind::StoneChip;
-          mr->mesh = ctx.resource.LoadMesh(dust ? "builtin/sphere" : "builtin/rock");
+          mr->mesh = ctx.resource.LoadMesh(dust ? "builtin/quad" : "builtin/rock");
           mr->shader = ctx.resource.LoadShader(
               dust ? "Particle" : "Basic",
               dust ? L"shaders/ParticleVS.hlsl" : L"Assets/shaders/BasicVS.hlsl",
@@ -773,7 +778,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           const bool mist = (k % 3) == 0;
           p.kind = mist ? EnvironmentParticleKind::WaterMist
                         : EnvironmentParticleKind::WaterDrop;
-          mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+          mr->mesh = ctx.resource.LoadMesh("builtin/quad");
           mr->shader = ctx.resource.LoadShader(
               "Particle", L"shaders/ParticleVS.hlsl",
               L"shaders/ParticlePS.hlsl");
@@ -803,7 +808,7 @@ void GameJuiceSystem::EmitEnvironmentParticles(core::GameContext &ctx,
           const bool smoke = (k % 3) == 0;
           p.kind = smoke ? EnvironmentParticleKind::LavaSmoke
                          : EnvironmentParticleKind::Ember;
-          mr->mesh = ctx.resource.LoadMesh(smoke ? "builtin/sphere" : "builtin/cube");
+          mr->mesh = ctx.resource.LoadMesh("builtin/quad");
           mr->shader = ctx.resource.LoadShader(
               "Particle", L"shaders/ParticleVS.hlsl",
               L"shaders/ParticlePS.hlsl");

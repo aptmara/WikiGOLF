@@ -40,7 +40,7 @@ void GameJuiceSystem::CreateImpactParticleEntities(core::GameContext &ctx) {
     t.scale = {0.1f, 0.1f, 0.1f};
 
     auto &mr = ctx.world.Add<MeshRenderer>(e);
-    mr.mesh = ctx.resource.LoadMesh("builtin/cube");
+    mr.mesh = ctx.resource.LoadMesh("builtin/quad");
     mr.shader = ctx.resource.LoadShader("Particle", L"shaders/ParticleVS.hlsl",
                                         L"shaders/ParticlePS.hlsl");
     mr.color = {1.0f, 0.8f, 0.2f, 1.0f}; // 黄金色
@@ -158,7 +158,7 @@ void GameJuiceSystem::TriggerImpactEffect(core::GameContext &ctx,
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
     if (mr) {
       mr->isVisible = true;
-      mr->mesh = ctx.resource.LoadMesh("builtin/cube");
+      mr->mesh = ctx.resource.LoadMesh("builtin/quad");
       mr->blendMode = BlendMode::Alpha;
       mr->customFlags = {0, 0, 0, 0};
       p.kind = ImpactParticleKind::Burst;
@@ -288,9 +288,9 @@ void GameJuiceSystem::TriggerShotEffect(core::GameContext &ctx,
       p.kind = ImpactParticleKind::ShotRing;
       mr->mesh = ctx.resource.LoadMesh("builtin/quad");
       mr->blendMode = BlendMode::Add;
-      mr->customFlags = {0.0f, 1.0f, 0.0f, 0.0f};
+      mr->customFlags = {7.0f, 0.0f, 0.0f, 0.0f};
       p.baseScale = 0.32f + power01 * 0.26f + quality * 0.08f;
-      p.maxLifetime = 0.38f + quality * 0.12f;
+      p.maxLifetime = 0.20f + quality * 0.07f;
       p.baseColor = ScaleColor(tint, 2.4f + quality * 0.8f, 0.92f);
       p.velocity = {dir.x * (2.0f + quality * 2.2f),
                     0.25f + quality * 0.42f,
@@ -312,7 +312,7 @@ void GameJuiceSystem::TriggerShotEffect(core::GameContext &ctx,
                            RandCentered() * 8.0f};
     } else {
       p.kind = ImpactParticleKind::ShotDust;
-      mr->mesh = ctx.resource.LoadMesh("builtin/sphere");
+      mr->mesh = ctx.resource.LoadMesh("builtin/quad");
       mr->blendMode = BlendMode::Alpha;
       float missFlag = 0.0f;
       float baseScale = 0.14f;
@@ -382,8 +382,9 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
 
     // 物理更新
     p.velocity.y -= particleGravity * effectDt;
-    p.velocity.x *= drag; // 空気抵抗
-    p.velocity.z *= drag;
+    const float frameDrag = std::pow(drag, effectDt * 60.0f);
+    p.velocity.x *= frameDrag; // 空気抵抗
+    p.velocity.z *= frameDrag;
 
     auto *t = ctx.world.Get<Transform>(p.entity);
     auto *mr = ctx.world.Get<MeshRenderer>(p.entity);
@@ -419,7 +420,7 @@ void GameJuiceSystem::UpdateImpactParticles(core::GameContext &ctx) {
       } else if (p.kind == ImpactParticleKind::ShotRing) {
         float pulse = std::sin(std::clamp(progress * 1.35f, 0.0f, 1.0f) * XM_PI);
         float scale = p.baseScale * (0.45f + progress * 3.2f + pulse * 0.45f);
-        t->scale = {scale * 2.2f, scale * 0.08f, scale * 2.2f};
+        t->scale = {scale, scale, scale};
       } else {
         float scale = p.baseScale * std::pow(lifeRatio, 0.5f);
         t->scale = {scale, scale, scale};

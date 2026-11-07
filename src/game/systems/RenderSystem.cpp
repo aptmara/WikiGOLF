@@ -68,6 +68,7 @@ struct RenderState {
   ComPtr<ID3D11BlendState> alphaBlendState;
   ComPtr<ID3D11BlendState> multiplyBlendState;
   ComPtr<ID3D11BlendState> addBlendState;
+  ComPtr<ID3D11DepthStencilState> transparentDepthState;
   ComPtr<ID3D11RasterizerState> twoSidedRasterizerState;
   ComPtr<ID3D11Buffer> instancedBuffer;
   ComPtr<ID3D11ShaderResourceView> instancedSRV;
@@ -208,6 +209,13 @@ void RenderSystem(core::GameContext &ctx) {
     blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
     blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
     device->CreateBlendState(&blendDesc, &newState.addBlendState);
+
+    D3D11_DEPTH_STENCIL_DESC transparentDepthDesc = {};
+    transparentDepthDesc.DepthEnable = TRUE;
+    transparentDepthDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    transparentDepthDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+    device->CreateDepthStencilState(&transparentDepthDesc,
+                                   &newState.transparentDepthState);
 
     D3D11_RASTERIZER_DESC rasterizerDesc = {};
     rasterizerDesc.FillMode = D3D11_FILL_SOLID;
@@ -384,6 +392,8 @@ void RenderSystem(core::GameContext &ctx) {
   // インスタンス化対応シェーダーのハンドル取得
   auto basicHandle = ctx.resource.FindShader("Basic");
   auto particleHandle = ctx.resource.FindShader("Particle");
+  auto trailHandle = ctx.resource.FindShader("Trail");
+  auto particleQuad = ctx.resource.LoadMesh("builtin/quad");
   auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
   auto terrainHandle = ctx.resource.FindShader("Terrain");
   // GolfBall は BasicVS.hlsl をそのまま使うピクセルシェーダーのみの派生なので、
@@ -451,6 +461,7 @@ void RenderSystem(core::GameContext &ctx) {
     XMMATRIX prevWorldMatrix;
     XMFLOAT4 color;
     XMFLOAT4 flags;
+    float viewDepth = 0.0f;
   };
 
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> opaqueBuckets;
@@ -585,6 +596,8 @@ void RenderSystem(core::GameContext &ctx) {
         inst.worldMatrix = t.GetWorldMatrix();
         inst.prevWorldMatrix = previousWorldOf(e, inst.worldMatrix);
         inst.color = r.color;
+        inst.viewDepth = XMVectorGetZ(XMVector3TransformCoord(
+            XMLoadFloat3(&t.position), XMMatrixTranspose(view)));
 
         const bool hasDiffuse = r.hasTexture && r.textureSRV;
         const bool hasNormal = r.hasNormalMap && r.normalMapSRV;
@@ -613,6 +626,13 @@ void RenderSystem(core::GameContext &ctx) {
           inst.flags.w = (r.clipsGolfCupOpening ? 1.0f : 0.0f) +
                          (r.usesDitherFade ? 2.0f : 0.0f);
         }
+        if (r.shader == particleHandle && r.mesh == particleQuad) {
+          inst.flags.x = 1.0f; // テクスチャを使わない粒子ではビルボード指定。
+          key.twoSided = true;
+        }
+        if (r.shader == trailHandle) {
+          key.twoSided = true;
+        }
 
         if (r.isTransparent) {
           transparentBuckets[key].push_back(inst);
@@ -633,6 +653,12 @@ void RenderSystem(core::GameContext &ctx) {
       stats.missingResourceSkipped += instances.size();
       return;
     }
+
+    ID3D11DepthStencilState *depthState = nullptr;
+    if (key.isTransparent) {
+      depthState = state->transparentDepthState.Get();
+    }
+    context->OMSetDepthStencilState(depthState, 0);
 
     // ブレンドステート設定
     if (key.blendMode == components::BlendMode::Alpha) {
@@ -684,6 +710,7 @@ void RenderSystem(core::GameContext &ctx) {
 
     const bool supportsInstancing =
         (key.shader == basicHandle || key.shader == particleHandle ||
+         key.shader == trailHandle ||
          key.shader == flagClothHandle ||
          key.shader == golfBallHandle);
 
@@ -817,11 +844,35 @@ void RenderSystem(core::GameContext &ctx) {
       DrawBucket(pair.first, pair.second);
     }
 
-    // 半透明描画実行
+    // 異なるメッシュ間も奥から手前へ合成。同じ描画状態が連続する部分だけまとめる。
+    struct TransparentDraw {
+      const RenderKey *key;
+      const RenderInstance *instance;
+    };
+    std::vector<TransparentDraw> transparentDraws;
     for (const auto &pair : transparentBuckets) {
-      graphics::ScopedGpuTimer gpuTimer(ctx.graphics, gpuCategoryOf(pair.first));
-      DrawBucket(pair.first, pair.second);
+      for (const auto &instance : pair.second) {
+        transparentDraws.push_back({&pair.first, &instance});
+      }
     }
+    std::stable_sort(transparentDraws.begin(), transparentDraws.end(),
+                     [](const TransparentDraw &a, const TransparentDraw &b) {
+      return a.instance->viewDepth > b.instance->viewDepth;
+    });
+    std::vector<RenderInstance> transparentBatch;
+    for (size_t start = 0; start < transparentDraws.size();) {
+      const auto &key = *transparentDraws[start].key;
+      transparentBatch.clear();
+      size_t end = start;
+      while (end < transparentDraws.size() && *transparentDraws[end].key == key) {
+        transparentBatch.push_back(*transparentDraws[end].instance);
+        ++end;
+      }
+      graphics::ScopedGpuTimer gpuTimer(ctx.graphics, gpuCategoryOf(key));
+      DrawBucket(key, transparentBatch);
+      start = end;
+    }
+    context->OMSetDepthStencilState(nullptr, 0);
 
     ctx.graphics.UnbindSceneVelocityTarget();
   }

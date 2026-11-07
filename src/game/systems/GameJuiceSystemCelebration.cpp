@@ -185,8 +185,8 @@ void GameJuiceSystem::TriggerRippleEffect(core::GameContext &ctx,
     r.baseColor.w *= 1.0f - layerRatio * 0.34f;
 
     if (auto *t = ctx.world.Get<Transform>(r.entity)) {
-      t->position = position;
-      t->position.y += 0.003f + static_cast<float>(i) * 0.0015f;
+      const auto surface = SampleEffectSurface(FindEffectTerrain(ctx), position);
+      PlaceOnEffectSurface(*t, surface, 0.004f + static_cast<float>(i) * 0.0015f);
       t->scale = {r.startScale, r.thickness, r.startScale};
     }
 
