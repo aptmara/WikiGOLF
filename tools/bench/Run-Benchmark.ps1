@@ -10,6 +10,7 @@
   - -Course なしなら、標準のランダムなコースへ入る。
   - -AutoShot 秒 を付けると、構えられる状態でその秒数待ってから自動で打つ（パワー 7 割、インパクトはパーフェクト付近）。
   - 起動から -Seconds 秒で自動終了し、最後の -Frames フレームを集計する。
+  - -Preset LOW などを付けると、計測の間だけ settings.ini の画質プリセットと内部解像度を書き換え、終わったら戻す。
 
 .EXAMPLE
   pwsh -File tools/bench/Run-Benchmark.ps1 -Course 日本 -Seconds 90 -AutoShot 8
@@ -22,6 +23,8 @@ param(
   [double]$AutoShot = 0,
   [string]$Label = '',
   [switch]$GrassFull,
+  [ValidateSet('', 'LOW', 'MEDIUM', 'HIGH', 'EXHIGH', 'ULTRA')]
+  [string]$Preset = '',
   [string]$BuildDir = ''
 )
 
@@ -45,6 +48,26 @@ $env:WIKIGOLF_DEBUG_EXIT_AFTER = "$Seconds"
 if ($AutoShot -gt 0) { $env:WIKIGOLF_DEBUG_AUTO_SHOT = "$AutoShot" }
 if ($GrassFull) { $env:WIKIGOLF_DEBUG_GRASS_FULL = '1' }
 
+$settingsPath = Join-Path $BuildDir 'save\settings.ini'
+$originalSettings = $null
+if ($Preset -and (Test-Path $settingsPath)) {
+  # GraphicsPreset.h の各プリセットの内部解像度・MSAA・FXAA と同じ値
+  $presetValues = @{
+    LOW    = @{ Scale = '0.6'; Msaa = '1'; Fxaa = '1' }
+    MEDIUM = @{ Scale = '0.8'; Msaa = '1'; Fxaa = '1' }
+    HIGH   = @{ Scale = '1';   Msaa = '1'; Fxaa = '0' }
+    EXHIGH = @{ Scale = '1';   Msaa = '4'; Fxaa = '0' }
+    ULTRA  = @{ Scale = '1';   Msaa = '8'; Fxaa = '0' }
+  }
+  $originalSettings = Get-Content $settingsPath -Raw
+  $v = $presetValues[$Preset]
+  $s = $originalSettings -replace '(?m)^GraphicsPreset=.*$', "GraphicsPreset=$Preset" `
+                         -replace '(?m)^RenderScale=.*$', "RenderScale=$($v.Scale)" `
+                         -replace '(?m)^MSAA=.*$', "MSAA=$($v.Msaa)" `
+                         -replace '(?m)^FXAA=.*$', "FXAA=$($v.Fxaa)"
+  Set-Content $settingsPath $s -NoNewline
+}
+
 try {
   $p = Start-Process -FilePath $exe -WorkingDirectory $BuildDir -PassThru
   if (-not $p.WaitForExit(($Seconds + 60) * 1000)) {
@@ -53,6 +76,7 @@ try {
   }
 } finally {
   foreach ($n in $envNames) { Remove-Item "Env:$n" -ErrorAction SilentlyContinue }
+  if ($null -ne $originalSettings) { Set-Content $settingsPath $originalSettings -NoNewline }
 }
 
 $session = Get-ChildItem (Join-Path $BuildDir 'profiling') -Directory | Sort-Object LastWriteTime | Select-Object -Last 1
