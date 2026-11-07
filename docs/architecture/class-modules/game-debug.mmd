@@ -1,35 +1,87 @@
-%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF クラス図: game-debug (generate_class_full.py による自動生成。手で編集しないこと)
 %% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
 %% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
-%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
-%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
 classDiagram
     direction LR
-    namespace game__debug {
-        class game__debug__DebugBallImpulseResult["DebugBallImpulseResult"] {
+    namespace game.debug {
+        class iso__game__debug__DebugBallImpulseResult["DebugBallImpulseResult"] {
             <<enumeration>>
             Success
             MissingBall
             ZeroMass
         }
         class game__debug__DebugBallInspector["DebugBallInspector"] {
-            -DirectX::XMFLOAT3 m_target
+            -XMFLOAT3 m_target
             -bool m_hasTarget
             -bool m_resetMotion
-            -std::string m_result
+            -string m_result
             -DebugBallPhysicsValues m_physics
             -bool m_hasPhysics
-            -DirectX::XMFLOAT3 m_impulse
-            +Draw(core::GameContext #amp; ctx) void
+            -XMFLOAT3 m_impulse
+            +Draw(GameContext#amp; ctx) void
         }
         class game__debug__DebugBallPhysicsSnapshot["DebugBallPhysicsSnapshot"] {
             <<struct>>
             +bool available
             +uint32_t entity
-            +DirectX::XMFLOAT3 position
-            +DirectX::XMFLOAT3 velocity
-            +DirectX::XMFLOAT3 acceleration
-            +DirectX::XMFLOAT3 angularVelocity
+            +XMFLOAT3 position
+            +XMFLOAT3 velocity
+            +XMFLOAT3 acceleration
+            +XMFLOAT3 angularVelocity
             +float speed
             +float mass
             +float drag
@@ -46,19 +98,19 @@ classDiagram
             +float spinDecay
         }
         class game__debug__DebugBallTelemetryHistory["DebugBallTelemetryHistory"] {
-            +std::size_t kMaximumFrames$
-            -std::vector#lt; DebugBallTelemetrySample #gt; m_samples
-            +Update(ecs::World #amp; world, bool simulationAdvanced) bool
+            +size_t kMaximumFrames$
+            -vector#lt;DebugBallTelemetrySample#gt; m_samples
+            +Update(World#amp; world, bool simulationAdvanced) bool
             +Clear() void
-            +Samples() const std::vector#lt; DebugBallTelemetrySample #gt; #amp; #123;const#125;
-            +SpeedSeries() std::vector#lt; float #gt; #123;const#125;
-            +VerticalVelocitySeries() std::vector#lt; float #gt; #123;const#125;
-            +AngularSpeedSeries() std::vector#lt; float #gt; #123;const#125;
-            +GroundedSeries() std::vector#lt; float #gt; #123;const#125;
+            +Samples() const vector#lt;DebugBallTelemetrySample#gt;#amp; #123;const#125;
+            +SpeedSeries() vector#lt;float#gt; #123;const#125;
+            +VerticalVelocitySeries() vector#lt;float#gt; #123;const#125;
+            +AngularSpeedSeries() vector#lt;float#gt; #123;const#125;
+            +GroundedSeries() vector#lt;float#gt; #123;const#125;
         }
         class game__debug__DebugBallTelemetryInspector["DebugBallTelemetryInspector"] {
             -DebugBallTelemetryHistory m_history
-            +Update(core::GameContext #amp; ctx, bool simulationAdvanced) void
+            +Update(GameContext#amp; ctx, bool simulationAdvanced) void
             +Draw() void
         }
         class game__debug__DebugBallTelemetrySample["DebugBallTelemetrySample"] {
@@ -68,29 +120,29 @@ classDiagram
             +float angularSpeed
             +float grounded
         }
-        class game__debug__DebugBallTeleportResult["DebugBallTeleportResult"] {
+        class iso__game__debug__DebugBallTeleportResult["DebugBallTeleportResult"] {
             <<enumeration>>
             Success
             MissingGameState
             MissingBallComponents
         }
         class game__debug__DebugBallTrailHistory["DebugBallTrailHistory"] {
-            -std::deque#lt; DirectX::XMFLOAT3 #gt; m_points
-            -ecs::Entity m_entity
+            -deque#lt;XMFLOAT3#gt; m_points
+            -Entity m_entity
             -int m_sampleFrame
-            +Update(ecs::Entity entity, const DirectX::XMFLOAT3 #amp; position, int sampleInterval, std::size_t maximumPoints) void
+            +Update(Entity entity, const XMFLOAT3#amp; position, int sampleInterval, size_t maximumPoints) void
             +Clear() void
-            +Points() const std::deque#lt; DirectX::XMFLOAT3 #gt; #amp; #123;const#125;
+            +Points() const deque#lt;XMFLOAT3#gt;#amp; #123;const#125;
         }
         class game__debug__DebugCheckpointInspector["DebugCheckpointInspector"] {
             -DebugGameplayCheckpoint m_checkpoint
-            -std::string m_result
-            +Draw(core::GameContext #amp; ctx) void
+            -string m_result
+            +Draw(GameContext#amp; ctx) void
         }
         class game__debug__DebugColliderRenderer["DebugColliderRenderer"] {
             -DebugBallTrailHistory m_ballTrail
             -int m_seenTrailClearGeneration
-            +Draw(core::GameContext #amp; ctx, const DebugColliderSettings #amp; settings) void
+            +Draw(GameContext#amp; ctx, const DebugColliderSettings#amp; settings) void
         }
         class game__debug__DebugColliderSettings["DebugColliderSettings"] {
             <<struct>>
@@ -122,19 +174,19 @@ classDiagram
             +uint32_t entityId
         }
         class game__debug__DebugCollisionHistory["DebugCollisionHistory"] {
-            +std::size_t kMaximumEvents$
+            +size_t kMaximumEvents$
             -uint64_t m_simulationFrame
-            -std::vector#lt; DebugCollisionRecord #gt; m_records
-            +Update(const game::components::CollisionEvents #42; events, bool simulationAdvanced) bool
+            -vector#lt;DebugCollisionRecord#gt; m_records
+            +Update(const CollisionEvents#42; events, bool simulationAdvanced) bool
             +Clear() void
-            +Records() const std::vector#lt; DebugCollisionRecord #gt; #amp; #123;const#125;
+            +Records() const vector#lt;DebugCollisionRecord#gt;#amp; #123;const#125;
         }
         class game__debug__DebugCollisionRecord["DebugCollisionRecord"] {
             <<struct>>
             +uint64_t simulationFrame
-            +game::components::CollisionEvent event
+            +CollisionEvent event
         }
-        class game__debug__DebugCupInStatus["DebugCupInStatus"] {
+        class iso__game__debug__DebugCupInStatus["DebugCupInStatus"] {
             <<struct>>
             +bool available
             +bool readyForCupIn
@@ -144,30 +196,30 @@ classDiagram
             +bool withinVerticalRange
             +bool slowEnough
             +uint32_t holeEntity
-            +std::string linkTarget
+            +string linkTarget
             +float horizontalDistance
             +float captureRadius
             +float verticalOffset
             +float speed
-            +DirectX::XMFLOAT3 ballPosition
-            +DirectX::XMFLOAT3 holePosition
+            +XMFLOAT3 ballPosition
+            +XMFLOAT3 holePosition
         }
         class game__debug__DebugEntityInspector["DebugEntityInspector"] {
             -uint32_t m_entity
-            +Draw(core::GameContext #amp; ctx, DebugColliderSettings #amp; colliderSettings) void
+            +Draw(GameContext#amp; ctx, DebugColliderSettings#amp; colliderSettings) void
         }
-        class game__debug__DebugEntitySnapshot["DebugEntitySnapshot"] {
+        class iso__game__debug__DebugEntitySnapshot["DebugEntitySnapshot"] {
             <<struct>>
             +uint32_t entity
             +bool alive
             +bool hasTransform
-            +DirectX::XMFLOAT3 position
-            +DirectX::XMFLOAT4 rotation
-            +DirectX::XMFLOAT3 scale
+            +XMFLOAT3 position
+            +XMFLOAT4 rotation
+            +XMFLOAT3 scale
             +bool hasRigidBody
-            +DirectX::XMFLOAT3 velocity
-            +DirectX::XMFLOAT3 acceleration
-            +DirectX::XMFLOAT3 angularVelocity
+            +XMFLOAT3 velocity
+            +XMFLOAT3 acceleration
+            +XMFLOAT3 angularVelocity
             +float mass
             +float drag
             +float rollingFriction
@@ -175,18 +227,18 @@ classDiagram
             +float spinDecay
             +bool isStatic
             +bool hasCollider
-            +std::string colliderType
+            +string colliderType
             +float colliderRadius
-            +DirectX::XMFLOAT3 colliderSize
-            +DirectX::XMFLOAT3 colliderOffset
+            +XMFLOAT3 colliderSize
+            +XMFLOAT3 colliderOffset
             +bool hasHeading
-            +std::string headingText
-            +std::string headingLink
+            +string headingText
+            +string headingLink
             +int headingHealth
             +int headingMaximumHealth
             +bool headingDestroyed
             +bool hasGolfHole
-            +std::string holeLink
+            +string holeLink
             +float holeRadius
             +float holeGravity
             +bool targetHole
@@ -196,12 +248,12 @@ classDiagram
             -float m_moveSpeed
             -float m_fastMultiplier
             -float m_mouseSensitivity
-            -ecs::Entity m_cameraEntity
+            -Entity m_cameraEntity
             -DebugFreeCameraPose m_pose
             +DrawControls() void
-            +Apply(core::GameContext #amp; ctx, float realDeltaSeconds) void
+            +Apply(GameContext#amp; ctx, float realDeltaSeconds) void
         }
-        class game__debug__DebugFreeCameraInput["DebugFreeCameraInput"] {
+        class iso__game__debug__DebugFreeCameraInput["DebugFreeCameraInput"] {
             <<struct>>
             +float moveForward
             +float moveRight
@@ -212,19 +264,19 @@ classDiagram
         }
         class game__debug__DebugFreeCameraPose["DebugFreeCameraPose"] {
             <<struct>>
-            +DirectX::XMFLOAT3 position
+            +XMFLOAT3 position
             +float yaw
             +float pitch
         }
         class game__debug__DebugGameplayCheckpoint["DebugGameplayCheckpoint"] {
             -bool m_saved
             -uint32_t m_ballEntity
-            -game::components::Transform m_transform
-            -game::components::RigidBody m_body
-            -game::components::GolfGameState m_golf
-            -game::components::ShotState m_shot
-            +Save(ecs::World #amp; world) bool
-            +Restore(ecs::World #amp; world) bool #123;const#125;
+            -Transform m_transform
+            -RigidBody m_body
+            -GolfGameState m_golf
+            -ShotState m_shot
+            +Save(World#amp; world) bool
+            +Restore(World#amp; world) bool #123;const#125;
             +HasSnapshot() bool #123;const#125;
         }
         class game__debug__DebugGameplaySnapshot["DebugGameplaySnapshot"] {
@@ -236,11 +288,11 @@ classDiagram
         class game__debug__DebugGolfStateSnapshot["DebugGolfStateSnapshot"] {
             <<struct>>
             +bool available
-            +std::string currentPage
-            +std::string targetPage
-            +std::string material
-            +DirectX::XMFLOAT2 windDirection
-            +DirectX::XMFLOAT3 lastShotPosition
+            +string currentPage
+            +string targetPage
+            +string material
+            +XMFLOAT2 windDirection
+            +XMFLOAT3 lastShotPosition
             +float windSpeed
             +float ballSpeed
             +int shotCount
@@ -254,12 +306,12 @@ classDiagram
         }
         class game__debug__DebugLine3D["DebugLine3D"] {
             <<struct>>
-            +DirectX::XMFLOAT3 from
-            +DirectX::XMFLOAT3 to
+            +XMFLOAT3 from
+            +XMFLOAT3 to
         }
         class game__debug__DebugOverlay["DebugOverlay"] {
             -bool m_visible
-            -std::array#lt; bool, 4 #gt; m_logLevels
+            -array#lt;bool, 4#gt; m_logLevels
             -char m_logFilter[128]
             -DebugColliderSettings m_colliderSettings
             -DebugBallInspector m_ballInspector
@@ -273,49 +325,49 @@ classDiagram
             -bool m_hideTerrainMeshes
             +Toggle() void
             +IsVisible() bool #123;const#125;
-            +Draw(core::GameContext #amp; ctx, DebugTimeController #amp; time) void
-            +ApplyFreeCamera(core::GameContext #amp; ctx, float realDeltaSeconds) void
-            +GetColliderSettings() const DebugColliderSettings #amp; #123;const#125;
-            -DrawSimulation(DebugTimeController #amp; time) void
+            +Draw(GameContext#amp; ctx, DebugTimeController#amp; time) void
+            +ApplyFreeCamera(GameContext#amp; ctx, float realDeltaSeconds) void
+            +GetColliderSettings() const DebugColliderSettings#amp; #123;const#125;
+            -DrawSimulation(DebugTimeController#amp; time) void
             -DrawLog() void
-            -DrawColliders(core::GameContext #amp; ctx, DebugTimeController #amp; time) void
-            -DrawSceneSelector(core::GameContext #amp; ctx, DebugTimeController #amp; time) void
+            -DrawColliders(GameContext#amp; ctx, DebugTimeController#amp; time) void
+            -DrawSceneSelector(GameContext#amp; ctx, DebugTimeController#amp; time) void
         }
         class game__debug__DebugProfilerHistory["DebugProfilerHistory"] {
-            +std::size_t kMaximumFrames$
-            -std::vector#lt; core::ProfilerFrameSnapshot #gt; m_frames
-            +Update(const core::ProfilerFrameSnapshot #amp; snapshot) void
+            +size_t kMaximumFrames$
+            -vector#lt;ProfilerFrameSnapshot#gt; m_frames
+            +Update(const ProfilerFrameSnapshot#amp; snapshot) void
             +Clear() void
-            +Frames() const std::vector#lt; core::ProfilerFrameSnapshot #gt; #amp; #123;const#125;
-            +CpuFrameSeries() std::vector#lt; float #gt; #123;const#125;
-            +CpuScopeSeries(std::string_view name, bool inclusive) std::vector#lt; float #gt; #123;const#125;
-            +GpuScopeSeries(std::string_view name) std::vector#lt; float #gt; #123;const#125;
-            +CounterSeries(std::string_view name) std::vector#lt; float #gt; #123;const#125;
+            +Frames() const vector#lt;ProfilerFrameSnapshot#gt;#amp; #123;const#125;
+            +CpuFrameSeries() vector#lt;float#gt; #123;const#125;
+            +CpuScopeSeries(string_view name, bool inclusive) vector#lt;float#gt; #123;const#125;
+            +GpuScopeSeries(string_view name) vector#lt;float#gt; #123;const#125;
+            +CounterSeries(string_view name) vector#lt;float#gt; #123;const#125;
         }
         class game__debug__DebugProfilerInspector["DebugProfilerInspector"] {
             -DebugProfilerHistory m_history
-            -std::string m_cpuScope
-            -std::string m_gpuScope
-            -std::string m_counter
+            -string m_cpuScope
+            -string m_gpuScope
+            -string m_counter
             +Draw() void
         }
-        class game__debug__DebugRaycastState["DebugRaycastState"] {
+        class iso__game__debug__DebugRaycastState["DebugRaycastState"] {
             <<struct>>
             +bool hasRay
-            +DirectX::XMFLOAT3 origin
-            +DirectX::XMFLOAT3 direction
+            +XMFLOAT3 origin
+            +XMFLOAT3 direction
             +bool hit
-            +DirectX::XMFLOAT3 hitPosition
+            +XMFLOAT3 hitPosition
             +float maxDistance
         }
-        class game__debug__DebugRenderState["DebugRenderState"] {
+        class iso__game__debug__DebugRenderState["DebugRenderState"] {
             <<struct>>
             +bool hideTerrainMeshes
         }
         class game__debug__DebugSceneNavigator["DebugSceneNavigator"] {
-            +Navigate(core::GameContext #amp; ctx, DebugSceneTarget target, bool replaceCurrent)$ void
+            +Navigate(GameContext#amp; ctx, DebugSceneTarget target, bool replaceCurrent)$ void
         }
-        class game__debug__DebugSceneTarget["DebugSceneTarget"] {
+        class iso__game__debug__DebugSceneTarget["DebugSceneTarget"] {
             <<enumeration>>
             Title
             Loading
@@ -326,8 +378,8 @@ classDiagram
         class game__debug__DebugShotStateSnapshot["DebugShotStateSnapshot"] {
             <<struct>>
             +bool available
-            +std::string phase
-            +std::string judgement
+            +string phase
+            +string judgement
             +float powerGauge
             +float powerDirection
             +float confirmedPower
@@ -353,19 +405,19 @@ classDiagram
             +DebugLine3D line
             +uint8_t material
         }
-        class game__debug__DebugTerrainVisibility["DebugTerrainVisibility"] {
-            -std::unordered_map#lt; ecs::Entity, bool #gt; m_originalVisibility
-            +Apply(ecs::World #amp; world, const DebugRenderState #42; state) void
-            -Hide(ecs::World #amp; world) void
-            -Restore(ecs::World #amp; world) void
+        class iso__game__debug__DebugTerrainVisibility["DebugTerrainVisibility"] {
+            -unordered_map#lt;Entity, bool#gt; m_originalVisibility
+            +Apply(World#amp; world, const DebugRenderState#42; state) void
+            -Hide(World#amp; world) void
+            -Restore(World#amp; world) void
         }
-        class game__debug__DebugTimeController["DebugTimeController"] {
+        class iso__game__debug__DebugTimeController["DebugTimeController"] {
             +float kStepDelta$
-            +std::size_t kDefaultTimeScaleIndex$
-            +std::array#lt; float, 5 #gt; kTimeScales$
+            +size_t kDefaultTimeScaleIndex$
+            +array#lt;float, 5#gt; kTimeScales$
             -bool m_paused
             -bool m_stepRequested
-            -std::size_t m_timeScaleIndex
+            -size_t m_timeScaleIndex
             +IsPaused() bool #123;const#125;
             +SetPaused(bool paused) void
             +TogglePaused() void
@@ -377,21 +429,21 @@ classDiagram
             +SimulationDelta(float realDelta) float
         }
         class game__debug__DebugUiLayer["DebugUiLayer"] {
-            -DebugUiLayer #42; s_activeLayer$
+            -DebugUiLayer#42; s_activeLayer$
             -bool m_initialized
             -DebugOverlay m_overlay
             -DebugColliderRenderer m_colliderRenderer
-            +Initialize(HWND window, ID3D11Device #42; device, ID3D11DeviceContext #42; context) bool
+            +Initialize(HWND window, ID3D11Device#42; device, ID3D11DeviceContext#42; context) bool
             +Shutdown() void
             +BeginFrame() void
-            +ApplyPreRender(core::GameContext #amp; ctx, float realDeltaSeconds) void
-            +Render(core::GameContext #amp; ctx, DebugTimeController #amp; time) void
+            +ApplyPreRender(GameContext#amp; ctx, float realDeltaSeconds) void
+            +Render(GameContext#amp; ctx, DebugTimeController#amp; time) void
             +IsPauseToggleRequested() bool #123;const#125;
             +IsFrameStepRequested() bool #123;const#125;
             +IsTimeScaleCycleRequested() bool #123;const#125;
             +ProcessWindowMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam)$ LRESULT
         }
-        class game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext["ProjectionContext"] {
+        class iso__game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext["ProjectionContext"] {
             <<struct>>
             +XMMATRIX viewProjection
             +ImVec2 displaySize
@@ -400,14 +452,21 @@ classDiagram
             -DebugSceneTarget m_target
             -bool m_requested
             +CleanSceneTransition(DebugSceneTarget target)
-            +virtual GetName() const char #42; #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
+            +virtual GetName() const char#42; #123;const#125;
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
         }
     }
-    %% 継承
+    %% 他モジュール / 外部の参照ノード
+    class core__ProfilerFrameSnapshot["core::ProfilerFrameSnapshot"]
+    class core__Scene["core::Scene"]
+    class game__components__CollisionEvent["game::components::CollisionEvent"]
+    class game__components__GolfGameState["game::components::GolfGameState"]
+    class game__components__RigidBody["game::components::RigidBody"]
+    class game__components__ShotState["game::components::ShotState"]
+    class game__components__Transform["game::components::Transform"]
+    %% 関係
     core__Scene <|-- game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition
-    %% メンバー由来の関係
     game__debug__DebugBallInspector *-- "1" game__debug__DebugBallPhysicsValues : m_physics
     game__debug__DebugBallTelemetryHistory *-- "0..*" game__debug__DebugBallTelemetrySample : m_samples
     game__debug__DebugBallTelemetryInspector *-- "1" game__debug__DebugBallTelemetryHistory : m_history
@@ -439,63 +498,17 @@ classDiagram
     game__debug__DebugUiLayer *-- "1" game__debug__DebugColliderRenderer : m_colliderRenderer
     game__debug__DebugUiLayer *-- "1" game__debug__DebugOverlay : m_overlay
     game__debug__DebugUiLayer o-- "0..1" game__debug__DebugUiLayer : s_activeLayer
-    game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition --> "1" game__debug__DebugSceneTarget : m_target
-    %% ネスト型
-    %% 依存 (宣言 / 生成 / ECS)
-    game__debug__DebugBallInspector ..> core__GameContext
-    game__debug__DebugBallTelemetryHistory ..> ecs__World
-    game__debug__DebugBallTelemetryHistory ..> game__components__GolfGameState : ECS
-    game__debug__DebugBallTelemetryHistory ..> game__components__RigidBody : ECS
-    game__debug__DebugBallTelemetryInspector ..> core__GameContext
-    game__debug__DebugCheckpointInspector ..> core__GameContext
-    game__debug__DebugColliderRenderer ..> core__GameContext
-    game__debug__DebugColliderRenderer ..> game__components__Collider : ECS
-    game__debug__DebugColliderRenderer ..> game__components__CollisionEvents : ECS
-    game__debug__DebugColliderRenderer ..> game__components__GolfGameState : ECS
-    game__debug__DebugColliderRenderer ..> game__components__GolfHole : ECS
-    game__debug__DebugColliderRenderer ..> game__components__RigidBody : ECS
-    game__debug__DebugColliderRenderer ..> game__components__TerrainCollider : ECS
-    game__debug__DebugColliderRenderer ..> game__components__Transform : ECS
-    game__debug__DebugColliderRenderer ..> game__debug__DebugColliderSettings
-    game__debug__DebugColliderRenderer ..> game__debug__DebugRaycastState : ECS
-    game__debug__DebugCollisionHistory ..> game__components__CollisionEvents
-    game__debug__DebugEntityInspector ..> core__GameContext
-    game__debug__DebugEntityInspector ..> game__components__GolfGameState : ECS
-    game__debug__DebugEntityInspector ..> game__debug__DebugColliderSettings
-    game__debug__DebugFreeCamera ..> core__GameContext
-    game__debug__DebugFreeCamera ..> game__components__Camera : ECS
-    game__debug__DebugFreeCamera ..> game__components__Transform : ECS
-    game__debug__DebugGameplayCheckpoint ..> ecs__World
-    game__debug__DebugOverlay ..> core__GameContext
-    game__debug__DebugOverlay ..> game__components__CollisionEvents : ECS
-    game__debug__DebugOverlay ..> game__components__GolfHole : ECS
-    game__debug__DebugOverlay ..> game__components__TerrainCollider : ECS
-    game__debug__DebugOverlay ..> game__debug__DebugTimeController
-    game__debug__DebugSceneNavigator ..> core__GameContext
-    game__debug__DebugSceneNavigator ..> game__debug__DebugSceneTarget
     game__debug__DebugSceneNavigator ..> game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition : 生成
-    game__debug__DebugTerrainVisibility ..> ecs__World
-    game__debug__DebugTerrainVisibility ..> game__components__MeshRenderer : ECS
-    game__debug__DebugTerrainVisibility ..> game__components__TerrainObject : ECS
-    game__debug__DebugTerrainVisibility ..> game__debug__DebugRenderState
-    game__debug__DebugUiLayer ..> core__GameContext
-    game__debug__DebugUiLayer ..> game__debug__DebugTimeController
-    game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition ..> core__GameContext
-    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
-    class core__GameContext["core::GameContext"]
-    class core__ProfilerFrameSnapshot["core::ProfilerFrameSnapshot"]
-    class core__Scene["core::Scene"]
-    class ecs__World["ecs::World"]
-    class game__components__Camera["game::components::Camera"]
-    class game__components__Collider["game::components::Collider"]
-    class game__components__CollisionEvent["game::components::CollisionEvent"]
-    class game__components__CollisionEvents["game::components::CollisionEvents"]
-    class game__components__GolfGameState["game::components::GolfGameState"]
-    class game__components__GolfHole["game::components::GolfHole"]
-    class game__components__MeshRenderer["game::components::MeshRenderer"]
-    class game__components__RigidBody["game::components::RigidBody"]
-    class game__components__ShotState["game::components::ShotState"]
-    class game__components__TerrainCollider["game::components::TerrainCollider"]
-    class game__components__TerrainObject["game::components::TerrainObject"]
-    class game__components__Transform["game::components::Transform"]
-    %% 外部クラス (継承元のみ)
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__game__debug__DebugTerrainVisibility .. iso__game__debug__DebugCupInStatus
+    iso__game__debug__DebugCupInStatus .. iso__game__debug__DebugEntitySnapshot
+    iso__game__debug__DebugEntitySnapshot .. iso__game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext
+    iso__game__debug__DebugEntitySnapshot .. iso__game__debug__DebugRenderState
+    iso__game__debug__DebugEntitySnapshot .. iso__game__debug__DebugFreeCameraInput
+    iso__game__debug__DebugEntitySnapshot .. iso__game__debug__DebugRaycastState
+    iso__game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext .. iso__game__debug__DebugBallTeleportResult
+    iso__game__debug__DebugRenderState .. iso__game__debug__DebugBallImpulseResult
+    iso__game__debug__DebugFreeCameraInput .. iso__game__debug__DebugSceneTarget
+    %% 配色
+    cssClass "iso__game__debug__DebugBallImpulseResult,game__debug__DebugBallInspector,game__debug__DebugBallPhysicsSnapshot,game__debug__DebugBallPhysicsValues,game__debug__DebugBallTelemetryHistory,game__debug__DebugBallTelemetryInspector,game__debug__DebugBallTelemetrySample,iso__game__debug__DebugBallTeleportResult,game__debug__DebugBallTrailHistory,game__debug__DebugCheckpointInspector,game__debug__DebugColliderRenderer,game__debug__DebugColliderSettings,game__debug__DebugCollisionBreakSettings,game__debug__DebugCollisionHistory,game__debug__DebugCollisionRecord,iso__game__debug__DebugCupInStatus,game__debug__DebugEntityInspector,iso__game__debug__DebugEntitySnapshot,game__debug__DebugFreeCamera,iso__game__debug__DebugFreeCameraInput,game__debug__DebugFreeCameraPose,game__debug__DebugGameplayCheckpoint,game__debug__DebugGameplaySnapshot,game__debug__DebugGolfStateSnapshot,game__debug__DebugLine3D,game__debug__DebugOverlay,game__debug__DebugProfilerHistory,game__debug__DebugProfilerInspector,iso__game__debug__DebugRaycastState,iso__game__debug__DebugRenderState,game__debug__DebugSceneNavigator,iso__game__debug__DebugSceneTarget,game__debug__DebugShotStateSnapshot,game__debug__DebugSlopeEvaluation,game__debug__DebugSlopeStatus,game__debug__DebugTerrainMaterialLine,iso__game__debug__DebugTerrainVisibility,iso__game__debug__DebugTimeController,game__debug__DebugUiLayer,iso__game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext,game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition" game_debug
+    cssClass "core__ProfilerFrameSnapshot,core__Scene,game__components__CollisionEvent,game__components__GolfGameState,game__components__RigidBody,game__components__ShotState,game__components__Transform" refnode

@@ -1,100 +1,152 @@
-%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF クラス図: game-scenes (generate_class_full.py による自動生成。手で編集しないこと)
 %% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
 %% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
-%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
-%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
 classDiagram
     direction LR
-    namespace game__scenes {
+    namespace game.scenes {
         class game__scenes__AchievementScene["AchievementScene"] {
-            -ecs::Entity m_closeButton
-            -ecs::Entity m_leftText
-            -ecs::Entity m_rightText
-            -ecs::Entity m_scrollTrack
-            -ecs::Entity m_scrollThumb
-            -std::vector#lt; ecs::Entity #gt; m_hiddenUnderlyingButtons
-            -std::vector#lt; std::wstring #gt; m_leftLines
-            -std::vector#lt; std::wstring #gt; m_rightLines
+            -Entity m_closeButton
+            -Entity m_leftText
+            -Entity m_rightText
+            -Entity m_scrollTrack
+            -Entity m_scrollThumb
+            -vector#lt;Entity#gt; m_hiddenUnderlyingButtons
+            -vector#lt;wstring#gt; m_leftLines
+            -vector#lt;wstring#gt; m_rightLines
             -int m_scrollOffset
             -int m_maxScrollOffset
             -bool m_draggingThumb
             -float m_dragGrabOffsetY
-            +virtual GetName() const char #42; #123;const#125;
+            +virtual GetName() const char#42; #123;const#125;
             +virtual BlocksUnderlyingInput() bool #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            +virtual Render(core::GameContext #amp; ctx) void
-            -RefreshColumns(core::GameContext #amp; ctx) void
-            -UpdateScrollThumb(core::GameContext #amp; ctx) void
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            -RefreshColumns(GameContext#amp; ctx) void
+            -UpdateScrollThumb(GameContext#amp; ctx) void
         }
         class game__scenes__AsyncPathEvaluator["AsyncPathEvaluator"] {
-            -std::future#lt; std::vector#lt; HolePlacementCandidate #gt; #gt; m_task
-            -std::vector#lt; std::future#lt; std::vector#lt; HolePlacementCandidate #gt; #gt; #gt; m_retiredTasks
-            -std::shared_ptr#lt; std::atomic#lt; bool #gt; #gt; m_cancelRequested
-            -std::shared_ptr#lt; std::atomic#lt; std::size_t #gt; #gt; m_progress
-            -std::shared_ptr#lt; std::atomic#lt; std::size_t #gt; #gt; m_total
-            -std::shared_ptr#lt; std::mutex #gt; m_partialMutex
-            -std::shared_ptr#lt; std::vector#lt; HolePlacementCandidate #gt; #gt; m_partialResults
-            -std::size_t m_consumedPartialCount
+            -future#lt;vector#lt;HolePlacementCandidate#gt;#gt; m_task
+            -vector#lt;future#lt;vector#lt;HolePlacementCandidate#gt;#gt;#gt; m_retiredTasks
+            -shared_ptr#lt;atomic#lt;bool#gt;#gt; m_cancelRequested
+            -shared_ptr#lt;atomic#lt;size_t#gt;#gt; m_progress
+            -shared_ptr#lt;atomic#lt;size_t#gt;#gt; m_total
+            -shared_ptr#lt;mutex#gt; m_partialMutex
+            -shared_ptr#lt;vector#lt;HolePlacementCandidate#gt;#gt; m_partialResults
+            -size_t m_consumedPartialCount
             -bool m_started
-            +Start(const std::vector#lt; HolePlacementCandidate #gt; #amp; candidates, int targetPageId, int maxDepth, std::uint64_t loadId) void
+            +Start(const vector#lt;HolePlacementCandidate#gt;#amp;, int, int, uint64_t) void
             +Cancel() void
-            +ResetForNewLoad(std::uint64_t loadId) void
-            +TryConsumeCompleted() std::optional#lt; std::vector#lt; HolePlacementCandidate #gt; #gt;
-            +ConsumePartial() std::vector#lt; HolePlacementCandidate #gt;
+            +ResetForNewLoad(uint64_t loadId) void
+            +TryConsumeCompleted() optional#lt;vector#lt;HolePlacementCandidate#gt;#gt;
+            +ConsumePartial() vector#lt;HolePlacementCandidate#gt;
             +PrepareNextEvaluation() void
             +HasStarted() bool #123;const#125;
             +HasActiveTask() bool #123;const#125;
             +GetProgress() float #123;const#125;
-            -RetireActiveTask(std::uint64_t loadId) void
+            -RetireActiveTask(uint64_t loadId) void
             -CollectRetiredTasks() void
         }
         class game__scenes__CourseIntroductionData["CourseIntroductionData"] {
             <<struct>>
-            +std::string pageName
-            +std::wstring abstractText
+            +string pageName
+            +wstring abstractText
             +float fieldWidth
             +float fieldDepth
             +float windSpeed
             +int par
-            +std::vector#lt; game::utils::CourseIntroductionHole #gt; holes
+            +vector#lt;CourseIntroductionHole#gt; holes
         }
         class game__scenes__GameScene["GameScene"] {
-            -ecs::Entity m_fpsEntity
+            -Entity m_fpsEntity
             -int m_frameCount
-            +virtual GetName() const char #42; #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +GetFpsEntity() ecs::Entity #123;const#125;
+            +virtual GetName() const char#42; #123;const#125;
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +GetFpsEntity() Entity #123;const#125;
         }
         class game__scenes__HolePlacementCandidate["HolePlacementCandidate"] {
             <<struct>>
             +float x
             +float z
-            +std::string linkTarget
+            +string linkTarget
             +bool isTarget
             +int hopsToTarget
-            +std::size_t originalIndex
+            +size_t originalIndex
             +bool isPlayable
         }
         class game__scenes__HolePlacementPlanner["HolePlacementPlanner"] {
-            +BuildCandidate(const graphics::LinkRegion #amp; link, std::size_t originalIndex, std::uint32_t textureWidth, std::uint32_t textureHeight, float fieldWidth, float fieldDepth) HolePlacementCandidate #123;const#125;
-            +SelectMapCandidates(const std::vector#lt; HolePlacementCandidate #gt; #amp; candidates) std::vector#lt; HolePlacementCandidate #gt; #123;const#125;
+            +BuildCandidate(const LinkRegion#amp;, size_t, uint32_t, uint32_t, float, float) HolePlacementCandidate #123;const#125;
+            +SelectMapCandidates(const vector#lt;HolePlacementCandidate#gt;#amp; candidates) vector#lt;HolePlacementCandidate#gt; #123;const#125;
         }
-        class game__scenes__HoleVisualRules["HoleVisualRules"] {
-            +GetColor(bool isTargetHole, int hopsToTarget)$ DirectX::XMFLOAT4
-            +GetBodyColor(bool isTargetHole, int hopsToTarget)$ DirectX::XMFLOAT4
+        class iso__game__scenes__HoleVisualRules["HoleVisualRules"] {
+            +GetColor(bool isTargetHole, int hopsToTarget)$ XMFLOAT4
+            +GetBodyColor(bool isTargetHole, int hopsToTarget)$ XMFLOAT4
         }
-        class game__scenes__HtmlCourseFieldSize["HtmlCourseFieldSize"] {
+        class iso__game__scenes__HtmlCourseFieldSize["HtmlCourseFieldSize"] {
             <<struct>>
             +float width
             +float depth
         }
         class game__scenes__LoadingScene["LoadingScene"] {
-            -std::function#lt; std::unique_ptr#lt; core::Scene #gt;#40;#41;#gt; m_nextSceneFactory
-            -std::vector#lt; BallState #gt; m_balls
-            -resources::MeshHandle m_ballMeshHandle
+            -function#lt;unique_ptr#lt;Scene#gt;#40;#41;#gt; m_nextSceneFactory
+            -vector#lt;BallState#gt; m_balls
+            -MeshHandle m_ballMeshHandle
             -int m_spawnedCount
             -float m_spawnTimer
             -int TOTAL_BALLS$
@@ -125,76 +177,76 @@ classDiagram
             -int m_settledCount
             -int m_lastSettledCount
             -float m_stuckTimer
-            -DirectX::XMFLOAT3 m_lastMovingPos
+            -XMFLOAT3 m_lastMovingPos
             -bool m_hasMovingSample
             -float m_forceFinishTimer
-            -ecs::Entity m_textEntity
-            -ecs::Entity m_progressTextEntity
-            -ecs::Entity m_captionTextEntity
-            -ecs::Entity m_fadeOverlay
-            -graphics::TextStyle m_primaryStyle
-            -graphics::TextStyle m_progressStyle
-            -graphics::TextStyle m_captionStyle
+            -Entity m_textEntity
+            -Entity m_progressTextEntity
+            -Entity m_captionTextEntity
+            -Entity m_fadeOverlay
+            -TextStyle m_primaryStyle
+            -TextStyle m_progressStyle
+            -TextStyle m_captionStyle
             -float m_tipTimer
             -size_t m_tipIndex
-            -ecs::Entity m_cameraEntity
+            -Entity m_cameraEntity
             -float m_cameraTime
-            -ecs::Entity m_floorEntity
-            -std::vector#lt; ecs::Entity #gt; m_wallEntities
-            -ecs::Entity m_backdropEntity
+            -Entity m_floorEntity
+            -vector#lt;Entity#gt; m_wallEntities
+            -Entity m_backdropEntity
             -float ARENA_HALF_WIDTH$
             -float ARENA_HALF_DEPTH$
             -float FLOOR_Y$
-            -std::future#lt; std::unique_ptr#lt; game::components::WikiGlobalData #gt; #gt; m_loadTask
-            -std::unique_ptr#lt; game::components::WikiGlobalData #gt; m_loadedData
+            -future#lt;unique_ptr#lt;WikiGlobalData#gt;#gt; m_loadTask
+            -unique_ptr#lt;WikiGlobalData#gt; m_loadedData
             -bool m_isLoading
             -bool m_loadCompleted
-            -std::shared_ptr#lt; std::atomic#lt; float #gt; #gt; m_loadProgress
+            -shared_ptr#lt;atomic#lt;float#gt;#gt; m_loadProgress
             -float m_uiProgress
-            -std::vector#lt; std::function#lt; void#40;core::GameContext #amp;#41;#gt; #gt; m_preloadTasks
+            -vector#lt;function#lt;void#40;GameContext#amp;#41;#gt;#gt; m_preloadTasks
             -size_t m_preloadIndex
             -bool m_preloadComplete
-            +LoadingScene(std::function#lt; std::unique_ptr#lt; core::Scene #gt;#40;#41;#gt; nextSceneFactory)
-            +virtual GetName() const char #42; #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual Render(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            -SpawnBall(core::GameContext #amp; ctx) void
-            -UpdatePhysics(core::GameContext #amp; ctx, float dt) void
+            +LoadingScene(function#lt;unique_ptr#lt;Scene#gt;#40;#41;#gt; nextSceneFactory)
+            +virtual GetName() const char#42; #123;const#125;
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            -SpawnBall(GameContext#amp; ctx) void
+            -UpdatePhysics(GameContext#amp; ctx, float dt) void
             -AreAllBallsSettled() bool
-            -UpdateFade(core::GameContext #amp; ctx, float dt) void
-            -CreateBoundaries(core::GameContext #amp; ctx) void
-            -UpdateCamera(core::GameContext #amp; ctx, float dt) void
-            -UpdateUI(core::GameContext #amp; ctx) void
-            -ApplyFadeToScene(core::GameContext #amp; ctx) void
+            -UpdateFade(GameContext#amp; ctx, float dt) void
+            -CreateBoundaries(GameContext#amp; ctx) void
+            -UpdateCamera(GameContext#amp; ctx, float dt) void
+            -UpdateUI(GameContext#amp; ctx) void
+            -ApplyFadeToScene(GameContext#amp; ctx) void
             -BuildGameplayPreloadQueue() void
         }
         class game__scenes__LoadingScene__BallState["LoadingScene::BallState"] {
             <<struct>>
-            +ecs::Entity entity
-            +DirectX::XMFLOAT3 velocity
-            +DirectX::XMFLOAT3 angularVelocity
+            +Entity entity
+            +XMFLOAT3 velocity
+            +XMFLOAT3 angularVelocity
             +bool settled
         }
         class game__scenes__PageDataAsyncResult["PageDataAsyncResult"] {
             <<struct>>
-            +std::string pageName
-            +std::string articleText
-            +std::string articleHtml
-            +std::vector#lt; game::WikiLink #gt; allLinks
-            +std::vector#lt; std::string #gt; pageCategories
-            +std::vector#lt; graphics::PendingWikiImage #gt; pendingImages
+            +string pageName
+            +string articleText
+            +string articleHtml
+            +vector#lt;WikiLink#gt; allLinks
+            +vector#lt;string#gt; pageCategories
+            +vector#lt;PendingWikiImage#gt; pendingImages
             +bool hasData
         }
-        class game__scenes__PageLinkSelectionResult["PageLinkSelectionResult"] {
+        class iso__game__scenes__PageLinkSelectionResult["PageLinkSelectionResult"] {
             <<struct>>
-            +std::vector#lt; std::pair#lt; std::string, std::wstring #gt; #gt; links
+            +vector#lt;pair#lt;string, wstring#gt;#gt; links
             +bool targetAdded
         }
         class game__scenes__PageLinkSelector["PageLinkSelector"] {
-            +Select(const std::vector#lt; game::WikiLink #gt; #amp; allLinks, const std::string #amp; articleText, const std::string #amp; targetPage) PageLinkSelectionResult #123;const#125;
-            -IsIgnored(const std::string #amp; title) bool #123;const#125;
+            +Select(const vector#lt;WikiLink#gt;#amp;, const string#amp;, const string#amp;) PageLinkSelectionResult #123;const#125;
+            -IsIgnored(const string#amp; title) bool #123;const#125;
         }
         class game__scenes__PageLoadResult["PageLoadResult"] {
             <<struct>>
@@ -207,54 +259,54 @@ classDiagram
             -bool m_canReturnToPreviousPage
             -ActionCallback m_returnToPreviousPage
             +PauseScene(bool canReturnToPreviousPage, ActionCallback returnToPreviousPage)
-            +virtual GetName() const char #42; #123;const#125;
+            +virtual GetName() const char#42; #123;const#125;
             +virtual BlocksUnderlyingInput() bool #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            -CreateButton(core::GameContext #amp; ctx, const std::wstring #amp; label, const std::string #amp; action, float x, float y, float width, bool enabled) void
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            -CreateButton(GameContext#amp;, const wstring#amp;, const string#amp;, float, float, float, bool) void
         }
         class game__scenes__PendingHoleThumbnail["PendingHoleThumbnail"] {
             <<struct>>
             +bool found
-            +std::vector#lt; uint8_t #gt; pixelsBGRA
+            +vector#lt;uint8_t#gt; pixelsBGRA
             +uint32_t width
             +uint32_t height
         }
         class game__scenes__RankingScene["RankingScene"] {
-            -game::systems::PlayFabProfile m_profile
+            -PlayFabProfile m_profile
             -bool m_wasRegisteringName
-            -std::string m_pendingDisplayName
-            -ecs::Entity m_statusText
-            -ecs::Entity m_rowsText
-            -ecs::Entity m_nameInputText
-            -ecs::Entity m_nameSubmitButton
-            -ecs::Entity m_strokesButton
-            -ecs::Entity m_timeButton
-            -std::wstring m_nameInput
+            -string m_pendingDisplayName
+            -Entity m_statusText
+            -Entity m_rowsText
+            -Entity m_nameInputText
+            -Entity m_nameSubmitButton
+            -Entity m_strokesButton
+            -Entity m_timeButton
+            -wstring m_nameInput
             -bool m_enteringName
             -bool m_loading
             -View m_view
-            -std::shared_ptr#lt; AsyncState #gt; m_asyncState
+            -shared_ptr#lt;AsyncState#gt; m_asyncState
             -LoadData m_data
-            +virtual GetName() const char #42; #123;const#125;
+            +virtual GetName() const char#42; #123;const#125;
             +virtual BlocksUnderlyingInput() bool #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            +virtual Render(core::GameContext #amp; ctx) void
-            -StartLoad(const std::string #amp; displayName) void
-            -RefreshUI(core::GameContext #amp; ctx) void
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            -StartLoad(const string#amp; displayName) void
+            -RefreshUI(GameContext#amp; ctx) void
         }
         class game__scenes__RankingScene__AsyncState["RankingScene::AsyncState"] {
             <<struct>>
-            +std::atomic_bool completed
+            +atomic_bool completed
             +LoadData data
         }
         class game__scenes__RankingScene__LoadData["RankingScene::LoadData"] {
             <<struct>>
-            +game::systems::PlayFabLeaderboardResult strokes
-            +game::systems::PlayFabLeaderboardResult clearTime
-            +game::systems::PlayFabResult nameUpdate
+            +PlayFabLeaderboardResult strokes
+            +PlayFabLeaderboardResult clearTime
+            +PlayFabResult nameUpdate
         }
         class game__scenes__RankingScene__View["RankingScene::View"] {
             <<enumeration>>
@@ -263,59 +315,59 @@ classDiagram
         }
         class game__scenes__ResultData["ResultData"] {
             <<struct>>
-            +std::string targetPage
+            +string targetPage
             +int shotCount
             +int clearTimeMs
             +int par
-            +std::vector#lt; std::string #gt; pathHistory
+            +vector#lt;string#gt; pathHistory
             +bool isNewRecord
             +bool isDailyChallenge
         }
         class game__scenes__ResultScene["ResultScene"] {
             -ResultData m_data
-            -ecs::Entity m_bgEntity
-            -ecs::Entity m_frameEntity
-            -ecs::Entity m_titleEntity
-            -ecs::Entity m_badgeEntity
-            -ecs::Entity m_subtitleEntity
-            -ecs::Entity m_textEntity
-            -ecs::Entity m_hintEntity
-            -ecs::Entity m_retryBtnEntity
-            -ecs::Entity m_titleBtnEntity
-            -ecs::Entity m_rankingStatusEntity
-            -std::shared_ptr#lt; RankingUploadState #gt; m_rankingUploadState
-            -ecs::Entity m_globeEntity
-            -ecs::Entity m_floorEntity
-            -ecs::Entity m_cameraEntity
-            -std::vector#lt; RingObject #gt; m_rings
-            -std::vector#lt; HanabiShell #gt; m_shells
-            -std::vector#lt; HanabiSpark #gt; m_sparks
+            -Entity m_bgEntity
+            -Entity m_frameEntity
+            -Entity m_titleEntity
+            -Entity m_badgeEntity
+            -Entity m_subtitleEntity
+            -Entity m_textEntity
+            -Entity m_hintEntity
+            -Entity m_retryBtnEntity
+            -Entity m_titleBtnEntity
+            -Entity m_rankingStatusEntity
+            -shared_ptr#lt;RankingUploadState#gt; m_rankingUploadState
+            -Entity m_globeEntity
+            -Entity m_floorEntity
+            -Entity m_cameraEntity
+            -vector#lt;RingObject#gt; m_rings
+            -vector#lt;HanabiShell#gt; m_shells
+            -vector#lt;HanabiSpark#gt; m_sparks
             -float m_cameraShake
             -float m_volleyTimer
             -float m_volleyInterval
             -int m_shellsPerVolley
-            -std::vector#lt; UIElement #gt; m_uiElements
+            -vector#lt;UIElement#gt; m_uiElements
             -float m_time
             -float m_scoreDisplayValue
             -bool m_isScoreCountFinished
-            +ResultScene(const ResultData #amp; data)
+            +ResultScene(const ResultData#amp; data)
             +#126;ResultScene()
-            +virtual GetName() const char #42; #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual Render(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            -SetupUI(core::GameContext #amp; ctx) void
+            +virtual GetName() const char#42; #123;const#125;
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            -SetupUI(GameContext#amp; ctx) void
             -LaunchVolley() void
-            -CreateLuxuryUI(core::GameContext #amp; ctx) void
-            -CreateVisualEnvironment(core::GameContext #amp; ctx) void
-            -UpdateVisuals(core::GameContext #amp; ctx) void
+            -CreateLuxuryUI(GameContext#amp; ctx) void
+            -CreateVisualEnvironment(GameContext#amp; ctx) void
+            -UpdateVisuals(GameContext#amp; ctx) void
         }
         class game__scenes__ResultScene__HanabiShell["ResultScene::HanabiShell"] {
             <<struct>>
             +Phase phase
-            +DirectX::XMFLOAT3 pos
-            +DirectX::XMFLOAT3 vel
+            +XMFLOAT3 pos
+            +XMFLOAT3 vel
             +float age
             +float lifeTime
             +float flashRadius
@@ -329,10 +381,10 @@ classDiagram
         }
         class game__scenes__ResultScene__HanabiSpark["ResultScene::HanabiSpark"] {
             <<struct>>
-            +ecs::Entity entity
-            +DirectX::XMFLOAT3 pos
-            +DirectX::XMFLOAT3 vel
-            +DirectX::XMFLOAT4 color
+            +Entity entity
+            +XMFLOAT3 pos
+            +XMFLOAT3 vel
+            +XMFLOAT4 color
             +float age
             +float lifeTime
             +float size
@@ -340,27 +392,27 @@ classDiagram
         }
         class game__scenes__ResultScene__RankingUploadState["ResultScene::RankingUploadState"] {
             <<struct>>
-            +std::atomic_bool completed
+            +atomic_bool completed
             +bool success
-            +std::string errorMessage
+            +string errorMessage
         }
         class game__scenes__ResultScene__RingObject["ResultScene::RingObject"] {
             <<struct>>
-            +ecs::Entity entity
+            +Entity entity
             +float baseRadius
             +float rotationSpeed
             +float phase
         }
         class game__scenes__ResultScene__UIElement["ResultScene::UIElement"] {
             <<struct>>
-            +ecs::Entity entity
+            +Entity entity
             +float baseX
             +float baseY
             +float currentScale
             +float targetScale
             +bool isHovered
-            +std::wstring text
-            +DirectX::XMFLOAT4 baseColor
+            +wstring text
+            +XMFLOAT4 baseColor
         }
         class game__scenes__SettingsScene["SettingsScene"] {
             -size_t kRowCount$
@@ -368,31 +420,31 @@ classDiagram
             -size_t kFirstContentRow$
             -bool m_confirmVisible
             -bool m_pendingSafeMode
-            -ecs::Entity m_confirmPanel
-            -ecs::Entity m_confirmTitle
-            -ecs::Entity m_confirmBody
-            -ecs::Entity m_confirmApplyButton
-            -ecs::Entity m_confirmCancelButton
-            -std::array#lt; ecs::Entity, kRowCount #gt; m_prevButtons
-            -std::array#lt; ecs::Entity, kRowCount #gt; m_nextButtons
-            -std::array#lt; ecs::Entity, kRowCount #gt; m_valueTexts
-            -ecs::Entity m_antiAliasingHint
-            -ecs::Entity m_closeButton
-            -std::vector#lt; ecs::Entity #gt; m_hiddenUnderlyingButtons
-            +virtual GetName() const char #42; #123;const#125;
+            -Entity m_confirmPanel
+            -Entity m_confirmTitle
+            -Entity m_confirmBody
+            -Entity m_confirmApplyButton
+            -Entity m_confirmCancelButton
+            -array#lt;Entity, kRowCount#gt; m_prevButtons
+            -array#lt;Entity, kRowCount#gt; m_nextButtons
+            -array#lt;Entity, kRowCount#gt; m_valueTexts
+            -Entity m_antiAliasingHint
+            -Entity m_closeButton
+            -vector#lt;Entity#gt; m_hiddenUnderlyingButtons
+            +virtual GetName() const char#42; #123;const#125;
             +virtual BlocksUnderlyingInput() bool #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            +virtual Render(core::GameContext #amp; ctx) void
-            -CreateSectionHeader(core::GameContext #amp; ctx, const std::wstring #amp; label, float y) void
-            -CreateArrowButton(core::GameContext #amp; ctx, const std::wstring #amp; label, const std::string #amp; action, float x, float y, float width, float height) ecs::Entity
-            -CreateSettingRow(core::GameContext #amp; ctx, size_t rowIndex, const std::wstring #amp; label, float y) void
-            -RefreshDisplay(core::GameContext #amp; ctx) void
-            -CreateSafeModeConfirm(core::GameContext #amp; ctx) void
-            -ShowSafeModeConfirm(core::GameContext #amp; ctx, bool enabled) void
-            -HideSafeModeConfirm(core::GameContext #amp; ctx) void
-            -UpdateSafeModeConfirm(core::GameContext #amp; ctx) void
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            -CreateSectionHeader(GameContext#amp; ctx, const wstring#amp; label, float y) void
+            -CreateArrowButton(GameContext#amp;, const wstring#amp;, const string#amp;, float, float, float, float) Entity
+            -CreateSettingRow(GameContext#amp; ctx, size_t rowIndex, const wstring#amp; label, float y) void
+            -RefreshDisplay(GameContext#amp; ctx) void
+            -CreateSafeModeConfirm(GameContext#amp; ctx) void
+            -ShowSafeModeConfirm(GameContext#amp; ctx, bool enabled) void
+            -HideSafeModeConfirm(GameContext#amp; ctx) void
+            -UpdateSafeModeConfirm(GameContext#amp; ctx) void
         }
         class game__scenes__SettingsScene__RowId["SettingsScene::RowId"] {
             <<enumeration>>
@@ -409,69 +461,73 @@ classDiagram
             Count
         }
         class game__scenes__TitleScene["TitleScene"] {
-            -const char #42; kIntroAudioLabel$
-            -ecs::Entity m_cameraEntity
-            -ecs::Entity m_skyboxEntity
-            -ecs::Entity m_floorEntity
-            -ecs::Entity m_globeEntity
-            -ecs::Entity m_teeLoEntity
-            -ecs::Entity m_teeHiEntity
-            -ecs::Entity m_flagEntity
-            -std::vector#lt; MenuEntry #gt; m_menuEntries
+            -const char#42; kIntroAudioLabel$
+            -Entity m_cameraEntity
+            -Entity m_skyboxEntity
+            -Entity m_floorEntity
+            -Entity m_globeEntity
+            -Entity m_teeLoEntity
+            -Entity m_teeHiEntity
+            -Entity m_flagEntity
+            -vector#lt;MenuEntry#gt; m_menuEntries
             -float m_time
-            -ecs::Entity m_popupBgEntity
-            -ecs::Entity m_popupTextEntity
+            -Entity m_popupBgEntity
+            -Entity m_popupTextEntity
             -float m_popupTimer
+            -float m_popupDuration
+            -wstring m_startupNotice
             -TitleState m_state
-            -std::unique_ptr#lt; graphics::VideoPlayer #gt; m_videoPlayer
-            -std::future#lt; void #gt; m_startupLoadTask
+            -unique_ptr#lt;VideoPlayer#gt; m_videoPlayer
+            -future#lt;void#gt; m_startupLoadTask
             -bool m_startupLoadCompleted
-            -std::shared_ptr#lt; StartConnectionState #gt; m_startConnectionState
+            -shared_ptr#lt;StartConnectionState#gt; m_startConnectionState
             -bool m_startConnectionChecking
             -float m_startConnectionElapsed
-            -ecs::Entity m_csBgEntity
-            -ecs::Entity m_csTitleEntity
-            -ecs::Entity m_startInputBg
-            -ecs::Entity m_startInputText
-            -ecs::Entity m_startPasteBtn
-            -std::wstring m_startString
-            -ecs::Entity m_goalInputBg
-            -ecs::Entity m_goalInputText
-            -ecs::Entity m_goalPasteBtn
-            -std::wstring m_goalString
+            -Entity m_csBgEntity
+            -Entity m_csTitleEntity
+            -Entity m_startInputBg
+            -Entity m_startInputText
+            -Entity m_startPasteBtn
+            -wstring m_startString
+            -Entity m_goalInputBg
+            -Entity m_goalInputText
+            -Entity m_goalPasteBtn
+            -wstring m_goalString
             -int m_focusIndex
-            -ecs::Entity m_checkBtn
-            -ecs::Entity m_startBtn
-            -ecs::Entity m_closeBtn
-            -ecs::Entity m_previewBg
-            -ecs::Entity m_previewText
-            -std::future#lt; std::string #gt; m_checkTask
+            -Entity m_checkBtn
+            -Entity m_startBtn
+            -Entity m_closeBtn
+            -Entity m_previewBg
+            -Entity m_previewText
+            -future#lt;string#gt; m_checkTask
             -bool m_checking
             -bool m_readyToStart
-            +virtual GetName() const char #42; #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual Render(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            -FinalizeStartupLoad(core::GameContext #amp; ctx) void
-            -StopIntroAudio(core::GameContext #amp; ctx) void
-            -CreateCourseSelectUI(core::GameContext #amp; ctx) void
-            -SetMainMenuVisible(core::GameContext #amp; ctx, bool visible) void
-            -SetCourseSelectVisible(core::GameContext #amp; ctx, bool visible) void
-            -UpdateCourseSelect(core::GameContext #amp; ctx) void
+            +TitleScene()
+            +TitleScene(wstring startupNotice)
+            +virtual GetName() const char#42; #123;const#125;
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            -FinalizeStartupLoad(GameContext#amp; ctx) void
+            -StopIntroAudio(GameContext#amp; ctx) void
+            -CreateCourseSelectUI(GameContext#amp; ctx) void
+            -SetMainMenuVisible(GameContext#amp; ctx, bool visible) void
+            -SetCourseSelectVisible(GameContext#amp; ctx, bool visible) void
+            -UpdateCourseSelect(GameContext#amp; ctx) void
         }
         class game__scenes__TitleScene__MenuEntry["TitleScene::MenuEntry"] {
             <<struct>>
-            +ecs::Entity entity
-            +ecs::Entity iconEntity
-            +std::wstring label
+            +Entity entity
+            +Entity iconEntity
+            +wstring label
             +float baseY
             +bool isHovered
         }
         class game__scenes__TitleScene__StartConnectionState["TitleScene::StartConnectionState"] {
             <<struct>>
-            +std::atomic_bool completed
-            +std::string title
+            +atomic_bool completed
+            +string title
         }
         class game__scenes__TitleScene__TitleState["TitleScene::TitleState"] {
             <<enumeration>>
@@ -482,57 +538,57 @@ classDiagram
         class game__scenes__TutorialCourseLayout["TutorialCourseLayout"] {
             +GetFieldWidth()$ float
             +GetFieldDepth()$ float
-            +IsPresetPage(const std::string #amp; pageName) bool #123;const#125;
-            +BuildGameplayLinks(const graphics::WikiTextureResult #amp; texture, const std::string #amp; targetPage) std::vector#lt; graphics::LinkRegion #gt; #123;const#125;
-            -PlaceAtWorld(graphics::LinkRegion #amp; link, const graphics::WikiTextureResult #amp; texture, float worldX, float worldZ) void #123;const#125;
+            +IsPresetPage(const string#amp; pageName) bool #123;const#125;
+            +BuildGameplayLinks(const WikiTextureResult#amp; texture, const string#amp; targetPage) vector#lt;LinkRegion#gt; #123;const#125;
+            -PlaceAtWorld(LinkRegion#amp; link, const WikiTextureResult#amp; texture, float worldX, float worldZ) void #123;const#125;
         }
         class game__scenes__WikiGolfScene["WikiGolfScene"] {
-            -ecs::Entity m_ballEntity
-            -ecs::Entity m_floorEntity
-            -ecs::Entity m_cameraEntity
-            -ecs::Entity m_arrowEntity
-            -std::vector#lt; ecs::Entity #gt; m_guideSegments
+            -Entity m_ballEntity
+            -Entity m_floorEntity
+            -Entity m_cameraEntity
+            -Entity m_arrowEntity
+            -vector#lt;Entity#gt; m_guideSegments
             -float m_guideAnimTimer
-            -ecs::Entity m_clubModelEntity
-            -std::unique_ptr#lt; game::controllers::CameraController #gt; m_cameraController
-            -std::unique_ptr#lt; game::controllers::MinimapController #gt; m_minimapController
-            -std::unique_ptr#lt; game::controllers::WikiGolfHUD #gt; m_hud
-            -std::unique_ptr#lt; game::controllers::ClubController #gt; m_clubController
-            -std::unique_ptr#lt; game::controllers::TrajectoryPredictor #gt; m_trajectoryPredictor
-            -std::unique_ptr#lt; game::controllers::ShotController #gt; m_shotController
-            -std::unique_ptr#lt; WikiPageLoader #gt; m_pageLoader
-            -std::unique_ptr#lt; game::controllers::ArticleTransitionController #gt; m_transitionController
-            -std::unique_ptr#lt; game::controllers::TutorialOverlayController #gt; m_tutorialOverlay
-            -std::unique_ptr#lt; game::controllers::AimPinController #gt; m_aimPinController
+            -Entity m_clubModelEntity
+            -unique_ptr#lt;CameraController#gt; m_cameraController
+            -unique_ptr#lt;MinimapController#gt; m_minimapController
+            -unique_ptr#lt;WikiGolfHUD#gt; m_hud
+            -unique_ptr#lt;ClubController#gt; m_clubController
+            -unique_ptr#lt;TrajectoryPredictor#gt; m_trajectoryPredictor
+            -unique_ptr#lt;ShotController#gt; m_shotController
+            -unique_ptr#lt;WikiPageLoader#gt; m_pageLoader
+            -unique_ptr#lt;ArticleTransitionController#gt; m_transitionController
+            -unique_ptr#lt;TutorialOverlayController#gt; m_tutorialOverlay
+            -unique_ptr#lt;AimPinController#gt; m_aimPinController
             -bool m_isTutorial
             -ScenePhase m_phase
-            -std::unique_ptr#lt; game::systems::GameJuiceSystem #gt; m_gameJuice
-            -std::unique_ptr#lt; game::systems::WikiTerrainSystem #gt; m_terrainSystem
-            -game::systems::SlopeVisualizationSystem m_slopeVisualization
-            -std::unique_ptr#lt; graphics::SkyboxTextureGenerator #gt; m_skyboxGenerator
-            -ecs::Entity m_skyboxEntity
-            -game::systems::EnvironmentParticleSystem m_particleSystem
-            -game::systems::ParticleRenderSystem m_particleRenderSystem
-            -game::systems::TimeOfDaySystem m_timeOfDay
-            -graphics::SkyboxTheme m_currentSkyboxTheme
-            -std::unique_ptr#lt; graphics::WikiTextureGenerator #gt; m_textureGenerator
-            -std::unique_ptr#lt; game::systems::WikiShortestPath #gt; m_shortestPath
-            -game::utils::ScreenFade m_screenFade
-            -ecs::Entity m_terrainImageEntity
+            -unique_ptr#lt;GameJuiceSystem#gt; m_gameJuice
+            -unique_ptr#lt;WikiTerrainSystem#gt; m_terrainSystem
+            -SlopeVisualizationSystem m_slopeVisualization
+            -unique_ptr#lt;SkyboxTextureGenerator#gt; m_skyboxGenerator
+            -Entity m_skyboxEntity
+            -EnvironmentParticleSystem m_particleSystem
+            -ParticleRenderSystem m_particleRenderSystem
+            -TimeOfDaySystem m_timeOfDay
+            -SkyboxTheme m_currentSkyboxTheme
+            -unique_ptr#lt;WikiTextureGenerator#gt; m_textureGenerator
+            -unique_ptr#lt;WikiShortestPath#gt; m_shortestPath
+            -ScreenFade m_screenFade
+            -Entity m_terrainImageEntity
             -float m_terrainDisplayTimer
             -float m_terrainDisplayTotal
             -float m_terrainDisplayTargetW
             -float m_terrainDisplayTargetH
             -TerrainResultTier m_terrainDisplayTier
-            -ecs::Entity m_judgeImageEntity
+            -Entity m_judgeImageEntity
             -float m_judgeDisplayTimer
             -float m_judgeDisplayTotal
             -float m_judgeDisplayTargetW
             -float m_judgeDisplayTargetH
-            -game::components::ShotJudgement m_judgeDisplayJudgement
-            -ecs::Entity m_fastForwardIndicatorEntity
-            -game::controllers::BallFastForwardTimer m_fastForwardTimer
-            -game::controllers::BallFastForwardIndicator m_fastForwardIndicator
+            -ShotJudgement m_judgeDisplayJudgement
+            -Entity m_fastForwardIndicatorEntity
+            -BallFastForwardTimer m_fastForwardTimer
+            -BallFastForwardIndicator m_fastForwardIndicator
             -float m_hudUpdateTimer
             -float m_minimapUpdateTimer
             -float m_flagEffectTimer
@@ -541,60 +597,61 @@ classDiagram
             -float m_shotBloomTimer
             -float m_shotBloomDuration
             -float m_shotBloomIntensity
-            -ecs::Entity m_cupInGlowHoleEntity
-            -ecs::Entity m_cupInGlowFlagEntity
-            -ecs::Entity m_cupInGlowPillarEntity
-            -DirectX::XMFLOAT4 m_cupInGlowHoleBaseColor
-            -DirectX::XMFLOAT4 m_cupInGlowFlagBaseColor
-            -DirectX::XMFLOAT4 m_cupInGlowPillarBaseColor
+            -Entity m_cupInGlowHoleEntity
+            -Entity m_cupInGlowFlagEntity
+            -Entity m_cupInGlowPillarEntity
+            -XMFLOAT4 m_cupInGlowHoleBaseColor
+            -XMFLOAT4 m_cupInGlowFlagBaseColor
+            -XMFLOAT4 m_cupInGlowPillarBaseColor
             -bool m_pendingResultTransition
             -float m_pendingResultTimer
             -ResultData m_pendingResultData
             -CelebrationNext m_celebrationNext
-            -std::string m_celebrationTargetPage
+            -string m_celebrationTargetPage
             -float m_celebrationElapsed
             -bool m_celebrationIrisStarted
             -bool m_cupApproachEffectTriggered
             -float m_cupApproachZoomTimer
             -float m_pendingLaunchTimer
-            -DirectX::XMFLOAT3 m_pendingShotDirection
+            -XMFLOAT3 m_pendingShotDirection
             -bool m_prevTutorialInputLocked
-            -std::vector#lt; ecs::Entity #gt; m_tutorialFlagSampleEntities
+            -vector#lt;Entity#gt; m_tutorialFlagSampleEntities
             -bool m_tutorialCupInFired
             -bool m_tutorialFairwayGuidanceApplied
             -bool m_tutorialGoalGuidanceApplied
-            -std::shared_ptr#lt; TutorialConnectionState #gt; m_tutorialConnectionState
+            -shared_ptr#lt;TutorialConnectionState#gt; m_tutorialConnectionState
             -bool m_tutorialConnectionChecking
             -float m_tutorialConnectionElapsed
-            +virtual GetName() const char #42; #123;const#125;
+            -Entity m_tutorialConnectionStatusEntity
+            +virtual GetName() const char#42; #123;const#125;
             +WikiGolfScene(bool isTutorial)
             +#126;WikiGolfScene()
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual Render(core::GameContext #amp; ctx) void
-            +virtual RenderOffscreen(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            -SpawnBall(core::GameContext #amp; ctx) void
-            -CreateField(core::GameContext #amp; ctx) void
-            -CreateTutorialFlagSamples(core::GameContext #amp; ctx) void
-            -ClearTutorialFlagSamples(core::GameContext #amp; ctx) void
-            -TransitionToPage(core::GameContext #amp; ctx, const std::string #amp; pageName) void
-            -ReturnToPreviousPage(core::GameContext #amp; ctx) bool
-            -CanReturnToPreviousPage(core::GameContext #amp; ctx) bool #123;const#125;
-            -OpenPauseScene(core::GameContext #amp; ctx) void
-            -CheckCupIn(core::GameContext #amp; ctx) bool
-            -BeginCupInCelebration(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; holePos) void
-            -UpdateCupApproachEffects(core::GameContext #amp; ctx, const game::components::GolfGameState #amp; state, const game::components::ShotState #amp; shot, float dt) void
-            -UpdateCupInCelebration(core::GameContext #amp; ctx) void
-            -UpdateCelebrationIris(core::GameContext #amp; ctx) void
-            -UpdateProceduralFlagEffects(core::GameContext #amp; ctx, float dt) void
-            -RefreshLandingPreview(core::GameContext #amp; ctx) void
-            -CalculateFullSwingLandingTarget(core::GameContext #amp; ctx) std::optional#lt; DirectX::XMFLOAT3 #gt; #123;const#125;
-            -RefreshAimPinSolution(core::GameContext #amp; ctx, bool selectClub) void
-            -UpdateResultVisuals(core::GameContext #amp; ctx, float dt) void
-            -UpdateTrajectoryAndGuide(core::GameContext #amp; ctx, game::components::GolfGameState #amp; state, game::components::ShotState #amp; shot, float dt, bool tutorialInputLocked, bool isMapView) void
-            -UpdateHudAndEffects(core::GameContext #amp; ctx, game::components::GolfGameState #amp; state, game::components::ShotState #amp; shot, float dt) void
-            -CheckCameraCollision(core::GameContext #amp; ctx, const DirectX::XMVECTOR #amp; targetPos, const DirectX::XMVECTOR #amp; lookAtPos, DirectX::XMVECTOR #amp; outPos) bool
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            +virtual RenderOffscreen(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            -SpawnBall(GameContext#amp; ctx) void
+            -CreateField(GameContext#amp; ctx) void
+            -CreateTutorialFlagSamples(GameContext#amp; ctx) void
+            -ClearTutorialFlagSamples(GameContext#amp; ctx) void
+            -TransitionToPage(GameContext#amp; ctx, const string#amp; pageName) void
+            -ReturnToPreviousPage(GameContext#amp; ctx) bool
+            -CanReturnToPreviousPage(GameContext#amp; ctx) bool #123;const#125;
+            -OpenPauseScene(GameContext#amp; ctx) void
+            -CheckCupIn(GameContext#amp; ctx) bool
+            -BeginCupInCelebration(GameContext#amp; ctx, const XMFLOAT3#amp; holePos) void
+            -UpdateCupApproachEffects(GameContext#amp;, const GolfGameState#amp;, const ShotState#amp;, float) void
+            -UpdateCupInCelebration(GameContext#amp; ctx) void
+            -UpdateCelebrationIris(GameContext#amp; ctx) void
+            -UpdateProceduralFlagEffects(GameContext#amp; ctx, float dt) void
+            -RefreshLandingPreview(GameContext#amp; ctx) void
+            -CalculateFullSwingLandingTarget(GameContext#amp; ctx) optional#lt;XMFLOAT3#gt; #123;const#125;
+            -RefreshAimPinSolution(GameContext#amp; ctx, bool selectClub) void
+            -UpdateResultVisuals(GameContext#amp; ctx, float dt) void
+            -UpdateTrajectoryAndGuide(GameContext#amp;, GolfGameState#amp;, ShotState#amp;, float, bool, bool) void
+            -UpdateHudAndEffects(GameContext#amp; ctx, GolfGameState#amp; state, ShotState#amp; shot, float dt) void
+            -CheckCameraCollision(GameContext#amp;, const XMVECTOR#amp;, const XMVECTOR#amp;, XMVECTOR#amp;) bool
         }
         class game__scenes__WikiGolfScene__CelebrationNext["WikiGolfScene::CelebrationNext"] {
             <<enumeration>>
@@ -616,31 +673,31 @@ classDiagram
         }
         class game__scenes__WikiGolfScene__TutorialConnectionState["WikiGolfScene::TutorialConnectionState"] {
             <<struct>>
-            +std::atomic_bool completed
-            +std::string title
+            +atomic_bool completed
+            +string title
         }
         class game__scenes__WikiPageDataFetcher["WikiPageDataFetcher"] {
             -bool m_hasPreloadedData
             -bool m_skipSupplementalFetch
-            -std::vector#lt; game::WikiLink #gt; m_preloadedLinks
-            -std::string m_preloadedExtract
-            +SetPreloadedData(std::vector#lt; game::WikiLink #gt; links, std::string extract, bool skipSupplementalFetch) void
-            +Fetch(const std::string #amp; pageName) PageDataAsyncResult
-            -FetchAndDecodeImages(game::systems::WikiClient #amp; wikiClient, const std::string #amp; pageName) std::vector#lt; graphics::PendingWikiImage #gt; #123;const#125;
+            -vector#lt;WikiLink#gt; m_preloadedLinks
+            -string m_preloadedExtract
+            +SetPreloadedData(vector#lt;WikiLink#gt; links, string extract, bool skipSupplementalFetch) void
+            +Fetch(const string#amp; pageName) PageDataAsyncResult
+            -FetchAndDecodeImages(WikiClient#amp; wikiClient, const string#amp; pageName) vector#lt;PendingWikiImage#gt; #123;const#125;
         }
         class game__scenes__WikiPageLoader["WikiPageLoader"] {
-            -graphics::WikiTextureGenerator #42; m_textureGenerator
-            -game::systems::WikiTerrainSystem #42; m_terrainSystem
-            -graphics::SkyboxTextureGenerator #42; m_skyboxGenerator
-            -game::systems::WikiShortestPath #42; m_shortestPath
+            -WikiTextureGenerator#42; m_textureGenerator
+            -WikiTerrainSystem#42; m_terrainSystem
+            -SkyboxTextureGenerator#42; m_skyboxGenerator
+            -WikiShortestPath#42; m_shortestPath
             -bool m_tutorialMode
-            -std::unique_ptr#lt; graphics::WikiTextureResult #gt; m_wikiTexture
-            -ecs::EntityOwner m_pageEntityOwner
-            -ecs::Entity m_startPinEntity
-            -Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; m_targetThumbnailSRV
+            -unique_ptr#lt;WikiTextureResult#gt; m_wikiTexture
+            -EntityOwner m_pageEntityOwner
+            -Entity m_startPinEntity
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_targetThumbnailSRV
             -float m_targetThumbnailAspect
             -bool m_hasTargetThumbnail
-            -std::unordered_map#lt; std::string, HoleThumbnailState #gt; m_holeThumbnailCache
+            -unordered_map#lt;string, HoleThumbnailState#gt; m_holeThumbnailCache
             -int m_activeThumbnailFetches
             -int kMaxConcurrentThumbnailFetches$
             -float kThumbnailLoadRadius$
@@ -653,80 +710,80 @@ classDiagram
             -PageDataAsyncResult m_buildData
             -PageLoadResult m_buildResult
             -uint64_t m_buildLoadId
-            -std::atomic#lt; uint64_t #gt; s_nextBuildLoadId$
-            -std::chrono::steady_clock::time_point m_buildStartedAt
-            -std::chrono::steady_clock::time_point m_stepStartedAt
-            -std::chrono::steady_clock::time_point m_lastLongStepLogAt
-            -std::chrono::steady_clock::time_point m_lastCreateHolesProgressLogAt
-            -ecs::Entity m_buildBall
-            -ecs::Entity m_buildCamera
-            -ecs::Entity m_buildSkybox
-            -game::controllers::MinimapController #42; m_buildMinimap
-            -std::vector#lt; std::pair#lt; std::string, std::wstring #gt; #gt; m_buildValidLinks
-            -std::vector#lt; std::pair#lt; std::wstring, std::string #gt; #gt; m_buildLinkPairs
+            -atomic#lt;uint64_t#gt; s_nextBuildLoadId$
+            -chrono::steady_clock::time_point m_buildStartedAt
+            -chrono::steady_clock::time_point m_stepStartedAt
+            -chrono::steady_clock::time_point m_lastLongStepLogAt
+            -chrono::steady_clock::time_point m_lastCreateHolesProgressLogAt
+            -Entity m_buildBall
+            -Entity m_buildCamera
+            -Entity m_buildSkybox
+            -MinimapController#42; m_buildMinimap
+            -vector#lt;pair#lt;string, wstring#gt;#gt; m_buildValidLinks
+            -vector#lt;pair#lt;wstring, string#gt;#gt; m_buildLinkPairs
             -HolePlacementPlanner m_holePlacementPlanner
             -TutorialCourseLayout m_tutorialCourseLayout
             -WikiPageDataFetcher m_pageDataFetcher
             -PageLinkSelector m_pageLinkSelector
             -AsyncPathEvaluator m_pathEvaluator
-            -std::vector#lt; HolePlacementCandidate #gt; m_buildHoleCandidates
-            -std::vector#lt; HolePlacementCandidate #gt; m_buildPathCandidates
-            -std::vector#lt; HolePlacementCandidate #gt; m_buildMapHoleCandidates
-            -std::vector#lt; graphics::LinkRegion #gt; m_buildGameplayLinks
+            -vector#lt;HolePlacementCandidate#gt; m_buildHoleCandidates
+            -vector#lt;HolePlacementCandidate#gt; m_buildPathCandidates
+            -vector#lt;HolePlacementCandidate#gt; m_buildMapHoleCandidates
+            -vector#lt;LinkRegion#gt; m_buildGameplayLinks
             -CourseIntroductionData m_courseIntroductionData
-            -std::unordered_map#lt; std::string, int #gt; m_pathHopCache
+            -unordered_map#lt;string, int#gt; m_pathHopCache
             -size_t m_nextHoleIndex
             -size_t m_nextMapIconIndex
-            -graphics::WikiTextureGenerationState m_textureState
+            -WikiTextureGenerationState m_textureState
             -float m_buildFieldWidth
             -float m_buildFieldDepth
             -float m_buildTexScale
             -float m_buildProgress
             -uint32_t m_buildTexWidth
             -uint32_t m_buildTexHeight
-            -std::chrono::steady_clock::time_point m_buildDeadline
+            -chrono::steady_clock::time_point m_buildDeadline
             +WikiPageLoader()
             +#126;WikiPageLoader()
             +CancelAsyncPathEvaluations() void
-            +Shutdown(core::GameContext #amp; ctx, game::controllers::MinimapController #42; minimapController) void
-            +SetSystems(graphics::WikiTextureGenerator #42; textureGen, game::systems::WikiTerrainSystem #42; terrainSys, graphics::SkyboxTextureGenerator #42; skyboxGen, game::systems::WikiShortestPath #42; shortestPath) void
-            +ClearStartPin(core::GameContext #amp; ctx, ecs::Entity ballEntity) void
+            +Shutdown(GameContext#amp; ctx, MinimapController#42; minimapController) void
+            +SetSystems(WikiTextureGenerator#42;, WikiTerrainSystem#42;, SkyboxTextureGenerator#42;, WikiShortestPath#42;) void
+            +ClearStartPin(GameContext#amp; ctx, Entity ballEntity) void
             +SetTutorialMode(bool enabled) void
-            +LoadPage(core::GameContext #amp; ctx, const std::string #amp; pageName, ecs::Entity ballEntity, ecs::Entity cameraEntity, ecs::Entity skyboxEntity, game::controllers::MinimapController #42; minimapController) PageLoadResult
-            +FetchPageDataAsync(const std::string #amp; pageName) PageDataAsyncResult
-            +BuildPageSync(core::GameContext #amp; ctx, PageDataAsyncResult asyncData, ecs::Entity ballEntity, ecs::Entity cameraEntity, ecs::Entity skyboxEntity, game::controllers::MinimapController #42; minimapController) PageLoadResult
-            +BeginBuildPage(core::GameContext #amp; ctx, PageDataAsyncResult asyncData, ecs::Entity ballEntity, ecs::Entity cameraEntity, ecs::Entity skyboxEntity, game::controllers::MinimapController #42; minimapController) void
-            +StepBuildPage(core::GameContext #amp; ctx) bool
-            +StepBuildPageWithinFrameBudget(core::GameContext #amp; ctx, std::chrono::milliseconds budget) bool
-            +UpdateAsyncPathEvaluation(core::GameContext #amp; ctx) bool
+            +LoadPage(GameContext#amp;, const string#amp;, Entity, Entity, Entity, MinimapController#42;) PageLoadResult
+            +FetchPageDataAsync(const string#amp; pageName) PageDataAsyncResult
+            +BuildPageSync(GameContext#amp;, PageDataAsyncResult, Entity, Entity, Entity, MinimapController#42;) PageLoadResult
+            +BeginBuildPage(GameContext#amp;, PageDataAsyncResult, Entity, Entity, Entity, MinimapController#42;) void
+            +StepBuildPage(GameContext#amp; ctx) bool
+            +StepBuildPageWithinFrameBudget(GameContext#amp; ctx, chrono::milliseconds budget) bool
+            +UpdateAsyncPathEvaluation(GameContext#amp; ctx) bool
             +GetBuildProgress() float #123;const#125;
-            +SetPreloadedData(std::vector#lt; game::WikiLink #gt; links, std::string extract, bool skipSupplementalFetch) void
-            +SetTargetThumbnail(core::GameContext #amp; ctx, const std::vector#lt; uint8_t #gt; #amp; pixelsBGRA, uint32_t width, uint32_t height) void
-            +UpdateNearbyHoleSignboards(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; ballPos, ecs::Entity cameraEntity, const DirectX::XMFLOAT3 #42; golferPosition) void
-            +CreateHole(core::GameContext #amp; ctx, float x, float z, const std::string #amp; linkTarget, bool isTargetHole, int hopsToTarget, bool addMapIcon) void
-            +GetWikiTexture() const graphics::WikiTextureResult #42; #123;const#125;
+            +SetPreloadedData(vector#lt;WikiLink#gt; links, string extract, bool skipSupplementalFetch) void
+            +SetTargetThumbnail(GameContext#amp;, const vector#lt;uint8_t#gt;#amp;, uint32_t, uint32_t) void
+            +UpdateNearbyHoleSignboards(GameContext#amp;, const XMFLOAT3#amp;, Entity, const XMFLOAT3#42;) void
+            +CreateHole(GameContext#amp;, float, float, const string#amp;, bool, int, bool) void
+            +GetWikiTexture() const WikiTextureResult#42; #123;const#125;
             +GetFieldWidth() float #123;const#125;
             +GetFieldDepth() float #123;const#125;
-            +GetTargetThumbnailSRV() ID3D11ShaderResourceView #42; #123;const#125;
+            +GetTargetThumbnailSRV() ID3D11ShaderResourceView#42; #123;const#125;
             +GetTargetThumbnailAspect() float #123;const#125;
-            +GetCourseIntroductionData() const CourseIntroductionData #amp; #123;const#125;
+            +GetCourseIntroductionData() const CourseIntroductionData#amp; #123;const#125;
             +GetTerrainVisualHeight(float x, float z) float #123;const#125;
-            -ClearGeneratedPageObjects(core::GameContext #amp; ctx, game::controllers::MinimapController #42; minimapController) void
-            -CreateLinksFromTexture(core::GameContext #amp; ctx) void
-            -CreateSRVFromPixels(core::GameContext #amp; ctx, const std::vector#lt; uint8_t #gt; #amp; pixelsBGRA, uint32_t width, uint32_t height) Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt;
-            -CreateHoleSignboardEntity(core::GameContext #amp; ctx, float x, float z, float terrainH, bool isTargetHole, int hopsToTarget, ID3D11ShaderResourceView #42; srv, float aspect) ecs::Entity
-            -PlaceBallAtStartTee(core::GameContext #amp; ctx, ecs::Entity ballEntity, float groundZ, game::controllers::MinimapController #42; minimapController, float fieldWidth, float fieldDepth) void
-            -BuildStepName(BuildStep step)$ const char #42;
+            -ClearGeneratedPageObjects(GameContext#amp; ctx, MinimapController#42; minimapController) void
+            -CreateLinksFromTexture(GameContext#amp; ctx) void
+            -CreateSRVFromPixels(GameContext#amp;, const vector#lt;uint8_t#gt;#amp;, uint32_t, uint32_t) ComPtr#lt;ID3D11ShaderResourceView#gt;
+            -CreateHoleSignboardEntity(GameContext#amp;, float, float, float, bool, int, ID3D11ShaderResourceView#42;, float) Entity
+            -PlaceBallAtStartTee(GameContext#amp;, Entity, float, MinimapController#42;, float, float) void
+            -BuildStepName(BuildStep step)$ const char#42;
             -LogBuildStepTransition() void
             -LogLongRunningBuildStep() void
-            -TryConsumePathEvaluation(core::GameContext #amp; ctx, bool updateWorld) bool
-            -ApplyPathEvaluationToWorld(core::GameContext #amp; ctx, const std::vector#lt; HolePlacementCandidate #gt; #amp; evaluatedCandidates) void
-            -ApplyPathEvaluationResults(const std::vector#lt; HolePlacementCandidate #gt; #amp; evaluatedCandidates) void
+            -TryConsumePathEvaluation(GameContext#amp; ctx, bool updateWorld) bool
+            -ApplyPathEvaluationToWorld(GameContext#amp;, const vector#lt;HolePlacementCandidate#gt;#amp;) void
+            -ApplyPathEvaluationResults(const vector#lt;HolePlacementCandidate#gt;#amp; evaluatedCandidates) void
             -FindMinResolvedHopsToTarget() int #123;const#125;
-            -RefreshParFromPathEvaluation(core::GameContext #amp; ctx, bool allowFallback) void
-            -EvaluateCandidatePath(core::GameContext #amp; ctx, HolePlacementCandidate #amp; candidate) void
-            -IsPlayableCandidate(const HolePlacementCandidate #amp; candidate) bool #123;const#125;
-            -CaptureCourseIntroductionData(const std::string #amp; pageName, const std::string #amp; articleText, const game::components::GolfGameState #amp; state) void
+            -RefreshParFromPathEvaluation(GameContext#amp; ctx, bool allowFallback) void
+            -EvaluateCandidatePath(GameContext#amp; ctx, HolePlacementCandidate#amp; candidate) void
+            -IsPlayableCandidate(const HolePlacementCandidate#amp; candidate) bool #123;const#125;
+            -CaptureCourseIntroductionData(const string#amp;, const string#amp;, const GolfGameState#amp;) void
         }
         class game__scenes__WikiPageLoader__BuildStep["WikiPageLoader::BuildStep"] {
             <<enumeration>>
@@ -749,8 +806,8 @@ classDiagram
         class game__scenes__WikiPageLoader__HoleThumbnailState["WikiPageLoader::HoleThumbnailState"] {
             <<struct>>
             +Status status
-            +std::future#lt; PendingHoleThumbnail #gt; future
-            +Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; srv
+            +future#lt;PendingHoleThumbnail#gt; future
+            +ComPtr#lt;ID3D11ShaderResourceView#gt; srv
             +float aspect
         }
         class game__scenes__WikiPageLoader__HoleThumbnailState__Status["WikiPageLoader::HoleThumbnailState::Status"] {
@@ -760,279 +817,37 @@ classDiagram
             Failed
         }
         class game__scenes__WikiPinballScene["WikiPinballScene"] {
-            -ecs::Entity m_ballEntity
-            -ecs::Entity m_scoreEntity
-            -ecs::Entity m_titleEntity
-            -ecs::Entity m_infoEntity
+            -Entity m_ballEntity
+            -Entity m_scoreEntity
+            -Entity m_titleEntity
+            -Entity m_infoEntity
             -int m_score
             -int m_headingsUnlocked
-            -std::wstring m_currentPageTitle
-            +virtual GetName() const char #42; #123;const#125;
-            +virtual OnEnter(core::GameContext #amp; ctx) void
-            +virtual OnUpdate(core::GameContext #amp; ctx) void
-            +virtual OnExit(core::GameContext #amp; ctx) void
-            -SetupTable(core::GameContext #amp; ctx) void
-            -SpawnBall(core::GameContext #amp; ctx) void
-            -CreateBoundaries(core::GameContext #amp; ctx) void
-            -CreateHeading(core::GameContext #amp; ctx, float x, float z, const std::wstring #amp; text) void
-            -CreateLinkObstacle(core::GameContext #amp; ctx, float x, float z, const std::string #amp; linkTarget) void
-            -CreateFlippers(core::GameContext #amp; ctx) void
-            -TransitionToPage(core::GameContext #amp; ctx, const std::string #amp; pageName) void
+            -wstring m_currentPageTitle
+            +virtual GetName() const char#42; #123;const#125;
+            +virtual OnEnter(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual OnExit(GameContext#amp; ctx) void
+            -SetupTable(GameContext#amp; ctx) void
+            -SpawnBall(GameContext#amp; ctx) void
+            -CreateBoundaries(GameContext#amp; ctx) void
+            -CreateHeading(GameContext#amp; ctx, float x, float z, const wstring#amp; text) void
+            -CreateLinkObstacle(GameContext#amp; ctx, float x, float z, const string#amp; linkTarget) void
+            -CreateFlippers(GameContext#amp; ctx) void
+            -TransitionToPage(GameContext#amp; ctx, const string#amp; pageName) void
         }
-        class game__scenes__anonymous_namespace_TutorialCourseLayout_cpp___TutorialLinkPlacement["TutorialLinkPlacement"] {
+        class iso__game__scenes__anonymous_namespace_TutorialCourseLayout_cpp___TutorialLinkPlacement["TutorialLinkPlacement"] {
             <<struct>>
-            +const char #42; page
+            +const char#42; page
             +float worldX
             +float worldZ
         }
     }
-    %% 継承
-    core__Scene <|-- game__scenes__AchievementScene
-    core__Scene <|-- game__scenes__GameScene
-    core__Scene <|-- game__scenes__LoadingScene
-    core__Scene <|-- game__scenes__PauseScene
-    core__Scene <|-- game__scenes__RankingScene
-    core__Scene <|-- game__scenes__ResultScene
-    core__Scene <|-- game__scenes__SettingsScene
-    core__Scene <|-- game__scenes__TitleScene
-    core__Scene <|-- game__scenes__WikiGolfScene
-    core__Scene <|-- game__scenes__WikiPinballScene
-    %% メンバー由来の関係
-    game__controllers__ArticleTransitionController *-- "0..*" game__scenes__PageDataAsyncResult : m_loadTask, m_prefetchTask, m_pendingPageData
-    game__controllers__ArticleTransitionController o-- "0..1" game__scenes__WikiPageLoader : m_pageLoader
-    game__scenes__AsyncPathEvaluator o-- "0..*" game__scenes__HolePlacementCandidate : m_partialResults
-    game__scenes__AsyncPathEvaluator *-- "0..*" game__scenes__HolePlacementCandidate : m_task, m_retiredTasks
-    game__scenes__CourseIntroductionData *-- "0..*" game__utils__CourseIntroductionHole : holes
-    game__scenes__LoadingScene *-- "0..*" game__components__WikiGlobalData : m_loadTask, m_loadedData
-    game__scenes__LoadingScene *-- "0..*" game__scenes__LoadingScene__BallState : m_balls
-    game__scenes__LoadingScene *-- "0..*" graphics__TextStyle : m_primaryStyle, m_progressStyle, m_captionStyle
-    game__scenes__PageDataAsyncResult *-- "0..*" game__WikiLink : allLinks
-    game__scenes__PageDataAsyncResult *-- "0..*" graphics__PendingWikiImage : pendingImages
-    game__scenes__RankingScene o-- "0..1" game__scenes__RankingScene__AsyncState : m_asyncState
-    game__scenes__RankingScene *-- "1" game__scenes__RankingScene__LoadData : m_data
-    game__scenes__RankingScene --> "1" game__scenes__RankingScene__View : m_view
-    game__scenes__RankingScene *-- "1" game__systems__PlayFabProfile : m_profile
-    game__scenes__RankingScene__AsyncState *-- "1" game__scenes__RankingScene__LoadData : data
-    game__scenes__RankingScene__LoadData *-- "0..*" game__systems__PlayFabLeaderboardResult : strokes, clearTime
-    game__scenes__RankingScene__LoadData *-- "1" game__systems__PlayFabResult : nameUpdate
-    game__scenes__ResultScene *-- "1" game__scenes__ResultData : m_data
-    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__HanabiShell : m_shells
-    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__HanabiSpark : m_sparks
-    game__scenes__ResultScene o-- "0..1" game__scenes__ResultScene__RankingUploadState : m_rankingUploadState
-    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__RingObject : m_rings
-    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__UIElement : m_uiElements
-    game__scenes__ResultScene__HanabiShell --> "1" game__scenes__ResultScene__HanabiShell__Phase : phase
-    game__scenes__TitleScene *-- "0..*" game__scenes__TitleScene__MenuEntry : m_menuEntries
-    game__scenes__TitleScene o-- "0..1" game__scenes__TitleScene__StartConnectionState : m_startConnectionState
-    game__scenes__TitleScene --> "1" game__scenes__TitleScene__TitleState : m_state
-    game__scenes__TitleScene *-- "0..1" graphics__VideoPlayer : m_videoPlayer
-    game__scenes__WikiGolfScene --> "1" game__components__ShotJudgement : m_judgeDisplayJudgement
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__AimPinController : m_aimPinController
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__ArticleTransitionController : m_transitionController
-    game__scenes__WikiGolfScene *-- "1" game__controllers__BallFastForwardIndicator : m_fastForwardIndicator
-    game__scenes__WikiGolfScene *-- "1" game__controllers__BallFastForwardTimer : m_fastForwardTimer
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__CameraController : m_cameraController
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__ClubController : m_clubController
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__MinimapController : m_minimapController
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__ShotController : m_shotController
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__TrajectoryPredictor : m_trajectoryPredictor
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__TutorialOverlayController : m_tutorialOverlay
-    game__scenes__WikiGolfScene *-- "0..1" game__controllers__WikiGolfHUD : m_hud
-    game__scenes__WikiGolfScene *-- "1" game__scenes__ResultData : m_pendingResultData
-    game__scenes__WikiGolfScene --> "1" game__scenes__WikiGolfScene__CelebrationNext : m_celebrationNext
-    game__scenes__WikiGolfScene --> "1" game__scenes__WikiGolfScene__ScenePhase : m_phase
-    game__scenes__WikiGolfScene --> "1" game__scenes__WikiGolfScene__TerrainResultTier : m_terrainDisplayTier
-    game__scenes__WikiGolfScene o-- "0..1" game__scenes__WikiGolfScene__TutorialConnectionState : m_tutorialConnectionState
-    game__scenes__WikiGolfScene *-- "0..1" game__scenes__WikiPageLoader : m_pageLoader
-    game__scenes__WikiGolfScene *-- "1" game__systems__EnvironmentParticleSystem : m_particleSystem
-    game__scenes__WikiGolfScene *-- "0..1" game__systems__GameJuiceSystem : m_gameJuice
-    game__scenes__WikiGolfScene *-- "1" game__systems__ParticleRenderSystem : m_particleRenderSystem
-    game__scenes__WikiGolfScene *-- "1" game__systems__SlopeVisualizationSystem : m_slopeVisualization
-    game__scenes__WikiGolfScene *-- "1" game__systems__TimeOfDaySystem : m_timeOfDay
-    game__scenes__WikiGolfScene *-- "0..1" game__systems__WikiShortestPath : m_shortestPath
-    game__scenes__WikiGolfScene *-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
-    game__scenes__WikiGolfScene *-- "1" game__utils__ScreenFade : m_screenFade
-    game__scenes__WikiGolfScene *-- "0..1" graphics__SkyboxTextureGenerator : m_skyboxGenerator
-    game__scenes__WikiGolfScene --> "1" graphics__SkyboxTheme : m_currentSkyboxTheme
-    game__scenes__WikiGolfScene *-- "0..1" graphics__WikiTextureGenerator : m_textureGenerator
-    game__scenes__WikiPageDataFetcher *-- "0..*" game__WikiLink : m_preloadedLinks
-    game__scenes__WikiPageLoader *-- "1" ecs__EntityOwner : m_pageEntityOwner
-    game__scenes__WikiPageLoader o-- "0..1" game__controllers__MinimapController : m_buildMinimap
-    game__scenes__WikiPageLoader *-- "1" game__scenes__AsyncPathEvaluator : m_pathEvaluator
-    game__scenes__WikiPageLoader *-- "1" game__scenes__CourseIntroductionData : m_courseIntroductionData
-    game__scenes__WikiPageLoader *-- "0..*" game__scenes__HolePlacementCandidate : m_buildHoleCandidates, m_buildPathCandidates, m_buildMapHoleCandidates
-    game__scenes__WikiPageLoader *-- "1" game__scenes__HolePlacementPlanner : m_holePlacementPlanner
-    game__scenes__WikiPageLoader *-- "1" game__scenes__PageDataAsyncResult : m_buildData
-    game__scenes__WikiPageLoader *-- "1" game__scenes__PageLinkSelector : m_pageLinkSelector
-    game__scenes__WikiPageLoader *-- "1" game__scenes__PageLoadResult : m_buildResult
-    game__scenes__WikiPageLoader *-- "1" game__scenes__TutorialCourseLayout : m_tutorialCourseLayout
-    game__scenes__WikiPageLoader *-- "1" game__scenes__WikiPageDataFetcher : m_pageDataFetcher
-    game__scenes__WikiPageLoader --> "0..*" game__scenes__WikiPageLoader__BuildStep : m_buildStep, m_loggedBuildStep
-    game__scenes__WikiPageLoader *-- "0..*" game__scenes__WikiPageLoader__HoleThumbnailState : m_holeThumbnailCache
-    game__scenes__WikiPageLoader o-- "0..1" game__systems__WikiShortestPath : m_shortestPath
-    game__scenes__WikiPageLoader o-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
-    game__scenes__WikiPageLoader *-- "0..*" graphics__LinkRegion : m_buildGameplayLinks
-    game__scenes__WikiPageLoader o-- "0..1" graphics__SkyboxTextureGenerator : m_skyboxGenerator
-    game__scenes__WikiPageLoader *-- "1" graphics__WikiTextureGenerationState : m_textureState
-    game__scenes__WikiPageLoader o-- "0..1" graphics__WikiTextureGenerator : m_textureGenerator
-    game__scenes__WikiPageLoader *-- "0..1" graphics__WikiTextureResult : m_wikiTexture
-    game__scenes__WikiPageLoader__HoleThumbnailState *-- "1" game__scenes__PendingHoleThumbnail : future
-    game__scenes__WikiPageLoader__HoleThumbnailState --> "1" game__scenes__WikiPageLoader__HoleThumbnailState__Status : status
-    %% ネスト型
-    game__scenes__SettingsScene .. game__scenes__SettingsScene__RowId : nested
-    %% 依存 (宣言 / 生成 / ECS)
-    game__controllers__ArticleTransitionController ..> game__scenes__CourseIntroductionData
-    game__scenes__AchievementScene ..> core__GameContext
-    game__scenes__AchievementScene ..> game__components__UIButton : ECS
-    game__scenes__AchievementScene ..> game__components__UIText : ECS
-    game__scenes__GameScene ..> core__GameContext
-    game__scenes__GameScene ..> game__components__Camera : ECS
-    game__scenes__GameScene ..> game__components__MeshRenderer : ECS
-    game__scenes__GameScene ..> game__components__Transform : ECS
-    game__scenes__GameScene ..> game__components__UIText : ECS
-    game__scenes__HolePlacementPlanner ..> game__scenes__HolePlacementCandidate
-    game__scenes__HolePlacementPlanner ..> graphics__LinkRegion
-    game__scenes__LoadingScene ..> core__GameContext
-    game__scenes__LoadingScene ..> core__Scene
-    game__scenes__LoadingScene ..> game__components__Camera : ECS
-    game__scenes__LoadingScene ..> game__components__MeshRenderer : ECS
-    game__scenes__LoadingScene ..> game__components__Transform : ECS
-    game__scenes__LoadingScene ..> game__components__UIText : ECS
-    game__scenes__LoadingScene ..> game__components__WikiGlobalData : ECS / 生成
-    game__scenes__LoadingScene ..> game__systems__WikiShortestPath : 生成
-    game__scenes__PageLinkSelector ..> game__WikiLink
-    game__scenes__PageLinkSelector ..> game__scenes__PageLinkSelectionResult
-    game__scenes__PauseScene ..> core__GameContext
-    game__scenes__PauseScene ..> game__components__UIButton : ECS
-    game__scenes__PauseScene ..> game__components__UIText : ECS
-    game__scenes__PauseScene ..> game__scenes__TitleScene : 生成
-    game__scenes__RankingScene ..> core__GameContext
-    game__scenes__RankingScene ..> game__components__UIButton : ECS
-    game__scenes__RankingScene ..> game__components__UIText : ECS
-    game__scenes__RankingScene ..> game__scenes__RankingScene__AsyncState : 生成
-    game__scenes__ResultScene ..> core__GameContext
-    game__scenes__ResultScene ..> game__components__Camera : ECS
-    game__scenes__ResultScene ..> game__components__MeshRenderer : ECS
-    game__scenes__ResultScene ..> game__components__TerrainObject : ECS
-    game__scenes__ResultScene ..> game__components__Transform : ECS
-    game__scenes__ResultScene ..> game__components__UIButton : ECS
-    game__scenes__ResultScene ..> game__components__UIText : ECS
-    game__scenes__ResultScene ..> game__scenes__LoadingScene : 生成
-    game__scenes__ResultScene ..> game__scenes__ResultScene__RankingUploadState : 生成
-    game__scenes__ResultScene ..> game__scenes__TitleScene : 生成
-    game__scenes__ResultScene ..> game__scenes__WikiGolfScene : 生成
-    game__scenes__SettingsScene ..> core__GameContext
-    game__scenes__SettingsScene ..> game__components__UIButton : ECS
-    game__scenes__SettingsScene ..> game__components__UIText : ECS
-    game__scenes__TitleScene ..> core__GameContext
-    game__scenes__TitleScene ..> game__components__Camera : ECS
-    game__scenes__TitleScene ..> game__components__GrassRenderBatch : ECS
-    game__scenes__TitleScene ..> game__components__MeshRenderer : ECS
-    game__scenes__TitleScene ..> game__components__Skybox : ECS
-    game__scenes__TitleScene ..> game__components__Transform : ECS
-    game__scenes__TitleScene ..> game__components__UIButton : ECS
-    game__scenes__TitleScene ..> game__components__UIImage : ECS
-    game__scenes__TitleScene ..> game__components__UIText : ECS
-    game__scenes__TitleScene ..> game__scenes__AchievementScene : 生成
-    game__scenes__TitleScene ..> game__scenes__LoadingScene : 生成
-    game__scenes__TitleScene ..> game__scenes__RankingScene : 生成
-    game__scenes__TitleScene ..> game__scenes__ResultScene : 生成
-    game__scenes__TitleScene ..> game__scenes__SettingsScene : 生成
-    game__scenes__TitleScene ..> game__scenes__TitleScene__StartConnectionState : 生成
-    game__scenes__TitleScene ..> game__scenes__WikiGolfScene : 生成
-    game__scenes__TitleScene ..> graphics__VideoPlayer : 生成
-    game__scenes__TutorialCourseLayout ..> graphics__LinkRegion
-    game__scenes__TutorialCourseLayout ..> graphics__WikiTextureResult
-    game__scenes__WikiGolfScene ..> core__GameContext
-    game__scenes__WikiGolfScene ..> game__components__AimPinState : ECS
-    game__scenes__WikiGolfScene ..> game__components__Camera : ECS
-    game__scenes__WikiGolfScene ..> game__components__Collider : ECS
-    game__scenes__WikiGolfScene ..> game__components__GolfGameState : ECS
-    game__scenes__WikiGolfScene ..> game__components__GolfHole : ECS
-    game__scenes__WikiGolfScene ..> game__components__HoleFlag : ECS
-    game__scenes__WikiGolfScene ..> game__components__MeshRenderer : ECS
-    game__scenes__WikiGolfScene ..> game__components__RigidBody : ECS
-    game__scenes__WikiGolfScene ..> game__components__ShotState : ECS
-    game__scenes__WikiGolfScene ..> game__components__Skybox : ECS
-    game__scenes__WikiGolfScene ..> game__components__Transform : ECS
-    game__scenes__WikiGolfScene ..> game__components__UIImage : ECS
-    game__scenes__WikiGolfScene ..> game__components__UIText : ECS
-    game__scenes__WikiGolfScene ..> game__components__WikiGlobalData : ECS
-    game__scenes__WikiGolfScene ..> game__controllers__AimPinController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__ArticleTransitionController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__CameraController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__ClubController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__MinimapController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__ShotController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__TrajectoryPredictor : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__TutorialOverlayController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__WikiGolfHUD : 生成
-    game__scenes__WikiGolfScene ..> game__scenes__LoadingScene : 生成
-    game__scenes__WikiGolfScene ..> game__scenes__PauseScene : 生成
-    game__scenes__WikiGolfScene ..> game__scenes__ResultScene : 生成
-    game__scenes__WikiGolfScene ..> game__scenes__TitleScene : 生成
-    game__scenes__WikiGolfScene ..> game__scenes__WikiGolfScene__TutorialConnectionState : 生成
-    game__scenes__WikiGolfScene ..> game__scenes__WikiPageLoader : 生成
-    game__scenes__WikiGolfScene ..> game__systems__GameJuiceSystem : ECS / 生成
-    game__scenes__WikiGolfScene ..> game__systems__WikiShortestPath : 生成
-    game__scenes__WikiGolfScene ..> game__systems__WikiTerrainSystem : 生成
-    game__scenes__WikiGolfScene ..> graphics__SkyboxTextureGenerator : 生成
-    game__scenes__WikiGolfScene ..> graphics__WikiTextureGenerator : 生成
-    game__scenes__WikiPageDataFetcher ..> game__scenes__PageDataAsyncResult
-    game__scenes__WikiPageDataFetcher ..> game__systems__WikiClient
-    game__scenes__WikiPageDataFetcher ..> graphics__PendingWikiImage
-    game__scenes__WikiPageLoader ..> core__GameContext
-    game__scenes__WikiPageLoader ..> game__WikiLink
-    game__scenes__WikiPageLoader ..> game__components__Billboard : ECS
-    game__scenes__WikiPageLoader ..> game__components__Camera : ECS
-    game__scenes__WikiPageLoader ..> game__components__GolfGameState : ECS
-    game__scenes__WikiPageLoader ..> game__components__GolfHole : ECS
-    game__scenes__WikiPageLoader ..> game__components__HoleFlag : ECS
-    game__scenes__WikiPageLoader ..> game__components__MeshRenderer : ECS
-    game__scenes__WikiPageLoader ..> game__components__RigidBody : ECS
-    game__scenes__WikiPageLoader ..> game__components__Skybox : ECS
-    game__scenes__WikiPageLoader ..> game__components__Transform : ECS
-    game__scenes__WikiPageLoader ..> game__components__UIText : ECS
-    game__scenes__WikiPageLoader ..> game__components__World3DLabel : ECS
-    game__scenes__WikiPageLoader ..> graphics__WikiTextureResult : 生成
-    game__scenes__WikiPinballScene ..> core__GameContext
-    game__scenes__WikiPinballScene ..> game__components__Camera : ECS
-    game__scenes__WikiPinballScene ..> game__components__Collider : ECS
-    game__scenes__WikiPinballScene ..> game__components__Flipper : ECS
-    game__scenes__WikiPinballScene ..> game__components__Heading : ECS
-    game__scenes__WikiPinballScene ..> game__components__MeshRenderer : ECS
-    game__scenes__WikiPinballScene ..> game__components__RigidBody : ECS
-    game__scenes__WikiPinballScene ..> game__components__Transform : ECS
-    game__scenes__WikiPinballScene ..> game__components__UIText : ECS
-    game__scenes__WikiPinballScene ..> game__components__WikiGameState : ECS
-    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
-    class core__GameContext["core::GameContext"]
+    %% 他モジュール / 外部の参照ノード
     class core__Scene["core::Scene"]
     class ecs__EntityOwner["ecs::EntityOwner"]
     class game__WikiLink["game::WikiLink"]
-    class game__components__AimPinState["game::components::AimPinState"]
-    class game__components__Billboard["game::components::Billboard"]
-    class game__components__Camera["game::components::Camera"]
-    class game__components__Collider["game::components::Collider"]
-    class game__components__Flipper["game::components::Flipper"]
-    class game__components__GolfGameState["game::components::GolfGameState"]
-    class game__components__GolfHole["game::components::GolfHole"]
-    class game__components__GrassRenderBatch["game::components::GrassRenderBatch"]
-    class game__components__Heading["game::components::Heading"]
-    class game__components__HoleFlag["game::components::HoleFlag"]
-    class game__components__MeshRenderer["game::components::MeshRenderer"]
-    class game__components__RigidBody["game::components::RigidBody"]
-    class game__components__ShotJudgement["game::components::ShotJudgement"]
-    class game__components__ShotState["game::components::ShotState"]
-    class game__components__Skybox["game::components::Skybox"]
-    class game__components__TerrainObject["game::components::TerrainObject"]
-    class game__components__Transform["game::components::Transform"]
-    class game__components__UIButton["game::components::UIButton"]
-    class game__components__UIImage["game::components::UIImage"]
-    class game__components__UIText["game::components::UIText"]
-    class game__components__WikiGameState["game::components::WikiGameState"]
     class game__components__WikiGlobalData["game::components::WikiGlobalData"]
-    class game__components__World3DLabel["game::components::World3DLabel"]
     class game__controllers__AimPinController["game::controllers::AimPinController"]
     class game__controllers__ArticleTransitionController["game::controllers::ArticleTransitionController"]
     class game__controllers__BallFastForwardIndicator["game::controllers::BallFastForwardIndicator"]
@@ -1052,7 +867,6 @@ classDiagram
     class game__systems__PlayFabResult["game::systems::PlayFabResult"]
     class game__systems__SlopeVisualizationSystem["game::systems::SlopeVisualizationSystem"]
     class game__systems__TimeOfDaySystem["game::systems::TimeOfDaySystem"]
-    class game__systems__WikiClient["game::systems::WikiClient"]
     class game__systems__WikiShortestPath["game::systems::WikiShortestPath"]
     class game__systems__WikiTerrainSystem["game::systems::WikiTerrainSystem"]
     class game__utils__CourseIntroductionHole["game::utils::CourseIntroductionHole"]
@@ -1060,10 +874,119 @@ classDiagram
     class graphics__LinkRegion["graphics::LinkRegion"]
     class graphics__PendingWikiImage["graphics::PendingWikiImage"]
     class graphics__SkyboxTextureGenerator["graphics::SkyboxTextureGenerator"]
-    class graphics__SkyboxTheme["graphics::SkyboxTheme"]
     class graphics__TextStyle["graphics::TextStyle"]
     class graphics__VideoPlayer["graphics::VideoPlayer"]
     class graphics__WikiTextureGenerationState["graphics::WikiTextureGenerationState"]
     class graphics__WikiTextureGenerator["graphics::WikiTextureGenerator"]
     class graphics__WikiTextureResult["graphics::WikiTextureResult"]
-    %% 外部クラス (継承元のみ)
+    %% 関係
+    core__Scene <|-- game__scenes__AchievementScene
+    core__Scene <|-- game__scenes__GameScene
+    core__Scene <|-- game__scenes__LoadingScene
+    core__Scene <|-- game__scenes__PauseScene
+    core__Scene <|-- game__scenes__RankingScene
+    core__Scene <|-- game__scenes__ResultScene
+    core__Scene <|-- game__scenes__SettingsScene
+    core__Scene <|-- game__scenes__TitleScene
+    core__Scene <|-- game__scenes__WikiGolfScene
+    core__Scene <|-- game__scenes__WikiPinballScene
+    game__controllers__ArticleTransitionController *-- "0..*" game__scenes__PageDataAsyncResult : m_loadTask, m_prefetchTask, m_pendingPageData
+    game__controllers__ArticleTransitionController o-- "0..1" game__scenes__WikiPageLoader : m_pageLoader
+    game__scenes__AsyncPathEvaluator o-- "0..*" game__scenes__HolePlacementCandidate : m_partialResults
+    game__scenes__AsyncPathEvaluator *-- "0..*" game__scenes__HolePlacementCandidate : m_task, m_retiredTasks
+    game__scenes__CourseIntroductionData *-- "0..*" game__utils__CourseIntroductionHole : holes
+    game__scenes__LoadingScene *-- "0..*" game__components__WikiGlobalData : m_loadTask, m_loadedData
+    game__scenes__LoadingScene *-- "0..*" game__scenes__LoadingScene__BallState : m_balls
+    game__scenes__LoadingScene *-- "0..*" graphics__TextStyle : m_primaryStyle, m_progressStyle, m_captionStyle
+    game__scenes__PageDataAsyncResult *-- "0..*" game__WikiLink : allLinks
+    game__scenes__PageDataAsyncResult *-- "0..*" graphics__PendingWikiImage : pendingImages
+    game__scenes__RankingScene o-- "0..1" game__scenes__RankingScene__AsyncState : m_asyncState
+    game__scenes__RankingScene *-- "1" game__scenes__RankingScene__LoadData : m_data
+    game__scenes__RankingScene *-- "1" game__systems__PlayFabProfile : m_profile
+    game__scenes__RankingScene__AsyncState *-- "1" game__scenes__RankingScene__LoadData : data
+    game__scenes__RankingScene__LoadData *-- "0..*" game__systems__PlayFabLeaderboardResult : strokes, clearTime
+    game__scenes__RankingScene__LoadData *-- "1" game__systems__PlayFabResult : nameUpdate
+    game__scenes__ResultScene *-- "1" game__scenes__ResultData : m_data
+    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__HanabiShell : m_shells
+    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__HanabiSpark : m_sparks
+    game__scenes__ResultScene o-- "0..1" game__scenes__ResultScene__RankingUploadState : m_rankingUploadState
+    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__RingObject : m_rings
+    game__scenes__ResultScene *-- "0..*" game__scenes__ResultScene__UIElement : m_uiElements
+    game__scenes__TitleScene *-- "0..*" game__scenes__TitleScene__MenuEntry : m_menuEntries
+    game__scenes__TitleScene o-- "0..1" game__scenes__TitleScene__StartConnectionState : m_startConnectionState
+    game__scenes__TitleScene *-- "0..1" graphics__VideoPlayer : m_videoPlayer
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__AimPinController : m_aimPinController
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__ArticleTransitionController : m_transitionController
+    game__scenes__WikiGolfScene *-- "1" game__controllers__BallFastForwardIndicator : m_fastForwardIndicator
+    game__scenes__WikiGolfScene *-- "1" game__controllers__BallFastForwardTimer : m_fastForwardTimer
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__CameraController : m_cameraController
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__ClubController : m_clubController
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__MinimapController : m_minimapController
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__ShotController : m_shotController
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__TrajectoryPredictor : m_trajectoryPredictor
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__TutorialOverlayController : m_tutorialOverlay
+    game__scenes__WikiGolfScene *-- "0..1" game__controllers__WikiGolfHUD : m_hud
+    game__scenes__WikiGolfScene *-- "1" game__scenes__ResultData : m_pendingResultData
+    game__scenes__WikiGolfScene o-- "0..1" game__scenes__WikiGolfScene__TutorialConnectionState : m_tutorialConnectionState
+    game__scenes__WikiGolfScene *-- "0..1" game__scenes__WikiPageLoader : m_pageLoader
+    game__scenes__WikiGolfScene *-- "1" game__systems__EnvironmentParticleSystem : m_particleSystem
+    game__scenes__WikiGolfScene *-- "0..1" game__systems__GameJuiceSystem : m_gameJuice
+    game__scenes__WikiGolfScene *-- "1" game__systems__ParticleRenderSystem : m_particleRenderSystem
+    game__scenes__WikiGolfScene *-- "1" game__systems__SlopeVisualizationSystem : m_slopeVisualization
+    game__scenes__WikiGolfScene *-- "1" game__systems__TimeOfDaySystem : m_timeOfDay
+    game__scenes__WikiGolfScene *-- "0..1" game__systems__WikiShortestPath : m_shortestPath
+    game__scenes__WikiGolfScene *-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
+    game__scenes__WikiGolfScene *-- "1" game__utils__ScreenFade : m_screenFade
+    game__scenes__WikiGolfScene *-- "0..1" graphics__SkyboxTextureGenerator : m_skyboxGenerator
+    game__scenes__WikiGolfScene *-- "0..1" graphics__WikiTextureGenerator : m_textureGenerator
+    game__scenes__WikiPageDataFetcher *-- "0..*" game__WikiLink : m_preloadedLinks
+    game__scenes__WikiPageLoader *-- "1" ecs__EntityOwner : m_pageEntityOwner
+    game__scenes__WikiPageLoader o-- "0..1" game__controllers__MinimapController : m_buildMinimap
+    game__scenes__WikiPageLoader *-- "1" game__scenes__AsyncPathEvaluator : m_pathEvaluator
+    game__scenes__WikiPageLoader *-- "1" game__scenes__CourseIntroductionData : m_courseIntroductionData
+    game__scenes__WikiPageLoader *-- "0..*" game__scenes__HolePlacementCandidate : m_buildHoleCandidates, m_buildPathCandidates, m_buildMapHoleCandidates
+    game__scenes__WikiPageLoader *-- "1" game__scenes__HolePlacementPlanner : m_holePlacementPlanner
+    game__scenes__WikiPageLoader *-- "1" game__scenes__PageDataAsyncResult : m_buildData
+    game__scenes__WikiPageLoader *-- "1" game__scenes__PageLinkSelector : m_pageLinkSelector
+    game__scenes__WikiPageLoader *-- "1" game__scenes__PageLoadResult : m_buildResult
+    game__scenes__WikiPageLoader *-- "1" game__scenes__TutorialCourseLayout : m_tutorialCourseLayout
+    game__scenes__WikiPageLoader *-- "1" game__scenes__WikiPageDataFetcher : m_pageDataFetcher
+    game__scenes__WikiPageLoader *-- "0..*" game__scenes__WikiPageLoader__HoleThumbnailState : m_holeThumbnailCache
+    game__scenes__WikiPageLoader o-- "0..1" game__systems__WikiShortestPath : m_shortestPath
+    game__scenes__WikiPageLoader o-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
+    game__scenes__WikiPageLoader *-- "0..*" graphics__LinkRegion : m_buildGameplayLinks
+    game__scenes__WikiPageLoader o-- "0..1" graphics__SkyboxTextureGenerator : m_skyboxGenerator
+    game__scenes__WikiPageLoader *-- "1" graphics__WikiTextureGenerationState : m_textureState
+    game__scenes__WikiPageLoader o-- "0..1" graphics__WikiTextureGenerator : m_textureGenerator
+    game__scenes__WikiPageLoader *-- "0..1" graphics__WikiTextureResult : m_wikiTexture
+    game__scenes__WikiPageLoader__HoleThumbnailState *-- "1" game__scenes__PendingHoleThumbnail : future
+    game__scenes__RankingScene .. game__scenes__RankingScene__View
+    game__scenes__ResultScene__HanabiShell .. game__scenes__ResultScene__HanabiShell__Phase
+    game__scenes__SettingsScene .. game__scenes__SettingsScene__RowId
+    game__scenes__TitleScene .. game__scenes__TitleScene__TitleState
+    game__scenes__WikiGolfScene .. game__scenes__WikiGolfScene__CelebrationNext
+    game__scenes__WikiGolfScene .. game__scenes__WikiGolfScene__ScenePhase
+    game__scenes__WikiGolfScene .. game__scenes__WikiGolfScene__TerrainResultTier
+    game__scenes__WikiPageLoader .. game__scenes__WikiPageLoader__BuildStep
+    game__scenes__WikiPageLoader__HoleThumbnailState .. game__scenes__WikiPageLoader__HoleThumbnailState__Status
+    game__scenes__LoadingScene ..> game__systems__WikiShortestPath : 生成
+    game__scenes__PauseScene ..> game__scenes__TitleScene : 生成
+    game__scenes__ResultScene ..> game__scenes__LoadingScene : 生成
+    game__scenes__ResultScene ..> game__scenes__TitleScene : 生成
+    game__scenes__ResultScene ..> game__scenes__WikiGolfScene : 生成
+    game__scenes__TitleScene ..> game__scenes__AchievementScene : 生成
+    game__scenes__TitleScene ..> game__scenes__LoadingScene : 生成
+    game__scenes__TitleScene ..> game__scenes__RankingScene : 生成
+    game__scenes__TitleScene ..> game__scenes__ResultScene : 生成
+    game__scenes__TitleScene ..> game__scenes__SettingsScene : 生成
+    game__scenes__TitleScene ..> game__scenes__WikiGolfScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__LoadingScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__PauseScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__ResultScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__TitleScene : 生成
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__game__scenes__HoleVisualRules .. iso__game__scenes__anonymous_namespace_TutorialCourseLayout_cpp___TutorialLinkPlacement
+    iso__game__scenes__PageLinkSelectionResult .. iso__game__scenes__HtmlCourseFieldSize
+    %% 配色
+    cssClass "game__scenes__AchievementScene,game__scenes__AsyncPathEvaluator,game__scenes__CourseIntroductionData,game__scenes__GameScene,game__scenes__HolePlacementCandidate,game__scenes__HolePlacementPlanner,iso__game__scenes__HoleVisualRules,iso__game__scenes__HtmlCourseFieldSize,game__scenes__LoadingScene,game__scenes__LoadingScene__BallState,game__scenes__PageDataAsyncResult,iso__game__scenes__PageLinkSelectionResult,game__scenes__PageLinkSelector,game__scenes__PageLoadResult,game__scenes__PauseScene,game__scenes__PendingHoleThumbnail,game__scenes__RankingScene,game__scenes__RankingScene__AsyncState,game__scenes__RankingScene__LoadData,game__scenes__RankingScene__View,game__scenes__ResultData,game__scenes__ResultScene,game__scenes__ResultScene__HanabiShell,game__scenes__ResultScene__HanabiShell__Phase,game__scenes__ResultScene__HanabiSpark,game__scenes__ResultScene__RankingUploadState,game__scenes__ResultScene__RingObject,game__scenes__ResultScene__UIElement,game__scenes__SettingsScene,game__scenes__SettingsScene__RowId,game__scenes__TitleScene,game__scenes__TitleScene__MenuEntry,game__scenes__TitleScene__StartConnectionState,game__scenes__TitleScene__TitleState,game__scenes__TutorialCourseLayout,game__scenes__WikiGolfScene,game__scenes__WikiGolfScene__CelebrationNext,game__scenes__WikiGolfScene__ScenePhase,game__scenes__WikiGolfScene__TerrainResultTier,game__scenes__WikiGolfScene__TutorialConnectionState,game__scenes__WikiPageDataFetcher,game__scenes__WikiPageLoader,game__scenes__WikiPageLoader__BuildStep,game__scenes__WikiPageLoader__HoleThumbnailState,game__scenes__WikiPageLoader__HoleThumbnailState__Status,game__scenes__WikiPinballScene,iso__game__scenes__anonymous_namespace_TutorialCourseLayout_cpp___TutorialLinkPlacement" game_scenes
+    cssClass "core__Scene,ecs__EntityOwner,game__WikiLink,game__components__WikiGlobalData,game__controllers__AimPinController,game__controllers__ArticleTransitionController,game__controllers__BallFastForwardIndicator,game__controllers__BallFastForwardTimer,game__controllers__CameraController,game__controllers__ClubController,game__controllers__MinimapController,game__controllers__ShotController,game__controllers__TrajectoryPredictor,game__controllers__TutorialOverlayController,game__controllers__WikiGolfHUD,game__systems__EnvironmentParticleSystem,game__systems__GameJuiceSystem,game__systems__ParticleRenderSystem,game__systems__PlayFabLeaderboardResult,game__systems__PlayFabProfile,game__systems__PlayFabResult,game__systems__SlopeVisualizationSystem,game__systems__TimeOfDaySystem,game__systems__WikiShortestPath,game__systems__WikiTerrainSystem,game__utils__CourseIntroductionHole,game__utils__ScreenFade,graphics__LinkRegion,graphics__PendingWikiImage,graphics__SkyboxTextureGenerator,graphics__TextStyle,graphics__VideoPlayer,graphics__WikiTextureGenerationState,graphics__WikiTextureGenerator,graphics__WikiTextureResult" refnode

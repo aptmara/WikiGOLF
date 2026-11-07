@@ -1,45 +1,97 @@
-%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF クラス図: ecs (generate_class_full.py による自動生成。手で編集しないこと)
 %% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
 %% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
-%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
-%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
 classDiagram
     direction LR
     namespace ecs {
         class ecs__ComponentPool["ComponentPool#lt;T#gt;"] {
-            -std::vector#lt; SparseIndex #gt; m_sparse
-            -std::vector#lt; T #gt; m_dense
-            -std::vector#lt; Entity #gt; m_entities
+            -vector#lt;SparseIndex#gt; m_sparse
+            -vector#lt;T#gt; m_dense
+            -vector#lt;Entity#gt; m_entities
             +ComponentPool()
             +virtual Has(Entity entity) bool #123;const#125;
-            +Get(Entity entity) T #42;
-            +Get(Entity entity) const T #42; #123;const#125;
-            +Add(Entity entity, Args #amp;#amp;... args) T #amp;
+            +Get(Entity entity) T#42;
+            +Get(Entity entity) const T#42; #123;const#125;
+            +Add(Entity entity, Args#amp;#amp;... args) T#amp;
             +virtual Remove(Entity entity) void
             +virtual Size() size_t #123;const#125;
             +begin() auto
             +begin() auto #123;const#125;
             +end() auto
             +end() auto #123;const#125;
-            +virtual Entities() const std::vector#lt; Entity #gt; #amp; #123;const#125;
-            +Data() std::vector#lt; T #gt; #amp;
-            +Data() const std::vector#lt; T #gt; #amp; #123;const#125;
+            +virtual Entities() const vector#lt;Entity#gt;#amp; #123;const#125;
+            +Data() vector#lt;T#gt;#amp;
+            +Data() const vector#lt;T#gt;#amp; #123;const#125;
             +virtual Clear() void
-            +virtual GetTypeName() const char #42; #123;const#125;
+            +virtual GetTypeName() const char#42; #123;const#125;
         }
         class ecs__EntityOwner["EntityOwner"] {
-            -std::vector#lt; Entity #gt; m_entities
+            -vector#lt;Entity#gt; m_entities
             +EntityOwner()
             +#126;EntityOwner()
-            +EntityOwner(const EntityOwner #amp;)
-            +operator=(const EntityOwner #amp;) EntityOwner #amp;
-            +EntityOwner(EntityOwner #amp;#amp;)
-            +operator=(EntityOwner #amp;#amp;) EntityOwner #amp;
-            +Create(World #amp; world) Entity
+            +EntityOwner(const EntityOwner#amp;)
+            +operator=(const EntityOwner#amp;) EntityOwner#amp;
+            +EntityOwner(EntityOwner#amp;#amp;)
+            +operator=(EntityOwner#amp;#amp;) EntityOwner#amp;
+            +Create(World#amp; world) Entity
             +Track(Entity entity) void
-            +DestroyAll(World #amp; world) std::size_t
+            +DestroyAll(World#amp; world) size_t
             +Owns(Entity entity) bool #123;const#125;
-            +GetTrackedCount() std::size_t #123;const#125;
+            +GetTrackedCount() size_t #123;const#125;
         }
         class ecs__IComponentPool["IComponentPool"] {
             <<abstract>>
@@ -48,18 +100,18 @@ classDiagram
             +Has(Entity entity)* bool #123;const#125;
             +Size()* size_t #123;const#125;
             +Clear()* void
-            +Entities()* const std::vector#lt; Entity #gt; #amp; #123;const#125;
-            +GetTypeName()* const char #42; #123;const#125;
+            +Entities()* const vector#lt;Entity#gt;#amp; #123;const#125;
+            +GetTypeName()* const char#42; #123;const#125;
         }
-        class ecs__ISystem["ISystem"] {
+        class iso__ecs__ISystem["ISystem"] {
             <<abstract>>
             +virtual #126;ISystem()
-            +virtual Initialize(World #amp; world) void
-            +Update(World #amp; world, float deltaTime)* void
-            +virtual Shutdown(World #amp; world) void
+            +virtual Initialize(World#amp; world) void
+            +Update(World#amp; world, float deltaTime)* void
+            +virtual Shutdown(World#amp; world) void
             +virtual Priority() int #123;const#125;
         }
-        class ecs__Phase["Phase"] {
+        class iso__ecs__Phase["Phase"] {
             <<enumeration>>
             PreUpdate
             Update
@@ -68,80 +120,100 @@ classDiagram
             Cleanup
         }
         class ecs__Pipeline["Pipeline"] {
-            -std::vector#lt; SystemDesc #gt; m_systems
-            +Register(const std::string #amp; name, SystemFunc func) SystemBuilder
-            +AddSystem(SystemDesc #amp;#amp; desc) void
+            -vector#lt;SystemDesc#gt; m_systems
+            +Register(const string#amp; name, SystemFunc func) SystemBuilder
+            +AddSystem(SystemDesc#amp;#amp; desc) void
             +Build() void
-            +Run(core::GameContext #amp; ctx) void
+            +Run(GameContext#amp; ctx) void
         }
         class ecs__SystemBuilder["SystemBuilder"] {
-            -Pipeline #amp; m_pipeline
+            -Pipeline#amp; m_pipeline
             -SystemDesc m_desc
-            +SystemBuilder(Pipeline #amp; pipeline, std::string name, SystemFunc func)
-            +Phase(Phase p) SystemBuilder #amp;
-            +Reads() SystemBuilder #amp;
-            +Writes() SystemBuilder #amp;
+            +SystemBuilder(Pipeline#amp; pipeline, string name, SystemFunc func)
+            +Phase(Phase p) SystemBuilder#amp;
+            +Reads() SystemBuilder#amp;
+            +Writes() SystemBuilder#amp;
             +Build() void
         }
         class ecs__SystemDesc["SystemDesc"] {
             <<struct>>
-            +std::string name
+            +string name
             +SystemFunc func
             +Phase phase
-            +std::vector#lt; ComponentTypeId #gt; reads
-            +std::vector#lt; ComponentTypeId #gt; writes
+            +vector#lt;ComponentTypeId#gt; reads
+            +vector#lt;ComponentTypeId#gt; writes
         }
         class ecs__View["View#lt;Ts#gt;"] {
-            -std::tuple#lt; ComponentPool#lt; Ts #gt; #42;... #gt; m_pools
-            +View(ComponentPool#lt; Ts #gt; #42;... pools)
-            +Each(Func #amp;#amp; func) void
+            -tuple#lt;ComponentPool#lt;Ts#gt;#42;...#gt; m_pools
+            +View(ComponentPool#lt;Ts#gt;#42;... pools)
+            +Each(Func#amp;#amp; func) void
             -IsValid() bool #123;const#125;
             -HasAll(Entity e) bool #123;const#125;
-            -FindSmallestPool(size_t #amp; minSize, IComponentPool #42;#amp; result) void
+            -FindSmallestPool(size_t#amp; minSize, IComponentPool#42;#amp; result) void
         }
         class ecs__World["World"] {
-            -std::vector#lt; uint16_t #gt; m_generations
-            -std::queue#lt; uint32_t #gt; m_freeIndices
-            -std::vector#lt; std::unique_ptr#lt; IComponentPool #gt; #gt; m_componentPools
-            -std::unordered_map#lt; ComponentTypeId, std::any #gt; m_globals
+            -vector#lt;uint16_t#gt; m_generations
+            -queue#lt;uint32_t#gt; m_freeIndices
+            -vector#lt;unique_ptr#lt;IComponentPool#gt;#gt; m_componentPools
+            -unordered_map#lt;ComponentTypeId, any#gt; m_globals
             +World()
             +#126;World()
-            +World(const World #amp;)
-            +operator=(const World #amp;) World #amp;
+            +World(const World#amp;)
+            +operator=(const World#amp;) World#amp;
             +Reset() void
             +CreateEntity() Entity
             +DestroyEntity(Entity entity) void
             +IsAlive(Entity entity) bool #123;const#125;
             +GetEntityCount() size_t #123;const#125;
-            +Add(Entity entity, Args #amp;#amp;... args) T #amp;
-            +Get(Entity entity) T #42;
-            +Get(Entity entity) const T #42; #123;const#125;
+            +Add(Entity entity, Args#amp;#amp;... args) T#amp;
+            +Get(Entity entity) T#42;
+            +Get(Entity entity) const T#42; #123;const#125;
             +Remove(Entity entity) void
             +Has(Entity entity) bool #123;const#125;
-            +SetGlobal(T #amp;#amp; value) void
-            +GetGlobal() T #42;
-            +Query() View#lt; Ts... #gt;
+            +SetGlobal(T#amp;#amp; value) void
+            +GetGlobal() T#42;
+            +Query() View#lt;Ts...#gt;
             +DumpStatistics() void #123;const#125;
-            -GetOrCreatePool() ComponentPool#lt; T #gt; #amp;
-            -GetPool() ComponentPool#lt; T #gt; #42;
-            -GetPool() const ComponentPool#lt; T #gt; #42; #123;const#125;
+            -GetOrCreatePool() ComponentPool#lt;T#gt;#amp;
+            -GetPool() ComponentPool#lt;T#gt;#42;
+            -GetPool() const ComponentPool#lt;T#gt;#42; #123;const#125;
         }
     }
-    namespace ecs__detail {
-        class ecs__detail__ComponentTypeIdGenerator["ComponentTypeIdGenerator#lt;T#gt;"] {
+    namespace ecs.detail {
+        class iso__ecs__detail__ComponentTypeIdGenerator["ComponentTypeIdGenerator#lt;T#gt;"] {
             <<struct>>
             +Id()$ ComponentTypeId
         }
     }
-    %% 継承
+    %% 他モジュール / 外部の参照ノード
+    class core__GameContext["core::GameContext"]
+    class core__Scene["core::Scene"]
+    class game__controllers__AimPinController["game::controllers::AimPinController"]
+    class game__controllers__ArticleTransitionController["game::controllers::ArticleTransitionController"]
+    class game__controllers__ClubController["game::controllers::ClubController"]
+    class game__controllers__MinimapController["game::controllers::MinimapController"]
+    class game__controllers__StartGoalIntroductionPanel["game::controllers::StartGoalIntroductionPanel"]
+    class game__controllers__TrajectoryPredictor["game::controllers::TrajectoryPredictor"]
+    class game__controllers__TutorialOverlayController["game::controllers::TutorialOverlayController"]
+    class game__controllers__hud__AchievementToastPanel["game::controllers::hud::AchievementToastPanel"]
+    class game__controllers__hud__AimDistancePanel["game::controllers::hud::AimDistancePanel"]
+    class game__controllers__hud__ClubSelectionPanel["game::controllers::hud::ClubSelectionPanel"]
+    class game__controllers__hud__CourseInfoPanel["game::controllers::hud::CourseInfoPanel"]
+    class game__controllers__hud__GameplayControlsPanel["game::controllers::hud::GameplayControlsPanel"]
+    class game__controllers__hud__LiePanel["game::controllers::hud::LiePanel"]
+    class game__controllers__hud__MinimapDecorationPanel["game::controllers::hud::MinimapDecorationPanel"]
+    class game__controllers__hud__ShotGaugePanel["game::controllers::hud::ShotGaugePanel"]
+    class game__controllers__hud__WindPanel["game::controllers::hud::WindPanel"]
+    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
+    class game__systems__GameJuiceSystem["game::systems::GameJuiceSystem"]
+    class game__systems__SlopeVisualizationSystem["game::systems::SlopeVisualizationSystem"]
+    %% 関係
     ecs__IComponentPool <|-- ecs__ComponentPool
-    %% メンバー由来の関係
     core__GameContext o-- "0..1" ecs__World : world
     core__Scene *-- "1" ecs__EntityOwner : m_entityOwner
     ecs__Pipeline *-- "0..*" ecs__SystemDesc : m_systems
     ecs__SystemBuilder o-- "0..1" ecs__Pipeline : m_pipeline
     ecs__SystemBuilder *-- "1" ecs__SystemDesc : m_desc
-    ecs__SystemDesc --> "1" ecs__Phase : phase
     ecs__View *-- "1" ecs__ComponentPool : m_pools
     ecs__World *-- "0..*" ecs__IComponentPool : m_componentPools
     game__controllers__AimPinController *-- "1" ecs__EntityOwner : m_markerOwner
@@ -163,45 +235,9 @@ classDiagram
     game__scenes__WikiPageLoader *-- "1" ecs__EntityOwner : m_pageEntityOwner
     game__systems__GameJuiceSystem *-- "1" ecs__EntityOwner : m_entityOwner
     game__systems__SlopeVisualizationSystem *-- "1" ecs__EntityOwner : m_entityOwner
-    %% ネスト型
-    %% 依存 (宣言 / 生成 / ECS)
-    core__Scene ..> ecs__World
-    ecs__EntityOwner ..> ecs__World
-    ecs__ISystem ..> ecs__World
-    ecs__Pipeline ..> core__GameContext
-    ecs__Pipeline ..> ecs__SystemBuilder
-    ecs__SystemBuilder ..> ecs__Phase
-    ecs__View ..> ecs__IComponentPool
     ecs__World ..> ecs__ComponentPool : 生成
-    ecs__World ..> ecs__View
-    game__debug__DebugBallTelemetryHistory ..> ecs__World
-    game__debug__DebugGameplayCheckpoint ..> ecs__World
-    game__debug__DebugTerrainVisibility ..> ecs__World
-    game__systems__StaticBodySpatialGrid ..> ecs__World
-    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
-    class core__GameContext["core::GameContext"]
-    class core__Scene["core::Scene"]
-    class game__controllers__AimPinController["game::controllers::AimPinController"]
-    class game__controllers__ArticleTransitionController["game::controllers::ArticleTransitionController"]
-    class game__controllers__ClubController["game::controllers::ClubController"]
-    class game__controllers__MinimapController["game::controllers::MinimapController"]
-    class game__controllers__StartGoalIntroductionPanel["game::controllers::StartGoalIntroductionPanel"]
-    class game__controllers__TrajectoryPredictor["game::controllers::TrajectoryPredictor"]
-    class game__controllers__TutorialOverlayController["game::controllers::TutorialOverlayController"]
-    class game__controllers__hud__AchievementToastPanel["game::controllers::hud::AchievementToastPanel"]
-    class game__controllers__hud__AimDistancePanel["game::controllers::hud::AimDistancePanel"]
-    class game__controllers__hud__ClubSelectionPanel["game::controllers::hud::ClubSelectionPanel"]
-    class game__controllers__hud__CourseInfoPanel["game::controllers::hud::CourseInfoPanel"]
-    class game__controllers__hud__GameplayControlsPanel["game::controllers::hud::GameplayControlsPanel"]
-    class game__controllers__hud__LiePanel["game::controllers::hud::LiePanel"]
-    class game__controllers__hud__MinimapDecorationPanel["game::controllers::hud::MinimapDecorationPanel"]
-    class game__controllers__hud__ShotGaugePanel["game::controllers::hud::ShotGaugePanel"]
-    class game__controllers__hud__WindPanel["game::controllers::hud::WindPanel"]
-    class game__debug__DebugBallTelemetryHistory["game::debug::DebugBallTelemetryHistory"]
-    class game__debug__DebugGameplayCheckpoint["game::debug::DebugGameplayCheckpoint"]
-    class game__debug__DebugTerrainVisibility["game::debug::DebugTerrainVisibility"]
-    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
-    class game__systems__GameJuiceSystem["game::systems::GameJuiceSystem"]
-    class game__systems__SlopeVisualizationSystem["game::systems::SlopeVisualizationSystem"]
-    class game__systems__StaticBodySpatialGrid["game::systems::StaticBodySpatialGrid"]
-    %% 外部クラス (継承元のみ)
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__ecs__ISystem .. iso__ecs__Phase
+    %% 配色
+    cssClass "ecs__ComponentPool,ecs__EntityOwner,ecs__IComponentPool,iso__ecs__ISystem,iso__ecs__Phase,ecs__Pipeline,ecs__SystemBuilder,ecs__SystemDesc,ecs__View,ecs__World,iso__ecs__detail__ComponentTypeIdGenerator" ecs
+    cssClass "core__GameContext,core__Scene,game__controllers__AimPinController,game__controllers__ArticleTransitionController,game__controllers__ClubController,game__controllers__MinimapController,game__controllers__StartGoalIntroductionPanel,game__controllers__TrajectoryPredictor,game__controllers__TutorialOverlayController,game__controllers__hud__AchievementToastPanel,game__controllers__hud__AimDistancePanel,game__controllers__hud__ClubSelectionPanel,game__controllers__hud__CourseInfoPanel,game__controllers__hud__GameplayControlsPanel,game__controllers__hud__LiePanel,game__controllers__hud__MinimapDecorationPanel,game__controllers__hud__ShotGaugePanel,game__controllers__hud__WindPanel,game__scenes__WikiPageLoader,game__systems__GameJuiceSystem,game__systems__SlopeVisualizationSystem" refnode

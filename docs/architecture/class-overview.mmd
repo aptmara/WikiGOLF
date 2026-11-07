@@ -1,0 +1,1117 @@
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF 全体概要 (名前のみ) (generate_class_full.py による自動生成。手で編集しないこと)
+%% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
+%% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
+classDiagram
+    direction LR
+    namespace audio {
+        class audio__AudioClip["AudioClip"]
+    }
+    namespace core {
+        class iso__core__AntiAliasingFlags["AntiAliasingFlags"]
+        class iso__core__AntiAliasingMode["AntiAliasingMode"]
+        class core__DisplaySettings["DisplaySettings"]
+        class core__DisplaySettingsData["DisplaySettingsData"]
+        class iso__core__DlssQuality["DlssQuality"]
+        class iso__core__FramePacer["FramePacer"]
+        class core__GameContext["GameContext"]
+        class core__GpuFrameSample["GpuFrameSample"]
+        class core__GpuPipelineStats["GpuPipelineStats"]
+        class core__GpuScopeSample["GpuScopeSample"]
+        class iso__core__GraphicsPreset["GraphicsPreset"]
+        class iso__core__GraphicsPresetSettings["GraphicsPresetSettings"]
+        class core__Input["Input"]
+        class core__LogEntry["LogEntry"]
+        class iso__core__LogLevel["LogLevel"]
+        class core__Logger["Logger"]
+        class core__Profiler["Profiler"]
+        class core__Profiler__ActiveScope["Profiler::ActiveScope"]
+        class core__Profiler__FrameData["Profiler::FrameData"]
+        class core__Profiler__ProcessMetrics["Profiler::ProcessMetrics"]
+        class core__Profiler__SceneAggregate["Profiler::SceneAggregate"]
+        class core__Profiler__ScopeAggregate["Profiler::ScopeAggregate"]
+        class core__Profiler__ScopeData["Profiler::ScopeData"]
+        class core__Profiler__ScopeMetadata["Profiler::ScopeMetadata"]
+        class core__Profiler__SlowFrame["Profiler::SlowFrame"]
+        class core__ProfilerCpuScopeSnapshot["ProfilerCpuScopeSnapshot"]
+        class core__ProfilerFrameSnapshot["ProfilerFrameSnapshot"]
+        class core__ProfilerNamedValue["ProfilerNamedValue"]
+        class iso__core__ResourceHandle["ResourceHandle#lt;T#gt;"]
+        class core__Scene["Scene"]
+        class core__SceneManager["SceneManager"]
+        class core__SceneManager__Op["SceneManager::Op"]
+        class iso__core__ScopedTimer["ScopedTimer"]
+        class iso__core__SectionTimer["SectionTimer"]
+        class iso__core__WindowMode["WindowMode"]
+    }
+    namespace core.profiler_detail {
+        class core__profiler_detail__BoundedStatistics["BoundedStatistics"]
+        class iso__core__profiler_detail__ScopeAggregate["ScopeAggregate"]
+    }
+    namespace ecs {
+        class ecs__ComponentPool["ComponentPool#lt;T#gt;"]
+        class ecs__EntityOwner["EntityOwner"]
+        class ecs__IComponentPool["IComponentPool"]
+        class iso__ecs__ISystem["ISystem"]
+        class iso__ecs__Phase["Phase"]
+        class ecs__Pipeline["Pipeline"]
+        class ecs__SystemBuilder["SystemBuilder"]
+        class ecs__SystemDesc["SystemDesc"]
+        class ecs__View["View#lt;Ts#gt;"]
+        class ecs__World["World"]
+    }
+    namespace ecs.detail {
+        class iso__ecs__detail__ComponentTypeIdGenerator["ComponentTypeIdGenerator#lt;T#gt;"]
+    }
+    namespace game {
+        class game__WikiLink["WikiLink"]
+    }
+    namespace game.components {
+        class iso__game__components__AimPinState["AimPinState"]
+        class iso__game__components__Billboard["Billboard"]
+        class iso__game__components__BlendMode["BlendMode"]
+        class iso__game__components__ButtonState["ButtonState"]
+        class iso__game__components__Camera["Camera"]
+        class game__components__Collider["Collider"]
+        class iso__game__components__ColliderType["ColliderType"]
+        class game__components__CollisionEvent["CollisionEvent"]
+        class game__components__CollisionEvents["CollisionEvents"]
+        class game__components__EnvironmentState["EnvironmentState"]
+        class game__components__Flipper["Flipper"]
+        class game__components__Flipper__Side["Flipper::Side"]
+        class iso__game__components__GoalHole["GoalHole"]
+        class game__components__GolfGameState["GolfGameState"]
+        class iso__game__components__GolfHole["GolfHole"]
+        class game__components__GrassRenderBatch["GrassRenderBatch"]
+        class game__components__GrassRenderInstance["GrassRenderInstance"]
+        class iso__game__components__GrassRenderSpatialIndex["GrassRenderSpatialIndex"]
+        class iso__game__components__Heading["Heading"]
+        class game__components__HoleFlag["HoleFlag"]
+        class game__components__HoleFlag__Kind["HoleFlag::Kind"]
+        class iso__game__components__LightingMood["LightingMood"]
+        class iso__game__components__MeshRenderer["MeshRenderer"]
+        class iso__game__components__MinimapRenderMode["MinimapRenderMode"]
+        class iso__game__components__ParticlePreset["ParticlePreset"]
+        class iso__game__components__PinballBall["PinballBall"]
+        class game__components__RigidBody["RigidBody"]
+        class iso__game__components__RippleEffect["RippleEffect"]
+        class iso__game__components__ShotJudgement["ShotJudgement"]
+        class game__components__ShotState["ShotState"]
+        class game__components__ShotState__Phase["ShotState::Phase"]
+        class iso__game__components__Skybox["Skybox"]
+        class game__components__TerrainCollider["TerrainCollider"]
+        class iso__game__components__TerrainMaterial["TerrainMaterial"]
+        class iso__game__components__TerrainObject["TerrainObject"]
+        class game__components__Transform["Transform"]
+        class iso__game__components__UIBarGauge["UIBarGauge"]
+        class iso__game__components__UIBarGaugeMode["UIBarGaugeMode"]
+        class game__components__UIButton["UIButton"]
+        class iso__game__components__UIImage["UIImage"]
+        class game__components__UIText["UIText"]
+        class iso__game__components__Wall["Wall"]
+        class iso__game__components__WikiGameState["WikiGameState"]
+        class game__components__WikiGlobalData["WikiGlobalData"]
+        class iso__game__components__World3DLabel["World3DLabel"]
+    }
+    namespace game.controllers {
+        class game__controllers__AimPinController["AimPinController"]
+        class game__controllers__AimPinController__UpdateParams["AimPinController::UpdateParams"]
+        class game__controllers__AimPinController__UpdateResult["AimPinController::UpdateResult"]
+        class game__controllers__ArticleTransitionController["ArticleTransitionController"]
+        class game__controllers__ArticleTransitionController__IntroductionShot["ArticleTransitionController::IntroductionShot"]
+        class game__controllers__ArticleTransitionController__IntroductionShotKind["ArticleTransitionController::IntroductionShotKind"]
+        class game__controllers__ArticleTransitionController__Phase["ArticleTransitionController::Phase"]
+        class game__controllers__BallFastForwardIndicator["BallFastForwardIndicator"]
+        class game__controllers__BallFastForwardTimer["BallFastForwardTimer"]
+        class game__controllers__CameraController["CameraController"]
+        class game__controllers__CameraController__Config["CameraController::Config"]
+        class game__controllers__ClubController["ClubController"]
+        class game__controllers__ClubController__CelebrationStage["ClubController::CelebrationStage"]
+        class game__controllers__ClubController__Club["ClubController::Club"]
+        class game__controllers__ClubController__ClubAnimPhase["ClubController::ClubAnimPhase"]
+        class game__controllers__ClubController__GolferTeleportPhase["ClubController::GolferTeleportPhase"]
+        class game__controllers__ClubController__InputParams["ClubController::InputParams"]
+        class game__controllers__ClubController__InputResult["ClubController::InputResult"]
+        class iso__game__controllers__ClubUIData["ClubUIData"]
+        class iso__game__controllers__FastForwardTier["FastForwardTier"]
+        class game__controllers__MinimapController["MinimapController"]
+        class game__controllers__MinimapController__Config["MinimapController::Config"]
+        class game__controllers__MinimapController__FlagFilterToggle["MinimapController::FlagFilterToggle"]
+        class game__controllers__MinimapController__InputActivity["MinimapController::InputActivity"]
+        class game__controllers__MinimapController__InputPermissions["MinimapController::InputPermissions"]
+        class game__controllers__MinimapController__MapHoleIcon["MinimapController::MapHoleIcon"]
+        class game__controllers__ShotController["ShotController"]
+        class game__controllers__ShotController__ShotEvent["ShotController::ShotEvent"]
+        class game__controllers__StartGoalIntroductionPanel["StartGoalIntroductionPanel"]
+        class game__controllers__StartGoalIntroductionPanel__Card["StartGoalIntroductionPanel::Card"]
+        class game__controllers__StartGoalIntroductionPanel__Content["StartGoalIntroductionPanel::Content"]
+        class game__controllers__StartGoalIntroductionPanel__Element["StartGoalIntroductionPanel::Element"]
+        class game__controllers__StartGoalIntroductionPanel__Group["StartGoalIntroductionPanel::Group"]
+        class game__controllers__TerrainCard["TerrainCard"]
+        class game__controllers__TrajectoryPredictor["TrajectoryPredictor"]
+        class game__controllers__TrajectoryPredictor__Params["TrajectoryPredictor::Params"]
+        class iso__game__controllers__TutorialInputPolicy["TutorialInputPolicy"]
+        class game__controllers__TutorialOverlayController["TutorialOverlayController"]
+        class game__controllers__TutorialOverlayController__EventCameraTarget["TutorialOverlayController::EventCameraTarget"]
+        class iso__game__controllers__TutorialPresentationPolicy["TutorialPresentationPolicy"]
+        class iso__game__controllers__TutorialStep["TutorialStep"]
+        class game__controllers__WikiGolfHUD["WikiGolfHUD"]
+    }
+    namespace game.controllers.hud {
+        class game__controllers__hud__AchievementToastPanel["AchievementToastPanel"]
+        class game__controllers__hud__AchievementToastPanel__ToastEntry["AchievementToastPanel::ToastEntry"]
+        class game__controllers__hud__AimDistancePanel["AimDistancePanel"]
+        class game__controllers__hud__AimDistancePanel__Entities["AimDistancePanel::Entities"]
+        class game__controllers__hud__ClubSelectionPanel["ClubSelectionPanel"]
+        class game__controllers__hud__CourseInfoPanel["CourseInfoPanel"]
+        class game__controllers__hud__CourseInfoPanel__Entities["CourseInfoPanel::Entities"]
+        class game__controllers__hud__GameplayControlsPanel["GameplayControlsPanel"]
+        class game__controllers__hud__LiePanel["LiePanel"]
+        class game__controllers__hud__MinimapDecorationPanel["MinimapDecorationPanel"]
+        class game__controllers__hud__ShotGaugePanel["ShotGaugePanel"]
+        class game__controllers__hud__ShotGaugePanel__Entities["ShotGaugePanel::Entities"]
+        class game__controllers__hud__WindPanel["WindPanel"]
+    }
+    namespace game.controllers.minimap_detail {
+        class iso__game__controllers__minimap_detail__FlagKind["FlagKind"]
+        class iso__game__controllers__minimap_detail__MarkerBounds["MarkerBounds"]
+    }
+    namespace game.debug {
+        class iso__game__debug__DebugBallImpulseResult["DebugBallImpulseResult"]
+        class game__debug__DebugBallInspector["DebugBallInspector"]
+        class game__debug__DebugBallPhysicsSnapshot["DebugBallPhysicsSnapshot"]
+        class game__debug__DebugBallPhysicsValues["DebugBallPhysicsValues"]
+        class game__debug__DebugBallTelemetryHistory["DebugBallTelemetryHistory"]
+        class game__debug__DebugBallTelemetryInspector["DebugBallTelemetryInspector"]
+        class game__debug__DebugBallTelemetrySample["DebugBallTelemetrySample"]
+        class iso__game__debug__DebugBallTeleportResult["DebugBallTeleportResult"]
+        class game__debug__DebugBallTrailHistory["DebugBallTrailHistory"]
+        class game__debug__DebugCheckpointInspector["DebugCheckpointInspector"]
+        class game__debug__DebugColliderRenderer["DebugColliderRenderer"]
+        class game__debug__DebugColliderSettings["DebugColliderSettings"]
+        class game__debug__DebugCollisionBreakSettings["DebugCollisionBreakSettings"]
+        class game__debug__DebugCollisionHistory["DebugCollisionHistory"]
+        class game__debug__DebugCollisionRecord["DebugCollisionRecord"]
+        class iso__game__debug__DebugCupInStatus["DebugCupInStatus"]
+        class game__debug__DebugEntityInspector["DebugEntityInspector"]
+        class iso__game__debug__DebugEntitySnapshot["DebugEntitySnapshot"]
+        class game__debug__DebugFreeCamera["DebugFreeCamera"]
+        class iso__game__debug__DebugFreeCameraInput["DebugFreeCameraInput"]
+        class game__debug__DebugFreeCameraPose["DebugFreeCameraPose"]
+        class game__debug__DebugGameplayCheckpoint["DebugGameplayCheckpoint"]
+        class game__debug__DebugGameplaySnapshot["DebugGameplaySnapshot"]
+        class game__debug__DebugGolfStateSnapshot["DebugGolfStateSnapshot"]
+        class game__debug__DebugLine3D["DebugLine3D"]
+        class game__debug__DebugOverlay["DebugOverlay"]
+        class game__debug__DebugProfilerHistory["DebugProfilerHistory"]
+        class game__debug__DebugProfilerInspector["DebugProfilerInspector"]
+        class iso__game__debug__DebugRaycastState["DebugRaycastState"]
+        class iso__game__debug__DebugRenderState["DebugRenderState"]
+        class game__debug__DebugSceneNavigator["DebugSceneNavigator"]
+        class iso__game__debug__DebugSceneTarget["DebugSceneTarget"]
+        class game__debug__DebugShotStateSnapshot["DebugShotStateSnapshot"]
+        class game__debug__DebugSlopeEvaluation["DebugSlopeEvaluation"]
+        class game__debug__DebugSlopeStatus["DebugSlopeStatus"]
+        class game__debug__DebugTerrainMaterialLine["DebugTerrainMaterialLine"]
+        class iso__game__debug__DebugTerrainVisibility["DebugTerrainVisibility"]
+        class iso__game__debug__DebugTimeController["DebugTimeController"]
+        class game__debug__DebugUiLayer["DebugUiLayer"]
+        class iso__game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext["ProjectionContext"]
+        class game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition["CleanSceneTransition"]
+    }
+    namespace game.physics {
+        class iso__game__physics__BallPhysicsParams["BallPhysicsParams"]
+        class iso__game__physics__BallSimState["BallSimState"]
+        class iso__game__physics__CarryResult["CarryResult"]
+        class iso__game__physics__FlatGroundParams["FlatGroundParams"]
+        class iso__game__physics__GolfCupContact["GolfCupContact"]
+        class iso__game__physics__GolfCupContactKind["GolfCupContactKind"]
+        class game__physics__GolfCupShape["GolfCupShape"]
+        class iso__game__physics__WindParams["WindParams"]
+    }
+    namespace game.scenes {
+        class game__scenes__AchievementScene["AchievementScene"]
+        class game__scenes__AsyncPathEvaluator["AsyncPathEvaluator"]
+        class game__scenes__CourseIntroductionData["CourseIntroductionData"]
+        class game__scenes__GameScene["GameScene"]
+        class game__scenes__HolePlacementCandidate["HolePlacementCandidate"]
+        class game__scenes__HolePlacementPlanner["HolePlacementPlanner"]
+        class iso__game__scenes__HoleVisualRules["HoleVisualRules"]
+        class iso__game__scenes__HtmlCourseFieldSize["HtmlCourseFieldSize"]
+        class game__scenes__LoadingScene["LoadingScene"]
+        class game__scenes__LoadingScene__BallState["LoadingScene::BallState"]
+        class game__scenes__PageDataAsyncResult["PageDataAsyncResult"]
+        class iso__game__scenes__PageLinkSelectionResult["PageLinkSelectionResult"]
+        class game__scenes__PageLinkSelector["PageLinkSelector"]
+        class game__scenes__PageLoadResult["PageLoadResult"]
+        class game__scenes__PauseScene["PauseScene"]
+        class game__scenes__PendingHoleThumbnail["PendingHoleThumbnail"]
+        class game__scenes__RankingScene["RankingScene"]
+        class game__scenes__RankingScene__AsyncState["RankingScene::AsyncState"]
+        class game__scenes__RankingScene__LoadData["RankingScene::LoadData"]
+        class game__scenes__RankingScene__View["RankingScene::View"]
+        class game__scenes__ResultData["ResultData"]
+        class game__scenes__ResultScene["ResultScene"]
+        class game__scenes__ResultScene__HanabiShell["ResultScene::HanabiShell"]
+        class game__scenes__ResultScene__HanabiShell__Phase["ResultScene::HanabiShell::Phase"]
+        class game__scenes__ResultScene__HanabiSpark["ResultScene::HanabiSpark"]
+        class game__scenes__ResultScene__RankingUploadState["ResultScene::RankingUploadState"]
+        class game__scenes__ResultScene__RingObject["ResultScene::RingObject"]
+        class game__scenes__ResultScene__UIElement["ResultScene::UIElement"]
+        class game__scenes__SettingsScene["SettingsScene"]
+        class game__scenes__SettingsScene__RowId["SettingsScene::RowId"]
+        class game__scenes__TitleScene["TitleScene"]
+        class game__scenes__TitleScene__MenuEntry["TitleScene::MenuEntry"]
+        class game__scenes__TitleScene__StartConnectionState["TitleScene::StartConnectionState"]
+        class game__scenes__TitleScene__TitleState["TitleScene::TitleState"]
+        class game__scenes__TutorialCourseLayout["TutorialCourseLayout"]
+        class game__scenes__WikiGolfScene["WikiGolfScene"]
+        class game__scenes__WikiGolfScene__CelebrationNext["WikiGolfScene::CelebrationNext"]
+        class game__scenes__WikiGolfScene__ScenePhase["WikiGolfScene::ScenePhase"]
+        class game__scenes__WikiGolfScene__TerrainResultTier["WikiGolfScene::TerrainResultTier"]
+        class game__scenes__WikiGolfScene__TutorialConnectionState["WikiGolfScene::TutorialConnectionState"]
+        class game__scenes__WikiPageDataFetcher["WikiPageDataFetcher"]
+        class game__scenes__WikiPageLoader["WikiPageLoader"]
+        class game__scenes__WikiPageLoader__BuildStep["WikiPageLoader::BuildStep"]
+        class game__scenes__WikiPageLoader__HoleThumbnailState["WikiPageLoader::HoleThumbnailState"]
+        class game__scenes__WikiPageLoader__HoleThumbnailState__Status["WikiPageLoader::HoleThumbnailState::Status"]
+        class game__scenes__WikiPinballScene["WikiPinballScene"]
+        class iso__game__scenes__anonymous_namespace_TutorialCourseLayout_cpp___TutorialLinkPlacement["TutorialLinkPlacement"]
+    }
+    namespace game.systems {
+        class iso__game__systems__AchievementCategory["AchievementCategory"]
+        class iso__game__systems__AchievementDef["AchievementDef"]
+        class iso__game__systems__AchievementEvent["AchievementEvent"]
+        class game__systems__AchievementEventBus["AchievementEventBus"]
+        class iso__game__systems__AchievementEventType["AchievementEventType"]
+        class iso__game__systems__AchievementId["AchievementId"]
+        class game__systems__AchievementManager["AchievementManager"]
+        class game__systems__AchievementManager__RoundSessionState["AchievementManager::RoundSessionState"]
+        class game__systems__AchievementProgress["AchievementProgress"]
+        class iso__game__systems__AchievementStore["AchievementStore"]
+        class game__systems__AudioSystem["AudioSystem"]
+        class game__systems__AudioSystem__ActiveVoice["AudioSystem::ActiveVoice"]
+        class game__systems__BodyInfo["BodyInfo"]
+        class iso__game__systems__ContentFilter["ContentFilter"]
+        class iso__game__systems__CourseFrame["CourseFrame"]
+        class iso__game__systems__DailyChallengeRandom["DailyChallengeRandom"]
+        class game__systems__EnvironmentParticleSystem["EnvironmentParticleSystem"]
+        class iso__game__systems__EnvironmentSoundPreset["EnvironmentSoundPreset"]
+        class game__systems__EnvironmentSoundSystem["EnvironmentSoundSystem"]
+        class game__systems__GameJuiceSystem["GameJuiceSystem"]
+        class game__systems__GameJuiceSystem__EnvironmentParticle["GameJuiceSystem::EnvironmentParticle"]
+        class game__systems__GameJuiceSystem__EnvironmentParticleKind["GameJuiceSystem::EnvironmentParticleKind"]
+        class game__systems__GameJuiceSystem__ImpactParticle["GameJuiceSystem::ImpactParticle"]
+        class game__systems__GameJuiceSystem__ImpactParticleKind["GameJuiceSystem::ImpactParticleKind"]
+        class game__systems__GameJuiceSystem__JudgeType["GameJuiceSystem::JudgeType"]
+        class game__systems__GameJuiceSystem__Ripple["GameJuiceSystem::Ripple"]
+        class game__systems__GameJuiceSystem__SurfaceMark["GameJuiceSystem::SurfaceMark"]
+        class iso__game__systems__GolfCupClipConstants["GolfCupClipConstants"]
+        class iso__game__systems__GrassBudgetLimits["GrassBudgetLimits"]
+        class iso__game__systems__GrassBudgetSample["GrassBudgetSample"]
+        class iso__game__systems__GrassBudgetScales["GrassBudgetScales"]
+        class game__systems__GrassGpuLoadController["GrassGpuLoadController"]
+        class iso__game__systems__GrassGpuLoadTarget["GrassGpuLoadTarget"]
+        class iso__game__systems__GrassNormalSampleRange["GrassNormalSampleRange"]
+        class iso__game__systems__GrassStreamingBounds["GrassStreamingBounds"]
+        class game__systems__HoleInfo["HoleInfo"]
+        class game__systems__HoleSpatialGrid["HoleSpatialGrid"]
+        class iso__game__systems__HtmlRegionKind["HtmlRegionKind"]
+        class game__systems__HtmlTerrainRegion["HtmlTerrainRegion"]
+        class iso__game__systems__ImageObstacleLayout["ImageObstacleLayout"]
+        class iso__game__systems__MapInstanceData["MapInstanceData"]
+        class iso__game__systems__MapRenderInstance["MapRenderInstance"]
+        class iso__game__systems__MapRenderKey["MapRenderKey"]
+        class iso__game__systems__MapRenderKeyHash["MapRenderKeyHash"]
+        class game__systems__MapRenderParams["MapRenderParams"]
+        class game__systems__MapSys["MapSys"]
+        class iso__game__systems__MapVSConst["MapVSConst"]
+        class game__systems__Particle["Particle"]
+        class game__systems__ParticleConfig["ParticleConfig"]
+        class game__systems__ParticleRenderSystem["ParticleRenderSystem"]
+        class game__systems__ParticleRenderSystem__ParticleConstants["ParticleRenderSystem::ParticleConstants"]
+        class iso__game__systems__ParticleVertex["ParticleVertex"]
+        class game__systems__PhysicsPerfStats["PhysicsPerfStats"]
+        class game__systems__PhysicsSpatialCache["PhysicsSpatialCache"]
+        class game__systems__PhysicsUpdateContext["PhysicsUpdateContext"]
+        class game__systems__PlayFabClient["PlayFabClient"]
+        class game__systems__PlayFabClient__Authorization["PlayFabClient::Authorization"]
+        class game__systems__PlayFabLeaderboardEntry["PlayFabLeaderboardEntry"]
+        class game__systems__PlayFabLeaderboardResult["PlayFabLeaderboardResult"]
+        class game__systems__PlayFabProfile["PlayFabProfile"]
+        class game__systems__PlayFabResult["PlayFabResult"]
+        class game__systems__PostProcessConstants["PostProcessConstants"]
+        class game__systems__PostProcessSystem["PostProcessSystem"]
+        class iso__game__systems__RenderFrameStats["RenderFrameStats"]
+        class game__systems__RenderState["RenderState"]
+        class game__systems__ShadowRenderState["ShadowRenderState"]
+        class iso__game__systems__ShortestPathResult["ShortestPathResult"]
+        class iso__game__systems__SkyGlobePlacement["SkyGlobePlacement"]
+        class game__systems__SlopeOverlayConfig["SlopeOverlayConfig"]
+        class game__systems__SlopeVisualizationMeshBuilder["SlopeVisualizationMeshBuilder"]
+        class game__systems__SlopeVisualizationMeshBuilder__BuildResult["SlopeVisualizationMeshBuilder::BuildResult"]
+        class game__systems__SlopeVisualizationMeshBuilder__SampledPoint["SlopeVisualizationMeshBuilder::SampledPoint"]
+        class game__systems__SlopeVisualizationSystem["SlopeVisualizationSystem"]
+        class game__systems__StaticBodySpatialGrid["StaticBodySpatialGrid"]
+        class iso__game__systems__SurfaceFrictionSettings["SurfaceFrictionSettings"]
+        class iso__game__systems__TemporalConstants["TemporalConstants"]
+        class game__systems__TerrainBackdropChunk["TerrainBackdropChunk"]
+        class iso__game__systems__TerrainBackdropSample["TerrainBackdropSample"]
+        class game__systems__TerrainConfig["TerrainConfig"]
+        class game__systems__TerrainData["TerrainData"]
+        class game__systems__TerrainGenerator["TerrainGenerator"]
+        class iso__game__systems__TerrainLayoutRules["TerrainLayoutRules"]
+        class iso__game__systems__TerrainObstacleLayout["TerrainObstacleLayout"]
+        class iso__game__systems__TerrainResolution["TerrainResolution"]
+        class iso__game__systems__TerrainSample["TerrainSample"]
+        class iso__game__systems__TimeOfDay["TimeOfDay"]
+        class game__systems__TimeOfDaySystem["TimeOfDaySystem"]
+        class iso__game__systems__UIBarGaugeRenderSystem["UIBarGaugeRenderSystem"]
+        class game__systems__UIButtonRenderSystem["UIButtonRenderSystem"]
+        class iso__game__systems__UIButtonSystem["UIButtonSystem"]
+        class game__systems__UIImageRenderSystem["UIImageRenderSystem"]
+        class game__systems__UIRenderSystem["UIRenderSystem"]
+        class game__systems__UIRenderSystem__EntityTextState["UIRenderSystem::EntityTextState"]
+        class iso__game__systems__VSConstants["VSConstants"]
+        class game__systems__VoiceCallback["VoiceCallback"]
+        class iso__game__systems__WallLayout["WallLayout"]
+        class iso__game__systems__WikiClient["WikiClient"]
+        class iso__game__systems__WikiImageInfo["WikiImageInfo"]
+        class iso__game__systems__WikiSectionInfo["WikiSectionInfo"]
+        class game__systems__WikiShortestPath["WikiShortestPath"]
+        class iso__game__systems__WikiTargetPage["WikiTargetPage"]
+        class game__systems__WikiTerrainSystem["WikiTerrainSystem"]
+        class game__systems__WikiTerrainSystem__BuildPhase["WikiTerrainSystem::BuildPhase"]
+        class game__systems__WikiTerrainSystem__GrassPatch["WikiTerrainSystem::GrassPatch"]
+        class game__systems__WikiTerrainSystem__SkyGlobe["WikiTerrainSystem::SkyGlobe"]
+        class game__systems__WikiTerrainSystem__SurfaceGrassChunkBuildState["WikiTerrainSystem::SurfaceGrassChunkBuildState"]
+        class game__systems__WikiTerrainSystem__TileMeshCache["WikiTerrainSystem::TileMeshCache"]
+        class iso__game__systems__anonymous_namespace_ShadowRenderSystem_cpp___ShadowConstants["ShadowConstants"]
+        class iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxConstants["SkyboxConstants"]
+        class iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxRenderState["SkyboxRenderState"]
+        class iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___BackdropStyle["BackdropStyle"]
+        class iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___GridPosition["GridPosition"]
+        class iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___MountainBand["MountainBand"]
+        class iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Boundary["Boundary"]
+        class iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ClearanceField["ClearanceField"]
+        class iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Cut["Cut"]
+        class iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___LandformTheme["LandformTheme"]
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___PatternShape["PatternShape"]
+        class iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___RowDensity["RowDensity"]
+        class game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Section["Section"]
+        class iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___SurfacePattern["SurfacePattern"]
+        class iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ThemeSample["ThemeSample"]
+        class iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___ResultFeel["ResultFeel"]
+        class iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___RulerFrame["RulerFrame"]
+        class iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___ShotJudgement["ShotJudgement"]
+    }
+    namespace game.systems.wiki_shortest_path_detail {
+        class iso__game__systems__wiki_shortest_path_detail__BackwardBfsCache["BackwardBfsCache"]
+        class iso__game__systems__wiki_shortest_path_detail__LinkFetchChunkStats["LinkFetchChunkStats"]
+        class iso__game__systems__wiki_shortest_path_detail__LinkFetchStats["LinkFetchStats"]
+        class iso__game__systems__wiki_shortest_path_detail__NodeInfo["NodeInfo"]
+        class iso__game__systems__wiki_shortest_path_detail__ResolvedDistanceCache["ResolvedDistanceCache"]
+    }
+    namespace game.utils {
+        class iso__game__utils__AimPinClubCandidate["AimPinClubCandidate"]
+        class iso__game__utils__AimPinSolution["AimPinSolution"]
+        class iso__game__utils__BlendMode["BlendMode"]
+        class iso__game__utils__CameraFramingAngles["CameraFramingAngles"]
+        class game__utils__CarryDistanceTable["CarryDistanceTable"]
+        class game__utils__CourseIntroductionHole["CourseIntroductionHole"]
+        class iso__game__utils__FadeType["FadeType"]
+        class iso__game__utils__FastForwardTier["FastForwardTier"]
+        class game__utils__FeaturedCourseHoles["FeaturedCourseHoles"]
+        class iso__game__utils__HeightFieldBounds["HeightFieldBounds"]
+        class iso__game__utils__JudgeFeedback["JudgeFeedback"]
+        class game__utils__MapViewSkyboxState["MapViewSkyboxState"]
+        class iso__game__utils__ProceduralFlagOptions["ProceduralFlagOptions"]
+        class iso__game__utils__ProceduralFlagResult["ProceduralFlagResult"]
+        class iso__game__utils__RulerTicks["RulerTicks"]
+        class game__utils__ScreenFade["ScreenFade"]
+        class game__utils__ScreenFade__FadeCB["ScreenFade::FadeCB"]
+        class iso__game__utils__ScreenRay["ScreenRay"]
+        class iso__game__utils__ShotJudgement["ShotJudgement"]
+        class iso__game__utils__StartGoalAdvance["StartGoalAdvance"]
+        class iso__game__utils__StartGoalBodyFit["StartGoalBodyFit"]
+        class iso__game__utils__StartGoalIntroductionTiming["StartGoalIntroductionTiming"]
+        class iso__game__utils__StartTeePinResult["StartTeePinResult"]
+        class iso__game__utils__TerrainWorldBounds["TerrainWorldBounds"]
+        class iso__game__utils__ViewportMapping["ViewportMapping"]
+    }
+    namespace graphics {
+        class iso__graphics__AdapterInfo["AdapterInfo"]
+        class graphics__AnimKeyQuat["AnimKeyQuat"]
+        class graphics__AnimKeyVec3["AnimKeyVec3"]
+        class graphics__AnimationChannel["AnimationChannel"]
+        class graphics__AnimationClip["AnimationClip"]
+        class graphics__Bone["Bone"]
+        class graphics__BrushCache["BrushCache"]
+        class graphics__DlssUpscaler["DlssUpscaler"]
+        class graphics__DlssUpscaler__EvaluateParams["DlssUpscaler::EvaluateParams"]
+        class graphics__DlssUpscaler__Quality["DlssUpscaler::Quality"]
+        class iso__graphics__EmbeddedModelTextures["EmbeddedModelTextures"]
+        class iso__graphics__FbxLoader["FbxLoader"]
+        class graphics__FontManager["FontManager"]
+        class graphics__FontManager__BundledFamilyOverride["FontManager::BundledFamilyOverride"]
+        class graphics__GraphicsDevice["GraphicsDevice"]
+        class graphics__GraphicsDevice__FullscreenConstants["GraphicsDevice::FullscreenConstants"]
+        class graphics__GraphicsDevice__GpuFrameQueries["GraphicsDevice::GpuFrameQueries"]
+        class graphics__GraphicsDevice__GpuFrameTimerQueries["GraphicsDevice::GpuFrameTimerQueries"]
+        class graphics__GraphicsDevice__GpuTimestampQueries["GraphicsDevice::GpuTimestampQueries"]
+        class graphics__GraphicsDevice__TemporalMode["GraphicsDevice::TemporalMode"]
+        class graphics__GraphicsDevice__TemporalShaderConstants["GraphicsDevice::TemporalShaderConstants"]
+        class graphics__HeadingRegion["HeadingRegion"]
+        class graphics__ImageRegion["ImageRegion"]
+        class graphics__LinkFragment["LinkFragment"]
+        class graphics__LinkRegion["LinkRegion"]
+        class graphics__Mesh["Mesh"]
+        class iso__graphics__MeshPrimitives["MeshPrimitives"]
+        class iso__graphics__ObjLoader["ObjLoader"]
+        class graphics__PendingWikiImage["PendingWikiImage"]
+        class graphics__PostProcessParams["PostProcessParams"]
+        class graphics__QualitySettings["QualitySettings"]
+        class graphics__ScopedGpuTimer["ScopedGpuTimer"]
+        class graphics__Shader["Shader"]
+        class graphics__SkeletalModel["SkeletalModel"]
+        class graphics__SkeletalModel__PoseLayer["SkeletalModel::PoseLayer"]
+        class graphics__SkeletonNode["SkeletonNode"]
+        class graphics__SkyboxTextureGenerator["SkyboxTextureGenerator"]
+        class iso__graphics__SkyboxTheme["SkyboxTheme"]
+        class iso__graphics__TextAlign["TextAlign"]
+        class graphics__TextRenderer["TextRenderer"]
+        class graphics__TextRenderer__RasterCacheEntry["TextRenderer::RasterCacheEntry"]
+        class graphics__TextRenderer__RasterCacheKey["TextRenderer::RasterCacheKey"]
+        class graphics__TextRenderer__RasterCacheKeyHash["TextRenderer::RasterCacheKeyHash"]
+        class graphics__TextRenderer__SrvBitmapCacheEntry["TextRenderer::SrvBitmapCacheEntry"]
+        class graphics__TextRenderer__TextLayoutEntry["TextRenderer::TextLayoutEntry"]
+        class graphics__TextRenderer__TextLayoutKey["TextRenderer::TextLayoutKey"]
+        class graphics__TextRenderer__TextLayoutKeyHash["TextRenderer::TextLayoutKeyHash"]
+        class graphics__TextStyle["TextStyle"]
+        class iso__graphics__TextVAlign["TextVAlign"]
+        class graphics__Vertex["Vertex"]
+        class graphics__VertexBoneWeights["VertexBoneWeights"]
+        class graphics__VideoPlayer["VideoPlayer"]
+        class graphics__VideoPlayer__Frame["VideoPlayer::Frame"]
+        class graphics__WikiHtmlRenderState["WikiHtmlRenderState"]
+        class graphics__WikiHtmlRenderState__Font["WikiHtmlRenderState::Font"]
+        class graphics__WikiPlacedImage["WikiPlacedImage"]
+        class graphics__WikiTextSegment["WikiTextSegment"]
+        class graphics__WikiTextureGenerationState["WikiTextureGenerationState"]
+        class graphics__WikiTextureGenerator["WikiTextureGenerator"]
+        class graphics__WikiTextureGenerator__HtmlCacheEntry["WikiTextureGenerator::HtmlCacheEntry"]
+        class graphics__WikiTextureResult["WikiTextureResult"]
+        class graphics__WikiTextureResult__Tile["WikiTextureResult::Tile"]
+        class graphics__anonymous_namespace_ObjLoader_cpp___FastObjParser["FastObjParser"]
+        class graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndex["ObjVertexIndex"]
+        class graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndexHash["ObjVertexIndexHash"]
+        class iso__graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance["MeshInstance"]
+        class iso__graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan["HeadingSpan"]
+        class graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___ImagePlacement["ImagePlacement"]
+    }
+    namespace graphics.html {
+        class graphics__html__CourseHtmlContainer["CourseHtmlContainer"]
+        class graphics__html__Link["Link"]
+        class graphics__html__PreparedArticle["PreparedArticle"]
+        class graphics__html__RasterSize["RasterSize"]
+        class graphics__html__Rect["Rect"]
+        class graphics__html__Region["Region"]
+        class iso__graphics__html__RegionKind["RegionKind"]
+        class graphics__html__anonymous_namespace_CourseHtml_cpp___Serializer["Serializer"]
+    }
+    namespace graphics.skybox_detail {
+        class iso__graphics__skybox_detail__ThemeParams["ThemeParams"]
+    }
+    namespace resources {
+        class resources__ResourceManager["ResourceManager"]
+        class resources__ResourceManager__ModelTextures["ResourceManager::ModelTextures"]
+        class resources__ResourcePool["ResourcePool#lt;T#gt;"]
+        class resources__ResourcePool__Slot["ResourcePool::Slot"]
+    }
+    %% 他モジュール / 外部の参照ノード
+    class IXAudio2VoiceCallback["IXAudio2VoiceCallback"]
+    class litehtml__document_container["litehtml::document_container"]
+    %% 関係
+    ecs__IComponentPool <|-- ecs__ComponentPool
+    core__Scene <|-- game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition
+    core__Scene <|-- game__scenes__AchievementScene
+    core__Scene <|-- game__scenes__GameScene
+    core__Scene <|-- game__scenes__LoadingScene
+    core__Scene <|-- game__scenes__PauseScene
+    core__Scene <|-- game__scenes__RankingScene
+    core__Scene <|-- game__scenes__ResultScene
+    core__Scene <|-- game__scenes__SettingsScene
+    core__Scene <|-- game__scenes__TitleScene
+    core__Scene <|-- game__scenes__WikiGolfScene
+    core__Scene <|-- game__scenes__WikiPinballScene
+    game__systems__PlayFabResult <|-- game__systems__PlayFabLeaderboardResult
+    IXAudio2VoiceCallback <|-- game__systems__VoiceCallback
+    graphics__html__CourseHtmlContainer <|-- graphics__WikiHtmlRenderState
+    litehtml__document_container <|-- graphics__html__CourseHtmlContainer
+    core__DisplaySettings *-- core__DisplaySettingsData
+    core__DisplaySettings o-- graphics__GraphicsDevice
+    core__GameContext o-- core__DisplaySettings
+    core__GameContext o-- core__Input
+    core__GameContext o-- core__SceneManager
+    core__GameContext o-- ecs__World
+    core__GameContext o-- game__systems__AchievementEventBus
+    core__GameContext o-- game__systems__AchievementManager
+    core__GameContext o-- game__systems__AudioSystem
+    core__GameContext o-- game__systems__PostProcessSystem
+    core__GameContext o-- graphics__GraphicsDevice
+    core__GameContext o-- graphics__TextRenderer
+    core__GameContext o-- resources__ResourceManager
+    core__GpuFrameSample *-- core__GpuPipelineStats
+    core__GpuFrameSample *-- core__GpuScopeSample
+    core__Logger *-- core__LogEntry
+    core__Profiler *-- core__Profiler__ActiveScope
+    core__Profiler *-- core__Profiler__FrameData
+    core__Profiler *-- core__Profiler__ProcessMetrics
+    core__Profiler *-- core__Profiler__SceneAggregate
+    core__Profiler *-- core__Profiler__ScopeAggregate
+    core__Profiler *-- core__Profiler__ScopeData
+    core__Profiler *-- core__Profiler__ScopeMetadata
+    core__Profiler *-- core__Profiler__SlowFrame
+    core__Profiler__FrameData *-- core__GpuPipelineStats
+    core__Profiler__FrameData *-- core__GpuScopeSample
+    core__Profiler__FrameData *-- core__Profiler__ProcessMetrics
+    core__Profiler__FrameData *-- core__Profiler__ScopeData
+    core__Profiler__SceneAggregate *-- core__profiler_detail__BoundedStatistics
+    core__Profiler__ScopeAggregate *-- core__profiler_detail__BoundedStatistics
+    core__ProfilerFrameSnapshot *-- core__GpuPipelineStats
+    core__ProfilerFrameSnapshot *-- core__GpuScopeSample
+    core__ProfilerFrameSnapshot *-- core__ProfilerCpuScopeSnapshot
+    core__ProfilerFrameSnapshot *-- core__ProfilerNamedValue
+    core__Scene *-- ecs__EntityOwner
+    core__SceneManager *-- core__Scene
+    ecs__Pipeline *-- ecs__SystemDesc
+    ecs__SystemBuilder o-- ecs__Pipeline
+    ecs__SystemBuilder *-- ecs__SystemDesc
+    ecs__View *-- ecs__ComponentPool
+    ecs__World *-- ecs__IComponentPool
+    game__components__CollisionEvents *-- game__components__CollisionEvent
+    game__components__EnvironmentState o-- game__components__EnvironmentState
+    game__components__GrassRenderBatch *-- game__components__GrassRenderInstance
+    game__components__TerrainCollider o-- game__systems__TerrainData
+    game__components__UIButton *-- graphics__TextStyle
+    game__components__UIText *-- graphics__TextStyle
+    game__components__WikiGlobalData *-- game__WikiLink
+    game__components__WikiGlobalData *-- game__systems__WikiShortestPath
+    game__controllers__AimPinController *-- ecs__EntityOwner
+    game__controllers__AimPinController__UpdateParams o-- game__systems__WikiTerrainSystem
+    game__controllers__ArticleTransitionController *-- ecs__EntityOwner
+    game__controllers__ArticleTransitionController *-- game__controllers__ArticleTransitionController__IntroductionShot
+    game__controllers__ArticleTransitionController o-- game__controllers__MinimapController
+    game__controllers__ArticleTransitionController *-- game__controllers__StartGoalIntroductionPanel
+    game__controllers__ArticleTransitionController *-- game__scenes__PageDataAsyncResult
+    game__controllers__ArticleTransitionController o-- game__scenes__WikiPageLoader
+    game__controllers__ArticleTransitionController *-- graphics__TextStyle
+    game__controllers__CameraController *-- game__controllers__CameraController__Config
+    game__controllers__CameraController__Config o-- game__systems__GameJuiceSystem
+    game__controllers__CameraController__Config o-- game__systems__WikiTerrainSystem
+    game__controllers__ClubController *-- ecs__EntityOwner
+    game__controllers__ClubController *-- game__controllers__ClubController__Club
+    game__controllers__ClubController o-- game__systems__WikiTerrainSystem
+    game__controllers__ClubController *-- graphics__SkeletalModel
+    game__controllers__ClubController *-- graphics__Vertex
+    game__controllers__ClubController__Club *-- game__utils__CarryDistanceTable
+    game__controllers__MinimapController *-- ecs__EntityOwner
+    game__controllers__MinimapController *-- game__controllers__MinimapController__Config
+    game__controllers__MinimapController *-- game__controllers__MinimapController__FlagFilterToggle
+    game__controllers__MinimapController *-- game__controllers__MinimapController__InputActivity
+    game__controllers__MinimapController *-- game__controllers__MinimapController__MapHoleIcon
+    game__controllers__MinimapController *-- game__systems__MapRenderParams
+    game__controllers__MinimapController *-- game__systems__MapSys
+    game__controllers__MinimapController *-- game__utils__MapViewSkyboxState
+    game__controllers__MinimapController__Config o-- game__systems__WikiTerrainSystem
+    game__controllers__StartGoalIntroductionPanel *-- ecs__EntityOwner
+    game__controllers__StartGoalIntroductionPanel *-- game__controllers__StartGoalIntroductionPanel__Card
+    game__controllers__StartGoalIntroductionPanel *-- game__controllers__StartGoalIntroductionPanel__Element
+    game__controllers__TrajectoryPredictor *-- ecs__EntityOwner
+    game__controllers__TrajectoryPredictor__Params o-- game__systems__WikiTerrainSystem
+    game__controllers__TrajectoryPredictor__Params o-- game__utils__CarryDistanceTable
+    game__controllers__TutorialOverlayController *-- ecs__EntityOwner
+    game__controllers__TutorialOverlayController *-- game__controllers__MinimapController__InputActivity
+    game__controllers__TutorialOverlayController *-- game__controllers__TerrainCard
+    game__controllers__TutorialOverlayController *-- game__controllers__TutorialOverlayController__EventCameraTarget
+    game__controllers__WikiGolfHUD *-- game__controllers__hud__ClubSelectionPanel
+    game__controllers__WikiGolfHUD *-- game__controllers__hud__CourseInfoPanel
+    game__controllers__WikiGolfHUD *-- game__controllers__hud__MinimapDecorationPanel
+    game__controllers__WikiGolfHUD *-- game__controllers__hud__ShotGaugePanel
+    game__controllers__WikiGolfHUD *-- game__controllers__hud__WindPanel
+    game__controllers__hud__AchievementToastPanel *-- ecs__EntityOwner
+    game__controllers__hud__AchievementToastPanel *-- game__controllers__hud__AchievementToastPanel__ToastEntry
+    game__controllers__hud__AimDistancePanel *-- ecs__EntityOwner
+    game__controllers__hud__AimDistancePanel *-- game__controllers__hud__AimDistancePanel__Entities
+    game__controllers__hud__ClubSelectionPanel *-- ecs__EntityOwner
+    game__controllers__hud__CourseInfoPanel *-- ecs__EntityOwner
+    game__controllers__hud__CourseInfoPanel *-- game__controllers__hud__CourseInfoPanel__Entities
+    game__controllers__hud__GameplayControlsPanel *-- ecs__EntityOwner
+    game__controllers__hud__LiePanel *-- ecs__EntityOwner
+    game__controllers__hud__MinimapDecorationPanel *-- ecs__EntityOwner
+    game__controllers__hud__ShotGaugePanel *-- ecs__EntityOwner
+    game__controllers__hud__ShotGaugePanel *-- game__controllers__hud__ShotGaugePanel__Entities
+    game__controllers__hud__WindPanel *-- ecs__EntityOwner
+    game__debug__DebugBallInspector *-- game__debug__DebugBallPhysicsValues
+    game__debug__DebugBallTelemetryHistory *-- game__debug__DebugBallTelemetrySample
+    game__debug__DebugBallTelemetryInspector *-- game__debug__DebugBallTelemetryHistory
+    game__debug__DebugCheckpointInspector *-- game__debug__DebugGameplayCheckpoint
+    game__debug__DebugColliderRenderer *-- game__debug__DebugBallTrailHistory
+    game__debug__DebugCollisionHistory *-- game__debug__DebugCollisionRecord
+    game__debug__DebugCollisionRecord *-- game__components__CollisionEvent
+    game__debug__DebugFreeCamera *-- game__debug__DebugFreeCameraPose
+    game__debug__DebugGameplayCheckpoint *-- game__components__GolfGameState
+    game__debug__DebugGameplayCheckpoint *-- game__components__RigidBody
+    game__debug__DebugGameplayCheckpoint *-- game__components__ShotState
+    game__debug__DebugGameplayCheckpoint *-- game__components__Transform
+    game__debug__DebugGameplaySnapshot *-- game__debug__DebugBallPhysicsSnapshot
+    game__debug__DebugGameplaySnapshot *-- game__debug__DebugGolfStateSnapshot
+    game__debug__DebugGameplaySnapshot *-- game__debug__DebugShotStateSnapshot
+    game__debug__DebugOverlay *-- game__debug__DebugBallInspector
+    game__debug__DebugOverlay *-- game__debug__DebugBallTelemetryInspector
+    game__debug__DebugOverlay *-- game__debug__DebugCheckpointInspector
+    game__debug__DebugOverlay *-- game__debug__DebugColliderSettings
+    game__debug__DebugOverlay *-- game__debug__DebugCollisionBreakSettings
+    game__debug__DebugOverlay *-- game__debug__DebugCollisionHistory
+    game__debug__DebugOverlay *-- game__debug__DebugEntityInspector
+    game__debug__DebugOverlay *-- game__debug__DebugFreeCamera
+    game__debug__DebugOverlay *-- game__debug__DebugProfilerInspector
+    game__debug__DebugProfilerHistory *-- core__ProfilerFrameSnapshot
+    game__debug__DebugProfilerInspector *-- game__debug__DebugProfilerHistory
+    game__debug__DebugSlopeStatus *-- game__debug__DebugSlopeEvaluation
+    game__debug__DebugTerrainMaterialLine *-- game__debug__DebugLine3D
+    game__debug__DebugUiLayer *-- game__debug__DebugColliderRenderer
+    game__debug__DebugUiLayer *-- game__debug__DebugOverlay
+    game__debug__DebugUiLayer o-- game__debug__DebugUiLayer
+    game__scenes__AsyncPathEvaluator o-- game__scenes__HolePlacementCandidate
+    game__scenes__AsyncPathEvaluator *-- game__scenes__HolePlacementCandidate
+    game__scenes__CourseIntroductionData *-- game__utils__CourseIntroductionHole
+    game__scenes__LoadingScene *-- game__components__WikiGlobalData
+    game__scenes__LoadingScene *-- game__scenes__LoadingScene__BallState
+    game__scenes__LoadingScene *-- graphics__TextStyle
+    game__scenes__PageDataAsyncResult *-- game__WikiLink
+    game__scenes__PageDataAsyncResult *-- graphics__PendingWikiImage
+    game__scenes__RankingScene o-- game__scenes__RankingScene__AsyncState
+    game__scenes__RankingScene *-- game__scenes__RankingScene__LoadData
+    game__scenes__RankingScene *-- game__systems__PlayFabProfile
+    game__scenes__RankingScene__AsyncState *-- game__scenes__RankingScene__LoadData
+    game__scenes__RankingScene__LoadData *-- game__systems__PlayFabLeaderboardResult
+    game__scenes__RankingScene__LoadData *-- game__systems__PlayFabResult
+    game__scenes__ResultScene *-- game__scenes__ResultData
+    game__scenes__ResultScene *-- game__scenes__ResultScene__HanabiShell
+    game__scenes__ResultScene *-- game__scenes__ResultScene__HanabiSpark
+    game__scenes__ResultScene o-- game__scenes__ResultScene__RankingUploadState
+    game__scenes__ResultScene *-- game__scenes__ResultScene__RingObject
+    game__scenes__ResultScene *-- game__scenes__ResultScene__UIElement
+    game__scenes__TitleScene *-- game__scenes__TitleScene__MenuEntry
+    game__scenes__TitleScene o-- game__scenes__TitleScene__StartConnectionState
+    game__scenes__TitleScene *-- graphics__VideoPlayer
+    game__scenes__WikiGolfScene *-- game__controllers__AimPinController
+    game__scenes__WikiGolfScene *-- game__controllers__ArticleTransitionController
+    game__scenes__WikiGolfScene *-- game__controllers__BallFastForwardIndicator
+    game__scenes__WikiGolfScene *-- game__controllers__BallFastForwardTimer
+    game__scenes__WikiGolfScene *-- game__controllers__CameraController
+    game__scenes__WikiGolfScene *-- game__controllers__ClubController
+    game__scenes__WikiGolfScene *-- game__controllers__MinimapController
+    game__scenes__WikiGolfScene *-- game__controllers__ShotController
+    game__scenes__WikiGolfScene *-- game__controllers__TrajectoryPredictor
+    game__scenes__WikiGolfScene *-- game__controllers__TutorialOverlayController
+    game__scenes__WikiGolfScene *-- game__controllers__WikiGolfHUD
+    game__scenes__WikiGolfScene *-- game__scenes__ResultData
+    game__scenes__WikiGolfScene o-- game__scenes__WikiGolfScene__TutorialConnectionState
+    game__scenes__WikiGolfScene *-- game__scenes__WikiPageLoader
+    game__scenes__WikiGolfScene *-- game__systems__EnvironmentParticleSystem
+    game__scenes__WikiGolfScene *-- game__systems__GameJuiceSystem
+    game__scenes__WikiGolfScene *-- game__systems__ParticleRenderSystem
+    game__scenes__WikiGolfScene *-- game__systems__SlopeVisualizationSystem
+    game__scenes__WikiGolfScene *-- game__systems__TimeOfDaySystem
+    game__scenes__WikiGolfScene *-- game__systems__WikiShortestPath
+    game__scenes__WikiGolfScene *-- game__systems__WikiTerrainSystem
+    game__scenes__WikiGolfScene *-- game__utils__ScreenFade
+    game__scenes__WikiGolfScene *-- graphics__SkyboxTextureGenerator
+    game__scenes__WikiGolfScene *-- graphics__WikiTextureGenerator
+    game__scenes__WikiPageDataFetcher *-- game__WikiLink
+    game__scenes__WikiPageLoader *-- ecs__EntityOwner
+    game__scenes__WikiPageLoader o-- game__controllers__MinimapController
+    game__scenes__WikiPageLoader *-- game__scenes__AsyncPathEvaluator
+    game__scenes__WikiPageLoader *-- game__scenes__CourseIntroductionData
+    game__scenes__WikiPageLoader *-- game__scenes__HolePlacementCandidate
+    game__scenes__WikiPageLoader *-- game__scenes__HolePlacementPlanner
+    game__scenes__WikiPageLoader *-- game__scenes__PageDataAsyncResult
+    game__scenes__WikiPageLoader *-- game__scenes__PageLinkSelector
+    game__scenes__WikiPageLoader *-- game__scenes__PageLoadResult
+    game__scenes__WikiPageLoader *-- game__scenes__TutorialCourseLayout
+    game__scenes__WikiPageLoader *-- game__scenes__WikiPageDataFetcher
+    game__scenes__WikiPageLoader *-- game__scenes__WikiPageLoader__HoleThumbnailState
+    game__scenes__WikiPageLoader o-- game__systems__WikiShortestPath
+    game__scenes__WikiPageLoader o-- game__systems__WikiTerrainSystem
+    game__scenes__WikiPageLoader *-- graphics__LinkRegion
+    game__scenes__WikiPageLoader o-- graphics__SkyboxTextureGenerator
+    game__scenes__WikiPageLoader *-- graphics__WikiTextureGenerationState
+    game__scenes__WikiPageLoader o-- graphics__WikiTextureGenerator
+    game__scenes__WikiPageLoader *-- graphics__WikiTextureResult
+    game__scenes__WikiPageLoader__HoleThumbnailState *-- game__scenes__PendingHoleThumbnail
+    game__systems__AchievementManager o-- core__GameContext
+    game__systems__AchievementManager *-- game__controllers__hud__AchievementToastPanel
+    game__systems__AchievementManager *-- game__systems__AchievementManager__RoundSessionState
+    game__systems__AchievementManager *-- game__systems__AchievementProgress
+    game__systems__AudioSystem *-- game__systems__AudioSystem__ActiveVoice
+    game__systems__AudioSystem *-- game__systems__VoiceCallback
+    game__systems__AudioSystem__ActiveVoice *-- game__systems__VoiceCallback
+    game__systems__BodyInfo o-- game__components__Collider
+    game__systems__BodyInfo o-- game__components__RigidBody
+    game__systems__BodyInfo o-- game__components__Transform
+    game__systems__EnvironmentParticleSystem *-- game__systems__Particle
+    game__systems__EnvironmentParticleSystem *-- game__systems__ParticleConfig
+    game__systems__EnvironmentSoundSystem o-- game__systems__AudioSystem
+    game__systems__GameJuiceSystem *-- ecs__EntityOwner
+    game__systems__GameJuiceSystem *-- game__systems__GameJuiceSystem__EnvironmentParticle
+    game__systems__GameJuiceSystem *-- game__systems__GameJuiceSystem__ImpactParticle
+    game__systems__GameJuiceSystem *-- game__systems__GameJuiceSystem__Ripple
+    game__systems__GameJuiceSystem *-- game__systems__GameJuiceSystem__SurfaceMark
+    game__systems__HoleInfo *-- game__physics__GolfCupShape
+    game__systems__HoleSpatialGrid *-- game__systems__HoleInfo
+    game__systems__PhysicsSpatialCache *-- game__systems__HoleSpatialGrid
+    game__systems__PhysicsSpatialCache *-- game__systems__StaticBodySpatialGrid
+    game__systems__PhysicsSpatialCache o-- game__systems__TerrainData
+    game__systems__PhysicsUpdateContext o-- core__GameContext
+    game__systems__PhysicsUpdateContext o-- game__components__CollisionEvents
+    game__systems__PhysicsUpdateContext o-- game__components__GolfGameState
+    game__systems__PhysicsUpdateContext o-- game__systems__BodyInfo
+    game__systems__PhysicsUpdateContext o-- game__systems__HoleSpatialGrid
+    game__systems__PhysicsUpdateContext o-- game__systems__PhysicsPerfStats
+    game__systems__PhysicsUpdateContext o-- game__systems__StaticBodySpatialGrid
+    game__systems__PhysicsUpdateContext o-- game__systems__TerrainData
+    game__systems__PlayFabClient *-- game__systems__PlayFabProfile
+    game__systems__PlayFabLeaderboardResult *-- game__systems__PlayFabLeaderboardEntry
+    game__systems__PostProcessSystem *-- game__systems__PostProcessConstants
+    game__systems__RenderState *-- game__systems__GrassGpuLoadController
+    game__systems__ShadowRenderState *-- graphics__Shader
+    game__systems__SlopeVisualizationMeshBuilder__BuildResult *-- graphics__Vertex
+    game__systems__SlopeVisualizationSystem *-- ecs__EntityOwner
+    game__systems__SlopeVisualizationSystem *-- game__systems__SlopeOverlayConfig
+    game__systems__TerrainBackdropChunk *-- graphics__Vertex
+    game__systems__TerrainConfig *-- game__systems__HtmlTerrainRegion
+    game__systems__TerrainData *-- game__systems__TerrainConfig
+    game__systems__TerrainData o-- game__systems__TerrainData
+    game__systems__TerrainData *-- graphics__Mesh
+    game__systems__TerrainData *-- graphics__Vertex
+    game__systems__UIButtonRenderSystem o-- graphics__TextRenderer
+    game__systems__UIImageRenderSystem o-- graphics__TextRenderer
+    game__systems__UIRenderSystem *-- game__systems__UIRenderSystem__EntityTextState
+    game__systems__UIRenderSystem o-- graphics__TextRenderer
+    game__systems__UIRenderSystem__EntityTextState *-- graphics__TextStyle
+    game__systems__WikiTerrainSystem *-- game__systems__TerrainBackdropChunk
+    game__systems__WikiTerrainSystem o-- game__systems__TerrainData
+    game__systems__WikiTerrainSystem *-- game__systems__TerrainData
+    game__systems__WikiTerrainSystem *-- game__systems__WikiTerrainSystem__GrassPatch
+    game__systems__WikiTerrainSystem *-- game__systems__WikiTerrainSystem__SkyGlobe
+    game__systems__WikiTerrainSystem *-- game__systems__WikiTerrainSystem__SurfaceGrassChunkBuildState
+    game__systems__WikiTerrainSystem *-- game__systems__WikiTerrainSystem__TileMeshCache
+    game__systems__WikiTerrainSystem *-- graphics__LinkRegion
+    game__systems__WikiTerrainSystem *-- graphics__WikiTextureResult__Tile
+    game__systems__WikiTerrainSystem__TileMeshCache *-- graphics__Vertex
+    game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Section *-- game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___PatternShape
+    game__utils__FeaturedCourseHoles *-- game__utils__CourseIntroductionHole
+    graphics__AnimationChannel *-- graphics__AnimKeyQuat
+    graphics__AnimationChannel *-- graphics__AnimKeyVec3
+    graphics__AnimationClip *-- graphics__AnimationChannel
+    graphics__GraphicsDevice *-- core__GpuFrameSample
+    graphics__GraphicsDevice *-- graphics__DlssUpscaler
+    graphics__GraphicsDevice o-- graphics__GraphicsDevice__GpuFrameQueries
+    graphics__GraphicsDevice *-- graphics__GraphicsDevice__GpuFrameQueries
+    graphics__GraphicsDevice o-- graphics__GraphicsDevice__GpuFrameTimerQueries
+    graphics__GraphicsDevice *-- graphics__GraphicsDevice__GpuFrameTimerQueries
+    graphics__GraphicsDevice *-- graphics__PostProcessParams
+    graphics__GraphicsDevice *-- graphics__QualitySettings
+    graphics__GraphicsDevice *-- graphics__Shader
+    graphics__GraphicsDevice__GpuFrameQueries *-- graphics__GraphicsDevice__GpuTimestampQueries
+    graphics__LinkRegion *-- graphics__LinkFragment
+    graphics__ScopedGpuTimer o-- graphics__GraphicsDevice
+    graphics__SkeletalModel *-- graphics__AnimationClip
+    graphics__SkeletalModel *-- graphics__Bone
+    graphics__SkeletalModel *-- graphics__SkeletonNode
+    graphics__SkeletalModel *-- graphics__Vertex
+    graphics__SkeletalModel *-- graphics__VertexBoneWeights
+    graphics__SkeletalModel__PoseLayer o-- graphics__AnimationClip
+    graphics__TextRenderer *-- graphics__BrushCache
+    graphics__TextRenderer *-- graphics__FontManager
+    graphics__TextRenderer *-- graphics__TextRenderer__RasterCacheEntry
+    graphics__TextRenderer *-- graphics__TextRenderer__RasterCacheKey
+    graphics__TextRenderer *-- graphics__TextRenderer__RasterCacheKeyHash
+    graphics__TextRenderer *-- graphics__TextRenderer__SrvBitmapCacheEntry
+    graphics__TextRenderer *-- graphics__TextRenderer__TextLayoutEntry
+    graphics__TextRenderer *-- graphics__TextRenderer__TextLayoutKey
+    graphics__TextRenderer *-- graphics__TextRenderer__TextLayoutKeyHash
+    graphics__TextRenderer__RasterCacheKey *-- graphics__TextStyle
+    graphics__VideoPlayer *-- graphics__VideoPlayer__Frame
+    graphics__WikiHtmlRenderState *-- graphics__WikiHtmlRenderState__Font
+    graphics__WikiHtmlRenderState *-- graphics__html__RasterSize
+    graphics__WikiTextureGenerationState *-- graphics__PendingWikiImage
+    graphics__WikiTextureGenerationState o-- graphics__WikiHtmlRenderState
+    graphics__WikiTextureGenerationState *-- graphics__WikiPlacedImage
+    graphics__WikiTextureGenerationState *-- graphics__WikiTextSegment
+    graphics__WikiTextureGenerationState *-- graphics__WikiTextureResult
+    graphics__WikiTextureGenerator *-- graphics__WikiTextureGenerator__HtmlCacheEntry
+    graphics__WikiTextureGenerator__HtmlCacheEntry *-- graphics__WikiTextureResult
+    graphics__WikiTextureResult *-- graphics__HeadingRegion
+    graphics__WikiTextureResult *-- graphics__ImageRegion
+    graphics__WikiTextureResult *-- graphics__LinkRegion
+    graphics__WikiTextureResult *-- graphics__WikiTextureResult__Tile
+    graphics__anonymous_namespace_ObjLoader_cpp___FastObjParser *-- graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndex
+    graphics__anonymous_namespace_ObjLoader_cpp___FastObjParser *-- graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndexHash
+    graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___ImagePlacement o-- graphics__PendingWikiImage
+    graphics__html__CourseHtmlContainer *-- graphics__html__Link
+    graphics__html__CourseHtmlContainer *-- graphics__html__Region
+    graphics__html__Link *-- graphics__html__Rect
+    graphics__html__Region *-- graphics__html__Rect
+    graphics__html__anonymous_namespace_CourseHtml_cpp___Serializer *-- graphics__html__PreparedArticle
+    resources__ResourceManager *-- audio__AudioClip
+    resources__ResourceManager o-- graphics__GraphicsDevice
+    resources__ResourceManager *-- graphics__Mesh
+    resources__ResourceManager *-- graphics__Shader
+    resources__ResourceManager *-- resources__ResourcePool
+    resources__ResourcePool *-- resources__ResourcePool__Slot
+    core__SceneManager .. core__SceneManager__Op
+    game__components__Flipper .. game__components__Flipper__Side
+    game__components__HoleFlag .. game__components__HoleFlag__Kind
+    game__components__ShotState .. game__components__ShotState__Phase
+    game__controllers__AimPinController .. game__controllers__AimPinController__UpdateParams
+    game__controllers__AimPinController .. game__controllers__AimPinController__UpdateResult
+    game__controllers__ArticleTransitionController .. game__controllers__ArticleTransitionController__IntroductionShotKind
+    game__controllers__ArticleTransitionController .. game__controllers__ArticleTransitionController__Phase
+    game__controllers__ClubController .. game__controllers__ClubController__CelebrationStage
+    game__controllers__ClubController .. game__controllers__ClubController__ClubAnimPhase
+    game__controllers__ClubController .. game__controllers__ClubController__GolferTeleportPhase
+    game__controllers__ClubController .. game__controllers__ClubController__InputParams
+    game__controllers__ClubController .. game__controllers__ClubController__InputResult
+    game__controllers__MinimapController .. game__controllers__MinimapController__InputPermissions
+    game__controllers__ShotController .. game__controllers__ShotController__ShotEvent
+    game__controllers__StartGoalIntroductionPanel .. game__controllers__StartGoalIntroductionPanel__Content
+    game__controllers__StartGoalIntroductionPanel .. game__controllers__StartGoalIntroductionPanel__Group
+    game__controllers__TrajectoryPredictor .. game__controllers__TrajectoryPredictor__Params
+    game__scenes__RankingScene .. game__scenes__RankingScene__View
+    game__scenes__ResultScene__HanabiShell .. game__scenes__ResultScene__HanabiShell__Phase
+    game__scenes__SettingsScene .. game__scenes__SettingsScene__RowId
+    game__scenes__TitleScene .. game__scenes__TitleScene__TitleState
+    game__scenes__WikiGolfScene .. game__scenes__WikiGolfScene__CelebrationNext
+    game__scenes__WikiGolfScene .. game__scenes__WikiGolfScene__ScenePhase
+    game__scenes__WikiGolfScene .. game__scenes__WikiGolfScene__TerrainResultTier
+    game__scenes__WikiPageLoader .. game__scenes__WikiPageLoader__BuildStep
+    game__scenes__WikiPageLoader__HoleThumbnailState .. game__scenes__WikiPageLoader__HoleThumbnailState__Status
+    game__systems__GameJuiceSystem .. game__systems__GameJuiceSystem__EnvironmentParticleKind
+    game__systems__GameJuiceSystem .. game__systems__GameJuiceSystem__ImpactParticleKind
+    game__systems__GameJuiceSystem .. game__systems__GameJuiceSystem__JudgeType
+    game__systems__ParticleRenderSystem .. game__systems__ParticleRenderSystem__ParticleConstants
+    game__systems__PlayFabClient .. game__systems__PlayFabClient__Authorization
+    game__systems__SlopeVisualizationMeshBuilder .. game__systems__SlopeVisualizationMeshBuilder__BuildResult
+    game__systems__SlopeVisualizationMeshBuilder .. game__systems__SlopeVisualizationMeshBuilder__SampledPoint
+    game__systems__WikiTerrainSystem .. game__systems__WikiTerrainSystem__BuildPhase
+    game__utils__ScreenFade .. game__utils__ScreenFade__FadeCB
+    graphics__DlssUpscaler .. graphics__DlssUpscaler__EvaluateParams
+    graphics__DlssUpscaler .. graphics__DlssUpscaler__Quality
+    graphics__FontManager .. graphics__FontManager__BundledFamilyOverride
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__FullscreenConstants
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__GpuTimestampQueries
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__TemporalMode
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__TemporalShaderConstants
+    graphics__SkeletalModel .. graphics__SkeletalModel__PoseLayer
+    resources__ResourceManager .. resources__ResourceManager__ModelTextures
+    ecs__World ..> ecs__ComponentPool : 生成
+    game__debug__DebugSceneNavigator ..> game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition : 生成
+    game__scenes__LoadingScene ..> game__systems__WikiShortestPath : 生成
+    game__scenes__PauseScene ..> game__scenes__TitleScene : 生成
+    game__scenes__ResultScene ..> game__scenes__LoadingScene : 生成
+    game__scenes__ResultScene ..> game__scenes__TitleScene : 生成
+    game__scenes__ResultScene ..> game__scenes__WikiGolfScene : 生成
+    game__scenes__TitleScene ..> game__scenes__AchievementScene : 生成
+    game__scenes__TitleScene ..> game__scenes__LoadingScene : 生成
+    game__scenes__TitleScene ..> game__scenes__RankingScene : 生成
+    game__scenes__TitleScene ..> game__scenes__ResultScene : 生成
+    game__scenes__TitleScene ..> game__scenes__SettingsScene : 生成
+    game__scenes__TitleScene ..> game__scenes__WikiGolfScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__LoadingScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__PauseScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__ResultScene : 生成
+    game__scenes__WikiGolfScene ..> game__scenes__TitleScene : 生成
+    game__systems__TerrainGenerator ..> game__systems__TerrainData : 生成
+    graphics__WikiTextureGenerator ..> graphics__WikiHtmlRenderState : 生成
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__core__GraphicsPresetSettings .. iso__core__ResourceHandle
+    iso__core__AntiAliasingFlags .. iso__core__SectionTimer
+    iso__core__AntiAliasingMode .. iso__core__DlssQuality
+    iso__core__GraphicsPreset .. iso__core__ScopedTimer
+    iso__core__ResourceHandle .. iso__core__WindowMode
+    iso__core__SectionTimer .. iso__core__FramePacer
+    iso__core__DlssQuality .. iso__core__LogLevel
+    iso__ecs__ISystem .. iso__ecs__Phase
+    iso__game__components__GrassRenderSpatialIndex .. iso__game__components__TerrainObject
+    iso__game__components__MinimapRenderMode .. iso__game__components__WikiGameState
+    iso__game__components__TerrainMaterial .. iso__game__components__ColliderType
+    iso__game__components__UIBarGaugeMode .. iso__game__components__RippleEffect
+    iso__game__components__ParticlePreset .. iso__game__components__MeshRenderer
+    iso__game__components__ShotJudgement .. iso__game__components__LightingMood
+    iso__game__components__TerrainObject .. iso__game__components__World3DLabel
+    iso__game__components__WikiGameState .. iso__game__components__PinballBall
+    iso__game__components__ColliderType .. iso__game__components__AimPinState
+    iso__game__components__RippleEffect .. iso__game__components__ButtonState
+    iso__game__components__MeshRenderer .. iso__game__components__UIBarGauge
+    iso__game__components__LightingMood .. iso__game__components__Billboard
+    iso__game__components__World3DLabel .. iso__game__components__BlendMode
+    iso__game__components__PinballBall .. iso__game__components__GolfHole
+    iso__game__components__AimPinState .. iso__game__components__GoalHole
+    iso__game__components__ButtonState .. iso__game__components__Camera
+    iso__game__components__UIBarGauge .. iso__game__components__Skybox
+    iso__game__components__Billboard .. iso__game__components__UIImage
+    iso__game__components__BlendMode .. iso__game__components__Heading
+    iso__game__components__GolfHole .. iso__game__components__Wall
+    iso__game__controllers__TutorialPresentationPolicy .. iso__game__controllers__TutorialStep
+    iso__game__controllers__TutorialInputPolicy .. iso__game__controllers__ClubUIData
+    iso__game__controllers__minimap_detail__MarkerBounds .. iso__game__controllers__minimap_detail__FlagKind
+    iso__game__debug__DebugBallTeleportResult .. iso__game__debug__DebugTimeController
+    iso__game__debug__DebugTerrainVisibility .. iso__game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext
+    iso__game__debug__DebugBallImpulseResult .. iso__game__debug__DebugRaycastState
+    iso__game__debug__DebugFreeCameraInput .. iso__game__debug__DebugCupInStatus
+    iso__game__debug__DebugEntitySnapshot .. iso__game__debug__DebugRenderState
+    iso__game__debug__DebugTimeController .. iso__game__debug__DebugSceneTarget
+    iso__game__physics__GolfCupContactKind .. iso__game__physics__GolfCupContact
+    iso__game__physics__BallPhysicsParams .. iso__game__physics__BallSimState
+    iso__game__physics__FlatGroundParams .. iso__game__physics__CarryResult
+    iso__game__physics__GolfCupContact .. iso__game__physics__WindParams
+    iso__game__scenes__PageLinkSelectionResult .. iso__game__scenes__HoleVisualRules
+    iso__game__systems__SurfaceFrictionSettings .. iso__game__systems__AchievementCategory
+    iso__game__systems__GrassNormalSampleRange .. iso__game__systems__ImageObstacleLayout
+    iso__game__systems__UIBarGaugeRenderSystem .. iso__game__systems__GrassGpuLoadTarget
+    iso__game__systems__EnvironmentSoundPreset .. iso__game__systems__ShortestPathResult
+    iso__game__systems__TerrainBackdropSample .. iso__game__systems__TerrainLayoutRules
+    iso__game__systems__TerrainObstacleLayout .. iso__game__systems__TemporalConstants
+    iso__game__systems__GrassStreamingBounds .. iso__game__systems__GrassBudgetLimits
+    iso__game__systems__AchievementEventType .. iso__game__systems__MapRenderInstance
+    iso__game__systems__DailyChallengeRandom .. iso__game__systems__TerrainResolution
+    iso__game__systems__GolfCupClipConstants .. iso__game__systems__GrassBudgetSample
+    iso__game__systems__AchievementCategory .. iso__game__systems__SkyGlobePlacement
+    iso__game__systems__ImageObstacleLayout .. iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxRenderState
+    iso__game__systems__GrassGpuLoadTarget .. iso__game__systems__GrassBudgetScales
+    iso__game__systems__ShortestPathResult .. iso__game__systems__AchievementStore
+    iso__game__systems__TerrainLayoutRules .. iso__game__systems__MapRenderKeyHash
+    iso__game__systems__TemporalConstants .. iso__game__systems__RenderFrameStats
+    iso__game__systems__GrassBudgetLimits .. iso__game__systems__AchievementEvent
+    iso__game__systems__MapRenderInstance .. iso__game__systems__anonymous_namespace_ShadowRenderSystem_cpp___ShadowConstants
+    iso__game__systems__TerrainResolution .. iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxConstants
+    iso__game__systems__GrassBudgetSample .. iso__game__systems__WikiSectionInfo
+    iso__game__systems__SkyGlobePlacement .. iso__game__systems__MapInstanceData
+    iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxRenderState .. iso__game__systems__HtmlRegionKind
+    iso__game__systems__GrassBudgetScales .. iso__game__systems__UIButtonSystem
+    iso__game__systems__AchievementStore .. iso__game__systems__WikiTargetPage
+    iso__game__systems__MapRenderKeyHash .. iso__game__systems__ParticleVertex
+    iso__game__systems__RenderFrameStats .. iso__game__systems__AchievementDef
+    iso__game__systems__AchievementEvent .. iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ClearanceField
+    iso__game__systems__anonymous_namespace_ShadowRenderSystem_cpp___ShadowConstants .. iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___SurfacePattern
+    iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxConstants .. iso__game__systems__AchievementId
+    iso__game__systems__WikiSectionInfo .. iso__game__systems__ContentFilter
+    iso__game__systems__MapInstanceData .. iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___LandformTheme
+    iso__game__systems__HtmlRegionKind .. iso__game__systems__WikiImageInfo
+    iso__game__systems__UIButtonSystem .. iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___BackdropStyle
+    iso__game__systems__WikiTargetPage .. iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___ShotJudgement
+    iso__game__systems__ParticleVertex .. iso__game__systems__TerrainSample
+    iso__game__systems__AchievementDef .. iso__game__systems__MapRenderKey
+    iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ClearanceField .. iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___MountainBand
+    iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___SurfacePattern .. iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___GridPosition
+    iso__game__systems__AchievementId .. iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ThemeSample
+    iso__game__systems__ContentFilter .. iso__game__systems__CourseFrame
+    iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___LandformTheme .. iso__game__systems__VSConstants
+    iso__game__systems__WikiImageInfo .. iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___ResultFeel
+    iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___BackdropStyle .. iso__game__systems__WikiClient
+    iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___ShotJudgement .. iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___RulerFrame
+    iso__game__systems__TerrainSample .. iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___RowDensity
+    iso__game__systems__MapRenderKey .. iso__game__systems__MapVSConst
+    iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___MountainBand .. iso__game__systems__WallLayout
+    iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___GridPosition .. iso__game__systems__TimeOfDay
+    iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ThemeSample .. iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Boundary
+    iso__game__systems__CourseFrame .. iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Cut
+    iso__game__systems__wiki_shortest_path_detail__ResolvedDistanceCache .. iso__game__systems__wiki_shortest_path_detail__LinkFetchStats
+    iso__game__systems__wiki_shortest_path_detail__LinkFetchChunkStats .. iso__game__systems__wiki_shortest_path_detail__NodeInfo
+    iso__game__utils__StartGoalIntroductionTiming .. iso__game__utils__HeightFieldBounds
+    iso__game__utils__ProceduralFlagOptions .. iso__game__utils__StartTeePinResult
+    iso__game__utils__ProceduralFlagResult .. iso__game__utils__StartGoalBodyFit
+    iso__game__utils__CameraFramingAngles .. iso__game__utils__StartGoalAdvance
+    iso__game__utils__AimPinClubCandidate .. iso__game__utils__FastForwardTier
+    iso__game__utils__TerrainWorldBounds .. iso__game__utils__ViewportMapping
+    iso__game__utils__HeightFieldBounds .. iso__game__utils__AimPinSolution
+    iso__game__utils__StartTeePinResult .. iso__game__utils__JudgeFeedback
+    iso__game__utils__StartGoalBodyFit .. iso__game__utils__ShotJudgement
+    iso__game__utils__StartGoalAdvance .. iso__game__utils__RulerTicks
+    iso__game__utils__FastForwardTier .. iso__game__utils__BlendMode
+    iso__game__utils__ViewportMapping .. iso__game__utils__ScreenRay
+    iso__game__utils__AimPinSolution .. iso__game__utils__FadeType
+    iso__graphics__EmbeddedModelTextures .. iso__graphics__AdapterInfo
+    iso__graphics__MeshPrimitives .. iso__graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan
+    iso__graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance .. iso__graphics__TextVAlign
+    iso__graphics__SkyboxTheme .. iso__graphics__TextAlign
+    iso__graphics__AdapterInfo .. iso__graphics__FbxLoader
+    iso__graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan .. iso__graphics__ObjLoader
+    %% 配色
+    cssClass "iso__core__AntiAliasingFlags,iso__core__AntiAliasingMode,core__DisplaySettings,core__DisplaySettingsData,iso__core__DlssQuality,iso__core__FramePacer,core__GameContext,core__GpuFrameSample,core__GpuPipelineStats,core__GpuScopeSample,iso__core__GraphicsPreset,iso__core__GraphicsPresetSettings,core__Input,core__LogEntry,iso__core__LogLevel,core__Logger,core__Profiler,core__Profiler__ActiveScope,core__Profiler__FrameData,core__Profiler__ProcessMetrics,core__Profiler__SceneAggregate,core__Profiler__ScopeAggregate,core__Profiler__ScopeData,core__Profiler__ScopeMetadata,core__Profiler__SlowFrame,core__ProfilerCpuScopeSnapshot,core__ProfilerFrameSnapshot,core__ProfilerNamedValue,iso__core__ResourceHandle,core__Scene,core__SceneManager,core__SceneManager__Op,iso__core__ScopedTimer,iso__core__SectionTimer,iso__core__WindowMode,core__profiler_detail__BoundedStatistics,iso__core__profiler_detail__ScopeAggregate" core
+    cssClass "ecs__ComponentPool,ecs__EntityOwner,ecs__IComponentPool,iso__ecs__ISystem,iso__ecs__Phase,ecs__Pipeline,ecs__SystemBuilder,ecs__SystemDesc,ecs__View,ecs__World,iso__ecs__detail__ComponentTypeIdGenerator" ecs
+    cssClass "audio__AudioClip,resources__ResourceManager,resources__ResourceManager__ModelTextures,resources__ResourcePool,resources__ResourcePool__Slot" audio_resources
+    cssClass "iso__graphics__AdapterInfo,graphics__AnimKeyQuat,graphics__AnimKeyVec3,graphics__AnimationChannel,graphics__AnimationClip,graphics__Bone,graphics__BrushCache,graphics__DlssUpscaler,graphics__DlssUpscaler__EvaluateParams,graphics__DlssUpscaler__Quality,iso__graphics__EmbeddedModelTextures,iso__graphics__FbxLoader,graphics__FontManager,graphics__FontManager__BundledFamilyOverride,graphics__GraphicsDevice,graphics__GraphicsDevice__FullscreenConstants,graphics__GraphicsDevice__GpuFrameQueries,graphics__GraphicsDevice__GpuFrameTimerQueries,graphics__GraphicsDevice__GpuTimestampQueries,graphics__GraphicsDevice__TemporalMode,graphics__GraphicsDevice__TemporalShaderConstants,graphics__HeadingRegion,graphics__ImageRegion,graphics__LinkFragment,graphics__LinkRegion,graphics__Mesh,iso__graphics__MeshPrimitives,iso__graphics__ObjLoader,graphics__PendingWikiImage,graphics__PostProcessParams,graphics__QualitySettings,graphics__ScopedGpuTimer,graphics__Shader,graphics__SkeletalModel,graphics__SkeletalModel__PoseLayer,graphics__SkeletonNode,graphics__SkyboxTextureGenerator,iso__graphics__SkyboxTheme,iso__graphics__TextAlign,graphics__TextRenderer,graphics__TextRenderer__RasterCacheEntry,graphics__TextRenderer__RasterCacheKey,graphics__TextRenderer__RasterCacheKeyHash,graphics__TextRenderer__SrvBitmapCacheEntry,graphics__TextRenderer__TextLayoutEntry,graphics__TextRenderer__TextLayoutKey,graphics__TextRenderer__TextLayoutKeyHash,graphics__TextStyle,iso__graphics__TextVAlign,graphics__Vertex,graphics__VertexBoneWeights,graphics__VideoPlayer,graphics__VideoPlayer__Frame,graphics__WikiHtmlRenderState,graphics__WikiHtmlRenderState__Font,graphics__WikiPlacedImage,graphics__WikiTextSegment,graphics__WikiTextureGenerationState,graphics__WikiTextureGenerator,graphics__WikiTextureGenerator__HtmlCacheEntry,graphics__WikiTextureResult,graphics__WikiTextureResult__Tile,graphics__anonymous_namespace_ObjLoader_cpp___FastObjParser,graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndex,graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndexHash,iso__graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance,iso__graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan,graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___ImagePlacement,graphics__html__CourseHtmlContainer,graphics__html__Link,graphics__html__PreparedArticle,graphics__html__RasterSize,graphics__html__Rect,graphics__html__Region,iso__graphics__html__RegionKind,graphics__html__anonymous_namespace_CourseHtml_cpp___Serializer,iso__graphics__skybox_detail__ThemeParams" graphics
+    cssClass "iso__game__components__AimPinState,iso__game__components__Billboard,iso__game__components__BlendMode,iso__game__components__ButtonState,iso__game__components__Camera,game__components__Collider,iso__game__components__ColliderType,game__components__CollisionEvent,game__components__CollisionEvents,game__components__EnvironmentState,game__components__Flipper,game__components__Flipper__Side,iso__game__components__GoalHole,game__components__GolfGameState,iso__game__components__GolfHole,game__components__GrassRenderBatch,game__components__GrassRenderInstance,iso__game__components__GrassRenderSpatialIndex,iso__game__components__Heading,game__components__HoleFlag,game__components__HoleFlag__Kind,iso__game__components__LightingMood,iso__game__components__MeshRenderer,iso__game__components__MinimapRenderMode,iso__game__components__ParticlePreset,iso__game__components__PinballBall,game__components__RigidBody,iso__game__components__RippleEffect,iso__game__components__ShotJudgement,game__components__ShotState,game__components__ShotState__Phase,iso__game__components__Skybox,game__components__TerrainCollider,iso__game__components__TerrainMaterial,iso__game__components__TerrainObject,game__components__Transform,iso__game__components__UIBarGauge,iso__game__components__UIBarGaugeMode,game__components__UIButton,iso__game__components__UIImage,game__components__UIText,iso__game__components__Wall,iso__game__components__WikiGameState,game__components__WikiGlobalData,iso__game__components__World3DLabel" game_components
+    cssClass "game__controllers__AimPinController,game__controllers__AimPinController__UpdateParams,game__controllers__AimPinController__UpdateResult,game__controllers__ArticleTransitionController,game__controllers__ArticleTransitionController__IntroductionShot,game__controllers__ArticleTransitionController__IntroductionShotKind,game__controllers__ArticleTransitionController__Phase,game__controllers__BallFastForwardIndicator,game__controllers__BallFastForwardTimer,game__controllers__CameraController,game__controllers__CameraController__Config,game__controllers__ClubController,game__controllers__ClubController__CelebrationStage,game__controllers__ClubController__Club,game__controllers__ClubController__ClubAnimPhase,game__controllers__ClubController__GolferTeleportPhase,game__controllers__ClubController__InputParams,game__controllers__ClubController__InputResult,iso__game__controllers__ClubUIData,iso__game__controllers__FastForwardTier,game__controllers__MinimapController,game__controllers__MinimapController__Config,game__controllers__MinimapController__FlagFilterToggle,game__controllers__MinimapController__InputActivity,game__controllers__MinimapController__InputPermissions,game__controllers__MinimapController__MapHoleIcon,game__controllers__ShotController,game__controllers__ShotController__ShotEvent,game__controllers__StartGoalIntroductionPanel,game__controllers__StartGoalIntroductionPanel__Card,game__controllers__StartGoalIntroductionPanel__Content,game__controllers__StartGoalIntroductionPanel__Element,game__controllers__StartGoalIntroductionPanel__Group,game__controllers__TerrainCard,game__controllers__TrajectoryPredictor,game__controllers__TrajectoryPredictor__Params,iso__game__controllers__TutorialInputPolicy,game__controllers__TutorialOverlayController,game__controllers__TutorialOverlayController__EventCameraTarget,iso__game__controllers__TutorialPresentationPolicy,iso__game__controllers__TutorialStep,game__controllers__WikiGolfHUD,game__controllers__hud__AchievementToastPanel,game__controllers__hud__AchievementToastPanel__ToastEntry,game__controllers__hud__AimDistancePanel,game__controllers__hud__AimDistancePanel__Entities,game__controllers__hud__ClubSelectionPanel,game__controllers__hud__CourseInfoPanel,game__controllers__hud__CourseInfoPanel__Entities,game__controllers__hud__GameplayControlsPanel,game__controllers__hud__LiePanel,game__controllers__hud__MinimapDecorationPanel,game__controllers__hud__ShotGaugePanel,game__controllers__hud__ShotGaugePanel__Entities,game__controllers__hud__WindPanel,iso__game__controllers__minimap_detail__FlagKind,iso__game__controllers__minimap_detail__MarkerBounds" game_controllers
+    cssClass "iso__game__debug__DebugBallImpulseResult,game__debug__DebugBallInspector,game__debug__DebugBallPhysicsSnapshot,game__debug__DebugBallPhysicsValues,game__debug__DebugBallTelemetryHistory,game__debug__DebugBallTelemetryInspector,game__debug__DebugBallTelemetrySample,iso__game__debug__DebugBallTeleportResult,game__debug__DebugBallTrailHistory,game__debug__DebugCheckpointInspector,game__debug__DebugColliderRenderer,game__debug__DebugColliderSettings,game__debug__DebugCollisionBreakSettings,game__debug__DebugCollisionHistory,game__debug__DebugCollisionRecord,iso__game__debug__DebugCupInStatus,game__debug__DebugEntityInspector,iso__game__debug__DebugEntitySnapshot,game__debug__DebugFreeCamera,iso__game__debug__DebugFreeCameraInput,game__debug__DebugFreeCameraPose,game__debug__DebugGameplayCheckpoint,game__debug__DebugGameplaySnapshot,game__debug__DebugGolfStateSnapshot,game__debug__DebugLine3D,game__debug__DebugOverlay,game__debug__DebugProfilerHistory,game__debug__DebugProfilerInspector,iso__game__debug__DebugRaycastState,iso__game__debug__DebugRenderState,game__debug__DebugSceneNavigator,iso__game__debug__DebugSceneTarget,game__debug__DebugShotStateSnapshot,game__debug__DebugSlopeEvaluation,game__debug__DebugSlopeStatus,game__debug__DebugTerrainMaterialLine,iso__game__debug__DebugTerrainVisibility,iso__game__debug__DebugTimeController,game__debug__DebugUiLayer,iso__game__debug__anonymous_namespace_DebugColliderRenderer_cpp___ProjectionContext,game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition" game_debug
+    cssClass "game__scenes__AchievementScene,game__scenes__AsyncPathEvaluator,game__scenes__CourseIntroductionData,game__scenes__GameScene,game__scenes__HolePlacementCandidate,game__scenes__HolePlacementPlanner,iso__game__scenes__HoleVisualRules,iso__game__scenes__HtmlCourseFieldSize,game__scenes__LoadingScene,game__scenes__LoadingScene__BallState,game__scenes__PageDataAsyncResult,iso__game__scenes__PageLinkSelectionResult,game__scenes__PageLinkSelector,game__scenes__PageLoadResult,game__scenes__PauseScene,game__scenes__PendingHoleThumbnail,game__scenes__RankingScene,game__scenes__RankingScene__AsyncState,game__scenes__RankingScene__LoadData,game__scenes__RankingScene__View,game__scenes__ResultData,game__scenes__ResultScene,game__scenes__ResultScene__HanabiShell,game__scenes__ResultScene__HanabiShell__Phase,game__scenes__ResultScene__HanabiSpark,game__scenes__ResultScene__RankingUploadState,game__scenes__ResultScene__RingObject,game__scenes__ResultScene__UIElement,game__scenes__SettingsScene,game__scenes__SettingsScene__RowId,game__scenes__TitleScene,game__scenes__TitleScene__MenuEntry,game__scenes__TitleScene__StartConnectionState,game__scenes__TitleScene__TitleState,game__scenes__TutorialCourseLayout,game__scenes__WikiGolfScene,game__scenes__WikiGolfScene__CelebrationNext,game__scenes__WikiGolfScene__ScenePhase,game__scenes__WikiGolfScene__TerrainResultTier,game__scenes__WikiGolfScene__TutorialConnectionState,game__scenes__WikiPageDataFetcher,game__scenes__WikiPageLoader,game__scenes__WikiPageLoader__BuildStep,game__scenes__WikiPageLoader__HoleThumbnailState,game__scenes__WikiPageLoader__HoleThumbnailState__Status,game__scenes__WikiPinballScene,iso__game__scenes__anonymous_namespace_TutorialCourseLayout_cpp___TutorialLinkPlacement" game_scenes
+    cssClass "iso__game__systems__AchievementCategory,iso__game__systems__AchievementDef,iso__game__systems__AchievementEvent,game__systems__AchievementEventBus,iso__game__systems__AchievementEventType,iso__game__systems__AchievementId,game__systems__AchievementManager,game__systems__AchievementManager__RoundSessionState,game__systems__AchievementProgress,iso__game__systems__AchievementStore,game__systems__AudioSystem,game__systems__AudioSystem__ActiveVoice,game__systems__BodyInfo,iso__game__systems__ContentFilter,iso__game__systems__CourseFrame,iso__game__systems__DailyChallengeRandom,game__systems__EnvironmentParticleSystem,iso__game__systems__EnvironmentSoundPreset,game__systems__EnvironmentSoundSystem,game__systems__GameJuiceSystem,game__systems__GameJuiceSystem__EnvironmentParticle,game__systems__GameJuiceSystem__EnvironmentParticleKind,game__systems__GameJuiceSystem__ImpactParticle,game__systems__GameJuiceSystem__ImpactParticleKind,game__systems__GameJuiceSystem__JudgeType,game__systems__GameJuiceSystem__Ripple,game__systems__GameJuiceSystem__SurfaceMark,iso__game__systems__GolfCupClipConstants,iso__game__systems__GrassBudgetLimits,iso__game__systems__GrassBudgetSample,iso__game__systems__GrassBudgetScales,game__systems__GrassGpuLoadController,iso__game__systems__GrassGpuLoadTarget,iso__game__systems__GrassNormalSampleRange,iso__game__systems__GrassStreamingBounds,game__systems__HoleInfo,game__systems__HoleSpatialGrid,iso__game__systems__HtmlRegionKind,game__systems__HtmlTerrainRegion,iso__game__systems__ImageObstacleLayout,iso__game__systems__MapInstanceData,iso__game__systems__MapRenderInstance,iso__game__systems__MapRenderKey,iso__game__systems__MapRenderKeyHash,game__systems__MapRenderParams,game__systems__MapSys,iso__game__systems__MapVSConst,game__systems__Particle,game__systems__ParticleConfig,game__systems__ParticleRenderSystem,game__systems__ParticleRenderSystem__ParticleConstants,iso__game__systems__ParticleVertex,game__systems__PhysicsPerfStats,game__systems__PhysicsSpatialCache,game__systems__PhysicsUpdateContext,game__systems__PlayFabClient,game__systems__PlayFabClient__Authorization,game__systems__PlayFabLeaderboardEntry,game__systems__PlayFabLeaderboardResult,game__systems__PlayFabProfile,game__systems__PlayFabResult,game__systems__PostProcessConstants,game__systems__PostProcessSystem,iso__game__systems__RenderFrameStats,game__systems__RenderState,game__systems__ShadowRenderState,iso__game__systems__ShortestPathResult,iso__game__systems__SkyGlobePlacement,game__systems__SlopeOverlayConfig,game__systems__SlopeVisualizationMeshBuilder,game__systems__SlopeVisualizationMeshBuilder__BuildResult,game__systems__SlopeVisualizationMeshBuilder__SampledPoint,game__systems__SlopeVisualizationSystem,game__systems__StaticBodySpatialGrid,iso__game__systems__SurfaceFrictionSettings,iso__game__systems__TemporalConstants,game__systems__TerrainBackdropChunk,iso__game__systems__TerrainBackdropSample,game__systems__TerrainConfig,game__systems__TerrainData,game__systems__TerrainGenerator,iso__game__systems__TerrainLayoutRules,iso__game__systems__TerrainObstacleLayout,iso__game__systems__TerrainResolution,iso__game__systems__TerrainSample,iso__game__systems__TimeOfDay,game__systems__TimeOfDaySystem,iso__game__systems__UIBarGaugeRenderSystem,game__systems__UIButtonRenderSystem,iso__game__systems__UIButtonSystem,game__systems__UIImageRenderSystem,game__systems__UIRenderSystem,game__systems__UIRenderSystem__EntityTextState,iso__game__systems__VSConstants,game__systems__VoiceCallback,iso__game__systems__WallLayout,iso__game__systems__WikiClient,iso__game__systems__WikiImageInfo,iso__game__systems__WikiSectionInfo,game__systems__WikiShortestPath,iso__game__systems__WikiTargetPage,game__systems__WikiTerrainSystem,game__systems__WikiTerrainSystem__BuildPhase,game__systems__WikiTerrainSystem__GrassPatch,game__systems__WikiTerrainSystem__SkyGlobe,game__systems__WikiTerrainSystem__SurfaceGrassChunkBuildState,game__systems__WikiTerrainSystem__TileMeshCache,iso__game__systems__anonymous_namespace_ShadowRenderSystem_cpp___ShadowConstants,iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxConstants,iso__game__systems__anonymous_namespace_SkyboxRenderSystem_cpp___SkyboxRenderState,iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___BackdropStyle,iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___GridPosition,iso__game__systems__anonymous_namespace_TerrainBackdrop_cpp___MountainBand,iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Boundary,iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ClearanceField,iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Cut,iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___LandformTheme,game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___PatternShape,iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___RowDensity,game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___Section,iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___SurfacePattern,iso__game__systems__anonymous_namespace_TerrainGeneratorLandforms_cpp___ThemeSample,iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___ResultFeel,iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___RulerFrame,iso__game__systems__anonymous_namespace_UIBarGaugeRenderSystem_cpp___ShotJudgement,iso__game__systems__wiki_shortest_path_detail__BackwardBfsCache,iso__game__systems__wiki_shortest_path_detail__LinkFetchChunkStats,iso__game__systems__wiki_shortest_path_detail__LinkFetchStats,iso__game__systems__wiki_shortest_path_detail__NodeInfo,iso__game__systems__wiki_shortest_path_detail__ResolvedDistanceCache" game_systems
+    cssClass "game__WikiLink,iso__game__physics__BallPhysicsParams,iso__game__physics__BallSimState,iso__game__physics__CarryResult,iso__game__physics__FlatGroundParams,iso__game__physics__GolfCupContact,iso__game__physics__GolfCupContactKind,game__physics__GolfCupShape,iso__game__physics__WindParams,iso__game__utils__AimPinClubCandidate,iso__game__utils__AimPinSolution,iso__game__utils__BlendMode,iso__game__utils__CameraFramingAngles,game__utils__CarryDistanceTable,game__utils__CourseIntroductionHole,iso__game__utils__FadeType,iso__game__utils__FastForwardTier,game__utils__FeaturedCourseHoles,iso__game__utils__HeightFieldBounds,iso__game__utils__JudgeFeedback,game__utils__MapViewSkyboxState,iso__game__utils__ProceduralFlagOptions,iso__game__utils__ProceduralFlagResult,iso__game__utils__RulerTicks,game__utils__ScreenFade,game__utils__ScreenFade__FadeCB,iso__game__utils__ScreenRay,iso__game__utils__ShotJudgement,iso__game__utils__StartGoalAdvance,iso__game__utils__StartGoalBodyFit,iso__game__utils__StartGoalIntroductionTiming,iso__game__utils__StartTeePinResult,iso__game__utils__TerrainWorldBounds,iso__game__utils__ViewportMapping" game_utils_physics
+    cssClass "IXAudio2VoiceCallback,litehtml__document_container" refnode

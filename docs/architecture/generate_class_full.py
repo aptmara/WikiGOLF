@@ -388,9 +388,21 @@ config:
     padding: 6
     hideEmptyMembersBox: true
   themeCSS: |
-    path[id^="id_iso__"] { display: none; }
----
+    path[id*="id_iso__"] { display: none; }
 """
+
+
+def front_matter():
+    """クラス図では classDef が CSS に反映されないため、配色は themeCSS に直接書く。"""
+    lines = [FRONT_MATTER.rstrip()]
+    colors = [(mid(module), fill, stroke) for module, _, fill, stroke in MODULES]
+    colors.append(("refnode", "#ffffff", "#9ca3af"))
+    for cls, fill, stroke in colors:
+        lines.append(f"    .node.{cls} .outer-path path:nth-child(1) {{ fill: {fill} !important; }}")
+        lines.append(f"    .node.{cls} .outer-path path:nth-child(2) {{ stroke: {stroke} !important; }}")
+        lines.append(f"    .node.{cls} .divider path {{ stroke: {stroke} !important; }}")
+    lines.append("---")
+    return "\n".join(lines)
 
 
 def emit(entities, by_id, out, title, edge_rows, focus=None, with_members=True, only_edge_nodes=False):
@@ -408,7 +420,7 @@ def emit(entities, by_id, out, title, edge_rows, focus=None, with_members=True, 
         return (ISOLATED_PREFIX if name in isolated else "") + mid(name)
 
     lines = [
-        FRONT_MATTER.rstrip(),
+        front_matter(),
         f"%% {title} (generate_class_full.py による自動生成。手で編集しないこと)",
         "%% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)",
         "%% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)",
@@ -453,15 +465,12 @@ def emit(entities, by_id, out, title, edge_rows, focus=None, with_members=True, 
         lines += layout_edges
 
     lines.append("    %% 配色")
-    for module, _, fill, stroke in MODULES:
+    for module, *_ in MODULES:
         ids = [nid(n) for n in sorted(shown) if module_of(n) == module]
         if ids:
-            cls = mid(module)
-            lines.append(f"    classDef {cls} fill:{fill},stroke:{stroke},stroke-width:1.5px")
-            lines.append(f'    cssClass "{",".join(ids)}" {cls}')
+            lines.append(f'    cssClass "{",".join(ids)}" {mid(module)}')
     if stubs:
-        lines.append("    classDef ref fill:#ffffff,stroke:#9ca3af,stroke-dasharray:4 3,color:#6b7280")
-        lines.append(f'    cssClass "{",".join(nid(n) for n in stubs)}" ref')
+        lines.append(f'    cssClass "{",".join(nid(n) for n in stubs)}" refnode')
 
     out.parent.mkdir(exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")

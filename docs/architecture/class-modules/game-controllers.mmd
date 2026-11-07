@@ -1,32 +1,84 @@
-%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF クラス図: game-controllers (generate_class_full.py による自動生成。手で編集しないこと)
 %% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
 %% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
-%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
-%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
 classDiagram
     direction LR
-    namespace game__controllers {
+    namespace game.controllers {
         class game__controllers__AimPinController["AimPinController"] {
             -bool m_middleButtonDown
             -int m_pressX
             -int m_pressY
-            -ecs::EntityOwner m_markerOwner
-            +Update(core::GameContext #amp; ctx, const UpdateParams #amp; params) UpdateResult
-            +PlacePin(core::GameContext #amp; ctx, ecs::Entity ballEntity, const DirectX::XMFLOAT3 #amp; worldPos) float
-            +ClearPin(core::GameContext #amp; ctx) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            -RebuildWorldMarker(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; worldPos) void
+            -EntityOwner m_markerOwner
+            +Update(GameContext#amp; ctx, const UpdateParams#amp; params) UpdateResult
+            +PlacePin(GameContext#amp; ctx, Entity ballEntity, const XMFLOAT3#amp; worldPos) float
+            +ClearPin(GameContext#amp; ctx) void
+            +Shutdown(GameContext#amp; ctx) void
+            -RebuildWorldMarker(GameContext#amp; ctx, const XMFLOAT3#amp; worldPos) void
         }
         class game__controllers__AimPinController__UpdateParams["AimPinController::UpdateParams"] {
             <<struct>>
             +int mouseX
             +int mouseY
             +bool allowInput
-            +ecs::Entity ballEntity
-            +ecs::Entity cameraEntity
-            +game::systems::WikiTerrainSystem #42; terrainSystem
+            +Entity ballEntity
+            +Entity cameraEntity
+            +WikiTerrainSystem#42; terrainSystem
             +bool hasMappedWorldPosition
-            +DirectX::XMFLOAT3 mappedWorldPosition
+            +XMFLOAT3 mappedWorldPosition
             +float maxDistance
         }
         class game__controllers__AimPinController__UpdateResult["AimPinController::UpdateResult"] {
@@ -39,92 +91,92 @@ classDiagram
             -Phase m_phase
             -float m_fadeAlpha
             -const float FADE_SPEED
-            -std::future#lt; scenes::PageDataAsyncResult #gt; m_loadTask
-            -std::future#lt; scenes::PageDataAsyncResult #gt; m_prefetchTask
-            -std::string m_prefetchPage
-            -std::shared_ptr#lt; std::atomic#lt; float #gt; #gt; m_loadProgress
-            -std::optional#lt; scenes::PageDataAsyncResult #gt; m_pendingPageData
-            -scenes::WikiPageLoader #42; m_pageLoader
-            -std::string m_targetPage
-            -std::string m_previousPage
-            -ecs::Entity m_targetBall
-            -ecs::Entity m_targetCam
-            -ecs::Entity m_targetSky
-            -game::controllers::MinimapController #42; m_minimap
+            -future#lt;scenes::PageDataAsyncResult#gt; m_loadTask
+            -future#lt;scenes::PageDataAsyncResult#gt; m_prefetchTask
+            -string m_prefetchPage
+            -shared_ptr#lt;atomic#lt;float#gt;#gt; m_loadProgress
+            -optional#lt;scenes::PageDataAsyncResult#gt; m_pendingPageData
+            -scenes::WikiPageLoader#42; m_pageLoader
+            -string m_targetPage
+            -string m_previousPage
+            -Entity m_targetBall
+            -Entity m_targetCam
+            -Entity m_targetSky
+            -MinimapController#42; m_minimap
             -bool m_loadCompleted
             -bool m_buildSucceeded
             -bool m_buildFailed
             -bool m_buildDelayStarted
             -float m_buildDelayTimer
             -float m_displayProgress
-            -std::chrono::steady_clock::time_point m_transitionStartedAt
-            -std::chrono::steady_clock::time_point m_fetchStartedAt
-            -std::chrono::steady_clock::time_point m_buildStartedAt
+            -chrono::steady_clock::time_point m_transitionStartedAt
+            -chrono::steady_clock::time_point m_fetchStartedAt
+            -chrono::steady_clock::time_point m_buildStartedAt
             -float m_globeRotation
-            -std::vector#lt; IntroductionShot #gt; m_introductionShots
+            -vector#lt;IntroductionShot#gt; m_introductionShots
             -size_t m_introductionShotIndex
             -float m_introductionShotTimer
-            -DirectX::XMFLOAT3 m_introductionCameraStart
-            -DirectX::XMFLOAT3 m_introductionFocusStart
+            -XMFLOAT3 m_introductionCameraStart
+            -XMFLOAT3 m_introductionFocusStart
             -bool m_startGoalIntroductionRequested
-            -std::string m_startGoalStartPage
-            -std::string m_startGoalGoalPage
-            -std::future#lt; std::string #gt; m_goalExtractTask
+            -string m_startGoalStartPage
+            -string m_startGoalGoalPage
+            -future#lt;string#gt; m_goalExtractTask
             -StartGoalIntroductionPanel m_startGoalPanel
-            -ecs::Entity m_globeEntity
-            -ecs::Entity m_bgEntity
-            -ecs::Entity m_cameraEntity
-            -ecs::Entity m_previousMainCameraEntity
-            -ecs::Entity m_textEntity
-            -ecs::Entity m_progressTextEntity
-            -ecs::Entity m_captionTextEntity
-            -ecs::Entity m_introductionPanelEntity
-            -ecs::Entity m_introductionDetailEntity
-            -ecs::Entity m_introductionSkipEntity
-            -ecs::EntityOwner m_entityOwner
-            -graphics::TextStyle m_primaryStyle
-            -graphics::TextStyle m_progressStyle
-            -graphics::TextStyle m_captionStyle
+            -Entity m_globeEntity
+            -Entity m_bgEntity
+            -Entity m_cameraEntity
+            -Entity m_previousMainCameraEntity
+            -Entity m_textEntity
+            -Entity m_progressTextEntity
+            -Entity m_captionTextEntity
+            -Entity m_introductionPanelEntity
+            -Entity m_introductionDetailEntity
+            -Entity m_introductionSkipEntity
+            -EntityOwner m_entityOwner
+            -TextStyle m_primaryStyle
+            -TextStyle m_progressStyle
+            -TextStyle m_captionStyle
             -float m_tipTimer
             -size_t m_tipIndex
             -bool m_hasError
             -float m_errorTimer
-            -std::wstring m_errorMsg
+            -wstring m_errorMsg
             +ArticleTransitionController()
             +#126;ArticleTransitionController()
-            +Initialize(core::GameContext #amp; ctx) void
-            +Cleanup(core::GameContext #amp; ctx) void
-            +StartTransition(core::GameContext #amp; ctx, const std::string #amp; targetPage, scenes::WikiPageLoader #42; pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController #42; minimap) void
-            +PrefetchPage(const std::string #amp; targetPage, scenes::WikiPageLoader #42; pageLoader) void
-            +Update(core::GameContext #amp; ctx) bool
+            +Initialize(GameContext#amp; ctx) void
+            +Cleanup(GameContext#amp; ctx) void
+            +StartTransition(GameContext#amp;, const string#amp;, scenes::WikiPageLoader#42;, Entity, Entity, Entity, MinimapController#42;) void
+            +PrefetchPage(const string#amp; targetPage, scenes::WikiPageLoader#42; pageLoader) void
+            +Update(GameContext#amp; ctx) bool
             +IsActive() bool #123;const#125;
-            +RequestStartGoalIntroduction(const std::string #amp; startPage, const std::string #amp; goalPage) void
+            +RequestStartGoalIntroduction(const string#amp; startPage, const string#amp; goalPage) void
             +IsCourseIntroductionActive() bool #123;const#125;
-            -SpawnEntities(core::GameContext #amp; ctx) void
-            -DestroyEntities(core::GameContext #amp; ctx) void
-            -CaptureMainCamera(core::GameContext #amp; ctx) void
-            -RestoreMainCamera(core::GameContext #amp; ctx) void
-            -UpdateAnimation(core::GameContext #amp; ctx, float dt) void
-            -UpdateUI(core::GameContext #amp; ctx, float dt) void
-            -BeginCourseIntroduction(core::GameContext #amp; ctx) void
-            -UpdateCourseIntroduction(core::GameContext #amp; ctx, float dt) void
-            -ApplyCourseIntroductionShot(core::GameContext #amp; ctx) void
-            -FinishCourseIntroduction(core::GameContext #amp; ctx) void
-            -BeginStartGoalIntroduction(core::GameContext #amp; ctx, const scenes::CourseIntroductionData #amp; data) void
-            -UpdateStartGoalIntroduction(core::GameContext #amp; ctx, float dt) void
-            -ShowIntroductionSkipButton(core::GameContext #amp; ctx) void
-            -UpdateIntroductionSkipButton(core::GameContext #amp; ctx) bool
+            -SpawnEntities(GameContext#amp; ctx) void
+            -DestroyEntities(GameContext#amp; ctx) void
+            -CaptureMainCamera(GameContext#amp; ctx) void
+            -RestoreMainCamera(GameContext#amp; ctx) void
+            -UpdateAnimation(GameContext#amp; ctx, float dt) void
+            -UpdateUI(GameContext#amp; ctx, float dt) void
+            -BeginCourseIntroduction(GameContext#amp; ctx) void
+            -UpdateCourseIntroduction(GameContext#amp; ctx, float dt) void
+            -ApplyCourseIntroductionShot(GameContext#amp; ctx) void
+            -FinishCourseIntroduction(GameContext#amp; ctx) void
+            -BeginStartGoalIntroduction(GameContext#amp; ctx, const scenes::CourseIntroductionData#amp; data) void
+            -UpdateStartGoalIntroduction(GameContext#amp; ctx, float dt) void
+            -ShowIntroductionSkipButton(GameContext#amp; ctx) void
+            -UpdateIntroductionSkipButton(GameContext#amp; ctx) bool
             -ResetLoadState() void
         }
         class game__controllers__ArticleTransitionController__IntroductionShot["ArticleTransitionController::IntroductionShot"] {
             <<struct>>
             +IntroductionShotKind kind
-            +DirectX::XMFLOAT3 cameraPosition
-            +DirectX::XMFLOAT3 focusPosition
-            +std::wstring label
-            +std::wstring title
-            +std::wstring body
-            +std::wstring detail
+            +XMFLOAT3 cameraPosition
+            +XMFLOAT3 focusPosition
+            +wstring label
+            +wstring title
+            +wstring body
+            +wstring detail
             +float duration
             +float cameraControlHeight
         }
@@ -147,22 +199,22 @@ classDiagram
             FadeOut
         }
         class game__controllers__BallFastForwardIndicator["BallFastForwardIndicator"] {
-            -ecs::Entity m_entity
-            -game::utils::FastForwardTier m_displayedTier
+            -Entity m_entity
+            -FastForwardTier m_displayedTier
             -float m_visibleSeconds
             -float m_currentAlpha
-            +Initialize(core::GameContext #amp; ctx, ecs::Entity entity) void
+            +Initialize(GameContext#amp; ctx, Entity entity) void
             +Shutdown() void
-            +Reset(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, float dt, game::utils::FastForwardTier tier) void
+            +Reset(GameContext#amp; ctx) void
+            +Update(GameContext#amp; ctx, float dt, FastForwardTier tier) void
         }
         class game__controllers__BallFastForwardTimer["BallFastForwardTimer"] {
             -bool m_hasLanded
             -float m_secondsSinceLanding
-            -game::utils::FastForwardTier m_currentTier
+            -FastForwardTier m_currentTier
             +Reset() void
-            +Update(core::GameContext #amp; ctx, float dt) float
-            +GetCurrentTier() game::utils::FastForwardTier #123;const#125;
+            +Update(GameContext#amp; ctx, float dt) float
+            +GetCurrentTier() FastForwardTier #123;const#125;
         }
         class game__controllers__CameraController["CameraController"] {
             -Config m_cfg
@@ -179,70 +231,70 @@ classDiagram
             -float m_distanceEaseFrom
             -float m_distanceEaseTimer
             -bool m_isDistanceEasing
-            -DirectX::XMFLOAT3 m_shotStartCamPos
-            -DirectX::XMFLOAT3 m_shotTpsCamPos
+            -XMFLOAT3 m_shotStartCamPos
+            -XMFLOAT3 m_shotTpsCamPos
             -float m_shotCamTimer
             -bool m_isCameraChasing
             -bool m_wasShotCamera
             -bool m_isFreeCamera
-            -DirectX::XMFLOAT3 m_golferAnchorPos
+            -XMFLOAT3 m_golferAnchorPos
             -float m_golferAnchorHeight
             -bool m_hasGolferAnchor
             -float m_orbitBlend
-            -DirectX::XMFLOAT3 m_orbitBlendFrom
-            -DirectX::XMFLOAT3 m_celebrationFromPos
-            -DirectX::XMFLOAT3 m_celebrationToPos
-            -DirectX::XMFLOAT3 m_celebrationFocus
+            -XMFLOAT3 m_orbitBlendFrom
+            -XMFLOAT3 m_celebrationFromPos
+            -XMFLOAT3 m_celebrationToPos
+            -XMFLOAT3 m_celebrationFocus
             -float m_celebrationTimer
-            -DirectX::XMFLOAT3 m_shotDirection
+            -XMFLOAT3 m_shotDirection
             -int m_prevMouseX
             -int m_prevMouseY
             +Initialize(Config cfg) void
-            +SetBallEntity(ecs::Entity ballEntity) void
-            +Update(core::GameContext #amp; ctx) void
-            +ProcessInput(core::GameContext #amp; ctx, int mouseX, int mouseY) void
-            +SetGolferAnchor(const DirectX::XMFLOAT3 #amp; position, float height) void
-            +OnShotStart(core::GameContext #amp; ctx) void
-            +BeginCelebrationView(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; holePos, const DirectX::XMFLOAT3 #amp; golferSpot, float golferHeight) void
-            +UpdateCelebrationView(core::GameContext #amp; ctx) void
-            +RestoreAfterFade(core::GameContext #amp; ctx) void
+            +SetBallEntity(Entity ballEntity) void
+            +Update(GameContext#amp; ctx) void
+            +ProcessInput(GameContext#amp; ctx, int mouseX, int mouseY) void
+            +SetGolferAnchor(const XMFLOAT3#amp; position, float height) void
+            +OnShotStart(GameContext#amp; ctx) void
+            +BeginCelebrationView(GameContext#amp;, const XMFLOAT3#amp;, const XMFLOAT3#amp;, float) void
+            +UpdateCelebrationView(GameContext#amp; ctx) void
+            +RestoreAfterFade(GameContext#amp; ctx) void
             +ResetForTransition(float fieldScale) void
-            +BeginTargetFraming(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; groundTarget, float recommendedDistance) void
-            +AimYawTowards(const DirectX::XMFLOAT3 #amp; fromPos, const DirectX::XMFLOAT3 #amp; toPos) void
-            +GetShotDirection() const DirectX::XMFLOAT3 #amp; #123;const#125;
+            +BeginTargetFraming(GameContext#amp;, const XMFLOAT3#amp;, float) void
+            +AimYawTowards(const XMFLOAT3#amp; fromPos, const XMFLOAT3#amp; toPos) void
+            +GetShotDirection() const XMFLOAT3#amp; #123;const#125;
             +IsCameraChasing() bool #123;const#125;
             +IsFreeCamera() bool #123;const#125;
             +GetYaw() float #123;const#125;
             +GetPitch() float #123;const#125;
             +GetDistance() float #123;const#125;
-            -UpdateChaseCamera(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; ballPos, DirectX::XMFLOAT3 #amp; camPos, DirectX::XMFLOAT4 #amp; camRot) void
-            -CalcOrbitPosition(const DirectX::XMFLOAT3 #amp; ballPos, DirectX::XMVECTOR #amp; outPos, DirectX::XMVECTOR #amp; outRot) void #123;const#125;
-            -CheckCameraCollision(core::GameContext #amp; ctx, const DirectX::XMVECTOR #amp; targetPos, const DirectX::XMVECTOR #amp; lookAtPos, DirectX::XMVECTOR #amp; outPos) bool
-            -EnterFreeCamera(core::GameContext #amp; ctx) void
-            -BeginOrbitBlend(const DirectX::XMFLOAT3 #amp; from) void
+            -UpdateChaseCamera(GameContext#amp;, const XMFLOAT3#amp;, XMFLOAT3#amp;, XMFLOAT4#amp;) void
+            -CalcOrbitPosition(const XMFLOAT3#amp; ballPos, XMVECTOR#amp; outPos, XMVECTOR#amp; outRot) void #123;const#125;
+            -CheckCameraCollision(GameContext#amp;, const XMVECTOR#amp;, const XMVECTOR#amp;, XMVECTOR#amp;) bool
+            -EnterFreeCamera(GameContext#amp; ctx) void
+            -BeginOrbitBlend(const XMFLOAT3#amp; from) void
         }
         class game__controllers__CameraController__Config["CameraController::Config"] {
             <<struct>>
-            +ecs::Entity cameraEntity
-            +ecs::Entity ballEntity
-            +ecs::Entity floorEntity
+            +Entity cameraEntity
+            +Entity ballEntity
+            +Entity floorEntity
             +float fieldScale
-            +game::systems::WikiTerrainSystem #42; terrain
-            +game::systems::GameJuiceSystem #42; gameJuice
+            +WikiTerrainSystem#42; terrain
+            +GameJuiceSystem#42; gameJuice
         }
         class game__controllers__ClubController["ClubController"] {
-            -game::systems::WikiTerrainSystem #42; m_terrainSystem
-            -std::vector#lt; Club #gt; m_availableClubs
+            -WikiTerrainSystem#42; m_terrainSystem
+            -vector#lt;Club#gt; m_availableClubs
             -Club m_currentClub
             -int m_currentClubIndex
-            -ecs::Entity m_clubModelEntity
+            -Entity m_clubModelEntity
             -ClubAnimPhase m_clubAnimPhase
             -float m_clubAnimTimer
-            -ecs::EntityOwner m_entityOwner
-            -graphics::SkeletalModel m_golferModel
-            -resources::MeshHandle m_golferMeshHandle
-            -std::vector#lt; graphics::Vertex #gt; m_golferPoseScratch
-            -std::string m_currentClipName
+            -EntityOwner m_entityOwner
+            -SkeletalModel m_golferModel
+            -MeshHandle m_golferMeshHandle
+            -vector#lt;Vertex#gt; m_golferPoseScratch
+            -string m_currentClipName
             -float m_clipTime
             -bool m_golferModelValid
             -float kGolferStanceOffsetX$
@@ -250,17 +302,17 @@ classDiagram
             -float kGolferYawOffsetDeg$
             -float kGolferScale$
             -bool m_golferPositionInitialized
-            -DirectX::XMFLOAT3 m_golferStandPos
-            -DirectX::XMFLOAT3 m_golferWalkTarget
+            -XMFLOAT3 m_golferStandPos
+            -XMFLOAT3 m_golferWalkTarget
             -bool m_golferWalking
             -float kGolferWalkSpeed$
             -float kGolferWalkTriggerDistance$
             -float kGolferTeleportDistance$
             -GolferTeleportPhase m_golferTeleportPhase
-            -DirectX::XMFLOAT3 m_golferTeleportTarget
+            -XMFLOAT3 m_golferTeleportTarget
             -float m_golferFadeAlpha
             -float kGolferFadeSeconds$
-            -std::string m_prevClipName
+            -string m_prevClipName
             -float m_prevClipTime
             -float m_crossfadeTimer
             -float m_crossfadeDuration
@@ -268,42 +320,42 @@ classDiagram
             -float kFullSwingImpactSeconds$
             -float kPuttImpactSeconds$
             -CelebrationStage m_celebrationStage
-            -DirectX::XMFLOAT3 m_celebrationSpot
+            -XMFLOAT3 m_celebrationSpot
             -float kCelebrateFrontRatio$
             -float kCelebrateSideRatio$
             -float kCelebrateMaxWalkRatio$
             -float kCelebrateWalkInRatio$
             -float kCelebrateHoldSeconds$
-            +Initialize(core::GameContext #amp; ctx, game::systems::WikiTerrainSystem #42; terrainSystem) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            +UpdateInput(core::GameContext #amp; ctx, const InputParams #amp; params) InputResult
-            +UpdateAnimation(core::GameContext #amp; ctx, float dt, ecs::Entity ballEntity, const DirectX::XMFLOAT3 #amp; shotDirection) void
-            +GetCurrentClub() const Club #amp; #123;const#125;
+            +Initialize(GameContext#amp; ctx, WikiTerrainSystem#42; terrainSystem) void
+            +Shutdown(GameContext#amp; ctx) void
+            +UpdateInput(GameContext#amp; ctx, const InputParams#amp; params) InputResult
+            +UpdateAnimation(GameContext#amp;, float, Entity, const XMFLOAT3#amp;) void
+            +GetCurrentClub() const Club#amp; #123;const#125;
             +GetCurrentClubIndex() int #123;const#125;
-            +SelectClubForAimPin(core::GameContext #amp; ctx, const std::vector#lt; float #gt; #amp; requiredPowerRatios, bool pathHasAbnormalSlope) bool
-            +ResetToFirstClub(core::GameContext #amp; ctx) bool
+            +SelectClubForAimPin(GameContext#amp;, const vector#lt;float#gt;#amp;, bool) bool
+            +ResetToFirstClub(GameContext#amp; ctx) bool
             +GetRecommendedCameraDistance(float fieldScale) float #123;const#125;
-            +GetAllClubs() const std::vector#lt; Club #gt; #amp; #123;const#125;
-            +GetGolferPosition() const DirectX::XMFLOAT3 #amp; #123;const#125;
+            +GetAllClubs() const vector#lt;Club#gt;#amp; #123;const#125;
+            +GetGolferPosition() const XMFLOAT3#amp; #123;const#125;
             +GetGolferHeight() float #123;const#125;
             +GetImpactDelay() float #123;const#125;
-            +BeginCelebration(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; holePos, const DirectX::XMFLOAT3 #amp; cameraPos) DirectX::XMFLOAT3
-            +UpdateCelebration(core::GameContext #amp; ctx, float dt, const DirectX::XMFLOAT3 #amp; cameraPos) void
+            +BeginCelebration(GameContext#amp; ctx, const XMFLOAT3#amp; holePos, const XMFLOAT3#amp; cameraPos) XMFLOAT3
+            +UpdateCelebration(GameContext#amp; ctx, float dt, const XMFLOAT3#amp; cameraPos) void
             +IsCelebrationFinished() bool #123;const#125;
             +EndCelebration() void
-            +GetCelebrateRemainingSeconds(float #amp; outSeconds) bool #123;const#125;
-            +GetGolferFaceWorldPosition(core::GameContext #amp; ctx, DirectX::XMFLOAT3 #amp; outPos) bool #123;const#125;
-            -InitializeClubs(core::GameContext #amp; ctx) void
-            -InitializeClubModel(core::GameContext #amp; ctx) void
-            -SwitchClub(core::GameContext #amp; ctx, int direction) bool
-            -SelectClubByIndex(core::GameContext #amp; ctx, size_t index) bool
-            -GetPhaseClipName(const char #42; suffix) std::string #123;const#125;
-            -UpdateGolferPose(core::GameContext #amp; ctx) void
-            -AdvanceClip(const std::string #amp; clipName, bool loop, float dt) void
-            -ConstrainToTerrain(const DirectX::XMFLOAT3 #amp; position) DirectX::XMFLOAT3 #123;const#125;
-            -BeginGolferTeleport(const DirectX::XMFLOAT3 #amp; target) void
+            +GetCelebrateRemainingSeconds(float#amp; outSeconds) bool #123;const#125;
+            +GetGolferFaceWorldPosition(GameContext#amp; ctx, XMFLOAT3#amp; outPos) bool #123;const#125;
+            -InitializeClubs(GameContext#amp; ctx) void
+            -InitializeClubModel(GameContext#amp; ctx) void
+            -SwitchClub(GameContext#amp; ctx, int direction) bool
+            -SelectClubByIndex(GameContext#amp; ctx, size_t index) bool
+            -GetPhaseClipName(const char#42; suffix) string #123;const#125;
+            -UpdateGolferPose(GameContext#amp; ctx) void
+            -AdvanceClip(const string#amp; clipName, bool loop, float dt) void
+            -ConstrainToTerrain(const XMFLOAT3#amp; position) XMFLOAT3 #123;const#125;
+            -BeginGolferTeleport(const XMFLOAT3#amp; target) void
             -UpdateGolferTeleport(float dt) void
-            -ClipDuration(const std::string #amp; clipName) float #123;const#125;
+            -ClipDuration(const string#amp; clipName) float #123;const#125;
         }
         class game__controllers__ClubController__CelebrationStage["ClubController::CelebrationStage"] {
             <<enumeration>>
@@ -314,15 +366,15 @@ classDiagram
         }
         class game__controllers__ClubController__Club["ClubController::Club"] {
             <<struct>>
-            +std::string name
+            +string name
             +float maxPower
             +float launchAngle
-            +std::string iconTexture
+            +string iconTexture
             +float rollingFrictionScale
-            +std::string shortName
-            +std::string categoryEN
+            +string shortName
+            +string categoryEN
             +float baseCarryDistance
-            +game::utils::CarryDistanceTable carryTable
+            +CarryDistanceTable carryTable
         }
         class game__controllers__ClubController__ClubAnimPhase["ClubController::ClubAnimPhase"] {
             <<enumeration>>
@@ -347,30 +399,30 @@ classDiagram
             +bool uiClicked
             +bool clubChanged
         }
-        class game__controllers__ClubUIData["ClubUIData"] {
+        class iso__game__controllers__ClubUIData["ClubUIData"] {
             <<struct>>
-            +std::string name
-            +std::string iconTexture
-            +std::string shortName
-            +std::string categoryEN
+            +string name
+            +string iconTexture
+            +string shortName
+            +string categoryEN
             +float maxPower
             +float baseCarryDistance
         }
-        class game__controllers__FastForwardTier["FastForwardTier"] {
+        class iso__game__controllers__FastForwardTier["FastForwardTier"] {
             <<enumeration>>
         }
         class game__controllers__MinimapController["MinimapController"] {
             -Config m_cfg
             -float m_mapZoom
-            -DirectX::XMFLOAT2 m_mapCenter
+            -XMFLOAT2 m_mapCenter
             -float m_minMapZoom
             -const float m_baseMaxMapZoom
             -float m_maxMapZoom
             -float m_mapFollowLerp
             -bool m_isMapView
-            -game::utils::MapViewSkyboxState m_mapViewSkyboxState
+            -MapViewSkyboxState m_mapViewSkyboxState
             -float m_targetMapZoom
-            -DirectX::XMFLOAT2 m_mapPanVelocity
+            -XMFLOAT2 m_mapPanVelocity
             -float m_lastMapClickTime
             -int m_lastMapClickX
             -int m_lastMapClickY
@@ -381,11 +433,11 @@ classDiagram
             -bool m_isVisible
             -int m_prevMouseX
             -int m_prevMouseY
-            -std::unique_ptr#lt; game::systems::MapSys #gt; m_minimapRenderer
-            -game::systems::MapRenderParams m_pendingMinimapParams
+            -unique_ptr#lt;MapSys#gt; m_minimapRenderer
+            -MapRenderParams m_pendingMinimapParams
             -bool m_minimapRenderPending
             -bool m_minimapHasRenderedOnce
-            -DirectX::XMFLOAT3 m_lastRenderedCenter
+            -XMFLOAT3 m_lastRenderedCenter
             -float m_lastRenderedZoom
             -float m_lastRenderedFieldWidth
             -float m_lastRenderedFieldDepth
@@ -394,86 +446,86 @@ classDiagram
             -float m_pendingFieldDepth
             -int m_lastRenderedMoveCount
             -int m_pendingMoveCount
-            -ecs::Entity m_minimapEntity
-            -ecs::Entity m_minimapMarkerEntity
-            -ecs::Entity m_minimapBallIconEntity
-            -ecs::Entity m_minimapPulseMarkerEntity
-            -ecs::Entity m_aimPinMarkerEntity
-            -std::vector#lt; ecs::Entity #gt; m_minimapGuideDotEntities
-            -ecs::Entity m_minimapHelpEntity
-            -ecs::Entity m_minimapKeyHintEntity
-            -ecs::Entity m_mapViewportBoundsEntity
-            -ecs::Entity m_holeHoverLabelEntity
+            -Entity m_minimapEntity
+            -Entity m_minimapMarkerEntity
+            -Entity m_minimapBallIconEntity
+            -Entity m_minimapPulseMarkerEntity
+            -Entity m_aimPinMarkerEntity
+            -vector#lt;Entity#gt; m_minimapGuideDotEntities
+            -Entity m_minimapHelpEntity
+            -Entity m_minimapKeyHintEntity
+            -Entity m_mapViewportBoundsEntity
+            -Entity m_holeHoverLabelEntity
             -size_t kFlagFilterCount$
-            -ecs::Entity m_flagFilterDropdownEntity
+            -Entity m_flagFilterDropdownEntity
             -float m_flagFilterDropdownX
             -float m_flagFilterDropdownY
             -float m_flagFilterDropdownWidth
             -float m_flagFilterDropdownHeight
             -bool m_flagFilterDropdownOpen
-            -std::vector#lt; FlagFilterToggle #gt; m_flagFilterToggles
-            -std::array#lt; bool, kFlagFilterCount #gt; m_flagFilterEnabled
-            -std::array#lt; bool, kFlagFilterCount #gt; m_flagFilterAvailable
-            -ecs::Entity m_landingPreviewRangeEntity
-            -ecs::Entity m_landingPreviewCenterEntity
+            -vector#lt;FlagFilterToggle#gt; m_flagFilterToggles
+            -array#lt;bool, kFlagFilterCount#gt; m_flagFilterEnabled
+            -array#lt;bool, kFlagFilterCount#gt; m_flagFilterAvailable
+            -Entity m_landingPreviewRangeEntity
+            -Entity m_landingPreviewCenterEntity
             -bool m_landingPreviewVisible
-            -DirectX::XMFLOAT3 m_landingPreviewCenter
+            -XMFLOAT3 m_landingPreviewCenter
             -float m_landingPreviewRadius
-            -ecs::Entity m_mapZoomIndicatorBg
-            -ecs::Entity m_mapZoomIndicatorText
-            -ecs::Entity m_mapCoordText
-            -ecs::Entity m_mapDistanceText
-            -ecs::Entity m_mapHelpPanelBg
-            -ecs::Entity m_mapHelpTitle
-            -std::vector#lt; ecs::Entity #gt; m_mapHelpLines
+            -Entity m_mapZoomIndicatorBg
+            -Entity m_mapZoomIndicatorText
+            -Entity m_mapCoordText
+            -Entity m_mapDistanceText
+            -Entity m_mapHelpPanelBg
+            -Entity m_mapHelpTitle
+            -vector#lt;Entity#gt; m_mapHelpLines
             -float m_mapOpenHintTimer
-            -ecs::Entity m_mapOpenHintBg
-            -ecs::Entity m_mapOpenHintText
-            -std::vector#lt; MapHoleIcon #gt; m_mapHoleIcons
-            -ecs::EntityOwner m_entityOwner
-            +Initialize(Config cfg, core::GameContext #amp; ctx) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            +SetBallEntity(ecs::Entity ballEntity) void
-            +InitializeUI(core::GameContext #amp; ctx) void
-            +UpdateMinimap(core::GameContext #amp; ctx, float fieldWidth, float fieldDepth, const std::vector#lt; ecs::Entity #gt; #amp; trajectoryEntities) void
-            +TryGetHudMapWorldPosition(core::GameContext #amp; ctx, int mouseX, int mouseY, float fieldWidth, float fieldDepth, DirectX::XMFLOAT3 #amp; outWorldPosition) bool #123;const#125;
-            +RenderPendingMinimap(core::GameContext #amp; ctx) void
-            +UpdateMapCamera(core::GameContext #amp; ctx, float fieldWidth, float fieldDepth) void
-            +ProcessInput(core::GameContext #amp; ctx, int mouseX, int mouseY, float fieldWidth, float fieldDepth, ecs::Entity skyboxEntity, const InputPermissions #amp; permissions) void
+            -Entity m_mapOpenHintBg
+            -Entity m_mapOpenHintText
+            -vector#lt;MapHoleIcon#gt; m_mapHoleIcons
+            -EntityOwner m_entityOwner
+            +Initialize(Config cfg, GameContext#amp; ctx) void
+            +Shutdown(GameContext#amp; ctx) void
+            +SetBallEntity(Entity ballEntity) void
+            +InitializeUI(GameContext#amp; ctx) void
+            +UpdateMinimap(GameContext#amp;, float, float, const vector#lt;Entity#gt;#amp;) void
+            +TryGetHudMapWorldPosition(GameContext#amp;, int, int, float, float, XMFLOAT3#amp;) bool #123;const#125;
+            +RenderPendingMinimap(GameContext#amp; ctx) void
+            +UpdateMapCamera(GameContext#amp; ctx, float fieldWidth, float fieldDepth) void
+            +ProcessInput(GameContext#amp;, int, int, float, float, Entity, const InputPermissions#amp;) void
             +IsPointerOverFlagFilters(int mouseX, int mouseY) bool #123;const#125;
-            +SyncMapCenterToBall(core::GameContext #amp; ctx, float dt, float fieldWidth, float fieldDepth, bool forceSnap) void
-            +ClearHoleIcons(core::GameContext #amp; ctx) void
-            +AddHoleIcon(core::GameContext #amp; ctx, float x, float z, const std::string #amp; linkTarget, bool isTargetHole, bool isPlayableHole, int hopsToTarget) void
-            +UpdateHoleIconEvaluation(const std::string #amp; linkTarget, bool isPlayableHole, int hopsToTarget) void
-            +ToggleMapView(core::GameContext #amp; ctx, ecs::Entity skyboxEntity) void
-            +SetLandingPreview(core::GameContext #amp; ctx, const DirectX::XMFLOAT3 #amp; landingCenter, float dispersionRadius, bool visible) void
+            +SyncMapCenterToBall(GameContext#amp;, float, float, float, bool) void
+            +ClearHoleIcons(GameContext#amp; ctx) void
+            +AddHoleIcon(GameContext#amp;, float, float, const string#amp;, bool, bool, int) void
+            +UpdateHoleIconEvaluation(const string#amp; linkTarget, bool isPlayableHole, int hopsToTarget) void
+            +ToggleMapView(GameContext#amp; ctx, Entity skyboxEntity) void
+            +SetLandingPreview(GameContext#amp;, const XMFLOAT3#amp;, float, bool) void
             +IsMapView() bool #123;const#125;
-            +GetInputActivity() const InputActivity #amp; #123;const#125;
-            +GetMapSRV() void #42; #123;const#125;
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetHudOpacity(core::GameContext #amp; ctx, float opacity) void
-            +SetTutorialHelpMode(core::GameContext #amp; ctx, bool enabled) void
+            +GetInputActivity() const InputActivity#amp; #123;const#125;
+            +GetMapSRV() void#42; #123;const#125;
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +SetHudOpacity(GameContext#amp; ctx, float opacity) void
+            +SetTutorialHelpMode(GameContext#amp; ctx, bool enabled) void
             +GetMapZoom() float #123;const#125;
             +SetMapZoom(float zoom) void
-            -CloseMapViewByInput(core::GameContext #amp; ctx, ecs::Entity skyboxEntity, const char #42; reason) void
-            -UpdateFlagFilterToggles(core::GameContext #amp; ctx) void
+            -CloseMapViewByInput(GameContext#amp; ctx, Entity skyboxEntity, const char#42; reason) void
+            -UpdateFlagFilterToggles(GameContext#amp; ctx) void
         }
         class game__controllers__MinimapController__Config["MinimapController::Config"] {
             <<struct>>
-            +ecs::Entity cameraEntity
-            +ecs::Entity ballEntity
+            +Entity cameraEntity
+            +Entity ballEntity
             +float fieldScale
-            +game::systems::WikiTerrainSystem #42; terrain
+            +WikiTerrainSystem#42; terrain
         }
         class game__controllers__MinimapController__FlagFilterToggle["MinimapController::FlagFilterToggle"] {
             <<struct>>
-            +ecs::Entity entity
+            +Entity entity
             +float x
             +float y
             +float width
             +float height
             +size_t filterIndex
-            +std::wstring label
+            +wstring label
         }
         class game__controllers__MinimapController__InputActivity["MinimapController::InputActivity"] {
             <<struct>>
@@ -499,9 +551,9 @@ classDiagram
         }
         class game__controllers__MinimapController__MapHoleIcon["MinimapController::MapHoleIcon"] {
             <<struct>>
-            +ecs::Entity iconEntity
-            +DirectX::XMFLOAT2 worldPos
-            +std::string linkTarget
+            +Entity iconEntity
+            +XMFLOAT2 worldPos
+            +string linkTarget
             +bool isTarget
             +bool isPlayable
             +int hopsToTarget
@@ -509,8 +561,8 @@ classDiagram
         class game__controllers__ShotController["ShotController"] {
             +ShotController()
             +#126;ShotController()
-            +ProcessShot(core::GameContext #amp; ctx, bool canAim, WikiGolfHUD #42; hud, class ClubController #42; clubCtrl) ShotEvent
-            +ExecuteShot(core::GameContext #amp; ctx, ecs::Entity ballEntity, const DirectX::XMFLOAT3 #amp; shotDir, const ClubController::Club #amp; club, game::systems::TimeOfDaySystem #42; timeOfDay, WikiGolfHUD #42; hud) void
+            +ProcessShot(GameContext#amp; ctx, bool canAim, WikiGolfHUD#42; hud, class ClubController#42; clubCtrl) ShotEvent
+            +ExecuteShot(GameContext#amp;, Entity, const XMFLOAT3#amp;, const ClubController::Club#amp;, TimeOfDaySystem#42;, WikiGolfHUD#42;) void
         }
         class game__controllers__ShotController__ShotEvent["ShotController::ShotEvent"] {
             <<struct>>
@@ -519,59 +571,59 @@ classDiagram
             +bool shotFired
         }
         class game__controllers__StartGoalIntroductionPanel["StartGoalIntroductionPanel"] {
-            -std::vector#lt; Element #gt; m_elements
-            -ecs::EntityOwner m_entityOwner
+            -vector#lt;Element#gt; m_elements
+            -EntityOwner m_entityOwner
             -Card m_startCard
             -Card m_goalCard
-            -ecs::Entity m_arrowCaption
-            -ecs::Entity m_arrow
-            -ecs::Entity m_hops
-            -ecs::Entity m_hint
+            -Entity m_arrowCaption
+            -Entity m_arrow
+            -Entity m_hops
+            -Entity m_hint
             -float m_elapsed
             -float m_fadeOutElapsed
             -bool m_initialized
-            +Initialize(core::GameContext #amp; ctx, const Content #amp; content) void
-            +SetGoalExtract(core::GameContext #amp; ctx, const std::wstring #amp; rawExtract) void
-            +Update(core::GameContext #amp; ctx, float dt, bool advanceRequested) bool
-            +Shutdown(core::GameContext #amp; ctx) void
+            +Initialize(GameContext#amp; ctx, const Content#amp; content) void
+            +SetGoalExtract(GameContext#amp; ctx, const wstring#amp; rawExtract) void
+            +Update(GameContext#amp; ctx, float dt, bool advanceRequested) bool
+            +Shutdown(GameContext#amp; ctx) void
             +IsInitialized() bool #123;const#125;
-            -AddText(core::GameContext #amp; ctx, Group group, float x, float width, int layer) ecs::Entity
-            -AddImage(core::GameContext #amp; ctx, Group group, float x, float width, float height, int layer, ID3D11ShaderResourceView #42; texture) ecs::Entity
-            -CreateArticleCard(core::GameContext #amp; ctx, Card #amp; card, Group group, float x, bool isGoal, const std::wstring #amp; title) void
-            -Layout(core::GameContext #amp; ctx) void
-            -MeasureHeight(core::GameContext #amp; ctx, const std::wstring #amp; text, const graphics::TextStyle #amp; style, float width) float #123;const#125;
-            -BodyWidth(const Card #amp; card) float #123;const#125;
-            -PlaceText(core::GameContext #amp; ctx, ecs::Entity entity, float y, float height) void
-            -ApplyAnimation(core::GameContext #amp; ctx) void
+            -AddText(GameContext#amp; ctx, Group group, float x, float width, int layer) Entity
+            -AddImage(GameContext#amp;, Group, float, float, float, int, ID3D11ShaderResourceView#42;) Entity
+            -CreateArticleCard(GameContext#amp;, Card#amp;, Group, float, bool, const wstring#amp;) void
+            -Layout(GameContext#amp; ctx) void
+            -MeasureHeight(GameContext#amp; ctx, const wstring#amp; text, const TextStyle#amp; style, float width) float #123;const#125;
+            -BodyWidth(const Card#amp; card) float #123;const#125;
+            -PlaceText(GameContext#amp; ctx, Entity entity, float y, float height) void
+            -ApplyAnimation(GameContext#amp; ctx) void
         }
         class game__controllers__StartGoalIntroductionPanel__Card["StartGoalIntroductionPanel::Card"] {
             <<struct>>
-            +ecs::Entity panel
-            +ecs::Entity accentBar
-            +ecs::Entity label
-            +ecs::Entity title
-            +ecs::Entity rule
-            +ecs::Entity body
-            +ecs::Entity url
-            +ecs::Entity thumbnailFrame
-            +ecs::Entity thumbnail
+            +Entity panel
+            +Entity accentBar
+            +Entity label
+            +Entity title
+            +Entity rule
+            +Entity body
+            +Entity url
+            +Entity thumbnailFrame
+            +Entity thumbnail
             +float x
             +float thumbnailWidth
             +float thumbnailHeight
-            +std::wstring abstractText
+            +wstring abstractText
         }
         class game__controllers__StartGoalIntroductionPanel__Content["StartGoalIntroductionPanel::Content"] {
             <<struct>>
-            +std::wstring startTitle
-            +std::wstring startAbstract
-            +std::wstring goalTitle
+            +wstring startTitle
+            +wstring startAbstract
+            +wstring goalTitle
             +int hops
-            +ID3D11ShaderResourceView #42; goalThumbnail
+            +ID3D11ShaderResourceView#42; goalThumbnail
             +float goalThumbnailAspect
         }
         class game__controllers__StartGoalIntroductionPanel__Element["StartGoalIntroductionPanel::Element"] {
             <<struct>>
-            +ecs::Entity entity
+            +Entity entity
             +Group group
             +float baseY
             +bool isImage
@@ -587,35 +639,35 @@ classDiagram
         }
         class game__controllers__TerrainCard["TerrainCard"] {
             <<struct>>
-            +std::wstring name
-            +std::wstring desc
+            +wstring name
+            +wstring desc
             +float timer
             +uint32_t bgEntity
             +uint32_t textEntity
         }
         class game__controllers__TrajectoryPredictor["TrajectoryPredictor"] {
-            -std::vector#lt; ecs::Entity #gt; m_dots
-            -ecs::Entity m_landingEntity
-            -ecs::EntityOwner m_entityOwner
-            +Initialize(core::GameContext #amp; ctx, size_t dotCount) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, const Params #amp; params) void
-            +Hide(core::GameContext #amp; ctx) void
-            +GetDots() const std::vector#lt; ecs::Entity #gt; #amp; #123;const#125;
+            -vector#lt;Entity#gt; m_dots
+            -Entity m_landingEntity
+            -EntityOwner m_entityOwner
+            +Initialize(GameContext#amp; ctx, size_t dotCount) void
+            +Shutdown(GameContext#amp; ctx) void
+            +Update(GameContext#amp; ctx, const Params#amp; params) void
+            +Hide(GameContext#amp; ctx) void
+            +GetDots() const vector#lt;Entity#gt;#amp; #123;const#125;
         }
         class game__controllers__TrajectoryPredictor__Params["TrajectoryPredictor::Params"] {
             <<struct>>
-            +ecs::Entity ballEntity
-            +ecs::Entity arrowEntity
-            +DirectX::XMFLOAT3 shotDirection
+            +Entity ballEntity
+            +Entity arrowEntity
+            +XMFLOAT3 shotDirection
             +float baseCarryDistance
-            +const game::utils::CarryDistanceTable #42; carryTable
+            +const CarryDistanceTable#42; carryTable
             +float launchAngle
             +bool isMapView
-            +game::systems::WikiTerrainSystem #42; terrainSystem
+            +WikiTerrainSystem#42; terrainSystem
             +float powerRatio
         }
-        class game__controllers__TutorialInputPolicy["TutorialInputPolicy"] {
+        class iso__game__controllers__TutorialInputPolicy["TutorialInputPolicy"] {
             <<struct>>
             +bool camera
             +bool aimPin
@@ -625,69 +677,69 @@ classDiagram
         }
         class game__controllers__TutorialOverlayController["TutorialOverlayController"] {
             -TutorialStep m_step
-            -ecs::Entity m_overlayBgEntity
-            -ecs::Entity m_overlayTextEntity
-            -ecs::Entity m_actionTextEntity
-            -ecs::Entity m_skipTextEntity
+            -Entity m_overlayBgEntity
+            -Entity m_overlayTextEntity
+            -Entity m_actionTextEntity
+            -Entity m_skipTextEntity
             -float m_initialCameraYaw
             -float m_initialCameraDistance
             -int m_initialClubIndex
             -bool m_terrainEventStarted
             -size_t m_terrainCardIndex
             -float m_terrainCardTimer
-            -std::vector#lt; TerrainCard #gt; m_terrainCards
-            -std::vector#lt; EventCameraTarget #gt; m_eventCamTargets
-            -std::vector#lt; EventCameraTarget #gt; m_flagEventCamTargets
-            -ecs::Entity m_cameraEntity
-            -DirectX::XMFLOAT3 m_eventCamFromPos
+            -vector#lt;TerrainCard#gt; m_terrainCards
+            -vector#lt;EventCameraTarget#gt; m_eventCamTargets
+            -vector#lt;EventCameraTarget#gt; m_flagEventCamTargets
+            -Entity m_cameraEntity
+            -XMFLOAT3 m_eventCamFromPos
             -float m_eventCamLerpTimer
             -float m_eventCamDisplayTimer
             -float m_cupInWaitTimer
             -bool m_inputLocked
             -bool m_visible
             -MinimapController::InputActivity m_mapActivityAtStep
-            -ecs::Entity m_checkMarkEntity
-            -ecs::EntityOwner m_entityOwner
+            -Entity m_checkMarkEntity
+            -EntityOwner m_entityOwner
             -bool m_checkMarkShown
             -float m_checkMarkTimer
             -bool m_stepClearPending
             +TutorialOverlayController()
             +#126;TutorialOverlayController()
-            +Initialize(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, CameraController #42; cameraCtrl, ClubController #42; clubCtrl, ShotController #42; shotCtrl, MinimapController #42; minimapCtrl, ecs::Entity skyboxEntity) void
-            +Shutdown(core::GameContext #amp; ctx) void
+            +Initialize(GameContext#amp; ctx) void
+            +Update(GameContext#amp;, CameraController#42;, ClubController#42;, ShotController#42;, MinimapController#42;, Entity) void
+            +Shutdown(GameContext#amp; ctx) void
             +IsDone() bool #123;const#125;
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
             +GetStep() TutorialStep #123;const#125;
             +GetInputPolicy() TutorialInputPolicy #123;const#125;
             +GetPresentationPolicy() TutorialPresentationPolicy #123;const#125;
-            +GetMapInputPermissions() game::controllers::MinimapController::InputPermissions #123;const#125;
-            +CanAcceptCupIn(const std::string #amp; linkTarget, bool isTarget) bool #123;const#125;
-            +NotifyLinkCupIn(core::GameContext #amp; ctx) void
-            +SetEventCameraTargets(ecs::Entity cameraEntity, std::vector#lt; EventCameraTarget #gt; terrainTargets, std::vector#lt; EventCameraTarget #gt; flagTargets) void
+            +GetMapInputPermissions() MinimapController::InputPermissions #123;const#125;
+            +CanAcceptCupIn(const string#amp; linkTarget, bool isTarget) bool #123;const#125;
+            +NotifyLinkCupIn(GameContext#amp; ctx) void
+            +SetEventCameraTargets(Entity, vector#lt;EventCameraTarget#gt;, vector#lt;EventCameraTarget#gt;) void
             +IsInputLocked() bool #123;const#125;
-            +UpdateEventCamera(core::GameContext #amp; ctx) void
-            -NextStep(core::GameContext #amp; ctx) void
-            -UpdateUI(core::GameContext #amp; ctx) void
-            -CheckCompletion(core::GameContext #amp; ctx, CameraController #42; cameraCtrl, ClubController #42; clubCtrl, ShotController #42; shotCtrl, MinimapController #42; minimapCtrl) void
-            -GetActiveEventCameraTargets() const std::vector#lt; EventCameraTarget #gt; #amp; #123;const#125;
-            -TriggerStepClear(core::GameContext #amp; ctx) void
-            -UpdateStepClearAnim(core::GameContext #amp; ctx) void
+            +UpdateEventCamera(GameContext#amp; ctx) void
+            -NextStep(GameContext#amp; ctx) void
+            -UpdateUI(GameContext#amp; ctx) void
+            -CheckCompletion(GameContext#amp;, CameraController#42;, ClubController#42;, ShotController#42;, MinimapController#42;) void
+            -GetActiveEventCameraTargets() const vector#lt;EventCameraTarget#gt;#amp; #123;const#125;
+            -TriggerStepClear(GameContext#amp; ctx) void
+            -UpdateStepClearAnim(GameContext#amp; ctx) void
         }
         class game__controllers__TutorialOverlayController__EventCameraTarget["TutorialOverlayController::EventCameraTarget"] {
             <<struct>>
-            +DirectX::XMFLOAT3 camPos
-            +DirectX::XMFLOAT3 focusPos
-            +std::wstring name
-            +std::wstring desc
+            +XMFLOAT3 camPos
+            +XMFLOAT3 focusPos
+            +wstring name
+            +wstring desc
         }
-        class game__controllers__TutorialPresentationPolicy["TutorialPresentationPolicy"] {
+        class iso__game__controllers__TutorialPresentationPolicy["TutorialPresentationPolicy"] {
             <<struct>>
             +bool courseInfo
             +bool club
             +bool minimap
         }
-        class game__controllers__TutorialStep["TutorialStep"] {
+        class iso__game__controllers__TutorialStep["TutorialStep"] {
             <<enumeration>>
             Intro
             Camera
@@ -722,41 +774,42 @@ classDiagram
             -bool m_tutorialShowCourseInfo
             -bool m_tutorialShowClubSelection
             -bool m_tutorialShowMinimapDecoration
-            +Initialize(core::GameContext #amp; ctx) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, float dt, const game::components::GolfGameState #amp; state, game::components::ShotState::Phase shotPhase, float currentImpact, float currentPower, float confirmedPower, float confirmedImpact, float impactCenter, float windSpeed, const DirectX::XMFLOAT2 #amp; windDir, float cameraYaw, const std::vector#lt; ClubUIData #gt; #amp; clubs, int currentClubIndex, float distanceToTarget, float heightDiff, const game::components::AimPinState #42; aimPin) void
-            +UpdatePowerGauge(core::GameContext #amp; ctx, float fillValue, float markerValue, float minPower, float maxPower) void
-            +UpdateJudge(core::GameContext #amp; ctx, const std::wstring #amp; text, const DirectX::XMFLOAT4 #amp; color) void
-            +ResetShotUI(core::GameContext #amp; ctx) void
-            +SetGaugeVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetImpactZonesVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetShotPhaseUIVisible(core::GameContext #amp; ctx, bool shotPhase) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetTutorialPresentation(core::GameContext #amp; ctx, bool enabled, bool showCourseInfo, bool showClubSelection, bool showMinimapDecoration) void
+            +Initialize(GameContext#amp; ctx) void
+            +Shutdown(GameContext#amp; ctx) void
+            +Update(GameContext#amp;, float, const GolfGameState#amp;, ShotState::Phase, bool, float, float, float, float, float, const XMFLOAT2#amp;, float, const vector#lt;ClubUIData#gt;#amp;, int, float, float, const AimPinState#42;) void
+            +UpdatePowerGauge(GameContext#amp;, float, float, float, float) void
+            +UpdateJudge(GameContext#amp; ctx, const wstring#amp; text, const XMFLOAT4#amp; color) void
+            +ResetShotUI(GameContext#amp; ctx) void
+            +SetGaugeVisible(GameContext#amp; ctx, bool visible) void
+            +SetImpactZonesVisible(GameContext#amp; ctx, bool visible) void
+            +SetShotPhaseUIVisible(GameContext#amp; ctx, bool shotPhase) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +SetTutorialPresentation(GameContext#amp;, bool, bool, bool, bool) void
+            +IsShotGaugeAnimating() bool #123;const#125;
             +GetNormalHudOpacity() float #123;const#125;
-            -UpdateNormalHudTransition(core::GameContext #amp; ctx, float dt, game::components::ShotState::Phase shotPhase) void
-            -ApplyNormalHudOpacity(core::GameContext #amp; ctx) void
+            -UpdateNormalHudTransition(GameContext#amp; ctx, float dt, ShotState::Phase shotPhase) void
+            -ApplyNormalHudOpacity(GameContext#amp; ctx) void
         }
     }
-    namespace game__controllers__hud {
+    namespace game.controllers.hud {
         class game__controllers__hud__AchievementToastPanel["AchievementToastPanel"] {
-            -std::vector#lt; ToastEntry #gt; m_active
-            -ecs::EntityOwner m_entityOwner
-            +PushToast(core::GameContext #amp; ctx, const std::wstring #amp; name, const std::wstring #amp; description) void
-            +Update(core::GameContext #amp; ctx, float dt) void
-            +Render(core::GameContext #amp; ctx, graphics::TextRenderer #amp; renderer) void #123;const#125;
-            +Shutdown(core::GameContext #amp; ctx) void
-            -SpawnEntities(core::GameContext #amp; ctx, ToastEntry #amp; entry) void
-            -ApplyVisualState(core::GameContext #amp; ctx, ToastEntry #amp; entry, float targetY, float targetBrightness, float dt) void
-            -DestroyEntry(core::GameContext #amp; ctx, ToastEntry #amp; entry) void
+            -vector#lt;ToastEntry#gt; m_active
+            -EntityOwner m_entityOwner
+            +PushToast(GameContext#amp; ctx, const wstring#amp; name, const wstring#amp; description) void
+            +Update(GameContext#amp; ctx, float dt) void
+            +Render(GameContext#amp; ctx, TextRenderer#amp; renderer) void #123;const#125;
+            +Shutdown(GameContext#amp; ctx) void
+            -SpawnEntities(GameContext#amp; ctx, ToastEntry#amp; entry) void
+            -ApplyVisualState(GameContext#amp;, ToastEntry#amp;, float, float, float) void
+            -DestroyEntry(GameContext#amp; ctx, ToastEntry#amp; entry) void
         }
         class game__controllers__hud__AchievementToastPanel__ToastEntry["AchievementToastPanel::ToastEntry"] {
             <<struct>>
-            +ecs::Entity background
-            +ecs::Entity title
-            +ecs::Entity description
-            +std::wstring name
-            +std::wstring descriptionText
+            +Entity background
+            +Entity title
+            +Entity description
+            +wstring name
+            +wstring descriptionText
             +float age
             +float fadeProgress
             +bool fadingOut
@@ -765,141 +818,142 @@ classDiagram
         }
         class game__controllers__hud__AimDistancePanel["AimDistancePanel"] {
             -Entities m_entities
-            -ecs::EntityOwner m_entityOwner
+            -EntityOwner m_entityOwner
             -bool m_manuallyHidden
-            +Initialize(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, game::components::ShotState::Phase phase, float currentPower, float confirmedPower, const game::components::AimPinState #42; aimPin, const ClubUIData #amp; currentClub) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +Shutdown(core::GameContext #amp; ctx) void
+            +Initialize(GameContext#amp; ctx) void
+            +Update(GameContext#amp;, ShotState::Phase, float, float, const AimPinState#42;, const ClubUIData#amp;) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +Shutdown(GameContext#amp; ctx) void
         }
         class game__controllers__hud__AimDistancePanel__Entities["AimDistancePanel::Entities"] {
             <<struct>>
-            +ecs::Entity track
-            +ecs::Entity fill
-            +ecs::Entity maxLabel
-            +ecs::Entity valueLabel
-            +ecs::Entity pinLine
-            +ecs::Entity pinMarker
-            +ecs::Entity pinLabel
+            +Entity track
+            +Entity fill
+            +Entity maxLabel
+            +Entity valueLabel
+            +Entity pinLine
+            +Entity pinMarker
+            +Entity pinLabel
         }
         class game__controllers__hud__ClubSelectionPanel["ClubSelectionPanel"] {
-            -ecs::Entity m_background
-            -ecs::Entity m_qKey
-            -ecs::Entity m_eKey
-            -ecs::Entity m_pinIcon
-            -ecs::Entity m_pinHint
-            -ecs::Entity m_clubIcon
-            -ecs::Entity m_clubName
-            -ecs::Entity m_clubSubName
+            -Entity m_background
+            -Entity m_qKey
+            -Entity m_eKey
+            -Entity m_pinIcon
+            -Entity m_pinHint
+            -Entity m_clubIcon
+            -Entity m_clubName
+            -Entity m_clubSubName
             -int m_selectedIndex
-            -ecs::EntityOwner m_staticEntityOwner
-            -ecs::EntityOwner m_selectedEntityOwner
-            +Initialize(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, float elapsedTime, const std::vector#lt; ClubUIData #gt; #amp; clubs, int currentClubIndex) void
-            +SetShotPhaseVisible(core::GameContext #amp; ctx, bool shotPhase) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetOpacity(core::GameContext #amp; ctx, float opacity) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            -RebuildSelectedClub(core::GameContext #amp; ctx, const ClubUIData #amp; club) void
+            -EntityOwner m_staticEntityOwner
+            -EntityOwner m_selectedEntityOwner
+            +Initialize(GameContext#amp; ctx) void
+            +Update(GameContext#amp;, float, const vector#lt;ClubUIData#gt;#amp;, int) void
+            +SetShotPhaseVisible(GameContext#amp; ctx, bool shotPhase) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +SetOpacity(GameContext#amp; ctx, float opacity) void
+            +Shutdown(GameContext#amp; ctx) void
+            -RebuildSelectedClub(GameContext#amp; ctx, const ClubUIData#amp; club) void
         }
         class game__controllers__hud__CourseInfoPanel["CourseInfoPanel"] {
             -Entities m_entities
-            -ecs::EntityOwner m_entityOwner
-            +Initialize(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, const game::components::GolfGameState #amp; state) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetOpacity(core::GameContext #amp; ctx, float opacity) void
-            +Shutdown(core::GameContext #amp; ctx) void
+            -EntityOwner m_entityOwner
+            +Initialize(GameContext#amp; ctx) void
+            +Update(GameContext#amp; ctx, const GolfGameState#amp; state) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +SetOpacity(GameContext#amp; ctx, float opacity) void
+            +Shutdown(GameContext#amp; ctx) void
         }
         class game__controllers__hud__CourseInfoPanel__Entities["CourseInfoPanel::Entities"] {
             <<struct>>
-            +ecs::Entity currentRule
-            +ecs::Entity currentLabel
-            +ecs::Entity currentPage
-            +ecs::Entity targetLabel
-            +ecs::Entity targetPage
-            +ecs::Entity targetRule
+            +Entity currentRule
+            +Entity currentLabel
+            +Entity currentPage
+            +Entity targetLabel
+            +Entity targetPage
+            +Entity targetRule
+            +Entity attribution
         }
         class game__controllers__hud__GameplayControlsPanel["GameplayControlsPanel"] {
-            -ecs::Entity m_shotButtonBackground
-            -ecs::Entity m_shotButtonText
-            -ecs::Entity m_controlHint
+            -Entity m_shotButtonBackground
+            -Entity m_shotButtonText
+            -Entity m_controlHint
             -bool m_tutorialMode
-            -ecs::EntityOwner m_entityOwner
-            +Initialize(core::GameContext #amp; ctx) void
-            +SetShotPhaseVisible(core::GameContext #amp; ctx, bool shotPhase) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetTutorialMode(core::GameContext #amp; ctx, bool enabled) void
-            +Shutdown(core::GameContext #amp; ctx) void
+            -EntityOwner m_entityOwner
+            +Initialize(GameContext#amp; ctx) void
+            +SetShotPhaseVisible(GameContext#amp; ctx, bool shotPhase) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +SetTutorialMode(GameContext#amp; ctx, bool enabled) void
+            +Shutdown(GameContext#amp; ctx) void
         }
         class game__controllers__hud__LiePanel["LiePanel"] {
-            -ecs::Entity m_background
-            -ecs::Entity m_label
-            -ecs::Entity m_value
-            -ecs::Entity m_condition
-            -ecs::EntityOwner m_entityOwner
-            +Update(core::GameContext #amp; ctx, game::components::TerrainMaterial material) void
-            +SetShotPhaseVisible(core::GameContext #amp; ctx, bool shotPhase) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            -Initialize(core::GameContext #amp; ctx) void
+            -Entity m_background
+            -Entity m_label
+            -Entity m_value
+            -Entity m_condition
+            -EntityOwner m_entityOwner
+            +Update(GameContext#amp; ctx, TerrainMaterial material) void
+            +SetShotPhaseVisible(GameContext#amp; ctx, bool shotPhase) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +Shutdown(GameContext#amp; ctx) void
+            -Initialize(GameContext#amp; ctx) void
         }
         class game__controllers__hud__MinimapDecorationPanel["MinimapDecorationPanel"] {
-            -ecs::EntityOwner m_entityOwner
-            +Initialize(core::GameContext #amp; ctx) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetOpacity(core::GameContext #amp; ctx, float opacity) void
-            +Shutdown(core::GameContext #amp; ctx) void
+            -EntityOwner m_entityOwner
+            +Initialize(GameContext#amp; ctx) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +SetOpacity(GameContext#amp; ctx, float opacity) void
+            +Shutdown(GameContext#amp; ctx) void
         }
         class game__controllers__hud__ShotGaugePanel["ShotGaugePanel"] {
             -Entities m_entities
-            -ecs::EntityOwner m_entityOwner
-            -float m_phaseTransition
-            -game::components::ShotState::Phase m_previousPhase
-            -float m_dismissRemaining
-            +Initialize(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, float deltaTime, game::components::ShotState::Phase phase, float currentPower, float confirmedPower, float currentImpact, float confirmedImpact, float impactCenter, const ClubUIData #amp; currentClub, const game::components::AimPinState #42; aimPin) void
-            +UpdatePowerGauge(core::GameContext #amp; ctx, float fillValue, float markerValue, float minPower, float maxPower) void
-            +UpdateJudge(core::GameContext #amp; ctx, const std::wstring #amp; text, const DirectX::XMFLOAT4 #amp; color) void
-            +Reset(core::GameContext #amp; ctx) void
-            +SetGaugeVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetImpactZonesVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetShotPhaseVisible(core::GameContext #amp; ctx, bool shotPhase) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +Shutdown(core::GameContext #amp; ctx) void
-            -UpdatePanelContent(core::GameContext #amp; ctx, game::components::ShotState::Phase phase, float currentPower, float confirmedPower, float currentImpact, float confirmedImpact, float impactCenter, const ClubUIData #amp; currentClub, const game::components::AimPinState #42; aimPin) void
+            -EntityOwner m_entityOwner
+            -ShotState::Phase m_previousPhase
+            -float m_entranceElapsed
+            -float m_zoneElapsed
+            -float m_confirmElapsed
+            -bool m_resultActive
+            -bool m_wasCommitted
+            -float m_resultElapsed
+            -float m_resultPower
+            -float m_resultImpact
+            -float m_resultCenter
+            -int m_resultYards
+            -ShotJudgement m_resultJudgement
+            +Initialize(GameContext#amp; ctx) void
+            +Update(GameContext#amp;, float, ShotState::Phase, float, float, float, float, const ClubUIData#amp;, const AimPinState#42;, bool) void
+            +IsResultAnimating() bool #123;const#125;
+            +UpdatePowerGauge(GameContext#amp;, float, float, float, float) void
+            +UpdateJudge(GameContext#amp; ctx, const wstring#amp; text, const XMFLOAT4#amp; color) void
+            +Reset(GameContext#amp; ctx) void
+            +SetGaugeVisible(GameContext#amp; ctx, bool visible) void
+            +SetImpactZonesVisible(GameContext#amp; ctx, bool visible) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +Shutdown(GameContext#amp; ctx) void
+            -ResetTimers() void
         }
         class game__controllers__hud__ShotGaugePanel__Entities["ShotGaugePanel::Entities"] {
             <<struct>>
-            +ecs::Entity background
-            +ecs::Entity step
-            +ecs::Entity title
-            +ecs::Entity hint
-            +ecs::Entity powerLabel
-            +ecs::Entity powerValue
-            +ecs::Entity accuracyLabel
-            +ecs::Entity accuracyValue
-            +ecs::Entity club
-            +ecs::Entity gauge
-            +ecs::Entity judge
+            +Entity gauge
+            +Entity judge
         }
         class game__controllers__hud__WindPanel["WindPanel"] {
-            -ecs::Entity m_background
-            -ecs::Entity m_surfaceTexture
-            -ecs::Entity m_label
-            -ecs::Entity m_value
-            -ecs::Entity m_directionAndUnit
-            -ecs::Entity m_rule
-            -ecs::EntityOwner m_entityOwner
-            +Initialize(core::GameContext #amp; ctx) void
-            +Update(core::GameContext #amp; ctx, float elapsedTime, float windSpeed, const DirectX::XMFLOAT2 #amp; windDirection, float cameraYaw, game::components::TerrainMaterial terrain) void
-            +SetVisible(core::GameContext #amp; ctx, bool visible) void
-            +SetOpacity(core::GameContext #amp; ctx, float opacity) void
-            +Shutdown(core::GameContext #amp; ctx) void
+            -Entity m_background
+            -Entity m_surfaceTexture
+            -Entity m_label
+            -Entity m_value
+            -Entity m_directionAndUnit
+            -Entity m_rule
+            -EntityOwner m_entityOwner
+            +Initialize(GameContext#amp; ctx) void
+            +Update(GameContext#amp;, float, float, const XMFLOAT2#amp;, float, TerrainMaterial) void
+            +SetVisible(GameContext#amp; ctx, bool visible) void
+            +SetOpacity(GameContext#amp; ctx, float opacity) void
+            +Shutdown(GameContext#amp; ctx) void
         }
     }
-    namespace game__controllers__minimap_detail {
-        class game__controllers__minimap_detail__FlagKind["FlagKind"] {
+    namespace game.controllers.minimap_detail {
+        class iso__game__controllers__minimap_detail__FlagKind["FlagKind"] {
             <<enumeration>>
             Target
             OneHop
@@ -909,7 +963,7 @@ classDiagram
             Unknown
             Count
         }
-        class game__controllers__minimap_detail__MarkerBounds["MarkerBounds"] {
+        class iso__game__controllers__minimap_detail__MarkerBounds["MarkerBounds"] {
             <<struct>>
             +float x
             +float y
@@ -917,29 +971,36 @@ classDiagram
             +float height
         }
     }
-    %% 継承
-    %% メンバー由来の関係
+    %% 他モジュール / 外部の参照ノード
+    class ecs__EntityOwner["ecs::EntityOwner"]
+    class game__scenes__PageDataAsyncResult["game::scenes::PageDataAsyncResult"]
+    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
+    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
+    class game__systems__AchievementManager["game::systems::AchievementManager"]
+    class game__systems__GameJuiceSystem["game::systems::GameJuiceSystem"]
+    class game__systems__MapRenderParams["game::systems::MapRenderParams"]
+    class game__systems__MapSys["game::systems::MapSys"]
+    class game__systems__WikiTerrainSystem["game::systems::WikiTerrainSystem"]
+    class game__utils__CarryDistanceTable["game::utils::CarryDistanceTable"]
+    class game__utils__MapViewSkyboxState["game::utils::MapViewSkyboxState"]
+    class graphics__SkeletalModel["graphics::SkeletalModel"]
+    class graphics__TextStyle["graphics::TextStyle"]
+    class graphics__Vertex["graphics::Vertex"]
+    %% 関係
     game__controllers__AimPinController *-- "1" ecs__EntityOwner : m_markerOwner
     game__controllers__AimPinController__UpdateParams o-- "0..1" game__systems__WikiTerrainSystem : terrainSystem
     game__controllers__ArticleTransitionController *-- "1" ecs__EntityOwner : m_entityOwner
     game__controllers__ArticleTransitionController *-- "0..*" game__controllers__ArticleTransitionController__IntroductionShot : m_introductionShots
-    game__controllers__ArticleTransitionController --> "1" game__controllers__ArticleTransitionController__Phase : m_phase
     game__controllers__ArticleTransitionController o-- "0..1" game__controllers__MinimapController : m_minimap
     game__controllers__ArticleTransitionController *-- "1" game__controllers__StartGoalIntroductionPanel : m_startGoalPanel
     game__controllers__ArticleTransitionController *-- "0..*" game__scenes__PageDataAsyncResult : m_loadTask, m_prefetchTask, m_pendingPageData
     game__controllers__ArticleTransitionController o-- "0..1" game__scenes__WikiPageLoader : m_pageLoader
     game__controllers__ArticleTransitionController *-- "0..*" graphics__TextStyle : m_primaryStyle, m_progressStyle, m_captionStyle
-    game__controllers__ArticleTransitionController__IntroductionShot --> "1" game__controllers__ArticleTransitionController__IntroductionShotKind : kind
-    game__controllers__BallFastForwardIndicator --> "1" game__utils__FastForwardTier : m_displayedTier
-    game__controllers__BallFastForwardTimer --> "1" game__utils__FastForwardTier : m_currentTier
     game__controllers__CameraController *-- "1" game__controllers__CameraController__Config : m_cfg
     game__controllers__CameraController__Config o-- "0..1" game__systems__GameJuiceSystem : gameJuice
     game__controllers__CameraController__Config o-- "0..1" game__systems__WikiTerrainSystem : terrain
     game__controllers__ClubController *-- "1" ecs__EntityOwner : m_entityOwner
-    game__controllers__ClubController --> "1" game__controllers__ClubController__CelebrationStage : m_celebrationStage
     game__controllers__ClubController *-- "0..*" game__controllers__ClubController__Club : m_availableClubs, m_currentClub
-    game__controllers__ClubController --> "1" game__controllers__ClubController__ClubAnimPhase : m_clubAnimPhase
-    game__controllers__ClubController --> "1" game__controllers__ClubController__GolferTeleportPhase : m_golferTeleportPhase
     game__controllers__ClubController o-- "0..1" game__systems__WikiTerrainSystem : m_terrainSystem
     game__controllers__ClubController *-- "1" graphics__SkeletalModel : m_golferModel
     game__controllers__ClubController *-- "0..*" graphics__Vertex : m_golferPoseScratch
@@ -956,7 +1017,6 @@ classDiagram
     game__controllers__StartGoalIntroductionPanel *-- "1" ecs__EntityOwner : m_entityOwner
     game__controllers__StartGoalIntroductionPanel *-- "0..*" game__controllers__StartGoalIntroductionPanel__Card : m_startCard, m_goalCard
     game__controllers__StartGoalIntroductionPanel *-- "0..*" game__controllers__StartGoalIntroductionPanel__Element : m_elements
-    game__controllers__StartGoalIntroductionPanel__Element --> "1" game__controllers__StartGoalIntroductionPanel__Group : group
     game__controllers__TrajectoryPredictor *-- "1" ecs__EntityOwner : m_entityOwner
     game__controllers__TrajectoryPredictor__Params o-- "0..1" game__systems__WikiTerrainSystem : terrainSystem
     game__controllers__TrajectoryPredictor__Params o-- "0..1" game__utils__CarryDistanceTable : carryTable
@@ -964,7 +1024,6 @@ classDiagram
     game__controllers__TutorialOverlayController *-- "1" game__controllers__MinimapController__InputActivity : m_mapActivityAtStep
     game__controllers__TutorialOverlayController *-- "0..*" game__controllers__TerrainCard : m_terrainCards
     game__controllers__TutorialOverlayController *-- "0..*" game__controllers__TutorialOverlayController__EventCameraTarget : m_eventCamTargets, m_flagEventCamTargets
-    game__controllers__TutorialOverlayController --> "1" game__controllers__TutorialStep : m_step
     game__controllers__WikiGolfHUD *-- "1" game__controllers__hud__ClubSelectionPanel : m_clubSelectionPanel
     game__controllers__WikiGolfHUD *-- "1" game__controllers__hud__CourseInfoPanel : m_courseInfoPanel
     game__controllers__WikiGolfHUD *-- "1" game__controllers__hud__MinimapDecorationPanel : m_minimapDecorationPanel
@@ -981,7 +1040,6 @@ classDiagram
     game__controllers__hud__LiePanel *-- "1" ecs__EntityOwner : m_entityOwner
     game__controllers__hud__MinimapDecorationPanel *-- "1" ecs__EntityOwner : m_entityOwner
     game__controllers__hud__ShotGaugePanel *-- "1" ecs__EntityOwner : m_entityOwner
-    game__controllers__hud__ShotGaugePanel --> "1" game__components__ShotState__Phase : m_previousPhase
     game__controllers__hud__ShotGaugePanel *-- "1" game__controllers__hud__ShotGaugePanel__Entities : m_entities
     game__controllers__hud__WindPanel *-- "1" ecs__EntityOwner : m_entityOwner
     game__scenes__WikiGolfScene *-- "0..1" game__controllers__AimPinController : m_aimPinController
@@ -997,167 +1055,25 @@ classDiagram
     game__scenes__WikiGolfScene *-- "0..1" game__controllers__WikiGolfHUD : m_hud
     game__scenes__WikiPageLoader o-- "0..1" game__controllers__MinimapController : m_buildMinimap
     game__systems__AchievementManager *-- "1" game__controllers__hud__AchievementToastPanel : m_toastPanel
-    %% ネスト型
-    game__controllers__AimPinController .. game__controllers__AimPinController__UpdateParams : nested
-    game__controllers__AimPinController .. game__controllers__AimPinController__UpdateResult : nested
-    game__controllers__ArticleTransitionController .. game__controllers__ArticleTransitionController__IntroductionShotKind : nested
-    game__controllers__ClubController .. game__controllers__ClubController__InputParams : nested
-    game__controllers__ClubController .. game__controllers__ClubController__InputResult : nested
-    game__controllers__MinimapController .. game__controllers__MinimapController__InputPermissions : nested
-    game__controllers__ShotController .. game__controllers__ShotController__ShotEvent : nested
-    game__controllers__StartGoalIntroductionPanel .. game__controllers__StartGoalIntroductionPanel__Content : nested
-    game__controllers__StartGoalIntroductionPanel .. game__controllers__StartGoalIntroductionPanel__Group : nested
-    game__controllers__TrajectoryPredictor .. game__controllers__TrajectoryPredictor__Params : nested
-    %% 依存 (宣言 / 生成 / ECS)
-    game__controllers__AimPinController ..> core__GameContext
-    game__controllers__AimPinController ..> game__components__AimPinState : ECS
-    game__controllers__AimPinController ..> game__components__Transform : ECS
-    game__controllers__ArticleTransitionController ..> core__GameContext
-    game__controllers__ArticleTransitionController ..> game__components__Camera : ECS
-    game__controllers__ArticleTransitionController ..> game__components__GolfGameState : ECS
-    game__controllers__ArticleTransitionController ..> game__components__MeshRenderer : ECS
-    game__controllers__ArticleTransitionController ..> game__components__Transform : ECS
-    game__controllers__ArticleTransitionController ..> game__components__UIText : ECS
-    game__controllers__ArticleTransitionController ..> game__scenes__CourseIntroductionData
-    game__controllers__BallFastForwardIndicator ..> core__GameContext
-    game__controllers__BallFastForwardIndicator ..> game__components__UIImage : ECS
-    game__controllers__BallFastForwardTimer ..> core__GameContext
-    game__controllers__BallFastForwardTimer ..> game__components__GolfGameState : ECS
-    game__controllers__BallFastForwardTimer ..> game__components__ShotState : ECS
-    game__controllers__CameraController ..> core__GameContext
-    game__controllers__CameraController ..> game__components__Camera : ECS
-    game__controllers__CameraController ..> game__components__Collider : ECS
-    game__controllers__CameraController ..> game__components__RigidBody : ECS
-    game__controllers__CameraController ..> game__components__ShotState : ECS
-    game__controllers__CameraController ..> game__components__Transform : ECS
-    game__controllers__CameraController ..> game__components__Wall : ECS
-    game__controllers__ClubController ..> core__GameContext
-    game__controllers__ClubController ..> game__components__GolfGameState : ECS
-    game__controllers__ClubController ..> game__components__MeshRenderer : ECS
-    game__controllers__ClubController ..> game__components__ShotState : ECS
-    game__controllers__ClubController ..> game__components__Transform : ECS
-    game__controllers__MinimapController ..> core__GameContext
-    game__controllers__MinimapController ..> game__components__AimPinState : ECS
-    game__controllers__MinimapController ..> game__components__GolfGameState : ECS
-    game__controllers__MinimapController ..> game__components__MeshRenderer : ECS
-    game__controllers__MinimapController ..> game__components__Skybox : ECS
-    game__controllers__MinimapController ..> game__components__Transform : ECS
-    game__controllers__MinimapController ..> game__components__UIImage : ECS
-    game__controllers__MinimapController ..> game__components__UIText : ECS
-    game__controllers__MinimapController ..> game__systems__MapSys : 生成
-    game__controllers__ShotController ..> core__GameContext
-    game__controllers__ShotController ..> game__components__GolfGameState : ECS
-    game__controllers__ShotController ..> game__components__RigidBody : ECS
-    game__controllers__ShotController ..> game__components__ShotState : ECS
-    game__controllers__ShotController ..> game__components__Transform : ECS
-    game__controllers__ShotController ..> game__controllers__ClubController
-    game__controllers__ShotController ..> game__controllers__ClubController__Club
-    game__controllers__ShotController ..> game__controllers__WikiGolfHUD
-    game__controllers__ShotController ..> game__systems__TimeOfDaySystem
-    game__controllers__StartGoalIntroductionPanel ..> core__GameContext
-    game__controllers__StartGoalIntroductionPanel ..> game__components__UIImage : ECS
-    game__controllers__StartGoalIntroductionPanel ..> game__components__UIText : ECS
-    game__controllers__StartGoalIntroductionPanel ..> graphics__TextStyle
-    game__controllers__TrajectoryPredictor ..> core__GameContext
-    game__controllers__TrajectoryPredictor ..> game__components__Collider : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__GolfGameState : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__MeshRenderer : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__RigidBody : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__Transform : ECS
-    game__controllers__TutorialOverlayController ..> core__GameContext
-    game__controllers__TutorialOverlayController ..> game__components__AimPinState : ECS
-    game__controllers__TutorialOverlayController ..> game__components__Camera : ECS
-    game__controllers__TutorialOverlayController ..> game__components__GolfGameState : ECS
-    game__controllers__TutorialOverlayController ..> game__components__ShotState : ECS
-    game__controllers__TutorialOverlayController ..> game__components__Transform : ECS
-    game__controllers__TutorialOverlayController ..> game__components__UIImage : ECS
-    game__controllers__TutorialOverlayController ..> game__components__UIText : ECS
-    game__controllers__TutorialOverlayController ..> game__controllers__CameraController
-    game__controllers__TutorialOverlayController ..> game__controllers__ClubController
-    game__controllers__TutorialOverlayController ..> game__controllers__MinimapController
-    game__controllers__TutorialOverlayController ..> game__controllers__MinimapController__InputPermissions
-    game__controllers__TutorialOverlayController ..> game__controllers__ShotController
-    game__controllers__TutorialOverlayController ..> game__controllers__TutorialInputPolicy
-    game__controllers__TutorialOverlayController ..> game__controllers__TutorialPresentationPolicy
-    game__controllers__WikiGolfHUD ..> core__GameContext
-    game__controllers__WikiGolfHUD ..> game__components__AimPinState
-    game__controllers__WikiGolfHUD ..> game__components__GolfGameState
-    game__controllers__WikiGolfHUD ..> game__components__ShotState__Phase
-    game__controllers__WikiGolfHUD ..> game__controllers__ClubUIData
-    game__controllers__hud__AchievementToastPanel ..> core__GameContext
-    game__controllers__hud__AchievementToastPanel ..> game__components__UIText : ECS
-    game__controllers__hud__AchievementToastPanel ..> graphics__TextRenderer
-    game__controllers__hud__AimDistancePanel ..> core__GameContext
-    game__controllers__hud__AimDistancePanel ..> game__components__AimPinState
-    game__controllers__hud__AimDistancePanel ..> game__components__ShotState__Phase
-    game__controllers__hud__AimDistancePanel ..> game__components__UIImage : ECS
-    game__controllers__hud__AimDistancePanel ..> game__components__UIText : ECS
-    game__controllers__hud__AimDistancePanel ..> game__controllers__ClubUIData
-    game__controllers__hud__ClubSelectionPanel ..> core__GameContext
-    game__controllers__hud__ClubSelectionPanel ..> game__components__UIImage : ECS
-    game__controllers__hud__ClubSelectionPanel ..> game__components__UIText : ECS
-    game__controllers__hud__ClubSelectionPanel ..> game__controllers__ClubUIData
-    game__controllers__hud__CourseInfoPanel ..> core__GameContext
-    game__controllers__hud__CourseInfoPanel ..> game__components__GolfGameState
-    game__controllers__hud__CourseInfoPanel ..> game__components__UIText : ECS
-    game__controllers__hud__GameplayControlsPanel ..> core__GameContext
-    game__controllers__hud__GameplayControlsPanel ..> game__components__UIText : ECS
-    game__controllers__hud__LiePanel ..> core__GameContext
-    game__controllers__hud__LiePanel ..> game__components__TerrainMaterial
-    game__controllers__hud__LiePanel ..> game__components__UIText : ECS
-    game__controllers__hud__MinimapDecorationPanel ..> core__GameContext
-    game__controllers__hud__MinimapDecorationPanel ..> game__components__UIText : ECS
-    game__controllers__hud__ShotGaugePanel ..> core__GameContext
-    game__controllers__hud__ShotGaugePanel ..> game__components__AimPinState
-    game__controllers__hud__ShotGaugePanel ..> game__components__UIBarGauge : ECS
-    game__controllers__hud__ShotGaugePanel ..> game__components__UIText : ECS
-    game__controllers__hud__ShotGaugePanel ..> game__controllers__ClubUIData
-    game__controllers__hud__WindPanel ..> core__GameContext
-    game__controllers__hud__WindPanel ..> game__components__TerrainMaterial
-    game__controllers__hud__WindPanel ..> game__components__UIImage : ECS
-    game__controllers__hud__WindPanel ..> game__components__UIText : ECS
-    game__scenes__WikiGolfScene ..> game__controllers__AimPinController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__ArticleTransitionController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__CameraController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__ClubController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__MinimapController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__ShotController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__TrajectoryPredictor : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__TutorialOverlayController : 生成
-    game__scenes__WikiGolfScene ..> game__controllers__WikiGolfHUD : 生成
-    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
-    class core__GameContext["core::GameContext"]
-    class ecs__EntityOwner["ecs::EntityOwner"]
-    class game__components__AimPinState["game::components::AimPinState"]
-    class game__components__Camera["game::components::Camera"]
-    class game__components__Collider["game::components::Collider"]
-    class game__components__GolfGameState["game::components::GolfGameState"]
-    class game__components__MeshRenderer["game::components::MeshRenderer"]
-    class game__components__RigidBody["game::components::RigidBody"]
-    class game__components__ShotState["game::components::ShotState"]
-    class game__components__ShotState__Phase["game::components::ShotState::Phase"]
-    class game__components__Skybox["game::components::Skybox"]
-    class game__components__TerrainMaterial["game::components::TerrainMaterial"]
-    class game__components__Transform["game::components::Transform"]
-    class game__components__UIBarGauge["game::components::UIBarGauge"]
-    class game__components__UIImage["game::components::UIImage"]
-    class game__components__UIText["game::components::UIText"]
-    class game__components__Wall["game::components::Wall"]
-    class game__scenes__CourseIntroductionData["game::scenes::CourseIntroductionData"]
-    class game__scenes__PageDataAsyncResult["game::scenes::PageDataAsyncResult"]
-    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
-    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
-    class game__systems__AchievementManager["game::systems::AchievementManager"]
-    class game__systems__GameJuiceSystem["game::systems::GameJuiceSystem"]
-    class game__systems__MapRenderParams["game::systems::MapRenderParams"]
-    class game__systems__MapSys["game::systems::MapSys"]
-    class game__systems__TimeOfDaySystem["game::systems::TimeOfDaySystem"]
-    class game__systems__WikiTerrainSystem["game::systems::WikiTerrainSystem"]
-    class game__utils__CarryDistanceTable["game::utils::CarryDistanceTable"]
-    class game__utils__FastForwardTier["game::utils::FastForwardTier"]
-    class game__utils__MapViewSkyboxState["game::utils::MapViewSkyboxState"]
-    class graphics__SkeletalModel["graphics::SkeletalModel"]
-    class graphics__TextRenderer["graphics::TextRenderer"]
-    class graphics__TextStyle["graphics::TextStyle"]
-    class graphics__Vertex["graphics::Vertex"]
-    %% 外部クラス (継承元のみ)
+    game__controllers__AimPinController .. game__controllers__AimPinController__UpdateParams
+    game__controllers__AimPinController .. game__controllers__AimPinController__UpdateResult
+    game__controllers__ArticleTransitionController .. game__controllers__ArticleTransitionController__IntroductionShotKind
+    game__controllers__ArticleTransitionController .. game__controllers__ArticleTransitionController__Phase
+    game__controllers__ClubController .. game__controllers__ClubController__CelebrationStage
+    game__controllers__ClubController .. game__controllers__ClubController__ClubAnimPhase
+    game__controllers__ClubController .. game__controllers__ClubController__GolferTeleportPhase
+    game__controllers__ClubController .. game__controllers__ClubController__InputParams
+    game__controllers__ClubController .. game__controllers__ClubController__InputResult
+    game__controllers__MinimapController .. game__controllers__MinimapController__InputPermissions
+    game__controllers__ShotController .. game__controllers__ShotController__ShotEvent
+    game__controllers__StartGoalIntroductionPanel .. game__controllers__StartGoalIntroductionPanel__Content
+    game__controllers__StartGoalIntroductionPanel .. game__controllers__StartGoalIntroductionPanel__Group
+    game__controllers__TrajectoryPredictor .. game__controllers__TrajectoryPredictor__Params
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__game__controllers__ClubUIData .. iso__game__controllers__TutorialStep
+    iso__game__controllers__TutorialStep .. iso__game__controllers__FastForwardTier
+    iso__game__controllers__TutorialStep .. iso__game__controllers__TutorialInputPolicy
+    iso__game__controllers__minimap_detail__FlagKind .. iso__game__controllers__minimap_detail__MarkerBounds
+    %% 配色
+    cssClass "game__controllers__AimPinController,game__controllers__AimPinController__UpdateParams,game__controllers__AimPinController__UpdateResult,game__controllers__ArticleTransitionController,game__controllers__ArticleTransitionController__IntroductionShot,game__controllers__ArticleTransitionController__IntroductionShotKind,game__controllers__ArticleTransitionController__Phase,game__controllers__BallFastForwardIndicator,game__controllers__BallFastForwardTimer,game__controllers__CameraController,game__controllers__CameraController__Config,game__controllers__ClubController,game__controllers__ClubController__CelebrationStage,game__controllers__ClubController__Club,game__controllers__ClubController__ClubAnimPhase,game__controllers__ClubController__GolferTeleportPhase,game__controllers__ClubController__InputParams,game__controllers__ClubController__InputResult,iso__game__controllers__ClubUIData,iso__game__controllers__FastForwardTier,game__controllers__MinimapController,game__controllers__MinimapController__Config,game__controllers__MinimapController__FlagFilterToggle,game__controllers__MinimapController__InputActivity,game__controllers__MinimapController__InputPermissions,game__controllers__MinimapController__MapHoleIcon,game__controllers__ShotController,game__controllers__ShotController__ShotEvent,game__controllers__StartGoalIntroductionPanel,game__controllers__StartGoalIntroductionPanel__Card,game__controllers__StartGoalIntroductionPanel__Content,game__controllers__StartGoalIntroductionPanel__Element,game__controllers__StartGoalIntroductionPanel__Group,game__controllers__TerrainCard,game__controllers__TrajectoryPredictor,game__controllers__TrajectoryPredictor__Params,iso__game__controllers__TutorialInputPolicy,game__controllers__TutorialOverlayController,game__controllers__TutorialOverlayController__EventCameraTarget,iso__game__controllers__TutorialPresentationPolicy,iso__game__controllers__TutorialStep,game__controllers__WikiGolfHUD,game__controllers__hud__AchievementToastPanel,game__controllers__hud__AchievementToastPanel__ToastEntry,game__controllers__hud__AimDistancePanel,game__controllers__hud__AimDistancePanel__Entities,game__controllers__hud__ClubSelectionPanel,game__controllers__hud__CourseInfoPanel,game__controllers__hud__CourseInfoPanel__Entities,game__controllers__hud__GameplayControlsPanel,game__controllers__hud__LiePanel,game__controllers__hud__MinimapDecorationPanel,game__controllers__hud__ShotGaugePanel,game__controllers__hud__ShotGaugePanel__Entities,game__controllers__hud__WindPanel,iso__game__controllers__minimap_detail__FlagKind,iso__game__controllers__minimap_detail__MarkerBounds" game_controllers
+    cssClass "ecs__EntityOwner,game__scenes__PageDataAsyncResult,game__scenes__WikiGolfScene,game__scenes__WikiPageLoader,game__systems__AchievementManager,game__systems__GameJuiceSystem,game__systems__MapRenderParams,game__systems__MapSys,game__systems__WikiTerrainSystem,game__utils__CarryDistanceTable,game__utils__MapViewSkyboxState,graphics__SkeletalModel,graphics__TextStyle,graphics__Vertex" refnode

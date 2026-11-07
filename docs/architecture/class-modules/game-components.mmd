@@ -1,56 +1,108 @@
-%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF クラス図: game-components (generate_class_full.py による自動生成。手で編集しないこと)
 %% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
 %% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
-%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
-%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
 classDiagram
     direction LR
-    namespace game__components {
-        class game__components__AimPinState["AimPinState"] {
+    namespace game.components {
+        class iso__game__components__AimPinState["AimPinState"] {
             <<struct>>
             +bool active
-            +DirectX::XMFLOAT3 worldPosition
+            +XMFLOAT3 worldPosition
             +float distanceFromBall
             +float heightFromBall
             +float requiredPowerRatio
             +float playsLikeDistance
             +bool reachable
         }
-        class game__components__Billboard["Billboard"] {
+        class iso__game__components__Billboard["Billboard"] {
             <<struct>>
         }
-        class game__components__BlendMode["BlendMode"] {
+        class iso__game__components__BlendMode["BlendMode"] {
             <<enumeration>>
             Opaque
             Alpha
             Multiply
             Add
         }
-        class game__components__ButtonState["ButtonState"] {
+        class iso__game__components__ButtonState["ButtonState"] {
             <<enumeration>>
             Normal
             Hovered
             Pressed
             Disabled
         }
-        class game__components__Camera["Camera"] {
+        class iso__game__components__Camera["Camera"] {
             <<struct>>
             +float fov
             +float nearZ
             +float farZ
             +float aspectRatio
             +bool isMainCamera
-            +GetViewMatrix(const Transform #amp; transform) DirectX::XMMATRIX #123;const#125;
-            +GetProjectionMatrix() DirectX::XMMATRIX #123;const#125;
+            +GetViewMatrix(const Transform#amp; transform) XMMATRIX #123;const#125;
+            +GetProjectionMatrix() XMMATRIX #123;const#125;
         }
         class game__components__Collider["Collider"] {
             <<struct>>
             +ColliderType type
             +float radius
-            +DirectX::XMFLOAT3 size
-            +DirectX::XMFLOAT3 offset
+            +XMFLOAT3 size
+            +XMFLOAT3 offset
         }
-        class game__components__ColliderType["ColliderType"] {
+        class iso__game__components__ColliderType["ColliderType"] {
             <<enumeration>>
             Sphere
             Box
@@ -60,27 +112,27 @@ classDiagram
             <<struct>>
             +uint32_t entityA
             +uint32_t entityB
-            +DirectX::XMFLOAT3 contactPoint
-            +DirectX::XMFLOAT3 normal
+            +XMFLOAT3 contactPoint
+            +XMFLOAT3 normal
             +float penetrationDepth
         }
         class game__components__CollisionEvents["CollisionEvents"] {
             <<struct>>
-            +std::vector#lt; CollisionEvent #gt; events
+            +vector#lt;CollisionEvent#gt; events
         }
         class game__components__EnvironmentState["EnvironmentState"] {
             <<struct>>
             +LightingMood lightingMood
-            +DirectX::XMFLOAT3 sunDirection
-            +DirectX::XMFLOAT3 sunColor
+            +XMFLOAT3 sunDirection
+            +XMFLOAT3 sunColor
             +float sunIntensity
-            +DirectX::XMFLOAT3 ambientColor
+            +XMFLOAT3 ambientColor
             +float ambientIntensity
-            +DirectX::XMFLOAT3 fogColor
+            +XMFLOAT3 fogColor
             +float fogDensity
             +float fogStart
             +float fogEnd
-            +DirectX::XMFLOAT3 colorTint
+            +XMFLOAT3 colorTint
             +float saturation
             +float brightness
             +float contrast
@@ -90,7 +142,7 @@ classDiagram
             +float timeOfDay
             +float timeScale
             +float transitionProgress
-            +EnvironmentState #42; transitionTarget
+            +EnvironmentState#42; transitionTarget
         }
         class game__components__Flipper["Flipper"] {
             <<struct>>
@@ -104,21 +156,21 @@ classDiagram
             Left
             Right
         }
-        class game__components__GoalHole["GoalHole"] {
+        class iso__game__components__GoalHole["GoalHole"] {
             <<struct>>
             +bool isOpen
-            +std::string targetPage
+            +string targetPage
         }
         class game__components__GolfGameState["GolfGameState"] {
             <<struct>>
             +uint32_t ballEntity
-            +std::string currentPage
-            +std::string targetPage
+            +string currentPage
+            +string targetPage
             +int targetPageId
-            +std::vector#lt; std::string #gt; pathHistory
+            +vector#lt;string#gt; pathHistory
             +float fieldWidth
             +float fieldDepth
-            +DirectX::XMFLOAT2 windDirection
+            +XMFLOAT2 windDirection
             +float windSpeed
             +int shotCount
             +int par
@@ -134,7 +186,7 @@ classDiagram
             +float rollingFrictionScale
             +bool isMapView
             +bool isOB
-            +DirectX::XMFLOAT3 lastShotPosition
+            +XMFLOAT3 lastShotPosition
             +uint32_t resultBgEntity
             +uint32_t resultFrameEntity
             +uint32_t resultTitleEntity
@@ -147,11 +199,11 @@ classDiagram
             +uint32_t guideEntity
             +uint32_t shotButtonEntity
             +uint32_t shotButtonTextEntity
-            +std::vector#lt; uint32_t #gt; holes
+            +vector#lt;uint32_t#gt; holes
         }
-        class game__components__GolfHole["GolfHole"] {
+        class iso__game__components__GolfHole["GolfHole"] {
             <<struct>>
-            +std::string linkTarget
+            +string linkTarget
             +float radius
             +float pinRadius
             +float pinHeight
@@ -162,47 +214,47 @@ classDiagram
             +uint32_t pillarEntity
             +uint32_t flagPoleEntity
             +uint32_t flagClothEntity
-            +std::vector#lt; uint32_t #gt; flagEntities
-            +std::vector#lt; uint32_t #gt; particleEntities
+            +vector#lt;uint32_t#gt; flagEntities
+            +vector#lt;uint32_t#gt; particleEntities
             +uint32_t signboardEntity
         }
         class game__components__GrassRenderBatch["GrassRenderBatch"] {
             <<struct>>
-            +resources::MeshHandle mesh
-            +resources::MeshHandle lodMesh
-            +resources::ShaderHandle shader
+            +MeshHandle mesh
+            +MeshHandle lodMesh
+            +ShaderHandle shader
             +float lodSwitchDistance
             +float maxDrawDistance
             +float maxThreeDOverheadRatio
             +bool twoSided
-            +DirectX::XMFLOAT3 boundsMin
-            +DirectX::XMFLOAT3 boundsMax
-            +std::vector#lt; GrassRenderInstance #gt; instances
+            +XMFLOAT3 boundsMin
+            +XMFLOAT3 boundsMax
+            +vector#lt;GrassRenderInstance#gt; instances
         }
         class game__components__GrassRenderInstance["GrassRenderInstance"] {
             <<struct>>
-            +DirectX::XMFLOAT4X4 world
-            +DirectX::XMFLOAT4 color
-            +DirectX::XMFLOAT4 flags
-            +DirectX::XMFLOAT3 position
+            +XMFLOAT4X4 world
+            +XMFLOAT4 color
+            +XMFLOAT4 flags
+            +XMFLOAT3 position
         }
-        class game__components__GrassRenderSpatialIndex["GrassRenderSpatialIndex"] {
+        class iso__game__components__GrassRenderSpatialIndex["GrassRenderSpatialIndex"] {
             <<struct>>
             +float chunkSize
             +float maxDrawDistance
             +float maxHorizontalExtent
             +float roughFadeScale
             +uint64_t triangleBudget
-            +std::unordered_map#lt; uint64_t, std::vector#lt; ecs::Entity #gt; #gt; batchesByChunk
+            +unordered_map#lt;uint64_t, vector#lt;Entity#gt;#gt; batchesByChunk
             +MakeKey(int chunkX, int chunkZ)$ uint64_t
         }
-        class game__components__Heading["Heading"] {
+        class iso__game__components__Heading["Heading"] {
             <<struct>>
             +int maxHealth
             +int currentHealth
-            +std::string textSnippet
-            +std::string fullText
-            +std::string linkTarget
+            +string textSnippet
+            +string fullText
+            +string linkTarget
             +uint32_t textEntityId
             +bool isDestroyed
         }
@@ -216,8 +268,8 @@ classDiagram
             +float baseAlpha
             +float fadeAlpha
             +float yawOffset
-            +DirectX::XMFLOAT3 basePosition
-            +DirectX::XMFLOAT3 baseScale
+            +XMFLOAT3 basePosition
+            +XMFLOAT3 baseScale
         }
         class game__components__HoleFlag__Kind["HoleFlag::Kind"] {
             <<enumeration>>
@@ -225,7 +277,7 @@ classDiagram
             Particle
             Accent
         }
-        class game__components__LightingMood["LightingMood"] {
+        class iso__game__components__LightingMood["LightingMood"] {
             <<enumeration>>
             SunriseDawn
             GoldenAfternoon
@@ -241,18 +293,18 @@ classDiagram
             FoggyMystery
             StormyDarkness
         }
-        class game__components__MeshRenderer["MeshRenderer"] {
+        class iso__game__components__MeshRenderer["MeshRenderer"] {
             <<struct>>
-            +resources::MeshHandle mesh
-            +resources::MeshHandle minimapMesh
-            +resources::ShaderHandle shader
+            +MeshHandle mesh
+            +MeshHandle minimapMesh
+            +ShaderHandle shader
             +bool isVisible
-            +DirectX::XMFLOAT4 color
-            +Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; textureSRV
+            +XMFLOAT4 color
+            +ComPtr#lt;ID3D11ShaderResourceView#gt; textureSRV
             +bool hasTexture
-            +Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; normalMapSRV
+            +ComPtr#lt;ID3D11ShaderResourceView#gt; normalMapSRV
             +bool hasNormalMap
-            +DirectX::XMFLOAT4 customFlags
+            +XMFLOAT4 customFlags
             +bool usesDitherFade
             +bool isTransparent
             +BlendMode blendMode
@@ -261,13 +313,13 @@ classDiagram
             +float boundsScale
             +MinimapRenderMode minimapMode
         }
-        class game__components__MinimapRenderMode["MinimapRenderMode"] {
+        class iso__game__components__MinimapRenderMode["MinimapRenderMode"] {
             <<enumeration>>
             None
             VertexColor
             Textured
         }
-        class game__components__ParticlePreset["ParticlePreset"] {
+        class iso__game__components__ParticlePreset["ParticlePreset"] {
             <<enumeration>>
             None
             Dust
@@ -284,30 +336,30 @@ classDiagram
             Sparkles
             NebulaGas
         }
-        class game__components__PinballBall["PinballBall"] {
+        class iso__game__components__PinballBall["PinballBall"] {
             <<struct>>
             +bool active
         }
         class game__components__RigidBody["RigidBody"] {
             <<struct>>
-            +DirectX::XMFLOAT3 velocity
-            +DirectX::XMFLOAT3 acceleration
+            +XMFLOAT3 velocity
+            +XMFLOAT3 acceleration
             +float mass
             +float drag
             +float rollingFriction
             +float restitution
-            +DirectX::XMFLOAT3 angularVelocity
+            +XMFLOAT3 angularVelocity
             +float spinDecay
             +bool isStatic
         }
-        class game__components__RippleEffect["RippleEffect"] {
+        class iso__game__components__RippleEffect["RippleEffect"] {
             <<struct>>
             +float timer
             +float duration
             +float maxScale
             +float initialAlpha
         }
-        class game__components__ShotJudgement["ShotJudgement"] {
+        class iso__game__components__ShotJudgement["ShotJudgement"] {
             <<enumeration>>
             None
             Special
@@ -330,7 +382,7 @@ classDiagram
             +ShotJudgement judgement
             +float resultDisplayTime
             +float maxPower
-            +DirectX::XMFLOAT2 spinInput
+            +XMFLOAT2 spinInput
             +bool aimClickTracking
             +int aimClickPressX
             +int aimClickPressY
@@ -346,21 +398,21 @@ classDiagram
             ShowResult
             RestoringCamera
         }
-        class game__components__Skybox["Skybox"] {
+        class iso__game__components__Skybox["Skybox"] {
             <<struct>>
-            +Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; cubemapSRV
+            +ComPtr#lt;ID3D11ShaderResourceView#gt; cubemapSRV
             +bool isVisible
             +float brightness
             +float saturation
-            +DirectX::XMFLOAT4 tintColor
+            +XMFLOAT4 tintColor
             +float time
-            +DirectX::XMFLOAT3 sunDirection
+            +XMFLOAT3 sunDirection
         }
         class game__components__TerrainCollider["TerrainCollider"] {
             <<struct>>
-            +std::shared_ptr#lt; game::systems::TerrainData #gt; data
+            +shared_ptr#lt;TerrainData#gt; data
         }
-        class game__components__TerrainMaterial["TerrainMaterial"] {
+        class iso__game__components__TerrainMaterial["TerrainMaterial"] {
             <<enumeration>>
             Fairway
             Rough
@@ -372,48 +424,48 @@ classDiagram
             Stone
             None
         }
-        class game__components__TerrainObject["TerrainObject"] {
+        class iso__game__components__TerrainObject["TerrainObject"] {
             <<struct>>
         }
         class game__components__Transform["Transform"] {
             <<struct>>
-            +DirectX::XMFLOAT3 position
-            +DirectX::XMFLOAT4 rotation
-            +DirectX::XMFLOAT3 scale
-            +GetWorldMatrix() DirectX::XMMATRIX #123;const#125;
+            +XMFLOAT3 position
+            +XMFLOAT4 rotation
+            +XMFLOAT3 scale
+            +GetWorldMatrix() XMMATRIX #123;const#125;
         }
-        class game__components__UIBarGauge["UIBarGauge"] {
+        class iso__game__components__UIBarGauge["UIBarGauge"] {
             <<struct>>
             +float value
-            +float maxValue
             +UIBarGaugeMode mode
-            +DirectX::XMFLOAT4 color
-            +DirectX::XMFLOAT4 bgColor
-            +DirectX::XMFLOAT4 borderColor
-            +float borderWidth
             +float x
             +float y
             +float width
             +float height
             +bool isVisible
-            +bool showMarker
+            +float opacity
+            +float entrance
             +float markerValue
-            +DirectX::XMFLOAT4 markerColor
-            +bool showConfirmedMarker
-            +float confirmedValue
-            +DirectX::XMFLOAT4 confirmedMarkerColor
             +bool showAimPinMarker
             +float aimPinValue
-            +DirectX::XMFLOAT4 aimPinMarkerColor
-            +float confirmPulse
-            +float opacity
+            +XMFLOAT4 aimPinMarkerColor
             +bool showImpactZones
+            +float zoneGrow
             +float impactCenter
             +float impactWidthSpecial
             +float impactWidthGreat
             +float impactWidthNice
+            +float rulerMaxYards
+            +wstring tabLabel
+            +wstring hintLabel
+            +int chipYards
+            +float chipAnchor
+            +bool resultActive
+            +ShotJudgement judgement
+            +float resultElapsed
+            +float confirmElapsed
         }
-        class game__components__UIBarGaugeMode["UIBarGaugeMode"] {
+        class iso__game__components__UIBarGaugeMode["UIBarGaugeMode"] {
             <<enumeration>>
             Power
             Impact
@@ -425,21 +477,21 @@ classDiagram
             +float width
             +float height
             +ButtonState state
-            +DirectX::XMFLOAT4 normalColor
-            +DirectX::XMFLOAT4 hoverColor
-            +DirectX::XMFLOAT4 pressedColor
-            +DirectX::XMFLOAT4 disabledColor
-            +std::wstring label
-            +graphics::TextStyle textStyle
-            +std::string action
+            +XMFLOAT4 normalColor
+            +XMFLOAT4 hoverColor
+            +XMFLOAT4 pressedColor
+            +XMFLOAT4 disabledColor
+            +wstring label
+            +TextStyle textStyle
+            +string action
             +bool visible
-            +GetCurrentColor() DirectX::XMFLOAT4 #123;const#125;
-            +Create(const std::wstring #amp; label, const std::string #amp; action, float x, float y, float w, float h)$ UIButton
+            +GetCurrentColor() XMFLOAT4 #123;const#125;
+            +Create(const wstring#amp; label, const string#amp; action, float x, float y, float w, float h)$ UIButton
         }
-        class game__components__UIImage["UIImage"] {
+        class iso__game__components__UIImage["UIImage"] {
             <<struct>>
-            +std::string texturePath
-            +ID3D11ShaderResourceView #42; textureSRV
+            +string texturePath
+            +ID3D11ShaderResourceView#42; textureSRV
             +float x
             +float y
             +float width
@@ -448,31 +500,31 @@ classDiagram
             +float alpha
             +float opacity
             +bool grayscaleTint
-            +DirectX::XMFLOAT4 tintColor
+            +XMFLOAT4 tintColor
             +bool visible
             +int layer
             +HasTexture() bool #123;const#125;
-            +Create(const std::string #amp; path, float x, float y)$ UIImage
+            +Create(const string#amp; path, float x, float y)$ UIImage
         }
         class game__components__UIText["UIText"] {
             <<struct>>
-            +std::wstring text
+            +wstring text
             +float x
             +float y
             +float width
             +float height
-            +graphics::TextStyle style
+            +TextStyle style
             +float opacity
             +bool visible
             +int layer
             +bool fullScreenCover
-            +Create(const std::wstring #amp; text, float x, float y, const graphics::TextStyle #amp; style)$ UIText
+            +Create(const wstring#amp; text, float x, float y, const TextStyle#amp; style)$ UIText
             +FPS(float x, float y)$ UIText
         }
-        class game__components__Wall["Wall"] {
+        class iso__game__components__Wall["Wall"] {
             <<struct>>
         }
-        class game__components__WikiGameState["WikiGameState"] {
+        class iso__game__components__WikiGameState["WikiGameState"] {
             <<struct>>
             +uint32_t scoreEntity
             +uint32_t infoEntity
@@ -480,327 +532,96 @@ classDiagram
             +uint32_t introEntity
             +int score
             +int headingsUnlocked
-            +std::string currentPage
-            +std::string currentIntro
-            +std::string targetPage
-            +std::string pendingLink
+            +string currentPage
+            +string currentIntro
+            +string targetPage
+            +string pendingLink
             +int moveCount
             +int lives
             +bool gameCleared
         }
         class game__components__WikiGlobalData["WikiGlobalData"] {
             <<struct>>
-            +std::unique_ptr#lt; game::systems::WikiShortestPath #gt; pathSystem
-            +std::string startPage
-            +std::string targetPage
+            +unique_ptr#lt;WikiShortestPath#gt; pathSystem
+            +string startPage
+            +string targetPage
             +int targetPageId
             +int initialPar
             +bool isUserOverride
             +bool isDailyChallenge
-            +std::uint32_t dailyChallengeSeed
+            +uint32_t dailyChallengeSeed
             +bool hasCachedData
-            +std::vector#lt; game::WikiLink #gt; cachedLinks
-            +std::string cachedExtract
-            +std::vector#lt; uint8_t #gt; targetThumbnailPixelsBGRA
+            +vector#lt;WikiLink#gt; cachedLinks
+            +string cachedExtract
+            +vector#lt;uint8_t#gt; targetThumbnailPixelsBGRA
             +uint32_t targetThumbnailWidth
             +uint32_t targetThumbnailHeight
         }
-        class game__components__World3DLabel["World3DLabel"] {
+        class iso__game__components__World3DLabel["World3DLabel"] {
             <<struct>>
-            +DirectX::XMFLOAT3 worldPos
+            +XMFLOAT3 worldPos
             +uint32_t uiTextEntity
             +float offsetY
             +bool visible
         }
     }
-    %% 継承
-    %% メンバー由来の関係
-    game__components__Collider --> "1" game__components__ColliderType : type
+    %% 他モジュール / 外部の参照ノード
+    class game__WikiLink["game::WikiLink"]
+    class game__debug__DebugCollisionRecord["game::debug::DebugCollisionRecord"]
+    class game__debug__DebugGameplayCheckpoint["game::debug::DebugGameplayCheckpoint"]
+    class game__scenes__LoadingScene["game::scenes::LoadingScene"]
+    class game__systems__BodyInfo["game::systems::BodyInfo"]
+    class game__systems__PhysicsUpdateContext["game::systems::PhysicsUpdateContext"]
+    class game__systems__TerrainData["game::systems::TerrainData"]
+    class game__systems__WikiShortestPath["game::systems::WikiShortestPath"]
+    class graphics__TextStyle["graphics::TextStyle"]
+    %% 関係
     game__components__CollisionEvents *-- "0..*" game__components__CollisionEvent : events
     game__components__EnvironmentState o-- "0..1" game__components__EnvironmentState : transitionTarget
-    game__components__EnvironmentState --> "1" game__components__LightingMood : lightingMood
-    game__components__EnvironmentState --> "1" game__components__ParticlePreset : particlePreset
-    game__components__Flipper --> "1" game__components__Flipper__Side : side
-    game__components__GolfGameState --> "1" game__components__TerrainMaterial : currentMaterial
     game__components__GrassRenderBatch *-- "0..*" game__components__GrassRenderInstance : instances
-    game__components__HoleFlag --> "1" game__components__HoleFlag__Kind : kind
-    game__components__MeshRenderer --> "1" game__components__BlendMode : blendMode
-    game__components__MeshRenderer --> "1" game__components__MinimapRenderMode : minimapMode
-    game__components__ShotState --> "1" game__components__ShotJudgement : judgement
-    game__components__ShotState --> "1" game__components__ShotState__Phase : phase
     game__components__TerrainCollider o-- "0..1" game__systems__TerrainData : data
-    game__components__UIBarGauge --> "1" game__components__UIBarGaugeMode : mode
-    game__components__UIButton --> "1" game__components__ButtonState : state
     game__components__UIButton *-- "1" graphics__TextStyle : textStyle
     game__components__UIText *-- "1" graphics__TextStyle : style
     game__components__WikiGlobalData *-- "0..*" game__WikiLink : cachedLinks
     game__components__WikiGlobalData *-- "0..1" game__systems__WikiShortestPath : pathSystem
-    game__controllers__hud__ShotGaugePanel --> "1" game__components__ShotState__Phase : m_previousPhase
     game__debug__DebugCollisionRecord *-- "1" game__components__CollisionEvent : event
     game__debug__DebugGameplayCheckpoint *-- "1" game__components__GolfGameState : m_golf
     game__debug__DebugGameplayCheckpoint *-- "1" game__components__RigidBody : m_body
     game__debug__DebugGameplayCheckpoint *-- "1" game__components__ShotState : m_shot
     game__debug__DebugGameplayCheckpoint *-- "1" game__components__Transform : m_transform
-    game__physics__FlatGroundParams --> "1" game__components__TerrainMaterial : material
     game__scenes__LoadingScene *-- "0..*" game__components__WikiGlobalData : m_loadTask, m_loadedData
-    game__scenes__WikiGolfScene --> "1" game__components__ShotJudgement : m_judgeDisplayJudgement
-    game__systems__AchievementEvent --> "1" game__components__ShotJudgement : judgement
-    game__systems__AchievementEvent --> "1" game__components__TerrainMaterial : material
     game__systems__BodyInfo o-- "0..1" game__components__Collider : c
     game__systems__BodyInfo o-- "0..1" game__components__RigidBody : rb
     game__systems__BodyInfo o-- "0..1" game__components__Transform : t
-    game__systems__MapRenderKey --> "1" game__components__MinimapRenderMode : mode
     game__systems__PhysicsUpdateContext o-- "0..1" game__components__CollisionEvents : events
     game__systems__PhysicsUpdateContext o-- "0..1" game__components__GolfGameState : golfState
-    %% ネスト型
-    %% 依存 (宣言 / 生成 / ECS)
-    game__components__Camera ..> game__components__Transform
-    game__controllers__AimPinController ..> game__components__AimPinState : ECS
-    game__controllers__AimPinController ..> game__components__Transform : ECS
-    game__controllers__ArticleTransitionController ..> game__components__Camera : ECS
-    game__controllers__ArticleTransitionController ..> game__components__GolfGameState : ECS
-    game__controllers__ArticleTransitionController ..> game__components__MeshRenderer : ECS
-    game__controllers__ArticleTransitionController ..> game__components__Transform : ECS
-    game__controllers__ArticleTransitionController ..> game__components__UIText : ECS
-    game__controllers__BallFastForwardIndicator ..> game__components__UIImage : ECS
-    game__controllers__BallFastForwardTimer ..> game__components__GolfGameState : ECS
-    game__controllers__BallFastForwardTimer ..> game__components__ShotState : ECS
-    game__controllers__CameraController ..> game__components__Camera : ECS
-    game__controllers__CameraController ..> game__components__Collider : ECS
-    game__controllers__CameraController ..> game__components__RigidBody : ECS
-    game__controllers__CameraController ..> game__components__ShotState : ECS
-    game__controllers__CameraController ..> game__components__Transform : ECS
-    game__controllers__CameraController ..> game__components__Wall : ECS
-    game__controllers__ClubController ..> game__components__GolfGameState : ECS
-    game__controllers__ClubController ..> game__components__MeshRenderer : ECS
-    game__controllers__ClubController ..> game__components__ShotState : ECS
-    game__controllers__ClubController ..> game__components__Transform : ECS
-    game__controllers__MinimapController ..> game__components__AimPinState : ECS
-    game__controllers__MinimapController ..> game__components__GolfGameState : ECS
-    game__controllers__MinimapController ..> game__components__MeshRenderer : ECS
-    game__controllers__MinimapController ..> game__components__Skybox : ECS
-    game__controllers__MinimapController ..> game__components__Transform : ECS
-    game__controllers__MinimapController ..> game__components__UIImage : ECS
-    game__controllers__MinimapController ..> game__components__UIText : ECS
-    game__controllers__ShotController ..> game__components__GolfGameState : ECS
-    game__controllers__ShotController ..> game__components__RigidBody : ECS
-    game__controllers__ShotController ..> game__components__ShotState : ECS
-    game__controllers__ShotController ..> game__components__Transform : ECS
-    game__controllers__StartGoalIntroductionPanel ..> game__components__UIImage : ECS
-    game__controllers__StartGoalIntroductionPanel ..> game__components__UIText : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__Collider : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__GolfGameState : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__MeshRenderer : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__RigidBody : ECS
-    game__controllers__TrajectoryPredictor ..> game__components__Transform : ECS
-    game__controllers__TutorialOverlayController ..> game__components__AimPinState : ECS
-    game__controllers__TutorialOverlayController ..> game__components__Camera : ECS
-    game__controllers__TutorialOverlayController ..> game__components__GolfGameState : ECS
-    game__controllers__TutorialOverlayController ..> game__components__ShotState : ECS
-    game__controllers__TutorialOverlayController ..> game__components__Transform : ECS
-    game__controllers__TutorialOverlayController ..> game__components__UIImage : ECS
-    game__controllers__TutorialOverlayController ..> game__components__UIText : ECS
-    game__controllers__WikiGolfHUD ..> game__components__AimPinState
-    game__controllers__WikiGolfHUD ..> game__components__GolfGameState
-    game__controllers__WikiGolfHUD ..> game__components__ShotState__Phase
-    game__controllers__hud__AchievementToastPanel ..> game__components__UIText : ECS
-    game__controllers__hud__AimDistancePanel ..> game__components__AimPinState
-    game__controllers__hud__AimDistancePanel ..> game__components__ShotState__Phase
-    game__controllers__hud__AimDistancePanel ..> game__components__UIImage : ECS
-    game__controllers__hud__AimDistancePanel ..> game__components__UIText : ECS
-    game__controllers__hud__ClubSelectionPanel ..> game__components__UIImage : ECS
-    game__controllers__hud__ClubSelectionPanel ..> game__components__UIText : ECS
-    game__controllers__hud__CourseInfoPanel ..> game__components__GolfGameState
-    game__controllers__hud__CourseInfoPanel ..> game__components__UIText : ECS
-    game__controllers__hud__GameplayControlsPanel ..> game__components__UIText : ECS
-    game__controllers__hud__LiePanel ..> game__components__TerrainMaterial
-    game__controllers__hud__LiePanel ..> game__components__UIText : ECS
-    game__controllers__hud__MinimapDecorationPanel ..> game__components__UIText : ECS
-    game__controllers__hud__ShotGaugePanel ..> game__components__AimPinState
-    game__controllers__hud__ShotGaugePanel ..> game__components__UIBarGauge : ECS
-    game__controllers__hud__ShotGaugePanel ..> game__components__UIText : ECS
-    game__controllers__hud__WindPanel ..> game__components__TerrainMaterial
-    game__controllers__hud__WindPanel ..> game__components__UIImage : ECS
-    game__controllers__hud__WindPanel ..> game__components__UIText : ECS
-    game__debug__DebugBallTelemetryHistory ..> game__components__GolfGameState : ECS
-    game__debug__DebugBallTelemetryHistory ..> game__components__RigidBody : ECS
-    game__debug__DebugColliderRenderer ..> game__components__Collider : ECS
-    game__debug__DebugColliderRenderer ..> game__components__CollisionEvents : ECS
-    game__debug__DebugColliderRenderer ..> game__components__GolfGameState : ECS
-    game__debug__DebugColliderRenderer ..> game__components__GolfHole : ECS
-    game__debug__DebugColliderRenderer ..> game__components__RigidBody : ECS
-    game__debug__DebugColliderRenderer ..> game__components__TerrainCollider : ECS
-    game__debug__DebugColliderRenderer ..> game__components__Transform : ECS
-    game__debug__DebugCollisionHistory ..> game__components__CollisionEvents
-    game__debug__DebugEntityInspector ..> game__components__GolfGameState : ECS
-    game__debug__DebugFreeCamera ..> game__components__Camera : ECS
-    game__debug__DebugFreeCamera ..> game__components__Transform : ECS
-    game__debug__DebugOverlay ..> game__components__CollisionEvents : ECS
-    game__debug__DebugOverlay ..> game__components__GolfHole : ECS
-    game__debug__DebugOverlay ..> game__components__TerrainCollider : ECS
-    game__debug__DebugTerrainVisibility ..> game__components__MeshRenderer : ECS
-    game__debug__DebugTerrainVisibility ..> game__components__TerrainObject : ECS
-    game__scenes__AchievementScene ..> game__components__UIButton : ECS
-    game__scenes__AchievementScene ..> game__components__UIText : ECS
-    game__scenes__GameScene ..> game__components__Camera : ECS
-    game__scenes__GameScene ..> game__components__MeshRenderer : ECS
-    game__scenes__GameScene ..> game__components__Transform : ECS
-    game__scenes__GameScene ..> game__components__UIText : ECS
-    game__scenes__LoadingScene ..> game__components__Camera : ECS
-    game__scenes__LoadingScene ..> game__components__MeshRenderer : ECS
-    game__scenes__LoadingScene ..> game__components__Transform : ECS
-    game__scenes__LoadingScene ..> game__components__UIText : ECS
-    game__scenes__LoadingScene ..> game__components__WikiGlobalData : ECS / 生成
-    game__scenes__PauseScene ..> game__components__UIButton : ECS
-    game__scenes__PauseScene ..> game__components__UIText : ECS
-    game__scenes__RankingScene ..> game__components__UIButton : ECS
-    game__scenes__RankingScene ..> game__components__UIText : ECS
-    game__scenes__ResultScene ..> game__components__Camera : ECS
-    game__scenes__ResultScene ..> game__components__MeshRenderer : ECS
-    game__scenes__ResultScene ..> game__components__TerrainObject : ECS
-    game__scenes__ResultScene ..> game__components__Transform : ECS
-    game__scenes__ResultScene ..> game__components__UIButton : ECS
-    game__scenes__ResultScene ..> game__components__UIText : ECS
-    game__scenes__SettingsScene ..> game__components__UIButton : ECS
-    game__scenes__SettingsScene ..> game__components__UIText : ECS
-    game__scenes__TitleScene ..> game__components__Camera : ECS
-    game__scenes__TitleScene ..> game__components__GrassRenderBatch : ECS
-    game__scenes__TitleScene ..> game__components__MeshRenderer : ECS
-    game__scenes__TitleScene ..> game__components__Skybox : ECS
-    game__scenes__TitleScene ..> game__components__Transform : ECS
-    game__scenes__TitleScene ..> game__components__UIButton : ECS
-    game__scenes__TitleScene ..> game__components__UIImage : ECS
-    game__scenes__TitleScene ..> game__components__UIText : ECS
-    game__scenes__WikiGolfScene ..> game__components__AimPinState : ECS
-    game__scenes__WikiGolfScene ..> game__components__Camera : ECS
-    game__scenes__WikiGolfScene ..> game__components__Collider : ECS
-    game__scenes__WikiGolfScene ..> game__components__GolfGameState : ECS
-    game__scenes__WikiGolfScene ..> game__components__GolfHole : ECS
-    game__scenes__WikiGolfScene ..> game__components__HoleFlag : ECS
-    game__scenes__WikiGolfScene ..> game__components__MeshRenderer : ECS
-    game__scenes__WikiGolfScene ..> game__components__RigidBody : ECS
-    game__scenes__WikiGolfScene ..> game__components__ShotState : ECS
-    game__scenes__WikiGolfScene ..> game__components__Skybox : ECS
-    game__scenes__WikiGolfScene ..> game__components__Transform : ECS
-    game__scenes__WikiGolfScene ..> game__components__UIImage : ECS
-    game__scenes__WikiGolfScene ..> game__components__UIText : ECS
-    game__scenes__WikiGolfScene ..> game__components__WikiGlobalData : ECS
-    game__scenes__WikiPageLoader ..> game__components__Billboard : ECS
-    game__scenes__WikiPageLoader ..> game__components__Camera : ECS
-    game__scenes__WikiPageLoader ..> game__components__GolfGameState : ECS
-    game__scenes__WikiPageLoader ..> game__components__GolfHole : ECS
-    game__scenes__WikiPageLoader ..> game__components__HoleFlag : ECS
-    game__scenes__WikiPageLoader ..> game__components__MeshRenderer : ECS
-    game__scenes__WikiPageLoader ..> game__components__RigidBody : ECS
-    game__scenes__WikiPageLoader ..> game__components__Skybox : ECS
-    game__scenes__WikiPageLoader ..> game__components__Transform : ECS
-    game__scenes__WikiPageLoader ..> game__components__UIText : ECS
-    game__scenes__WikiPageLoader ..> game__components__World3DLabel : ECS
-    game__scenes__WikiPinballScene ..> game__components__Camera : ECS
-    game__scenes__WikiPinballScene ..> game__components__Collider : ECS
-    game__scenes__WikiPinballScene ..> game__components__Flipper : ECS
-    game__scenes__WikiPinballScene ..> game__components__Heading : ECS
-    game__scenes__WikiPinballScene ..> game__components__MeshRenderer : ECS
-    game__scenes__WikiPinballScene ..> game__components__RigidBody : ECS
-    game__scenes__WikiPinballScene ..> game__components__Transform : ECS
-    game__scenes__WikiPinballScene ..> game__components__UIText : ECS
-    game__scenes__WikiPinballScene ..> game__components__WikiGameState : ECS
-    game__systems__GameJuiceSystem ..> game__components__Camera : ECS
-    game__systems__GameJuiceSystem ..> game__components__Collider : ECS
-    game__systems__GameJuiceSystem ..> game__components__GolfGameState : ECS
-    game__systems__GameJuiceSystem ..> game__components__MeshRenderer : ECS
-    game__systems__GameJuiceSystem ..> game__components__RigidBody : ECS
-    game__systems__GameJuiceSystem ..> game__components__TerrainMaterial
-    game__systems__GameJuiceSystem ..> game__components__Transform : ECS
-    game__systems__MapSys ..> game__components__MeshRenderer : ECS
-    game__systems__MapSys ..> game__components__Transform : ECS
-    game__systems__PostProcessSystem ..> game__components__EnvironmentState
-    game__systems__SlopeVisualizationSystem ..> game__components__MeshRenderer : ECS
-    game__systems__SlopeVisualizationSystem ..> game__components__Transform : ECS
-    game__systems__StaticBodySpatialGrid ..> game__components__Collider : ECS
-    game__systems__StaticBodySpatialGrid ..> game__components__RigidBody : ECS
-    game__systems__StaticBodySpatialGrid ..> game__components__Transform : ECS
-    game__systems__TimeOfDaySystem ..> game__components__EnvironmentState
-    game__systems__UIBarGaugeRenderSystem ..> game__components__UIBarGauge : ECS
-    game__systems__UIButtonRenderSystem ..> game__components__UIButton : ECS
-    game__systems__UIButtonSystem ..> game__components__UIButton : ECS
-    game__systems__UIImageRenderSystem ..> game__components__UIImage : ECS
-    game__systems__UIRenderSystem ..> game__components__UIImage : ECS
-    game__systems__UIRenderSystem ..> game__components__UIText : ECS
-    game__systems__WikiTerrainSystem ..> game__components__Camera : ECS
-    game__systems__WikiTerrainSystem ..> game__components__Collider : ECS
-    game__systems__WikiTerrainSystem ..> game__components__GolfGameState : ECS
-    game__systems__WikiTerrainSystem ..> game__components__GrassRenderBatch : ECS
-    game__systems__WikiTerrainSystem ..> game__components__GrassRenderSpatialIndex : ECS
-    game__systems__WikiTerrainSystem ..> game__components__MeshRenderer : ECS
-    game__systems__WikiTerrainSystem ..> game__components__RigidBody : ECS
-    game__systems__WikiTerrainSystem ..> game__components__TerrainCollider : ECS
-    game__systems__WikiTerrainSystem ..> game__components__TerrainObject : ECS
-    game__systems__WikiTerrainSystem ..> game__components__Transform : ECS
-    game__systems__WikiTerrainSystem ..> game__components__Wall : ECS
-    game__utils__MapViewSkyboxState ..> game__components__Skybox
-    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
-    class game__WikiLink["game::WikiLink"]
-    class game__controllers__AimPinController["game::controllers::AimPinController"]
-    class game__controllers__ArticleTransitionController["game::controllers::ArticleTransitionController"]
-    class game__controllers__BallFastForwardIndicator["game::controllers::BallFastForwardIndicator"]
-    class game__controllers__BallFastForwardTimer["game::controllers::BallFastForwardTimer"]
-    class game__controllers__CameraController["game::controllers::CameraController"]
-    class game__controllers__ClubController["game::controllers::ClubController"]
-    class game__controllers__MinimapController["game::controllers::MinimapController"]
-    class game__controllers__ShotController["game::controllers::ShotController"]
-    class game__controllers__StartGoalIntroductionPanel["game::controllers::StartGoalIntroductionPanel"]
-    class game__controllers__TrajectoryPredictor["game::controllers::TrajectoryPredictor"]
-    class game__controllers__TutorialOverlayController["game::controllers::TutorialOverlayController"]
-    class game__controllers__WikiGolfHUD["game::controllers::WikiGolfHUD"]
-    class game__controllers__hud__AchievementToastPanel["game::controllers::hud::AchievementToastPanel"]
-    class game__controllers__hud__AimDistancePanel["game::controllers::hud::AimDistancePanel"]
-    class game__controllers__hud__ClubSelectionPanel["game::controllers::hud::ClubSelectionPanel"]
-    class game__controllers__hud__CourseInfoPanel["game::controllers::hud::CourseInfoPanel"]
-    class game__controllers__hud__GameplayControlsPanel["game::controllers::hud::GameplayControlsPanel"]
-    class game__controllers__hud__LiePanel["game::controllers::hud::LiePanel"]
-    class game__controllers__hud__MinimapDecorationPanel["game::controllers::hud::MinimapDecorationPanel"]
-    class game__controllers__hud__ShotGaugePanel["game::controllers::hud::ShotGaugePanel"]
-    class game__controllers__hud__WindPanel["game::controllers::hud::WindPanel"]
-    class game__debug__DebugBallTelemetryHistory["game::debug::DebugBallTelemetryHistory"]
-    class game__debug__DebugColliderRenderer["game::debug::DebugColliderRenderer"]
-    class game__debug__DebugCollisionHistory["game::debug::DebugCollisionHistory"]
-    class game__debug__DebugCollisionRecord["game::debug::DebugCollisionRecord"]
-    class game__debug__DebugEntityInspector["game::debug::DebugEntityInspector"]
-    class game__debug__DebugFreeCamera["game::debug::DebugFreeCamera"]
-    class game__debug__DebugGameplayCheckpoint["game::debug::DebugGameplayCheckpoint"]
-    class game__debug__DebugOverlay["game::debug::DebugOverlay"]
-    class game__debug__DebugTerrainVisibility["game::debug::DebugTerrainVisibility"]
-    class game__physics__FlatGroundParams["game::physics::FlatGroundParams"]
-    class game__scenes__AchievementScene["game::scenes::AchievementScene"]
-    class game__scenes__GameScene["game::scenes::GameScene"]
-    class game__scenes__LoadingScene["game::scenes::LoadingScene"]
-    class game__scenes__PauseScene["game::scenes::PauseScene"]
-    class game__scenes__RankingScene["game::scenes::RankingScene"]
-    class game__scenes__ResultScene["game::scenes::ResultScene"]
-    class game__scenes__SettingsScene["game::scenes::SettingsScene"]
-    class game__scenes__TitleScene["game::scenes::TitleScene"]
-    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
-    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
-    class game__scenes__WikiPinballScene["game::scenes::WikiPinballScene"]
-    class game__systems__AchievementEvent["game::systems::AchievementEvent"]
-    class game__systems__BodyInfo["game::systems::BodyInfo"]
-    class game__systems__GameJuiceSystem["game::systems::GameJuiceSystem"]
-    class game__systems__MapRenderKey["game::systems::MapRenderKey"]
-    class game__systems__MapSys["game::systems::MapSys"]
-    class game__systems__PhysicsUpdateContext["game::systems::PhysicsUpdateContext"]
-    class game__systems__PostProcessSystem["game::systems::PostProcessSystem"]
-    class game__systems__SlopeVisualizationSystem["game::systems::SlopeVisualizationSystem"]
-    class game__systems__StaticBodySpatialGrid["game::systems::StaticBodySpatialGrid"]
-    class game__systems__TerrainData["game::systems::TerrainData"]
-    class game__systems__TimeOfDaySystem["game::systems::TimeOfDaySystem"]
-    class game__systems__UIBarGaugeRenderSystem["game::systems::UIBarGaugeRenderSystem"]
-    class game__systems__UIButtonRenderSystem["game::systems::UIButtonRenderSystem"]
-    class game__systems__UIButtonSystem["game::systems::UIButtonSystem"]
-    class game__systems__UIImageRenderSystem["game::systems::UIImageRenderSystem"]
-    class game__systems__UIRenderSystem["game::systems::UIRenderSystem"]
-    class game__systems__WikiShortestPath["game::systems::WikiShortestPath"]
-    class game__systems__WikiTerrainSystem["game::systems::WikiTerrainSystem"]
-    class game__utils__MapViewSkyboxState["game::utils::MapViewSkyboxState"]
-    class graphics__TextStyle["graphics::TextStyle"]
-    %% 外部クラス (継承元のみ)
+    game__components__Flipper .. game__components__Flipper__Side
+    game__components__HoleFlag .. game__components__HoleFlag__Kind
+    game__components__ShotState .. game__components__ShotState__Phase
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__game__components__Camera .. iso__game__components__MeshRenderer
+    iso__game__components__GrassRenderSpatialIndex .. iso__game__components__Skybox
+    iso__game__components__UIImage .. iso__game__components__GolfHole
+    iso__game__components__MeshRenderer .. iso__game__components__UIBarGauge
+    iso__game__components__Skybox .. iso__game__components__AimPinState
+    iso__game__components__GolfHole .. iso__game__components__Heading
+    iso__game__components__UIBarGauge .. iso__game__components__World3DLabel
+    iso__game__components__AimPinState .. iso__game__components__WikiGameState
+    iso__game__components__Heading .. iso__game__components__RippleEffect
+    iso__game__components__UIBarGauge .. iso__game__components__GoalHole
+    iso__game__components__AimPinState .. iso__game__components__LightingMood
+    iso__game__components__World3DLabel .. iso__game__components__TerrainMaterial
+    iso__game__components__WikiGameState .. iso__game__components__ColliderType
+    iso__game__components__RippleEffect .. iso__game__components__UIBarGaugeMode
+    iso__game__components__GoalHole .. iso__game__components__MinimapRenderMode
+    iso__game__components__LightingMood .. iso__game__components__BlendMode
+    iso__game__components__World3DLabel .. iso__game__components__ShotJudgement
+    iso__game__components__TerrainMaterial .. iso__game__components__ButtonState
+    iso__game__components__ColliderType .. iso__game__components__ParticlePreset
+    iso__game__components__UIBarGaugeMode .. iso__game__components__Wall
+    iso__game__components__MinimapRenderMode .. iso__game__components__Billboard
+    iso__game__components__BlendMode .. iso__game__components__TerrainObject
+    iso__game__components__ShotJudgement .. iso__game__components__PinballBall
+    %% 配色
+    cssClass "iso__game__components__AimPinState,iso__game__components__Billboard,iso__game__components__BlendMode,iso__game__components__ButtonState,iso__game__components__Camera,game__components__Collider,iso__game__components__ColliderType,game__components__CollisionEvent,game__components__CollisionEvents,game__components__EnvironmentState,game__components__Flipper,game__components__Flipper__Side,iso__game__components__GoalHole,game__components__GolfGameState,iso__game__components__GolfHole,game__components__GrassRenderBatch,game__components__GrassRenderInstance,iso__game__components__GrassRenderSpatialIndex,iso__game__components__Heading,game__components__HoleFlag,game__components__HoleFlag__Kind,iso__game__components__LightingMood,iso__game__components__MeshRenderer,iso__game__components__MinimapRenderMode,iso__game__components__ParticlePreset,iso__game__components__PinballBall,game__components__RigidBody,iso__game__components__RippleEffect,iso__game__components__ShotJudgement,game__components__ShotState,game__components__ShotState__Phase,iso__game__components__Skybox,game__components__TerrainCollider,iso__game__components__TerrainMaterial,iso__game__components__TerrainObject,game__components__Transform,iso__game__components__UIBarGauge,iso__game__components__UIBarGaugeMode,game__components__UIButton,iso__game__components__UIImage,game__components__UIText,iso__game__components__Wall,iso__game__components__WikiGameState,game__components__WikiGlobalData,iso__game__components__World3DLabel" game_components
+    cssClass "game__WikiLink,game__debug__DebugCollisionRecord,game__debug__DebugGameplayCheckpoint,game__scenes__LoadingScene,game__systems__BodyInfo,game__systems__PhysicsUpdateContext,game__systems__TerrainData,game__systems__WikiShortestPath,graphics__TextStyle" refnode

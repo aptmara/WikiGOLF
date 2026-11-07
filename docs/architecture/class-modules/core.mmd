@@ -1,19 +1,71 @@
-%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF クラス図: core (generate_class_full.py による自動生成。手で編集しないこと)
 %% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
 %% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
-%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
-%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
 classDiagram
     direction LR
     namespace core {
-        class core__AntiAliasingFlags["AntiAliasingFlags"] {
+        class iso__core__AntiAliasingFlags["AntiAliasingFlags"] {
             <<struct>>
             +bool fxaaEnabled
             +int msaaSamples
             +bool taaEnabled
             +bool dlssEnabled
         }
-        class core__AntiAliasingMode["AntiAliasingMode"] {
+        class iso__core__AntiAliasingMode["AntiAliasingMode"] {
             <<enumeration>>
             Off
             Fxaa
@@ -26,17 +78,17 @@ classDiagram
         class core__DisplaySettings["DisplaySettings"] {
             +DWORD kWindowedStyle$
             -HWND m_hwnd
-            -graphics::GraphicsDevice #42; m_graphics
+            -GraphicsDevice#42; m_graphics
             -DisplaySettingsData m_data
-            -std::vector#lt; std::pair#lt; int, int #gt; #gt; m_resolutions
-            -std::vector#lt; std::string #gt; m_gpuNames
+            -vector#lt;pair#lt;int, int#gt;#gt; m_resolutions
+            -vector#lt;string#gt; m_gpuNames
             -GraphicsPreset m_effectiveGraphicsPreset
             -int m_currentWidth
             -int m_currentHeight
-            +DefaultPath()$ std::string
-            +LoadFromFile(const std::string #amp; path) void
-            +SaveToFile(const std::string #amp; path) void #123;const#125;
-            +Initialize(HWND hwnd, graphics::GraphicsDevice #42; graphicsDevice) void
+            +DefaultPath()$ string
+            +LoadFromFile(const string#amp; path) void
+            +SaveToFile(const string#amp; path) void #123;const#125;
+            +Initialize(HWND hwnd, GraphicsDevice#42; graphicsDevice) void
             +ApplyToWindow() void
             +SetWindowMode(WindowMode mode) void
             +CycleWindowMode(int direction) void
@@ -56,15 +108,15 @@ classDiagram
             +IsDlssAvailable() bool #123;const#125;
             +SetShowFps(bool enabled) void
             +SetSafeMode(bool enabled) void
-            +SetGpuAdapter(const std::string #amp; adapterName) void
+            +SetGpuAdapter(const string#amp; adapterName) void
             +CycleGpu(int direction) void
-            +GetAvailableGpuNames() const std::vector#lt; std::string #gt; #amp; #123;const#125;
-            +GetGpuAdapterNameWide() std::wstring #123;const#125;
-            +GetData() const DisplaySettingsData #amp; #123;const#125;
-            +GetAvailableResolutions() const std::vector#lt; std::pair#lt; int, int #gt; #gt; #amp; #123;const#125;
+            +GetAvailableGpuNames() const vector#lt;string#gt;#amp; #123;const#125;
+            +GetGpuAdapterNameWide() wstring #123;const#125;
+            +GetData() const DisplaySettingsData#amp; #123;const#125;
+            +GetAvailableResolutions() const vector#lt;pair#lt;int, int#gt;#gt;#amp; #123;const#125;
             +GetCurrentWidth() int #123;const#125;
             +GetCurrentHeight() int #123;const#125;
-            -EnumerateResolutions()$ std::vector#lt; std::pair#lt; int, int #gt; #gt;
+            -EnumerateResolutions()$ vector#lt;pair#lt;int, int#gt;#gt;
             -GetMonitorRect(bool workAreaOnly) RECT #123;const#125;
             -RefreshCurrentResolution() void
             -ApplyQualityToGraphics() void
@@ -85,18 +137,18 @@ classDiagram
             +bool taaEnabled
             +bool dlssEnabled
             +bool showFps
-            +std::string gpuAdapterName
+            +string gpuAdapterName
             +bool safeMode
         }
-        class core__DlssQuality["DlssQuality"] {
+        class iso__core__DlssQuality["DlssQuality"] {
             <<enumeration>>
             Performance
             Balanced
             Quality
             Dlaa
         }
-        class core__FramePacer["FramePacer"] {
-            +std::chrono::milliseconds kSpinMargin$
+        class iso__core__FramePacer["FramePacer"] {
+            +chrono::milliseconds kSpinMargin$
             -Clock::time_point m_deadline
             -int m_fpsLimit
             +NextDeadline(Clock::time_point previous, Clock::time_point now, Clock::duration period)$ Clock::time_point
@@ -104,28 +156,28 @@ classDiagram
         }
         class core__GameContext["GameContext"] {
             <<struct>>
-            +resources::ResourceManager #amp; resource
-            +ecs::World #amp; world
-            +graphics::GraphicsDevice #amp; graphics
-            +core::Input #amp; input
-            +game::systems::AudioSystem #42; audio
-            +core::SceneManager #42; sceneManager
-            +core::DisplaySettings #42; displaySettings
-            +game::systems::AchievementEventBus #42; achievementEvents
-            +game::systems::AchievementManager #42; achievements
+            +ResourceManager#amp; resource
+            +World#amp; world
+            +GraphicsDevice#amp; graphics
+            +Input#amp; input
+            +AudioSystem#42; audio
+            +SceneManager#42; sceneManager
+            +DisplaySettings#42; displaySettings
+            +AchievementEventBus#42; achievementEvents
+            +AchievementManager#42; achievements
             +bool shouldClose
             +float dt
             +float time
-            +graphics::TextRenderer #42; textRenderer
-            +game::systems::PostProcessSystem #42; postProcess
-            +GameContext(resources::ResourceManager #amp; r, ecs::World #amp; w, graphics::GraphicsDevice #amp; g, core::Input #amp; i)
+            +TextRenderer#42; textRenderer
+            +PostProcessSystem#42; postProcess
+            +GameContext(ResourceManager#amp; r, World#amp; w, GraphicsDevice#amp; g, Input#amp; i)
         }
         class core__GpuFrameSample["GpuFrameSample"] {
             <<struct>>
             +uint64_t frameIndex
             +bool valid
             +bool pipelineValid
-            +std::vector#lt; GpuScopeSample #gt; scopes
+            +vector#lt;GpuScopeSample#gt; scopes
             +GpuPipelineStats pipeline
         }
         class core__GpuPipelineStats["GpuPipelineStats"] {
@@ -137,10 +189,10 @@ classDiagram
         }
         class core__GpuScopeSample["GpuScopeSample"] {
             <<struct>>
-            +std::string name
+            +string name
             +double milliseconds
         }
-        class core__GraphicsPreset["GraphicsPreset"] {
+        class iso__core__GraphicsPreset["GraphicsPreset"] {
             <<enumeration>>
             Auto
             Low
@@ -150,22 +202,22 @@ classDiagram
             Ultra
             Custom
         }
-        class core__GraphicsPresetSettings["GraphicsPresetSettings"] {
+        class iso__core__GraphicsPresetSettings["GraphicsPresetSettings"] {
             <<struct>>
             +float renderScale
             +int msaaSamples
             +bool fxaaEnabled
         }
         class core__Input["Input"] {
-            -std::array#lt; bool, 256 #gt; m_keys
-            -std::array#lt; bool, 256 #gt; m_keysDown
-            -std::array#lt; bool, 256 #gt; m_keysUp
-            -std::array#lt; bool, 3 #gt; m_mouseButtons
-            -std::array#lt; bool, 3 #gt; m_mouseButtonsDown
-            -std::array#lt; bool, 3 #gt; m_mouseButtonsUp
-            -DirectX::XMINT2 m_mousePosition
+            -array#lt;bool, 256#gt; m_keys
+            -array#lt;bool, 256#gt; m_keysDown
+            -array#lt;bool, 256#gt; m_keysUp
+            -array#lt;bool, 3#gt; m_mouseButtons
+            -array#lt;bool, 3#gt; m_mouseButtonsDown
+            -array#lt;bool, 3#gt; m_mouseButtonsUp
+            -XMINT2 m_mousePosition
             -float m_scrollDelta
-            -std::wstring m_inputChars
+            -wstring m_inputChars
             -bool m_backspacePressed
             -bool m_cursorVisible
             -bool m_cursorLocked
@@ -181,22 +233,22 @@ classDiagram
             +GetMouseButton(int button) bool #123;const#125;
             +GetMouseButtonDown(int button) bool #123;const#125;
             +GetMouseButtonUp(int button) bool #123;const#125;
-            +GetMousePosition() DirectX::XMINT2 #123;const#125;
+            +GetMousePosition() XMINT2 #123;const#125;
             +GetMouseScrollDelta() float #123;const#125;
             +SetMouseCursorVisible(bool visible) void
             +SetMouseCursorLocked(bool locked) void
-            +GetInputChars() const std::wstring #amp; #123;const#125;
+            +GetInputChars() const wstring#amp; #123;const#125;
             +GetBackspacePressed() bool #123;const#125;
-            +GetClipboardText() std::wstring #123;const#125;
-            -ClientToVirtual(int rawX, int rawY) DirectX::XMINT2 #123;const#125;
+            +GetClipboardText() wstring #123;const#125;
+            -ClientToVirtual(int rawX, int rawY) XMINT2 #123;const#125;
         }
         class core__LogEntry["LogEntry"] {
             <<struct>>
             +LogLevel level
-            +std::string category
-            +std::string text
+            +string category
+            +string text
         }
-        class core__LogLevel["LogLevel"] {
+        class iso__core__LogLevel["LogLevel"] {
             <<enumeration>>
             Debug
             Info
@@ -204,22 +256,22 @@ classDiagram
             Error
         }
         class core__Logger["Logger"] {
-            -std::ofstream m_fileStream
-            -std::ofstream m_warningFileStream
-            -std::ofstream m_perfFileStream
-            -std::mutex m_mutex
+            -ofstream m_fileStream
+            -ofstream m_warningFileStream
+            -ofstream m_perfFileStream
+            -mutex m_mutex
             -bool m_initialized
-            -std::size_t kRecentEntryLimit$
-            -std::deque#lt; LogEntry #gt; m_recentEntries
-            +Instance()$ Logger #amp;
-            +Logger(const Logger #amp;)
-            +operator=(const Logger #amp;) Logger #amp;
-            +Initialize(const std::string #amp; filename) void
+            -size_t kRecentEntryLimit$
+            -deque#lt;LogEntry#gt; m_recentEntries
+            +Instance()$ Logger#amp;
+            +Logger(const Logger#amp;)
+            +operator=(const Logger#amp;) Logger#amp;
+            +Initialize(const string#amp; filename) void
             +Shutdown() void
-            +Log(LogLevel level, const char #42; category, const char #42; file, int line, const std::string #amp; message) void
-            +GetRecentEntries() std::vector#lt; LogEntry #gt;
+            +Log(LogLevel level, const char#42; category, const char#42; file, int line, const string#amp; message) void
+            +GetRecentEntries() vector#lt;LogEntry#gt;
             +ClearRecentEntries() void
-            +LogFmt(LogLevel level, const char #42; category, const char #42; file, int line, std::format_string#lt; Args... #gt; fmt, Args #amp;#amp;... args) void
+            +LogFmt(LogLevel, const char#42;, const char#42;, int, format_string#lt;Args...#gt;, Args#amp;#amp;...) void
             -Logger()
             -#126;Logger()
         }
@@ -228,63 +280,63 @@ classDiagram
             -bool m_frameActive
             -uint64_t m_currentFrameIndex
             -size_t m_currentEntityCount
-            -std::string m_currentScene
+            -string m_currentScene
             -Clock::time_point m_frameStartedAt
             -Clock::time_point m_lastReportAt
             -size_t m_lastReportFrame
-            -std::filesystem::path m_outputDirectory
-            -std::vector#lt; ActiveScope #gt; m_scopeStack
-            -std::unordered_map#lt; MetricId, ScopeData #gt; m_frameScopes
-            -std::unordered_map#lt; MetricId, double #gt; m_frameCounters
-            -std::vector#lt; FrameData #gt; m_frames
-            -std::unordered_map#lt; uint64_t, size_t #gt; m_frameLookup
-            -std::vector#lt; ScopeMetadata #gt; m_scopeMetadata
-            -std::unordered_map#lt; uint64_t, std::vector#lt; MetricId #gt; #gt; m_scopeIds
-            -std::vector#lt; std::string #gt; m_counterNames
-            -std::unordered_map#lt; uint64_t, std::vector#lt; MetricId #gt; #gt; m_counterIds
-            -std::map#lt; std::string, SceneAggregate #gt; m_sceneSummary
-            -std::map#lt; MetricId, ScopeAggregate #gt; m_cpuSummary
-            -std::map#lt; std::string, ScopeAggregate #gt; m_gpuSummary
-            -std::vector#lt; SlowFrame #gt; m_slowFrames
+            -filesystem::path m_outputDirectory
+            -vector#lt;ActiveScope#gt; m_scopeStack
+            -unordered_map#lt;MetricId, ScopeData#gt; m_frameScopes
+            -unordered_map#lt;MetricId, double#gt; m_frameCounters
+            -vector#lt;FrameData#gt; m_frames
+            -unordered_map#lt;uint64_t, size_t#gt; m_frameLookup
+            -vector#lt;ScopeMetadata#gt; m_scopeMetadata
+            -unordered_map#lt;uint64_t, vector#lt;MetricId#gt;#gt; m_scopeIds
+            -vector#lt;string#gt; m_counterNames
+            -unordered_map#lt;uint64_t, vector#lt;MetricId#gt;#gt; m_counterIds
+            -map#lt;string, SceneAggregate#gt; m_sceneSummary
+            -map#lt;MetricId, ScopeAggregate#gt; m_cpuSummary
+            -map#lt;string, ScopeAggregate#gt; m_gpuSummary
+            -vector#lt;SlowFrame#gt; m_slowFrames
             -uint64_t m_finalizedFrameCount
             -uint64_t m_gpuValidFrameCount
             -ProcessMetrics m_cachedProcessMetrics
-            -std::ofstream m_framesFile
-            -std::ofstream m_scopesFile
-            -std::ofstream m_countersFile
-            -std::ofstream m_slowFramesFile
+            -ofstream m_framesFile
+            -ofstream m_scopesFile
+            -ofstream m_countersFile
+            -ofstream m_slowFramesFile
             -uint64_t m_lastProcessKernelTime
             -uint64_t m_lastProcessUserTime
             -Clock::time_point m_lastProcessSampleAt
             -uint32_t m_logicalProcessorCount
-            +Instance()$ Profiler #amp;
-            +Initialize(const std::filesystem::path #amp; outputRoot) void
+            +Instance()$ Profiler#amp;
+            +Initialize(const filesystem::path#amp; outputRoot) void
             +Shutdown() void
-            +BeginFrame(std::string_view sceneName, size_t entityCount) uint64_t
+            +BeginFrame(string_view sceneName, size_t entityCount) uint64_t
             +EndFrame() void
-            +BeginScope(std::string_view name, std::string_view function, std::string_view file, uint32_t line) void
+            +BeginScope(string_view name, string_view function, string_view file, uint32_t line) void
             +EndScope() void
-            +SetCounter(std::string_view name, double value) void
-            +AddCounter(std::string_view name, double value) void
+            +SetCounter(string_view name, double value) void
+            +AddCounter(string_view name, double value) void
             +SubmitGpuFrame(GpuFrameSample sample) void
             +GetCurrentFrameIndex() uint64_t #123;const#125;
-            +GetOutputDirectory() const std::filesystem::path #amp; #123;const#125;
-            +GetLatestCompletedFrameSnapshot(ProfilerFrameSnapshot #amp; snapshot) bool #123;const#125;
-            +GetRecentCompletedFrameSnapshots(size_t maximumFrames) std::vector#lt; ProfilerFrameSnapshot #gt; #123;const#125;
+            +GetOutputDirectory() const filesystem::path#amp; #123;const#125;
+            +GetLatestCompletedFrameSnapshot(ProfilerFrameSnapshot#amp; snapshot) bool #123;const#125;
+            +GetRecentCompletedFrameSnapshots(size_t maximumFrames) vector#lt;ProfilerFrameSnapshot#gt; #123;const#125;
             -Profiler()
             -#126;Profiler()
             -CaptureProcessMetrics() ProcessMetrics
-            -InternScope(std::string_view name, std::string_view function, std::string_view file, uint32_t line) MetricId
-            -InternCounter(std::string_view name) MetricId
+            -InternScope(string_view name, string_view function, string_view file, uint32_t line) MetricId
+            -InternCounter(string_view name) MetricId
             -OpenRawReports() void
-            -FinalizeFrame(FrameData #amp; frame) void
-            -WriteFrameRows(const FrameData #amp; frame) void
-            -AccumulateFrame(const FrameData #amp; frame) void
+            -FinalizeFrame(FrameData#amp; frame) void
+            -WriteFrameRows(const FrameData#amp; frame) void
+            -AccumulateFrame(const FrameData#amp; frame) void
             -ReleaseOldFrameDetails() void
             -LogIntervalReport() void
             -WriteReports() void
-            -FindFrame(uint64_t frameIndex) FrameData #42;
-            -MakeSnapshot(const FrameData #amp; frame) ProfilerFrameSnapshot #123;const#125;
+            -FindFrame(uint64_t frameIndex) FrameData#42;
+            -MakeSnapshot(const FrameData#amp; frame) ProfilerFrameSnapshot #123;const#125;
         }
         class core__Profiler__ActiveScope["Profiler::ActiveScope"] {
             <<struct>>
@@ -295,21 +347,21 @@ classDiagram
         class core__Profiler__FrameData["Profiler::FrameData"] {
             <<struct>>
             +uint64_t index
-            +std::string scene
+            +string scene
             +double cpuFrameMs
             +double profilerOverheadMs
             +size_t entityCount
             +ProcessMetrics process
             +bool processSampled
-            +std::unordered_map#lt; MetricId, ScopeData #gt; cpuScopes
-            +std::unordered_map#lt; MetricId, double #gt; counters
+            +unordered_map#lt;MetricId, ScopeData#gt; cpuScopes
+            +unordered_map#lt;MetricId, double#gt; counters
             +bool gpuReceived
             +bool gpuValid
             +bool pipelineStatsValid
             +bool finalized
             +double gpuFrameMs
             +uint32_t gpuQueryLatencyFrames
-            +std::vector#lt; GpuScopeSample #gt; gpuScopes
+            +vector#lt;GpuScopeSample#gt; gpuScopes
             +GpuPipelineStats pipeline
         }
         class core__Profiler__ProcessMetrics["Profiler::ProcessMetrics"] {
@@ -342,52 +394,52 @@ classDiagram
         }
         class core__Profiler__ScopeMetadata["Profiler::ScopeMetadata"] {
             <<struct>>
-            +std::string name
-            +std::string function
-            +std::string file
+            +string name
+            +string function
+            +string file
             +uint32_t line
         }
         class core__Profiler__SlowFrame["Profiler::SlowFrame"] {
             <<struct>>
             +uint64_t index
-            +std::string scene
+            +string scene
             +double cpuMs
             +double gpuMs
         }
         class core__ProfilerCpuScopeSnapshot["ProfilerCpuScopeSnapshot"] {
             <<struct>>
-            +std::string name
+            +string name
             +double inclusiveMs
             +double exclusiveMs
             +uint32_t calls
-            +std::string function
-            +std::string file
+            +string function
+            +string file
             +uint32_t line
         }
         class core__ProfilerFrameSnapshot["ProfilerFrameSnapshot"] {
             <<struct>>
             +uint64_t frameIndex
-            +std::string scene
+            +string scene
             +double cpuFrameMs
             +double profilerOverheadMs
             +size_t entityCount
             +double processCpuPercent
             +double workingSetMb
             +double privateMb
-            +std::vector#lt; ProfilerCpuScopeSnapshot #gt; cpuScopes
-            +std::vector#lt; ProfilerNamedValue #gt; counters
+            +vector#lt;ProfilerCpuScopeSnapshot#gt; cpuScopes
+            +vector#lt;ProfilerNamedValue#gt; counters
             +bool gpuReceived
             +bool gpuValid
             +bool pipelineStatsValid
-            +std::vector#lt; GpuScopeSample #gt; gpuScopes
+            +vector#lt;GpuScopeSample#gt; gpuScopes
             +GpuPipelineStats pipeline
         }
         class core__ProfilerNamedValue["ProfilerNamedValue"] {
             <<struct>>
-            +std::string name
+            +string name
             +double value
         }
-        class core__ResourceHandle["ResourceHandle#lt;T#gt;"] {
+        class iso__core__ResourceHandle["ResourceHandle#lt;T#gt;"] {
             <<struct>>
             +uint32_t index
             +uint32_t generation
@@ -396,34 +448,34 @@ classDiagram
         }
         class core__Scene["Scene"] {
             <<abstract>>
-            #ecs::EntityOwner m_entityOwner
+            #EntityOwner m_entityOwner
             +virtual #126;Scene()
-            +GetName()* const char #42; #123;const#125;
-            +OnEnter(GameContext #amp; ctx)* void
-            +virtual OnExit(GameContext #amp; ctx) void
-            +virtual OnUpdate(GameContext #amp; ctx) void
-            +virtual Render(GameContext #amp; ctx) void
-            +virtual RenderOffscreen(GameContext #amp; ctx) void
+            +GetName()* const char#42; #123;const#125;
+            +OnEnter(GameContext#amp; ctx)* void
+            +virtual OnExit(GameContext#amp; ctx) void
+            +virtual OnUpdate(GameContext#amp; ctx) void
+            +virtual Render(GameContext#amp; ctx) void
+            +virtual RenderOffscreen(GameContext#amp; ctx) void
             +virtual BlocksUnderlyingInput() bool #123;const#125;
-            +OwnsEntity(ecs::Entity entity) bool #123;const#125;
-            #CreateEntity(ecs::World #amp; world) ecs::Entity
-            #DestroyAllEntities(GameContext #amp; ctx) void
+            +OwnsEntity(Entity entity) bool #123;const#125;
+            #CreateEntity(World#amp; world) Entity
+            #DestroyAllEntities(GameContext#amp; ctx) void
         }
         class core__SceneManager["SceneManager"] {
-            -std::vector#lt; std::unique_ptr#lt; Scene #gt; #gt; m_sceneStack
+            -vector#lt;unique_ptr#lt;Scene#gt;#gt; m_sceneStack
             -Op m_pendingOp
-            -std::unique_ptr#lt; Scene #gt; m_pendingScene
-            +PushScene(std::unique_ptr#lt; Scene #gt; scene) void
+            -unique_ptr#lt;Scene#gt; m_pendingScene
+            +PushScene(unique_ptr#lt;Scene#gt; scene) void
             +PopScene() void
-            +ChangeScene(std::unique_ptr#lt; Scene #gt; scene) void
-            +ResetToScene(std::unique_ptr#lt; Scene #gt; scene) void
-            +Current() Scene #42;
-            +Update(GameContext #amp; ctx) void
-            +Render(GameContext #amp; ctx) void
-            +RenderOffscreen(GameContext #amp; ctx) void
+            +ChangeScene(unique_ptr#lt;Scene#gt; scene) void
+            +ResetToScene(unique_ptr#lt;Scene#gt; scene) void
+            +Current() Scene#42;
+            +Update(GameContext#amp; ctx) void
+            +Render(GameContext#amp; ctx) void
+            +RenderOffscreen(GameContext#amp; ctx) void
             +IsEmpty() bool #123;const#125;
-            -ElapsedMs(const std::chrono::steady_clock::time_point #amp; startedAt)$ long long
-            -ProcessPendingOp(GameContext #amp; ctx) void
+            -ElapsedMs(const chrono::steady_clock::time_point#amp; startedAt)$ long long
+            -ProcessPendingOp(GameContext#amp; ctx) void
         }
         class core__SceneManager__Op["SceneManager::Op"] {
             <<enumeration>>
@@ -433,29 +485,29 @@ classDiagram
             Change
             Reset
         }
-        class core__ScopedTimer["ScopedTimer"] {
-            +ScopedTimer(std::string_view name, std::string_view function, std::string_view file, uint32_t line)
+        class iso__core__ScopedTimer["ScopedTimer"] {
+            +ScopedTimer(string_view name, string_view function, string_view file, uint32_t line)
             +#126;ScopedTimer()
-            +ScopedTimer(const ScopedTimer #amp;)
-            +operator=(const ScopedTimer #amp;) ScopedTimer #amp;
+            +ScopedTimer(const ScopedTimer#amp;)
+            +operator=(const ScopedTimer#amp;) ScopedTimer#amp;
         }
-        class core__SectionTimer["SectionTimer"] {
+        class iso__core__SectionTimer["SectionTimer"] {
             -bool m_open
             +SectionTimer()
             +#126;SectionTimer()
-            +Next(std::string_view name, std::string_view function, std::string_view file, uint32_t line) void
-            +SectionTimer(const SectionTimer #amp;)
-            +operator=(const SectionTimer #amp;) SectionTimer #amp;
+            +Next(string_view name, string_view function, string_view file, uint32_t line) void
+            +SectionTimer(const SectionTimer#amp;)
+            +operator=(const SectionTimer#amp;) SectionTimer#amp;
             -End() void
         }
-        class core__WindowMode["WindowMode"] {
+        class iso__core__WindowMode["WindowMode"] {
             <<enumeration>>
             Windowed
             Borderless
             Fullscreen
         }
     }
-    namespace core__profiler_detail {
+    namespace core.profiler_detail {
         class core__profiler_detail__BoundedStatistics["BoundedStatistics"] {
             <<struct>>
             +size_t kSampleCapacity$
@@ -463,19 +515,42 @@ classDiagram
             +double total
             +double maximum
             +uint64_t randomState
-            +std::vector#lt; double #gt; samples
+            +vector#lt;double#gt; samples
             +Add(double value) void
             +Average() double #123;const#125;
             +Percentile(double percentile) double #123;const#125;
         }
-        class core__profiler_detail__ScopeAggregate["ScopeAggregate"] {
+        class iso__core__profiler_detail__ScopeAggregate["ScopeAggregate"] {
             <<struct>>
-            +std::vector#lt; double #gt; inclusive
-            +std::vector#lt; double #gt; exclusive
+            +vector#lt;double#gt; inclusive
+            +vector#lt;double#gt; exclusive
             +uint64_t calls
         }
     }
-    %% 継承
+    %% 他モジュール / 外部の参照ノード
+    class ecs__EntityOwner["ecs::EntityOwner"]
+    class ecs__World["ecs::World"]
+    class game__debug__DebugProfilerHistory["game::debug::DebugProfilerHistory"]
+    class game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition["game::debug::CleanSceneTransition"]
+    class game__scenes__AchievementScene["game::scenes::AchievementScene"]
+    class game__scenes__GameScene["game::scenes::GameScene"]
+    class game__scenes__LoadingScene["game::scenes::LoadingScene"]
+    class game__scenes__PauseScene["game::scenes::PauseScene"]
+    class game__scenes__RankingScene["game::scenes::RankingScene"]
+    class game__scenes__ResultScene["game::scenes::ResultScene"]
+    class game__scenes__SettingsScene["game::scenes::SettingsScene"]
+    class game__scenes__TitleScene["game::scenes::TitleScene"]
+    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
+    class game__scenes__WikiPinballScene["game::scenes::WikiPinballScene"]
+    class game__systems__AchievementEventBus["game::systems::AchievementEventBus"]
+    class game__systems__AchievementManager["game::systems::AchievementManager"]
+    class game__systems__AudioSystem["game::systems::AudioSystem"]
+    class game__systems__PhysicsUpdateContext["game::systems::PhysicsUpdateContext"]
+    class game__systems__PostProcessSystem["game::systems::PostProcessSystem"]
+    class graphics__GraphicsDevice["graphics::GraphicsDevice"]
+    class graphics__TextRenderer["graphics::TextRenderer"]
+    class resources__ResourceManager["resources::ResourceManager"]
+    %% 関係
     core__Scene <|-- game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition
     core__Scene <|-- game__scenes__AchievementScene
     core__Scene <|-- game__scenes__GameScene
@@ -487,12 +562,8 @@ classDiagram
     core__Scene <|-- game__scenes__TitleScene
     core__Scene <|-- game__scenes__WikiGolfScene
     core__Scene <|-- game__scenes__WikiPinballScene
-    %% メンバー由来の関係
     core__DisplaySettings *-- "1" core__DisplaySettingsData : m_data
-    core__DisplaySettings --> "1" core__GraphicsPreset : m_effectiveGraphicsPreset
     core__DisplaySettings o-- "0..1" graphics__GraphicsDevice : m_graphics
-    core__DisplaySettingsData --> "1" core__GraphicsPreset : graphicsPreset
-    core__DisplaySettingsData --> "1" core__WindowMode : mode
     core__GameContext o-- "0..1" core__DisplaySettings : displaySettings
     core__GameContext o-- "0..1" core__Input : input
     core__GameContext o-- "0..1" core__SceneManager : sceneManager
@@ -506,7 +577,6 @@ classDiagram
     core__GameContext o-- "0..1" resources__ResourceManager : resource
     core__GpuFrameSample *-- "1" core__GpuPipelineStats : pipeline
     core__GpuFrameSample *-- "0..*" core__GpuScopeSample : scopes
-    core__LogEntry --> "1" core__LogLevel : level
     core__Logger *-- "0..*" core__LogEntry : m_recentEntries
     core__Profiler *-- "0..*" core__Profiler__ActiveScope : m_scopeStack
     core__Profiler *-- "0..*" core__Profiler__FrameData : m_frames
@@ -528,139 +598,19 @@ classDiagram
     core__ProfilerFrameSnapshot *-- "0..*" core__ProfilerNamedValue : counters
     core__Scene *-- "1" ecs__EntityOwner : m_entityOwner
     core__SceneManager *-- "0..*" core__Scene : m_sceneStack, m_pendingScene
-    core__SceneManager --> "1" core__SceneManager__Op : m_pendingOp
     game__debug__DebugProfilerHistory *-- "0..*" core__ProfilerFrameSnapshot : m_frames
     game__systems__AchievementManager o-- "0..1" core__GameContext : m_ctx
     game__systems__PhysicsUpdateContext o-- "0..1" core__GameContext : gameContext
     graphics__GraphicsDevice *-- "0..*" core__GpuFrameSample : m_readyGpuSamples
-    %% ネスト型
-    %% 依存 (宣言 / 生成 / ECS)
-    core__DisplaySettings ..> core__AntiAliasingMode
-    core__DisplaySettings ..> core__WindowMode
-    core__Logger ..> core__LogLevel
-    core__Profiler ..> core__GpuFrameSample
-    core__Profiler ..> core__ProfilerFrameSnapshot
-    core__Scene ..> core__GameContext
-    core__Scene ..> ecs__World
-    core__SceneManager ..> core__GameContext
-    ecs__Pipeline ..> core__GameContext
-    game__controllers__AimPinController ..> core__GameContext
-    game__controllers__ArticleTransitionController ..> core__GameContext
-    game__controllers__BallFastForwardIndicator ..> core__GameContext
-    game__controllers__BallFastForwardTimer ..> core__GameContext
-    game__controllers__CameraController ..> core__GameContext
-    game__controllers__ClubController ..> core__GameContext
-    game__controllers__MinimapController ..> core__GameContext
-    game__controllers__ShotController ..> core__GameContext
-    game__controllers__StartGoalIntroductionPanel ..> core__GameContext
-    game__controllers__TrajectoryPredictor ..> core__GameContext
-    game__controllers__TutorialOverlayController ..> core__GameContext
-    game__controllers__WikiGolfHUD ..> core__GameContext
-    game__controllers__hud__AchievementToastPanel ..> core__GameContext
-    game__controllers__hud__AimDistancePanel ..> core__GameContext
-    game__controllers__hud__ClubSelectionPanel ..> core__GameContext
-    game__controllers__hud__CourseInfoPanel ..> core__GameContext
-    game__controllers__hud__GameplayControlsPanel ..> core__GameContext
-    game__controllers__hud__LiePanel ..> core__GameContext
-    game__controllers__hud__MinimapDecorationPanel ..> core__GameContext
-    game__controllers__hud__ShotGaugePanel ..> core__GameContext
-    game__controllers__hud__WindPanel ..> core__GameContext
-    game__debug__DebugBallInspector ..> core__GameContext
-    game__debug__DebugBallTelemetryInspector ..> core__GameContext
-    game__debug__DebugCheckpointInspector ..> core__GameContext
-    game__debug__DebugColliderRenderer ..> core__GameContext
-    game__debug__DebugEntityInspector ..> core__GameContext
-    game__debug__DebugFreeCamera ..> core__GameContext
-    game__debug__DebugOverlay ..> core__GameContext
-    game__debug__DebugSceneNavigator ..> core__GameContext
-    game__debug__DebugUiLayer ..> core__GameContext
-    game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition ..> core__GameContext
-    game__scenes__AchievementScene ..> core__GameContext
-    game__scenes__GameScene ..> core__GameContext
-    game__scenes__LoadingScene ..> core__GameContext
-    game__scenes__LoadingScene ..> core__Scene
-    game__scenes__PauseScene ..> core__GameContext
-    game__scenes__RankingScene ..> core__GameContext
-    game__scenes__ResultScene ..> core__GameContext
-    game__scenes__SettingsScene ..> core__GameContext
-    game__scenes__TitleScene ..> core__GameContext
-    game__scenes__WikiGolfScene ..> core__GameContext
-    game__scenes__WikiPageLoader ..> core__GameContext
-    game__scenes__WikiPinballScene ..> core__GameContext
-    game__systems__AudioSystem ..> core__GameContext
-    game__systems__GameJuiceSystem ..> core__GameContext
-    game__systems__MapSys ..> core__GameContext
-    game__systems__SlopeVisualizationSystem ..> core__GameContext
-    game__systems__UIBarGaugeRenderSystem ..> core__GameContext
-    game__systems__UIButtonRenderSystem ..> core__GameContext
-    game__systems__UIButtonSystem ..> core__GameContext
-    game__systems__UIImageRenderSystem ..> core__GameContext
-    game__systems__UIRenderSystem ..> core__GameContext
-    game__systems__WikiTerrainSystem ..> core__GameContext
-    game__utils__ScreenFade ..> core__GameContext
-    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
-    class ecs__EntityOwner["ecs::EntityOwner"]
-    class ecs__Pipeline["ecs::Pipeline"]
-    class ecs__World["ecs::World"]
-    class game__controllers__AimPinController["game::controllers::AimPinController"]
-    class game__controllers__ArticleTransitionController["game::controllers::ArticleTransitionController"]
-    class game__controllers__BallFastForwardIndicator["game::controllers::BallFastForwardIndicator"]
-    class game__controllers__BallFastForwardTimer["game::controllers::BallFastForwardTimer"]
-    class game__controllers__CameraController["game::controllers::CameraController"]
-    class game__controllers__ClubController["game::controllers::ClubController"]
-    class game__controllers__MinimapController["game::controllers::MinimapController"]
-    class game__controllers__ShotController["game::controllers::ShotController"]
-    class game__controllers__StartGoalIntroductionPanel["game::controllers::StartGoalIntroductionPanel"]
-    class game__controllers__TrajectoryPredictor["game::controllers::TrajectoryPredictor"]
-    class game__controllers__TutorialOverlayController["game::controllers::TutorialOverlayController"]
-    class game__controllers__WikiGolfHUD["game::controllers::WikiGolfHUD"]
-    class game__controllers__hud__AchievementToastPanel["game::controllers::hud::AchievementToastPanel"]
-    class game__controllers__hud__AimDistancePanel["game::controllers::hud::AimDistancePanel"]
-    class game__controllers__hud__ClubSelectionPanel["game::controllers::hud::ClubSelectionPanel"]
-    class game__controllers__hud__CourseInfoPanel["game::controllers::hud::CourseInfoPanel"]
-    class game__controllers__hud__GameplayControlsPanel["game::controllers::hud::GameplayControlsPanel"]
-    class game__controllers__hud__LiePanel["game::controllers::hud::LiePanel"]
-    class game__controllers__hud__MinimapDecorationPanel["game::controllers::hud::MinimapDecorationPanel"]
-    class game__controllers__hud__ShotGaugePanel["game::controllers::hud::ShotGaugePanel"]
-    class game__controllers__hud__WindPanel["game::controllers::hud::WindPanel"]
-    class game__debug__DebugBallInspector["game::debug::DebugBallInspector"]
-    class game__debug__DebugBallTelemetryInspector["game::debug::DebugBallTelemetryInspector"]
-    class game__debug__DebugCheckpointInspector["game::debug::DebugCheckpointInspector"]
-    class game__debug__DebugColliderRenderer["game::debug::DebugColliderRenderer"]
-    class game__debug__DebugEntityInspector["game::debug::DebugEntityInspector"]
-    class game__debug__DebugFreeCamera["game::debug::DebugFreeCamera"]
-    class game__debug__DebugOverlay["game::debug::DebugOverlay"]
-    class game__debug__DebugProfilerHistory["game::debug::DebugProfilerHistory"]
-    class game__debug__DebugSceneNavigator["game::debug::DebugSceneNavigator"]
-    class game__debug__DebugUiLayer["game::debug::DebugUiLayer"]
-    class game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition["game::debug::CleanSceneTransition"]
-    class game__scenes__AchievementScene["game::scenes::AchievementScene"]
-    class game__scenes__GameScene["game::scenes::GameScene"]
-    class game__scenes__LoadingScene["game::scenes::LoadingScene"]
-    class game__scenes__PauseScene["game::scenes::PauseScene"]
-    class game__scenes__RankingScene["game::scenes::RankingScene"]
-    class game__scenes__ResultScene["game::scenes::ResultScene"]
-    class game__scenes__SettingsScene["game::scenes::SettingsScene"]
-    class game__scenes__TitleScene["game::scenes::TitleScene"]
-    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
-    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
-    class game__scenes__WikiPinballScene["game::scenes::WikiPinballScene"]
-    class game__systems__AchievementEventBus["game::systems::AchievementEventBus"]
-    class game__systems__AchievementManager["game::systems::AchievementManager"]
-    class game__systems__AudioSystem["game::systems::AudioSystem"]
-    class game__systems__GameJuiceSystem["game::systems::GameJuiceSystem"]
-    class game__systems__MapSys["game::systems::MapSys"]
-    class game__systems__PhysicsUpdateContext["game::systems::PhysicsUpdateContext"]
-    class game__systems__PostProcessSystem["game::systems::PostProcessSystem"]
-    class game__systems__SlopeVisualizationSystem["game::systems::SlopeVisualizationSystem"]
-    class game__systems__UIBarGaugeRenderSystem["game::systems::UIBarGaugeRenderSystem"]
-    class game__systems__UIButtonRenderSystem["game::systems::UIButtonRenderSystem"]
-    class game__systems__UIButtonSystem["game::systems::UIButtonSystem"]
-    class game__systems__UIImageRenderSystem["game::systems::UIImageRenderSystem"]
-    class game__systems__UIRenderSystem["game::systems::UIRenderSystem"]
-    class game__systems__WikiTerrainSystem["game::systems::WikiTerrainSystem"]
-    class game__utils__ScreenFade["game::utils::ScreenFade"]
-    class graphics__GraphicsDevice["graphics::GraphicsDevice"]
-    class graphics__TextRenderer["graphics::TextRenderer"]
-    class resources__ResourceManager["resources::ResourceManager"]
-    %% 外部クラス (継承元のみ)
+    core__SceneManager .. core__SceneManager__Op
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__core__FramePacer .. iso__core__GraphicsPresetSettings
+    iso__core__ScopedTimer .. iso__core__AntiAliasingFlags
+    iso__core__SectionTimer .. iso__core__WindowMode
+    iso__core__ResourceHandle .. iso__core__DlssQuality
+    iso__core__GraphicsPresetSettings .. iso__core__AntiAliasingMode
+    iso__core__AntiAliasingFlags .. iso__core__LogLevel
+    iso__core__WindowMode .. iso__core__GraphicsPreset
+    %% 配色
+    cssClass "iso__core__AntiAliasingFlags,iso__core__AntiAliasingMode,core__DisplaySettings,core__DisplaySettingsData,iso__core__DlssQuality,iso__core__FramePacer,core__GameContext,core__GpuFrameSample,core__GpuPipelineStats,core__GpuScopeSample,iso__core__GraphicsPreset,iso__core__GraphicsPresetSettings,core__Input,core__LogEntry,iso__core__LogLevel,core__Logger,core__Profiler,core__Profiler__ActiveScope,core__Profiler__FrameData,core__Profiler__ProcessMetrics,core__Profiler__SceneAggregate,core__Profiler__ScopeAggregate,core__Profiler__ScopeData,core__Profiler__ScopeMetadata,core__Profiler__SlowFrame,core__ProfilerCpuScopeSnapshot,core__ProfilerFrameSnapshot,core__ProfilerNamedValue,iso__core__ResourceHandle,core__Scene,core__SceneManager,core__SceneManager__Op,iso__core__ScopedTimer,iso__core__SectionTimer,iso__core__WindowMode,core__profiler_detail__BoundedStatistics,iso__core__profiler_detail__ScopeAggregate" core
+    cssClass "ecs__EntityOwner,ecs__World,game__debug__DebugProfilerHistory,game__debug__anonymous_namespace_DebugSceneNavigator_cpp___CleanSceneTransition,game__scenes__AchievementScene,game__scenes__GameScene,game__scenes__LoadingScene,game__scenes__PauseScene,game__scenes__RankingScene,game__scenes__ResultScene,game__scenes__SettingsScene,game__scenes__TitleScene,game__scenes__WikiGolfScene,game__scenes__WikiPinballScene,game__systems__AchievementEventBus,game__systems__AchievementManager,game__systems__AudioSystem,game__systems__PhysicsUpdateContext,game__systems__PostProcessSystem,graphics__GraphicsDevice,graphics__TextRenderer,resources__ResourceManager" refnode

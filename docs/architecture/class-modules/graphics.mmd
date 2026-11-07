@@ -1,58 +1,110 @@
-%% WikiGOLF 全クラス図 (generate_class_full.py による自動生成。手で編集しないこと)
+---
+config:
+  layout: elk
+  elk:
+    mergeEdges: true
+    nodePlacementStrategy: NETWORK_SIMPLEX
+    cycleBreakingStrategy: GREEDY
+  theme: base
+  themeVariables:
+    clusterBkg: "#fafafa"
+    clusterBorder: "#9ca3af"
+    lineColor: "#374151"
+    primaryTextColor: "#111827"
+    edgeLabelBackground: "#ffffff"
+  class:
+    padding: 6
+    hideEmptyMembersBox: true
+  themeCSS: |
+    path[id*="id_iso__"] { display: none; }
+    .node.core .outer-path path:nth-child(1) { fill: #fef3c7 !important; }
+    .node.core .outer-path path:nth-child(2) { stroke: #d97706 !important; }
+    .node.core .divider path { stroke: #d97706 !important; }
+    .node.ecs .outer-path path:nth-child(1) { fill: #ffedd5 !important; }
+    .node.ecs .outer-path path:nth-child(2) { stroke: #ea580c !important; }
+    .node.ecs .divider path { stroke: #ea580c !important; }
+    .node.audio_resources .outer-path path:nth-child(1) { fill: #fce7f3 !important; }
+    .node.audio_resources .outer-path path:nth-child(2) { stroke: #db2777 !important; }
+    .node.audio_resources .divider path { stroke: #db2777 !important; }
+    .node.graphics .outer-path path:nth-child(1) { fill: #dcfce7 !important; }
+    .node.graphics .outer-path path:nth-child(2) { stroke: #16a34a !important; }
+    .node.graphics .divider path { stroke: #16a34a !important; }
+    .node.game_components .outer-path path:nth-child(1) { fill: #dbeafe !important; }
+    .node.game_components .outer-path path:nth-child(2) { stroke: #2563eb !important; }
+    .node.game_components .divider path { stroke: #2563eb !important; }
+    .node.game_controllers .outer-path path:nth-child(1) { fill: #e0e7ff !important; }
+    .node.game_controllers .outer-path path:nth-child(2) { stroke: #4f46e5 !important; }
+    .node.game_controllers .divider path { stroke: #4f46e5 !important; }
+    .node.game_debug .outer-path path:nth-child(1) { fill: #f3f4f6 !important; }
+    .node.game_debug .outer-path path:nth-child(2) { stroke: #6b7280 !important; }
+    .node.game_debug .divider path { stroke: #6b7280 !important; }
+    .node.game_scenes .outer-path path:nth-child(1) { fill: #fee2e2 !important; }
+    .node.game_scenes .outer-path path:nth-child(2) { stroke: #dc2626 !important; }
+    .node.game_scenes .divider path { stroke: #dc2626 !important; }
+    .node.game_systems .outer-path path:nth-child(1) { fill: #ccfbf1 !important; }
+    .node.game_systems .outer-path path:nth-child(2) { stroke: #0d9488 !important; }
+    .node.game_systems .divider path { stroke: #0d9488 !important; }
+    .node.game_utils_physics .outer-path path:nth-child(1) { fill: #ede9fe !important; }
+    .node.game_utils_physics .outer-path path:nth-child(2) { stroke: #7c3aed !important; }
+    .node.game_utils_physics .divider path { stroke: #7c3aed !important; }
+    .node.refnode .outer-path path:nth-child(1) { fill: #ffffff !important; }
+    .node.refnode .outer-path path:nth-child(2) { stroke: #9ca3af !important; }
+    .node.refnode .divider path { stroke: #9ca3af !important; }
+---
+%% WikiGOLF クラス図: graphics (generate_class_full.py による自動生成。手で編集しないこと)
 %% 根拠: Doxygen XML (src + DX_GAME。テストと src/thirdparty は除外)
 %% <|-- 継承 / *-- 所有 (値, unique_ptr, コンテナ) / o-- 非所有 (生ポインタ, 参照, shared_ptr, weak_ptr)
-%% --> enum 型のメンバー / ..> 宣言上の依存 (引数, 戻り値, std::function) / ..> 生成: make_unique, make_shared, new
-%% ..> ECS: World の Add/Get/Has/Remove/Query 等で扱うコンポーネント / .. ネスト型
+%% .. ネスト型 / ..> 生成 (make_unique, make_shared, new) または ECS 利用
 classDiagram
     direction LR
     namespace graphics {
-        class graphics__AdapterInfo["AdapterInfo"] {
+        class iso__graphics__AdapterInfo["AdapterInfo"] {
             <<struct>>
-            +std::wstring name
+            +wstring name
             +uint64_t dedicatedVideoMemoryBytes
         }
         class graphics__AnimKeyQuat["AnimKeyQuat"] {
             <<struct>>
             +float time
-            +DirectX::XMFLOAT4 value
+            +XMFLOAT4 value
         }
         class graphics__AnimKeyVec3["AnimKeyVec3"] {
             <<struct>>
             +float time
-            +DirectX::XMFLOAT3 value
+            +XMFLOAT3 value
         }
         class graphics__AnimationChannel["AnimationChannel"] {
             <<struct>>
             +int nodeIndex
-            +std::vector#lt; AnimKeyVec3 #gt; positionKeys
-            +std::vector#lt; AnimKeyQuat #gt; rotationKeys
-            +std::vector#lt; AnimKeyVec3 #gt; scaleKeys
+            +vector#lt;AnimKeyVec3#gt; positionKeys
+            +vector#lt;AnimKeyQuat#gt; rotationKeys
+            +vector#lt;AnimKeyVec3#gt; scaleKeys
         }
         class graphics__AnimationClip["AnimationClip"] {
             <<struct>>
-            +std::string name
+            +string name
             +float duration
-            +std::vector#lt; AnimationChannel #gt; channels
+            +vector#lt;AnimationChannel#gt; channels
         }
         class graphics__Bone["Bone"] {
             <<struct>>
-            +std::string name
+            +string name
             +int nodeIndex
-            +DirectX::XMFLOAT4X4 offsetMatrix
+            +XMFLOAT4X4 offsetMatrix
         }
         class graphics__BrushCache["BrushCache"] {
-            -ID2D1RenderTarget #42; m_target
-            -std::unordered_map#lt; uint32_t, ComPtr#lt; ID2D1SolidColorBrush #gt; #gt; m_cache
-            +Initialize(ID2D1RenderTarget #42; target) void
+            -ID2D1RenderTarget#42; m_target
+            -unordered_map#lt;uint32_t, ComPtr#lt;ID2D1SolidColorBrush#gt;#gt; m_cache
+            +Initialize(ID2D1RenderTarget#42; target) void
             +Clear() void
-            +GetBrush(const D2D1_COLOR_F #amp; color) ID2D1SolidColorBrush #42;
-            +GetBrush(const DirectX::XMFLOAT4 #amp; color) ID2D1SolidColorBrush #42;
-            -ColorToKey(const D2D1_COLOR_F #amp; color)$ uint32_t
+            +GetBrush(const D2D1_COLOR_F#amp; color) ID2D1SolidColorBrush#42;
+            +GetBrush(const XMFLOAT4#amp; color) ID2D1SolidColorBrush#42;
+            -ColorToKey(const D2D1_COLOR_F#amp; color)$ uint32_t
         }
         class graphics__DlssUpscaler["DlssUpscaler"] {
-            -ID3D11Device #42; m_device
-            -NVSDK_NGX_Parameter #42; m_parameters
-            -NVSDK_NGX_Handle #42; m_feature
+            -ID3D11Device#42; m_device
+            -NVSDK_NGX_Parameter#42; m_parameters
+            -NVSDK_NGX_Handle#42; m_feature
             -bool m_initialized
             -bool m_supported
             -bool m_parametersFromCapability
@@ -63,23 +115,23 @@ classDiagram
             -Quality m_featureQuality
             +DlssUpscaler()
             +#126;DlssUpscaler()
-            +DlssUpscaler(const DlssUpscaler #amp;)
-            +operator=(const DlssUpscaler #amp;) DlssUpscaler #amp;
+            +DlssUpscaler(const DlssUpscaler#amp;)
+            +operator=(const DlssUpscaler#amp;) DlssUpscaler#amp;
             +IsCompiledIn()$ bool
-            +Initialize(ID3D11Device #42; device) bool
+            +Initialize(ID3D11Device#42; device) bool
             +Shutdown() void
             +IsSupported() bool #123;const#125;
-            +QueryRenderSize(uint32_t outputWidth, uint32_t outputHeight, Quality quality, uint32_t #amp; renderWidth, uint32_t #amp; renderHeight) bool
-            +Evaluate(ID3D11DeviceContext #42; context, const EvaluateParams #amp; params) bool
+            +QueryRenderSize(uint32_t, uint32_t, Quality, uint32_t#amp;, uint32_t#amp;) bool
+            +Evaluate(ID3D11DeviceContext#42; context, const EvaluateParams#amp; params) bool
             +ReleaseFeature() void
-            -CreateFeature(ID3D11DeviceContext #42; context, const EvaluateParams #amp; params) bool
+            -CreateFeature(ID3D11DeviceContext#42; context, const EvaluateParams#amp; params) bool
         }
         class graphics__DlssUpscaler__EvaluateParams["DlssUpscaler::EvaluateParams"] {
             <<struct>>
-            +ID3D11Resource #42; color
-            +ID3D11Resource #42; depth
-            +ID3D11Resource #42; motionVectors
-            +ID3D11Resource #42; output
+            +ID3D11Resource#42; color
+            +ID3D11Resource#42; depth
+            +ID3D11Resource#42; motionVectors
+            +ID3D11Resource#42; output
             +uint32_t renderWidth
             +uint32_t renderHeight
             +uint32_t outputWidth
@@ -99,97 +151,97 @@ classDiagram
             Quality
             Dlaa
         }
-        class graphics__EmbeddedModelTextures["EmbeddedModelTextures"] {
+        class iso__graphics__EmbeddedModelTextures["EmbeddedModelTextures"] {
             <<struct>>
-            +std::vector#lt; uint8_t #gt; baseColor
-            +std::vector#lt; uint8_t #gt; normal
+            +vector#lt;uint8_t#gt; baseColor
+            +vector#lt;uint8_t#gt; normal
         }
-        class graphics__FbxLoader["FbxLoader"] {
-            +Load(const std::string #amp; path, std::vector#lt; Vertex #gt; #amp; outVertices, std::vector#lt; uint32_t #gt; #amp; outIndices)$ bool
-            +LoadEmbeddedTextures(const std::string #amp; path, EmbeddedModelTextures #amp; out)$ bool
+        class iso__graphics__FbxLoader["FbxLoader"] {
+            +Load(const string#amp; path, vector#lt;Vertex#gt;#amp; outVertices, vector#lt;uint32_t#gt;#amp; outIndices)$ bool
+            +LoadEmbeddedTextures(const string#amp; path, EmbeddedModelTextures#amp; out)$ bool
         }
         class graphics__FontManager["FontManager"] {
-            -IDWriteFactory #42; m_factory
-            -ComPtr#lt; IDWriteFactory5 #gt; m_factory5
-            -std::vector#lt; std::string #gt; m_loadedFontPaths
-            -std::vector#lt; std::wstring #gt; m_pendingFontFiles
-            -ComPtr#lt; IDWriteFontCollection1 #gt; m_collection
+            -IDWriteFactory#42; m_factory
+            -ComPtr#lt;IDWriteFactory5#gt; m_factory5
+            -vector#lt;string#gt; m_loadedFontPaths
+            -vector#lt;wstring#gt; m_pendingFontFiles
+            -ComPtr#lt;IDWriteFontCollection1#gt; m_collection
             -bool m_collectionDirty
-            -std::unordered_map#lt; std::string, ComPtr#lt; IDWriteTextFormat #gt; #gt; m_formatCache
-            -std::unordered_set#lt; std::string #gt; m_missingBundledFamilyWarnings
-            +Initialize(IDWriteFactory #42; factory) void
+            -unordered_map#lt;string, ComPtr#lt;IDWriteTextFormat#gt;#gt; m_formatCache
+            -unordered_set#lt;string#gt; m_missingBundledFamilyWarnings
+            +Initialize(IDWriteFactory#42; factory) void
             +Shutdown() void
-            +LoadFont(const std::string #amp; fontName, const std::string #amp; filePath) bool
-            +GetFormat(const std::string #amp; fontName, float size, TextAlign align) IDWriteTextFormat #42;
-            -GetBundledFamilyOverrides()$ const std::unordered_map#lt; std::string, BundledFamilyOverride #gt; #amp;
-            -EnsureCollection() IDWriteFontCollection1 #42;
+            +LoadFont(const string#amp; fontName, const string#amp; filePath) bool
+            +GetFormat(const string#amp; fontName, float size, TextAlign align) IDWriteTextFormat#42;
+            -GetBundledFamilyOverrides()$ const unordered_map#lt;string, BundledFamilyOverride#gt;#amp;
+            -EnsureCollection() IDWriteFontCollection1#42;
         }
         class graphics__FontManager__BundledFamilyOverride["FontManager::BundledFamilyOverride"] {
             <<struct>>
-            +std::string baseFamily
+            +string baseFamily
             +DWRITE_FONT_WEIGHT weight
             +DWRITE_FONT_STRETCH stretch
         }
         class graphics__GraphicsDevice["GraphicsDevice"] {
-            -ComPtr#lt; ID3D11Device #gt; m_device
-            -ComPtr#lt; ID3D11DeviceContext #gt; m_context
-            -ComPtr#lt; IDXGISwapChain #gt; m_swapChain
-            -ComPtr#lt; ID3D11RenderTargetView #gt; m_renderTargetView
-            -ComPtr#lt; ID3D11DepthStencilView #gt; m_depthStencilView
-            -ComPtr#lt; ID3D11Texture2D #gt; m_depthStencilBuffer
-            -ComPtr#lt; ID3D11ShaderResourceView #gt; m_depthSRV
-            -ComPtr#lt; ID3D11RasterizerState #gt; m_rasterizerState
-            -ComPtr#lt; ID3D11DepthStencilState #gt; m_depthStencilState
-            -ComPtr#lt; ID3D11Texture2D #gt; m_sceneColorTexMS
-            -ComPtr#lt; ID3D11RenderTargetView #gt; m_sceneColorRTVMS
-            -ComPtr#lt; ID3D11Texture2D #gt; m_sceneColorTexResolved
-            -ComPtr#lt; ID3D11RenderTargetView #gt; m_sceneColorRTVResolved
-            -ComPtr#lt; ID3D11ShaderResourceView #gt; m_sceneColorSRVResolved
-            -ComPtr#lt; ID3D11Texture2D #gt; m_fxaaTex
-            -ComPtr#lt; ID3D11RenderTargetView #gt; m_fxaaRTV
-            -ComPtr#lt; ID3D11ShaderResourceView #gt; m_fxaaSRV
-            -ComPtr#lt; ID3D11Texture2D #gt; m_postProcessTex
-            -ComPtr#lt; ID3D11RenderTargetView #gt; m_postProcessRTV
-            -ComPtr#lt; ID3D11ShaderResourceView #gt; m_postProcessSRV
+            -ComPtr#lt;ID3D11Device#gt; m_device
+            -ComPtr#lt;ID3D11DeviceContext#gt; m_context
+            -ComPtr#lt;IDXGISwapChain#gt; m_swapChain
+            -ComPtr#lt;ID3D11RenderTargetView#gt; m_renderTargetView
+            -ComPtr#lt;ID3D11DepthStencilView#gt; m_depthStencilView
+            -ComPtr#lt;ID3D11Texture2D#gt; m_depthStencilBuffer
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_depthSRV
+            -ComPtr#lt;ID3D11RasterizerState#gt; m_rasterizerState
+            -ComPtr#lt;ID3D11DepthStencilState#gt; m_depthStencilState
+            -ComPtr#lt;ID3D11Texture2D#gt; m_sceneColorTexMS
+            -ComPtr#lt;ID3D11RenderTargetView#gt; m_sceneColorRTVMS
+            -ComPtr#lt;ID3D11Texture2D#gt; m_sceneColorTexResolved
+            -ComPtr#lt;ID3D11RenderTargetView#gt; m_sceneColorRTVResolved
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_sceneColorSRVResolved
+            -ComPtr#lt;ID3D11Texture2D#gt; m_fxaaTex
+            -ComPtr#lt;ID3D11RenderTargetView#gt; m_fxaaRTV
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_fxaaSRV
+            -ComPtr#lt;ID3D11Texture2D#gt; m_postProcessTex
+            -ComPtr#lt;ID3D11RenderTargetView#gt; m_postProcessRTV
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_postProcessSRV
             -TemporalMode m_temporalMode
-            -ComPtr#lt; ID3D11Texture2D #gt; m_velocityTex
-            -ComPtr#lt; ID3D11RenderTargetView #gt; m_velocityRTV
-            -ComPtr#lt; ID3D11ShaderResourceView #gt; m_velocitySRV
-            -ComPtr#lt; ID3D11Texture2D #gt; m_resolvedVelocityTex
-            -ComPtr#lt; ID3D11RenderTargetView #gt; m_resolvedVelocityRTV
-            -ComPtr#lt; ID3D11ShaderResourceView #gt; m_resolvedVelocitySRV
-            -std::array#lt; ComPtr#lt; ID3D11Texture2D #gt;, 2 #gt; m_taaHistoryTex
-            -std::array#lt; ComPtr#lt; ID3D11RenderTargetView #gt;, 2 #gt; m_taaHistoryRTV
-            -std::array#lt; ComPtr#lt; ID3D11ShaderResourceView #gt;, 2 #gt; m_taaHistorySRV
+            -ComPtr#lt;ID3D11Texture2D#gt; m_velocityTex
+            -ComPtr#lt;ID3D11RenderTargetView#gt; m_velocityRTV
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_velocitySRV
+            -ComPtr#lt;ID3D11Texture2D#gt; m_resolvedVelocityTex
+            -ComPtr#lt;ID3D11RenderTargetView#gt; m_resolvedVelocityRTV
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_resolvedVelocitySRV
+            -array#lt;ComPtr#lt;ID3D11Texture2D#gt;, 2#gt; m_taaHistoryTex
+            -array#lt;ComPtr#lt;ID3D11RenderTargetView#gt;, 2#gt; m_taaHistoryRTV
+            -array#lt;ComPtr#lt;ID3D11ShaderResourceView#gt;, 2#gt; m_taaHistorySRV
             -size_t m_taaWriteIndex
-            -ComPtr#lt; ID3D11Texture2D #gt; m_dlssOutputTex
-            -ComPtr#lt; ID3D11ShaderResourceView #gt; m_dlssOutputSRV
+            -ComPtr#lt;ID3D11Texture2D#gt; m_dlssOutputTex
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_dlssOutputSRV
             -DlssUpscaler m_dlss
             -bool m_temporalHistoryValid
             -bool m_temporalCameraSetThisFrame
             -bool m_temporalPrevViewProjectionValid
             -uint32_t m_temporalFrameIndex
-            -DirectX::XMFLOAT2 m_jitterNdc
-            -DirectX::XMFLOAT4X4 m_temporalViewProjection
-            -DirectX::XMFLOAT4X4 m_temporalPrevViewProjection
-            -std::chrono::steady_clock::time_point m_lastTemporalFrameAt
+            -XMFLOAT2 m_jitterNdc
+            -XMFLOAT4X4 m_temporalViewProjection
+            -XMFLOAT4X4 m_temporalPrevViewProjection
+            -chrono::steady_clock::time_point m_lastTemporalFrameAt
             -float m_temporalFrameTimeMs
-            -ComPtr#lt; ID3D11Buffer #gt; m_taaConstantBuffer
-            -ComPtr#lt; ID3D11Buffer #gt; m_velocityResolveConstantBuffer
-            -ComPtr#lt; ID3D11SamplerState #gt; m_pointSampler
+            -ComPtr#lt;ID3D11Buffer#gt; m_taaConstantBuffer
+            -ComPtr#lt;ID3D11Buffer#gt; m_velocityResolveConstantBuffer
+            -ComPtr#lt;ID3D11SamplerState#gt; m_pointSampler
             -Shader m_upscaleShader
             -Shader m_fxaaShader
             -Shader m_postProcessShader
             -Shader m_taaShader
             -Shader m_velocityResolveShader
-            -ComPtr#lt; ID3D11Buffer #gt; m_fullscreenVB
-            -ComPtr#lt; ID3D11SamplerState #gt; m_linearSampler
-            -ComPtr#lt; ID3D11Buffer #gt; m_fxaaConstantBuffer
-            -ComPtr#lt; ID3D11Buffer #gt; m_upscaleConstantBuffer
-            -ComPtr#lt; ID3D11Buffer #gt; m_postProcessConstantBuffer
-            -ComPtr#lt; ID3D11BlendState #gt; m_postProcessBlendState
-            -ComPtr#lt; ID3D11DepthStencilState #gt; m_postProcessDepthState
-            -ComPtr#lt; ID3D11RasterizerState #gt; m_postProcessRasterizerState
+            -ComPtr#lt;ID3D11Buffer#gt; m_fullscreenVB
+            -ComPtr#lt;ID3D11SamplerState#gt; m_linearSampler
+            -ComPtr#lt;ID3D11Buffer#gt; m_fxaaConstantBuffer
+            -ComPtr#lt;ID3D11Buffer#gt; m_upscaleConstantBuffer
+            -ComPtr#lt;ID3D11Buffer#gt; m_postProcessConstantBuffer
+            -ComPtr#lt;ID3D11BlendState#gt; m_postProcessBlendState
+            -ComPtr#lt;ID3D11DepthStencilState#gt; m_postProcessDepthState
+            -ComPtr#lt;ID3D11RasterizerState#gt; m_postProcessRasterizerState
             -PostProcessParams m_postProcessParams
             -QualitySettings m_quality
             -bool m_vsyncEnabled
@@ -200,48 +252,48 @@ classDiagram
             -uint32_t m_renderHeight
             -D3D_DRIVER_TYPE m_driverType
             -D3D_FEATURE_LEVEL m_featureLevel
-            -std::string m_adapterName
+            -string m_adapterName
             -uint64_t m_dedicatedVideoMemoryBytes
-            -std::wstring m_preferredAdapterName
+            -wstring m_preferredAdapterName
             -size_t kGpuQueryBufferCount$
             -uint64_t kPipelineStatisticsInterval$
-            -std::array#lt; GpuFrameQueries, kGpuQueryBufferCount #gt; m_gpuQueryFrames
+            -array#lt;GpuFrameQueries, kGpuQueryBufferCount#gt; m_gpuQueryFrames
             -size_t m_gpuQueryWriteIndex
-            -GpuFrameQueries #42; m_currentGpuQueryFrame
-            -std::vector#lt; size_t #gt; m_gpuScopeStack
-            -std::vector#lt; core::GpuFrameSample #gt; m_readyGpuSamples
+            -GpuFrameQueries#42; m_currentGpuQueryFrame
+            -vector#lt;size_t#gt; m_gpuScopeStack
+            -vector#lt;GpuFrameSample#gt; m_readyGpuSamples
             -bool m_gpuProfilerAvailable
             -size_t kGpuFrameTimerCount$
-            -std::array#lt; GpuFrameTimerQueries, kGpuFrameTimerCount #gt; m_gpuFrameTimers
+            -array#lt;GpuFrameTimerQueries, kGpuFrameTimerCount#gt; m_gpuFrameTimers
             -size_t m_gpuFrameTimerWriteIndex
-            -GpuFrameTimerQueries #42; m_currentGpuFrameTimer
+            -GpuFrameTimerQueries#42; m_currentGpuFrameTimer
             -bool m_gpuFrameTimerAvailable
             -float m_latestGpuFrameMs
             +GraphicsDevice()
             +#126;GraphicsDevice()
-            +EnumerateAdapters()$ std::vector#lt; AdapterInfo #gt;
-            +GraphicsDevice(const GraphicsDevice #amp;)
-            +operator=(const GraphicsDevice #amp;) GraphicsDevice #amp;
-            +Initialize(HWND hWnd, uint32_t width, uint32_t height, const std::wstring #amp; preferredAdapterName) bool
+            +EnumerateAdapters()$ vector#lt;AdapterInfo#gt;
+            +GraphicsDevice(const GraphicsDevice#amp;)
+            +operator=(const GraphicsDevice#amp;) GraphicsDevice#amp;
+            +Initialize(HWND hWnd, uint32_t width, uint32_t height, const wstring#amp; preferredAdapterName) bool
             +Shutdown() void
             +BeginFrame(uint64_t profileFrameIndex, float r, float g, float b, float a) void
             +ResolveSceneToBackbuffer() void
             +EndFrame() void
-            +BeginGpuScope(std::string_view name) void
+            +BeginGpuScope(string_view name) void
             +EndGpuScope() void
-            +ConsumeGpuProfileSamples() std::vector#lt; core::GpuFrameSample #gt;
+            +ConsumeGpuProfileSamples() vector#lt;GpuFrameSample#gt;
             +GetLatestGpuFrameMs() float #123;const#125;
             +Resize(uint32_t width, uint32_t height) bool
-            +ApplyQualitySettings(const QualitySettings #amp; settings) void
-            +GetQualitySettings() const QualitySettings #amp; #123;const#125;
-            +SetPostProcessParams(const PostProcessParams #amp; params) void
+            +ApplyQualitySettings(const QualitySettings#amp; settings) void
+            +GetQualitySettings() const QualitySettings#amp; #123;const#125;
+            +SetPostProcessParams(const PostProcessParams#amp; params) void
             +IsDepthReadable() bool #123;const#125;
             +IsTaaActive() bool #123;const#125;
             +IsDlssActive() bool #123;const#125;
             +IsTemporalActive() bool #123;const#125;
             +IsDlssSupported() bool #123;const#125;
-            +ApplyProjectionJitter(DirectX::XMMATRIX #amp; projection) void #123;const#125;
-            +SetTemporalCameraViewProjection(const DirectX::XMMATRIX #amp; viewProjection) void
+            +ApplyProjectionJitter(XMMATRIX#amp; projection) void #123;const#125;
+            +SetTemporalCameraViewProjection(const XMMATRIX#amp; viewProjection) void
             +GetTemporalShaderConstants() TemporalShaderConstants #123;const#125;
             +BindSceneVelocityTarget() void
             +UnbindSceneVelocityTarget() void
@@ -250,15 +302,15 @@ classDiagram
             +GetVSync() bool #123;const#125;
             +SetFullscreenExclusive(bool enable, uint32_t width, uint32_t height) bool
             +IsFullscreenExclusive() bool #123;const#125;
-            +GetDevice() ID3D11Device #42; #123;const#125;
-            +GetContext() ID3D11DeviceContext #42; #123;const#125;
-            +GetSwapChain() IDXGISwapChain #42; #123;const#125;
+            +GetDevice() ID3D11Device#42; #123;const#125;
+            +GetContext() ID3D11DeviceContext#42; #123;const#125;
+            +GetSwapChain() IDXGISwapChain#42; #123;const#125;
             +GetDeviceRemovedReason() HRESULT #123;const#125;
             +GetDriverType() D3D_DRIVER_TYPE #123;const#125;
             +GetFeatureLevel() D3D_FEATURE_LEVEL #123;const#125;
-            +GetAdapterName() const std::string #amp; #123;const#125;
+            +GetAdapterName() const string#amp; #123;const#125;
             +GetDedicatedVideoMemoryBytes() uint64_t #123;const#125;
-            +QueryLocalVideoMemory(uint64_t #amp; usageBytes, uint64_t #amp; budgetBytes) bool #123;const#125;
+            +QueryLocalVideoMemory(uint64_t#amp; usageBytes, uint64_t#amp; budgetBytes) bool #123;const#125;
             +GetWidth() uint32_t #123;const#125;
             +GetHeight() uint32_t #123;const#125;
             +GetRenderWidth() uint32_t #123;const#125;
@@ -277,16 +329,16 @@ classDiagram
             -ResolveGpuProfilerQueries() void
             -InitializeGpuFrameTimer() void
             -ResolveGpuFrameTimer() void
-            -RunFullscreenPass(Shader #amp; shader, ID3D11ShaderResourceView #42; srv, ID3D11RenderTargetView #42; dstRTV, uint32_t dstWidth, uint32_t dstHeight, FullscreenConstants constants) void
-            -RunPostProcessPass(ID3D11ShaderResourceView #42; colorSRV, ID3D11RenderTargetView #42; dstRTV, uint32_t dstWidth, uint32_t dstHeight) void
+            -RunFullscreenPass(Shader#amp;, ID3D11ShaderResourceView#42;, ID3D11RenderTargetView#42;, uint32_t, uint32_t, FullscreenConstants) void
+            -RunPostProcessPass(ID3D11ShaderResourceView#42;, ID3D11RenderTargetView#42;, uint32_t, uint32_t) void
             -DecideTemporalModeAndRenderSize() void
-            -CreateTemporalTargets(const D3D11_TEXTURE2D_DESC #amp; sceneColorDesc) bool
+            -CreateTemporalTargets(const D3D11_TEXTURE2D_DESC#amp; sceneColorDesc) bool
             -ReleaseTemporalTargets() void
             -BeginTemporalFrame() void
             -RunVelocityResolvePass() void
-            -RunTaaPass() ID3D11ShaderResourceView #42;
-            -RunDlssPass() ID3D11ShaderResourceView #42;
-            -DrawFullscreenTriangle(Shader #amp; shader, ID3D11RenderTargetView #42; dstRTV, uint32_t dstWidth, uint32_t dstHeight) void
+            -RunTaaPass() ID3D11ShaderResourceView#42;
+            -RunDlssPass() ID3D11ShaderResourceView#42;
+            -DrawFullscreenTriangle(Shader#amp;, ID3D11RenderTargetView#42;, uint32_t, uint32_t) void
         }
         class graphics__GraphicsDevice__FullscreenConstants["GraphicsDevice::FullscreenConstants"] {
             <<enumeration>>
@@ -296,11 +348,11 @@ classDiagram
         }
         class graphics__GraphicsDevice__GpuFrameQueries["GraphicsDevice::GpuFrameQueries"] {
             <<struct>>
-            +ComPtr#lt; ID3D11Query #gt; disjoint
-            +ComPtr#lt; ID3D11Query #gt; pipeline
-            +ComPtr#lt; ID3D11Query #gt; frameStart
-            +ComPtr#lt; ID3D11Query #gt; frameEnd
-            +std::vector#lt; GpuTimestampQueries #gt; scopes
+            +ComPtr#lt;ID3D11Query#gt; disjoint
+            +ComPtr#lt;ID3D11Query#gt; pipeline
+            +ComPtr#lt;ID3D11Query#gt; frameStart
+            +ComPtr#lt;ID3D11Query#gt; frameEnd
+            +vector#lt;GpuTimestampQueries#gt; scopes
             +uint64_t frameIndex
             +size_t usedScopeCount
             +bool issued
@@ -308,16 +360,16 @@ classDiagram
         }
         class graphics__GraphicsDevice__GpuFrameTimerQueries["GraphicsDevice::GpuFrameTimerQueries"] {
             <<struct>>
-            +ComPtr#lt; ID3D11Query #gt; disjoint
-            +ComPtr#lt; ID3D11Query #gt; frameStart
-            +ComPtr#lt; ID3D11Query #gt; frameEnd
+            +ComPtr#lt;ID3D11Query#gt; disjoint
+            +ComPtr#lt;ID3D11Query#gt; frameStart
+            +ComPtr#lt;ID3D11Query#gt; frameEnd
             +bool issued
         }
         class graphics__GraphicsDevice__GpuTimestampQueries["GraphicsDevice::GpuTimestampQueries"] {
             <<struct>>
-            +std::string name
-            +ComPtr#lt; ID3D11Query #gt; start
-            +ComPtr#lt; ID3D11Query #gt; end
+            +string name
+            +ComPtr#lt;ID3D11Query#gt; start
+            +ComPtr#lt;ID3D11Query#gt; end
         }
         class graphics__GraphicsDevice__TemporalMode["GraphicsDevice::TemporalMode"] {
             <<enumeration>>
@@ -327,8 +379,8 @@ classDiagram
         }
         class graphics__GraphicsDevice__TemporalShaderConstants["GraphicsDevice::TemporalShaderConstants"] {
             <<struct>>
-            +DirectX::XMMATRIX prevViewProjection
-            +DirectX::XMFLOAT4 jitterUv
+            +XMMATRIX prevViewProjection
+            +XMFLOAT4 jitterUv
             +bool velocityEnabled
         }
         class graphics__HeadingRegion["HeadingRegion"] {
@@ -355,74 +407,74 @@ classDiagram
         }
         class graphics__LinkRegion["LinkRegion"] {
             <<struct>>
-            +std::string targetPage
+            +string targetPage
             +float x
             +float y
             +float width
             +float height
             +bool isTarget
             +uint32_t elementId
-            +std::vector#lt; LinkFragment #gt; fragments
+            +vector#lt;LinkFragment#gt; fragments
         }
         class graphics__Mesh["Mesh"] {
-            -ComPtr#lt; ID3D11Buffer #gt; m_vertexBuffer
-            -ComPtr#lt; ID3D11Buffer #gt; m_indexBuffer
+            -ComPtr#lt;ID3D11Buffer#gt; m_vertexBuffer
+            -ComPtr#lt;ID3D11Buffer#gt; m_indexBuffer
             -uint32_t m_indexCount
             -uint32_t m_stride
             -uint32_t m_offset
             -uint32_t m_vertexCapacity
-            -DirectX::BoundingSphere m_bounds
+            -BoundingSphere m_bounds
             +Mesh()
             +#126;Mesh()
-            +Create(ID3D11Device #42; device, const std::vector#lt; Vertex #gt; #amp; vertices, const std::vector#lt; uint32_t #gt; #amp; indices) bool
-            +CreateDynamic(ID3D11Device #42; device, const std::vector#lt; Vertex #gt; #amp; initialVertices, const std::vector#lt; uint32_t #gt; #amp; indices) bool
-            +UpdateVertices(ID3D11DeviceContext #42; context, const std::vector#lt; Vertex #gt; #amp; vertices) bool
-            +Bind(ID3D11DeviceContext #42; context) void #123;const#125;
-            +Draw(ID3D11DeviceContext #42; context) void #123;const#125;
+            +Create(ID3D11Device#42;, const vector#lt;Vertex#gt;#amp;, const vector#lt;uint32_t#gt;#amp;) bool
+            +CreateDynamic(ID3D11Device#42;, const vector#lt;Vertex#gt;#amp;, const vector#lt;uint32_t#gt;#amp;) bool
+            +UpdateVertices(ID3D11DeviceContext#42; context, const vector#lt;Vertex#gt;#amp; vertices) bool
+            +Bind(ID3D11DeviceContext#42; context) void #123;const#125;
+            +Draw(ID3D11DeviceContext#42; context) void #123;const#125;
             +IsValid() bool #123;const#125;
             +GetIndexCount() uint32_t #123;const#125;
-            +GetBounds() const DirectX::BoundingSphere #amp; #123;const#125;
+            +GetBounds() const BoundingSphere#amp; #123;const#125;
         }
-        class graphics__MeshPrimitives["MeshPrimitives"] {
-            +CreateTriangle(ID3D11Device #42; device)$ Mesh
-            +CreateCube(ID3D11Device #42; device)$ Mesh
-            +CreateSphere(ID3D11Device #42; device, int segments)$ Mesh
-            +CreateCylinder(ID3D11Device #42; device, int segments)$ Mesh
-            +CreateGolfCup(ID3D11Device #42; device, int segments)$ Mesh
-            +CreateRock(ID3D11Device #42; device, int rings, int sectors)$ Mesh
-            +CreateGrassClump(ID3D11Device #42; device)$ Mesh
-            +CreateGrassPatch(ID3D11Device #42; device, uint32_t variantSeed, int gridSize, int bladesPerCell, float keepRatio, float widthScale)$ Mesh
-            +CreateTurfPatch(ID3D11Device #42; device, uint32_t variantSeed)$ Mesh
-            +CreateDenseTurfPatch(ID3D11Device #42; device, uint32_t variantSeed)$ Mesh
-            +CreateUltraDenseTurfPatch(ID3D11Device #42; device, uint32_t variantSeed)$ Mesh
-            +CreateDenseFairwayTurfPatch(ID3D11Device #42; device, uint32_t variantSeed)$ Mesh
-            +CreateUltraDenseFairwayTurfPatch(ID3D11Device #42; device, uint32_t variantSeed)$ Mesh
-            +CreateSandCrater(ID3D11Device #42; device, int segments)$ Mesh
-            +CreatePlane(ID3D11Device #42; device, float width, float depth)$ Mesh
-            +CreateQuad(ID3D11Device #42; device)$ Mesh
+        class iso__graphics__MeshPrimitives["MeshPrimitives"] {
+            +CreateTriangle(ID3D11Device#42; device)$ Mesh
+            +CreateCube(ID3D11Device#42; device)$ Mesh
+            +CreateSphere(ID3D11Device#42; device, int segments)$ Mesh
+            +CreateCylinder(ID3D11Device#42; device, int segments)$ Mesh
+            +CreateGolfCup(ID3D11Device#42; device, int segments)$ Mesh
+            +CreateRock(ID3D11Device#42; device, int rings, int sectors)$ Mesh
+            +CreateGrassClump(ID3D11Device#42; device)$ Mesh
+            +CreateGrassPatch(ID3D11Device#42;, uint32_t, int, int, float, float)$ Mesh
+            +CreateTurfPatch(ID3D11Device#42; device, uint32_t variantSeed)$ Mesh
+            +CreateDenseTurfPatch(ID3D11Device#42; device, uint32_t variantSeed)$ Mesh
+            +CreateUltraDenseTurfPatch(ID3D11Device#42; device, uint32_t variantSeed)$ Mesh
+            +CreateDenseFairwayTurfPatch(ID3D11Device#42; device, uint32_t variantSeed)$ Mesh
+            +CreateUltraDenseFairwayTurfPatch(ID3D11Device#42; device, uint32_t variantSeed)$ Mesh
+            +CreateSandCrater(ID3D11Device#42; device, int segments)$ Mesh
+            +CreatePlane(ID3D11Device#42; device, float width, float depth)$ Mesh
+            +CreateQuad(ID3D11Device#42; device)$ Mesh
         }
-        class graphics__ObjLoader["ObjLoader"] {
-            +Load(const std::string #amp; path, std::vector#lt; Vertex #gt; #amp; outVertices, std::vector#lt; uint32_t #gt; #amp; outIndices)$ bool
+        class iso__graphics__ObjLoader["ObjLoader"] {
+            +Load(const string#amp; path, vector#lt;Vertex#gt;#amp; outVertices, vector#lt;uint32_t#gt;#amp; outIndices)$ bool
         }
         class graphics__PendingWikiImage["PendingWikiImage"] {
             <<struct>>
-            +std::string sourceUrl
-            +std::vector#lt; uint8_t #gt; pixelsBGRA
+            +string sourceUrl
+            +vector#lt;uint8_t#gt; pixelsBGRA
             +uint32_t pixelWidth
             +uint32_t pixelHeight
-            +std::wstring caption
+            +wstring caption
             +bool isLead
-            +std::wstring headingText
+            +wstring headingText
         }
         class graphics__PostProcessParams["PostProcessParams"] {
             <<struct>>
-            +DirectX::XMFLOAT4 fogColor
-            +DirectX::XMFLOAT4 fogParams
-            +DirectX::XMFLOAT4 colorTint
-            +DirectX::XMFLOAT4 colorParams
-            +DirectX::XMFLOAT4 vignetteParams
-            +DirectX::XMFLOAT4 timeParams
-            +DirectX::XMFLOAT4 depthParams
+            +XMFLOAT4 fogColor
+            +XMFLOAT4 fogParams
+            +XMFLOAT4 colorTint
+            +XMFLOAT4 colorParams
+            +XMFLOAT4 vignetteParams
+            +XMFLOAT4 timeParams
+            +XMFLOAT4 depthParams
         }
         class graphics__QualitySettings["QualitySettings"] {
             <<struct>>
@@ -433,81 +485,81 @@ classDiagram
             +bool dlssEnabled
         }
         class graphics__ScopedGpuTimer["ScopedGpuTimer"] {
-            -GraphicsDevice #amp; m_graphics
-            +ScopedGpuTimer(GraphicsDevice #amp; graphics, std::string_view name)
+            -GraphicsDevice#amp; m_graphics
+            +ScopedGpuTimer(GraphicsDevice#amp; graphics, string_view name)
             +#126;ScopedGpuTimer()
-            +ScopedGpuTimer(const ScopedGpuTimer #amp;)
-            +operator=(const ScopedGpuTimer #amp;) ScopedGpuTimer #amp;
+            +ScopedGpuTimer(const ScopedGpuTimer#amp;)
+            +operator=(const ScopedGpuTimer#amp;) ScopedGpuTimer#amp;
         }
         class graphics__Shader["Shader"] {
-            -ComPtr#lt; ID3D11VertexShader #gt; m_vertexShader
-            -ComPtr#lt; ID3D11PixelShader #gt; m_pixelShader
-            -ComPtr#lt; ID3D11InputLayout #gt; m_inputLayout
+            -ComPtr#lt;ID3D11VertexShader#gt; m_vertexShader
+            -ComPtr#lt;ID3D11PixelShader#gt; m_pixelShader
+            -ComPtr#lt;ID3D11InputLayout#gt; m_inputLayout
             +Shader()
             +#126;Shader()
-            +LoadFromFile(ID3D11Device #42; device, const std::wstring #amp; vsPath, const std::string #amp; vsEntry, const std::wstring #amp; psPath, const std::string #amp; psEntry, const std::vector#lt; D3D11_INPUT_ELEMENT_DESC #gt; #amp; inputLayout) bool
-            +Bind(ID3D11DeviceContext #42; context) void #123;const#125;
+            +LoadFromFile(ID3D11Device#42;, const wstring#amp;, const string#amp;, const wstring#amp;, const string#amp;, const vector#lt;D3D11_INPUT_ELEMENT_DESC#gt;#amp;) bool
+            +Bind(ID3D11DeviceContext#42; context) void #123;const#125;
             +IsValid() bool #123;const#125;
-            +GetDefaultInputLayout()$ std::vector#lt; D3D11_INPUT_ELEMENT_DESC #gt;
+            +GetDefaultInputLayout()$ vector#lt;D3D11_INPUT_ELEMENT_DESC#gt;
         }
         class graphics__SkeletalModel["SkeletalModel"] {
-            -std::vector#lt; Vertex #gt; m_bindVertices
-            -std::vector#lt; uint32_t #gt; m_indices
-            -std::vector#lt; VertexBoneWeights #gt; m_vertexWeights
-            -std::vector#lt; SkeletonNode #gt; m_nodes
-            -std::unordered_map#lt; std::string, int #gt; m_nodeNameToIndex
-            -std::vector#lt; Bone #gt; m_bones
-            -std::unordered_map#lt; std::string, int #gt; m_boneNameToIndex
-            -std::vector#lt; AnimationClip #gt; m_clips
-            -std::unordered_map#lt; std::string, int #gt; m_clipNameToIndex
-            -DirectX::XMFLOAT4X4 m_globalInverseTransform
+            -vector#lt;Vertex#gt; m_bindVertices
+            -vector#lt;uint32_t#gt; m_indices
+            -vector#lt;VertexBoneWeights#gt; m_vertexWeights
+            -vector#lt;SkeletonNode#gt; m_nodes
+            -unordered_map#lt;string, int#gt; m_nodeNameToIndex
+            -vector#lt;Bone#gt; m_bones
+            -unordered_map#lt;string, int#gt; m_boneNameToIndex
+            -vector#lt;AnimationClip#gt; m_clips
+            -unordered_map#lt;string, int#gt; m_clipNameToIndex
+            -XMFLOAT4X4 m_globalInverseTransform
             -float m_bindPoseHeight
-            -std::vector#lt; uint8_t #gt; m_baseColorTextureBytes
-            +LoadFromFile(const std::string #amp; path) bool
-            +GetBindPoseVertices() const std::vector#lt; Vertex #gt; #amp; #123;const#125;
-            +GetIndices() const std::vector#lt; uint32_t #gt; #amp; #123;const#125;
-            +FindClip(const std::string #amp; name) const AnimationClip #42; #123;const#125;
-            +GetClipNames() std::vector#lt; std::string #gt; #123;const#125;
-            +ComputePose(const AnimationClip #42; clip, float timeSeconds, std::vector#lt; Vertex #gt; #amp; outVertices) void #123;const#125;
-            +ComputeBlendedPose(const AnimationClip #42; fromClip, float fromTime, const AnimationClip #42; toClip, float toTime, float toWeight, std::vector#lt; Vertex #gt; #amp; outVertices) void #123;const#125;
-            +ComputeBoneVertexCentroid(const std::string #amp; boneName, const std::vector#lt; Vertex #gt; #amp; posedVertices, DirectX::XMFLOAT3 #amp; outCentroid) bool #123;const#125;
+            -vector#lt;uint8_t#gt; m_baseColorTextureBytes
+            +LoadFromFile(const string#amp; path) bool
+            +GetBindPoseVertices() const vector#lt;Vertex#gt;#amp; #123;const#125;
+            +GetIndices() const vector#lt;uint32_t#gt;#amp; #123;const#125;
+            +FindClip(const string#amp; name) const AnimationClip#42; #123;const#125;
+            +GetClipNames() vector#lt;string#gt; #123;const#125;
+            +ComputePose(const AnimationClip#42; clip, float timeSeconds, vector#lt;Vertex#gt;#amp; outVertices) void #123;const#125;
+            +ComputeBlendedPose(const AnimationClip#42;, float, const AnimationClip#42;, float, float, vector#lt;Vertex#gt;#amp;) void #123;const#125;
+            +ComputeBoneVertexCentroid(const string#amp;, const vector#lt;Vertex#gt;#amp;, XMFLOAT3#amp;) bool #123;const#125;
             +GetBindPoseHeight() float #123;const#125;
             +IsValid() bool #123;const#125;
-            +GetBaseColorTextureBytes() const std::vector#lt; uint8_t #gt; #amp; #123;const#125;
-            -SampleLocalTRS(int nodeIndex, const PoseLayer #amp; layer, DirectX::XMVECTOR #amp; outScale, DirectX::XMVECTOR #amp; outRotation, DirectX::XMVECTOR #amp; outTranslation) void #123;const#125;
-            -ComputeGlobalTransforms(int nodeIndex, const DirectX::XMMATRIX #amp; parentGlobal, const PoseLayer #amp; from, const PoseLayer #amp; to, float toWeight, std::vector#lt; DirectX::XMMATRIX #gt; #amp; outGlobal) void #123;const#125;
+            +GetBaseColorTextureBytes() const vector#lt;uint8_t#gt;#amp; #123;const#125;
+            -SampleLocalTRS(int, const PoseLayer#amp;, XMVECTOR#amp;, XMVECTOR#amp;, XMVECTOR#amp;) void #123;const#125;
+            -ComputeGlobalTransforms(int, const XMMATRIX#amp;, const PoseLayer#amp;, const PoseLayer#amp;, float, vector#lt;XMMATRIX#gt;#amp;) void #123;const#125;
         }
         class graphics__SkeletalModel__PoseLayer["SkeletalModel::PoseLayer"] {
             <<struct>>
-            +const AnimationClip #42; clip
+            +const AnimationClip#42; clip
             +float time
         }
         class graphics__SkeletonNode["SkeletonNode"] {
             <<struct>>
-            +std::string name
+            +string name
             +int parentIndex
-            +std::vector#lt; int #gt; children
-            +DirectX::XMFLOAT4X4 localBindTransform
-            +DirectX::XMFLOAT3 bindScale
-            +DirectX::XMFLOAT4 bindRotation
-            +DirectX::XMFLOAT3 bindTranslation
+            +vector#lt;int#gt; children
+            +XMFLOAT4X4 localBindTransform
+            +XMFLOAT3 bindScale
+            +XMFLOAT4 bindRotation
+            +XMFLOAT3 bindTranslation
         }
         class graphics__SkyboxTextureGenerator["SkyboxTextureGenerator"] {
             +SkyboxTextureGenerator()
             +#126;SkyboxTextureGenerator()
-            +GenerateCubemap(ID3D11Device #42; device, const std::string #amp; pageTitle, const std::string #amp; pageExtract, Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; #amp; outSRV) bool
-            +GenerateCubemapFromTheme(ID3D11Device #42; device, SkyboxTheme theme, Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; #amp; outSRV) bool
-            +GenerateCubemapToFiles(ID3D11Device #42; device, const std::string #amp; pageTitle, const std::string #amp; pageExtract, const std::wstring #amp; baseFilePath, Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; #amp; outSRV) bool
-            +GenerateCubemapFromThemeToFiles(ID3D11Device #42; device, SkyboxTheme theme, const std::wstring #amp; baseFilePath) bool
-            +LoadCubemapFromFiles(ID3D11Device #42; device, const std::wstring #amp; baseFilePath, Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; #amp; outSRV) bool
-            +LoadCubemapFromSingleFile(ID3D11Device #42; device, const std::wstring #amp; filePath, Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; #amp; outSRV) bool
-            +DetermineTheme(const std::string #amp; pageTitle, const std::string #amp; pageExtract) SkyboxTheme
-            +GetThemeFileName(SkyboxTheme theme)$ std::wstring
-            -GetThemeColors(SkyboxTheme theme, DirectX::XMFLOAT3 #amp; outTopColor, DirectX::XMFLOAT3 #amp; outHorizonColor, DirectX::XMFLOAT3 #amp; outBottomColor) void
-            -GenerateFaceData(const DirectX::XMFLOAT3 #amp; topColor, const DirectX::XMFLOAT3 #amp; horizonColor, const DirectX::XMFLOAT3 #amp; bottomColor, int faceSize, std::vector#lt; std::vector#lt; uint8_t #gt; #gt; #amp; outData, SkyboxTheme theme, uint8_t faceMask) void
-            -CreateCubemapTexture(ID3D11Device #42; device, const std::vector#lt; std::vector#lt; uint8_t #gt; #gt; #amp; faceData, int faceSize, Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; #amp; outSRV) bool
+            +GenerateCubemap(ID3D11Device#42;, const string#amp;, const string#amp;, ComPtr#lt;ID3D11ShaderResourceView#gt;#amp;) bool
+            +GenerateCubemapFromTheme(ID3D11Device#42;, SkyboxTheme, ComPtr#lt;ID3D11ShaderResourceView#gt;#amp;) bool
+            +GenerateCubemapToFiles(ID3D11Device#42;, const string#amp;, const string#amp;, const wstring#amp;, ComPtr#lt;ID3D11ShaderResourceView#gt;#amp;) bool
+            +GenerateCubemapFromThemeToFiles(ID3D11Device#42;, SkyboxTheme, const wstring#amp;) bool
+            +LoadCubemapFromFiles(ID3D11Device#42;, const wstring#amp;, ComPtr#lt;ID3D11ShaderResourceView#gt;#amp;) bool
+            +LoadCubemapFromSingleFile(ID3D11Device#42;, const wstring#amp;, ComPtr#lt;ID3D11ShaderResourceView#gt;#amp;) bool
+            +DetermineTheme(const string#amp; pageTitle, const string#amp; pageExtract) SkyboxTheme
+            +GetThemeFileName(SkyboxTheme theme)$ wstring
+            -GetThemeColors(SkyboxTheme, XMFLOAT3#amp;, XMFLOAT3#amp;, XMFLOAT3#amp;) void
+            -GenerateFaceData(const XMFLOAT3#amp;, const XMFLOAT3#amp;, const XMFLOAT3#amp;, int, vector#lt;vector#lt;uint8_t#gt;#gt;#amp;, SkyboxTheme, uint8_t) void
+            -CreateCubemapTexture(ID3D11Device#42;, const vector#lt;vector#lt;uint8_t#gt;#gt;#amp;, int, ComPtr#lt;ID3D11ShaderResourceView#gt;#amp;) bool
         }
-        class graphics__SkyboxTheme["SkyboxTheme"] {
+        class iso__graphics__SkyboxTheme["SkyboxTheme"] {
             <<enumeration>>
             Default
             HistoryAncient
@@ -536,26 +588,26 @@ classDiagram
             Retro
             GolfCourseClear
         }
-        class graphics__TextAlign["TextAlign"] {
+        class iso__graphics__TextAlign["TextAlign"] {
             <<enumeration>>
             Left
             Center
             Right
         }
         class graphics__TextRenderer["TextRenderer"] {
-            -ComPtr#lt; IDXGISwapChain #gt; m_swapChain
-            -ComPtr#lt; ID2D1Factory1 #gt; m_d2dFactory
-            -ComPtr#lt; ID2D1DeviceContext #gt; m_d2dContext
-            -ComPtr#lt; ID2D1Effect #gt; m_imageColorMatrixEffect
-            -ComPtr#lt; IDWriteFactory #gt; m_dwriteFactory
-            -ComPtr#lt; IWICImagingFactory #gt; m_wicFactory
-            -std::map#lt; std::string, ComPtr#lt; ID2D1Bitmap1 #gt; #gt; m_bitmapCache
-            -std::unordered_map#lt; ID3D11Resource #42;, SrvBitmapCacheEntry #gt; m_srvBitmapCache
+            -ComPtr#lt;IDXGISwapChain#gt; m_swapChain
+            -ComPtr#lt;ID2D1Factory1#gt; m_d2dFactory
+            -ComPtr#lt;ID2D1DeviceContext#gt; m_d2dContext
+            -ComPtr#lt;ID2D1Effect#gt; m_imageColorMatrixEffect
+            -ComPtr#lt;IDWriteFactory#gt; m_dwriteFactory
+            -ComPtr#lt;IWICImagingFactory#gt; m_wicFactory
+            -map#lt;string, ComPtr#lt;ID2D1Bitmap1#gt;#gt; m_bitmapCache
+            -unordered_map#lt;ID3D11Resource#42;, SrvBitmapCacheEntry#gt; m_srvBitmapCache
             -FontManager m_fontManager
             -BrushCache m_brushCache
-            -std::unordered_map#lt; TextLayoutKey, TextLayoutEntry, TextLayoutKeyHash #gt; m_layoutCache
+            -unordered_map#lt;TextLayoutKey, TextLayoutEntry, TextLayoutKeyHash#gt; m_layoutCache
             -size_t kMaxLayoutCacheEntries$
-            -std::unordered_map#lt; RasterCacheKey, RasterCacheEntry, RasterCacheKeyHash #gt; m_rasterCache
+            -unordered_map#lt;RasterCacheKey, RasterCacheEntry, RasterCacheKeyHash#gt; m_rasterCache
             -size_t kMaxRasterCacheEntries$
             -size_t kMaxRasterCacheBytes$
             -size_t m_rasterCacheBytes
@@ -567,103 +619,104 @@ classDiagram
             -int m_drawRefCount
             +TextRenderer()
             +#126;TextRenderer()
-            +TextRenderer(const TextRenderer #amp;)
-            +operator=(const TextRenderer #amp;) TextRenderer #amp;
-            +Initialize(IDXGISwapChain #42; swapChain) bool
+            +TextRenderer(const TextRenderer#amp;)
+            +operator=(const TextRenderer#amp;) TextRenderer#amp;
+            +Initialize(IDXGISwapChain#42; swapChain) bool
             +Shutdown() void
-            +LoadFont(const std::string #amp; fontName, const std::string #amp; filePath) bool
+            +LoadFont(const string#amp; fontName, const string#amp; filePath) bool
             +BeginDraw() void
             +EndDraw() void
-            +FillRect(const D2D1_RECT_F #amp; rect, const DirectX::XMFLOAT4 #amp; color) void
-            +FillFullScreenRect(const DirectX::XMFLOAT4 #amp; color) void
-            +FillRoundedRect(const D2D1_RECT_F #amp; rect, float radius, const DirectX::XMFLOAT4 #amp; color) void
-            +DrawRoundedRect(const D2D1_RECT_F #amp; rect, float radius, const DirectX::XMFLOAT4 #amp; color, float width) void
-            +LoadBitmapFromFile(const std::string #amp; filePath) bool
-            +RenderImage(const std::string #amp; filePath, const D2D1_RECT_F #amp; destRect, float alpha, float rotation, bool grayscaleTint, const DirectX::XMFLOAT4 #amp; tintColor) void
-            +RenderImage(ID3D11ShaderResourceView #42; srv, const D2D1_RECT_F #amp; destRect, float alpha, float rotation, bool grayscaleTint, const DirectX::XMFLOAT4 #amp; tintColor) void
-            +RenderText(const std::wstring #amp; text, const D2D1_RECT_F #amp; rect, const TextStyle #amp; style) void
-            +RenderText(const std::wstring #amp; text, float x, float y, const TextStyle #amp; style) void
-            +RenderTextCached(const std::wstring #amp; text, const D2D1_RECT_F #amp; rect, const TextStyle #amp; style) void
-            +MeasureTextHeight(const std::wstring #amp; text, const TextStyle #amp; style, float maxWidth) float
+            +FillRect(const D2D1_RECT_F#amp; rect, const XMFLOAT4#amp; color) void
+            +FillFullScreenRect(const XMFLOAT4#amp; color) void
+            +FillRoundedRect(const D2D1_RECT_F#amp; rect, float radius, const XMFLOAT4#amp; color) void
+            +DrawRoundedRect(const D2D1_RECT_F#amp; rect, float radius, const XMFLOAT4#amp; color, float width) void
+            +FillPolygon(const D2D1_POINT_2F#42; points, UINT32 count, const XMFLOAT4#amp; color) void
+            +LoadBitmapFromFile(const string#amp; filePath) bool
+            +RenderImage(const string#amp;, const D2D1_RECT_F#amp;, float, float, bool, const XMFLOAT4#amp;) void
+            +RenderImage(ID3D11ShaderResourceView#42;, const D2D1_RECT_F#amp;, float, float, bool, const XMFLOAT4#amp;) void
+            +RenderText(const wstring#amp; text, const D2D1_RECT_F#amp; rect, const TextStyle#amp; style) void
+            +RenderText(const wstring#amp; text, float x, float y, const TextStyle#amp; style) void
+            +RenderTextCached(const wstring#amp; text, const D2D1_RECT_F#amp; rect, const TextStyle#amp; style) void
+            +MeasureTextHeight(const wstring#amp; text, const TextStyle#amp; style, float maxWidth) float
             +GetWidth() float #123;const#125;
             +GetHeight() float #123;const#125;
             +ReleaseTargetForResize() void
             +RecreateTargetAfterResize() bool
             +IsValid() bool #123;const#125;
-            -CreateTargetBitmap(IDXGISwapChain #42; swapChain) HRESULT
-            -DrawImageBitmap(ID2D1Bitmap1 #42; bitmap, const D2D1_RECT_F #amp; destRect, float alpha, float rotation, bool grayscaleTint, const DirectX::XMFLOAT4 #amp; tintColor) void
+            -CreateTargetBitmap(IDXGISwapChain#42; swapChain) HRESULT
+            -DrawImageBitmap(ID2D1Bitmap1#42;, const D2D1_RECT_F#amp;, float, float, bool, const XMFLOAT4#amp;) void
             -ComputeVirtualToScreenTransform() D2D1::Matrix3x2F #123;const#125;
             -ComputeUniformScale() float #123;const#125;
-            -DrawTextCore(const std::wstring #amp; text, const D2D1_RECT_F #amp; rect, const TextStyle #amp; style) void
-            -GetOrCreateTextLayout(const std::wstring #amp; text, IDWriteTextFormat #42; format, const std::string #amp; fontFamily, float fontSize, TextAlign align, float maxWidth, float maxHeight) IDWriteTextLayout #42;
+            -DrawTextCore(const wstring#amp; text, const D2D1_RECT_F#amp; rect, const TextStyle#amp; style) void
+            -GetOrCreateTextLayout(const wstring#amp;, IDWriteTextFormat#42;, const string#amp;, float, TextAlign, float, float) IDWriteTextLayout#42;
             -EvictLayoutCacheIfNeeded() void
             -EvictRasterCacheIfNeeded(size_t incomingBytes) void
         }
         class graphics__TextRenderer__RasterCacheEntry["TextRenderer::RasterCacheEntry"] {
             <<struct>>
-            +ComPtr#lt; ID2D1Bitmap1 #gt; bitmap
+            +ComPtr#lt;ID2D1Bitmap1#gt; bitmap
             +float marginVirtual
             +size_t approxBytes
             +uint64_t lastUsedFrame
         }
         class graphics__TextRenderer__RasterCacheKey["TextRenderer::RasterCacheKey"] {
             <<struct>>
-            +std::wstring text
+            +wstring text
             +TextStyle style
             +uint32_t widthBits
             +uint32_t heightBits
-            +operator==(const RasterCacheKey #amp; o) bool #123;const#125;
+            +operator==(const RasterCacheKey#amp; o) bool #123;const#125;
         }
         class graphics__TextRenderer__RasterCacheKeyHash["TextRenderer::RasterCacheKeyHash"] {
             <<struct>>
-            +operator#40;#41;(const RasterCacheKey #amp; k) size_t #123;const#125;
+            +operator#40;#41;(const RasterCacheKey#amp; k) size_t #123;const#125;
         }
         class graphics__TextRenderer__SrvBitmapCacheEntry["TextRenderer::SrvBitmapCacheEntry"] {
             <<struct>>
-            +ComPtr#lt; ID3D11Resource #gt; resource
-            +ComPtr#lt; ID2D1Bitmap1 #gt; bitmap
+            +ComPtr#lt;ID3D11Resource#gt; resource
+            +ComPtr#lt;ID2D1Bitmap1#gt; bitmap
         }
         class graphics__TextRenderer__TextLayoutEntry["TextRenderer::TextLayoutEntry"] {
             <<struct>>
-            +ComPtr#lt; IDWriteTextLayout #gt; layout
+            +ComPtr#lt;IDWriteTextLayout#gt; layout
             +uint64_t lastUsedFrame
         }
         class graphics__TextRenderer__TextLayoutKey["TextRenderer::TextLayoutKey"] {
             <<struct>>
-            +std::wstring text
-            +std::string fontFamily
+            +wstring text
+            +string fontFamily
             +uint32_t fontSizeBits
             +TextAlign align
             +uint32_t widthBits
             +uint32_t heightBits
-            +operator==(const TextLayoutKey #amp; o) bool #123;const#125;
+            +operator==(const TextLayoutKey#amp; o) bool #123;const#125;
         }
         class graphics__TextRenderer__TextLayoutKeyHash["TextRenderer::TextLayoutKeyHash"] {
             <<struct>>
-            +operator#40;#41;(const TextLayoutKey #amp; k) size_t #123;const#125;
+            +operator#40;#41;(const TextLayoutKey#amp; k) size_t #123;const#125;
         }
         class graphics__TextStyle["TextStyle"] {
             <<struct>>
-            +std::string fontFamily
+            +string fontFamily
             +float fontSize
-            +DirectX::XMFLOAT4 color
+            +XMFLOAT4 color
             +TextAlign align
             +TextVAlign valign
             +bool hasShadow
-            +DirectX::XMFLOAT4 shadowColor
+            +XMFLOAT4 shadowColor
             +float shadowOffsetX
             +float shadowOffsetY
-            +DirectX::XMFLOAT4 bgColor
+            +XMFLOAT4 bgColor
             +float cornerRadius
             +float borderWidth
-            +DirectX::XMFLOAT4 borderColor
+            +XMFLOAT4 borderColor
             +bool useGradient
-            +DirectX::XMFLOAT4 bgGradientEnd
+            +XMFLOAT4 bgGradientEnd
             +bool hasOutline
-            +DirectX::XMFLOAT4 outlineColor
+            +XMFLOAT4 outlineColor
             +float outlineWidth
-            +operator==(const TextStyle #amp; o) bool #123;const#125;
-            +operator!=(const TextStyle #amp; o) bool #123;const#125;
+            +operator==(const TextStyle#amp; o) bool #123;const#125;
+            +operator!=(const TextStyle#amp; o) bool #123;const#125;
             +Default()$ TextStyle
             +ModernBlack()$ TextStyle
             +FPS()$ TextStyle
@@ -681,7 +734,7 @@ classDiagram
             +ShotPanelValue()$ TextStyle
             +ClubName()$ TextStyle
         }
-        class graphics__TextVAlign["TextVAlign"] {
+        class iso__graphics__TextVAlign["TextVAlign"] {
             <<enumeration>>
             Top
             Middle
@@ -689,12 +742,12 @@ classDiagram
         }
         class graphics__Vertex["Vertex"] {
             <<struct>>
-            +DirectX::XMFLOAT3 position
-            +DirectX::XMFLOAT3 normal
-            +DirectX::XMFLOAT2 texCoord
-            +DirectX::XMFLOAT4 color
-            +DirectX::XMFLOAT3 tangent
-            +DirectX::XMFLOAT3 bitangent
+            +XMFLOAT3 position
+            +XMFLOAT3 normal
+            +XMFLOAT2 texCoord
+            +XMFLOAT4 color
+            +XMFLOAT3 tangent
+            +XMFLOAT3 bitangent
         }
         class graphics__VertexBoneWeights["VertexBoneWeights"] {
             <<struct>>
@@ -702,27 +755,27 @@ classDiagram
             +float boneWeights[4]
         }
         class graphics__VideoPlayer["VideoPlayer"] {
-            -Microsoft::WRL::ComPtr#lt; ID3D11Texture2D #gt; m_texture
-            -Microsoft::WRL::ComPtr#lt; ID3D11ShaderResourceView #gt; m_srv
-            -Microsoft::WRL::ComPtr#lt; IMFSourceReader #gt; m_reader
-            -ID3D11Device #42; m_device
-            -std::queue#lt; Frame #gt; m_frameQueue
-            -std::mutex m_mutex
-            -std::thread m_decodeThread
-            -std::atomic#lt; bool #gt; m_stopThread
-            -std::atomic#lt; bool #gt; m_isFinished
+            -ComPtr#lt;ID3D11Texture2D#gt; m_texture
+            -ComPtr#lt;ID3D11ShaderResourceView#gt; m_srv
+            -ComPtr#lt;IMFSourceReader#gt; m_reader
+            -ID3D11Device#42; m_device
+            -queue#lt;Frame#gt; m_frameQueue
+            -mutex m_mutex
+            -thread m_decodeThread
+            -atomic#lt;bool#gt; m_stopThread
+            -atomic#lt;bool#gt; m_isFinished
             -LONGLONG m_currentPlaybackTime
             -int m_width
             -int m_height
             -LONG m_stride
-            -std::vector#lt; uint8_t #gt; m_frameUploadBuffer
+            -vector#lt;uint8_t#gt; m_frameUploadBuffer
             +VideoPlayer()
             +#126;VideoPlayer()
-            +VideoPlayer(const VideoPlayer #amp;)
-            +operator=(const VideoPlayer #amp;) VideoPlayer #amp;
-            +Initialize(ID3D11Device #42; device, const std::string #amp; filePath) bool
-            +Update(ID3D11DeviceContext #42; context, float dt) void
-            +GetSRV() ID3D11ShaderResourceView #42; #123;const#125;
+            +VideoPlayer(const VideoPlayer#amp;)
+            +operator=(const VideoPlayer#amp;) VideoPlayer#amp;
+            +Initialize(ID3D11Device#42; device, const string#amp; filePath) bool
+            +Update(ID3D11DeviceContext#42; context, float dt) void
+            +GetSRV() ID3D11ShaderResourceView#42; #123;const#125;
             +IsFinished() bool #123;const#125;
             +Stop() void
             -DecodeThreadFunc() void
@@ -730,49 +783,49 @@ classDiagram
         }
         class graphics__VideoPlayer__Frame["VideoPlayer::Frame"] {
             <<struct>>
-            +Microsoft::WRL::ComPtr#lt; IMFSample #gt; sample
+            +ComPtr#lt;IMFSample#gt; sample
             +LONGLONG timestamp
         }
         class graphics__WikiHtmlRenderState["WikiHtmlRenderState"] {
             <<struct>>
-            +ComPtr#lt; IDWriteFactory #gt; write
-            +ComPtr#lt; ID2D1DeviceContext #gt; context
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; brush
-            +std::map#lt; litehtml::uint_ptr, Font #gt; fonts
-            +std::map#lt; std::string, ComPtr#lt; ID2D1Bitmap #gt; #gt; images
-            +std::map#lt; std::string, litehtml::size #gt; imageSizes
-            +std::future#lt; bool #gt; layoutFuture
-            +std::atomic_bool cancelled
+            +ComPtr#lt;IDWriteFactory#gt; write
+            +ComPtr#lt;ID2D1DeviceContext#gt; context
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; brush
+            +map#lt;litehtml::uint_ptr, Font#gt; fonts
+            +map#lt;string, ComPtr#lt;ID2D1Bitmap#gt;#gt; images
+            +map#lt;string, litehtml::size#gt; imageSizes
+            +future#lt;bool#gt; layoutFuture
+            +atomic_bool cancelled
             +litehtml::uint_ptr nextFont
             +html::RasterSize raster
             +unsigned clipDepth
-            +std::uint64_t textDraws
-            +std::uint64_t imageDraws
-            +std::uint64_t shapeDraws
+            +uint64_t textDraws
+            +uint64_t imageDraws
+            +uint64_t shapeDraws
             +ResetClips() void
             +#126;WikiHtmlRenderState()
-            +Text(const char #42; text, litehtml::uint_ptr font) ComPtr#lt; IDWriteTextLayout #gt;
-            +create_font(const litehtml::font_description #amp; d, const litehtml::document #42;, litehtml::font_metrics #42; metrics) litehtml::uint_ptr
+            +Text(const char#42; text, litehtml::uint_ptr font) ComPtr#lt;IDWriteTextLayout#gt;
+            +create_font(const litehtml::font_description#amp;, const litehtml::document#42;, litehtml::font_metrics#42;) litehtml::uint_ptr
             +delete_font(litehtml::uint_ptr font) void
-            +text_width(const char #42; text, litehtml::uint_ptr font) litehtml::pixel_t
-            +draw_text(litehtml::uint_ptr, const char #42; text, litehtml::uint_ptr font, litehtml::web_color color, const litehtml::position #amp; pos) void
-            +get_image_size(const char #42; src, const char #42;, litehtml::size #amp; size) void
-            +draw_image(litehtml::uint_ptr, const litehtml::background_layer #amp; layer, const std::string #amp; url, const std::string #amp;) void
-            +draw_solid_fill(litehtml::uint_ptr, const litehtml::background_layer #amp; layer, const litehtml::web_color #amp; color) void
-            +draw_borders(litehtml::uint_ptr, const litehtml::borders #amp; b, const litehtml::position #amp; p, bool) void
-            +draw_list_marker(litehtml::uint_ptr, const litehtml::list_marker #amp; m) void
-            +set_clip(const litehtml::position #amp; p, const litehtml::border_radiuses #amp;) void
+            +text_width(const char#42; text, litehtml::uint_ptr font) litehtml::pixel_t
+            +draw_text(litehtml::uint_ptr, const char#42;, litehtml::uint_ptr, litehtml::web_color, const litehtml::position#amp;) void
+            +get_image_size(const char#42; src, const char#42;, litehtml::size#amp; size) void
+            +draw_image(litehtml::uint_ptr, const litehtml::background_layer#amp;, const string#amp;, const string#amp;) void
+            +draw_solid_fill(litehtml::uint_ptr, const litehtml::background_layer#amp;, const litehtml::web_color#amp;) void
+            +draw_borders(litehtml::uint_ptr, const litehtml::borders#amp;, const litehtml::position#amp;, bool) void
+            +draw_list_marker(litehtml::uint_ptr, const litehtml::list_marker#amp; m) void
+            +set_clip(const litehtml::position#amp; p, const litehtml::border_radiuses#amp;) void
             +del_clip() void
         }
         class graphics__WikiHtmlRenderState__Font["WikiHtmlRenderState::Font"] {
             <<struct>>
-            +ComPtr#lt; IDWriteTextFormat #gt; format
+            +ComPtr#lt;IDWriteTextFormat#gt; format
             +bool underline
         }
         class graphics__WikiPlacedImage["WikiPlacedImage"] {
             <<struct>>
-            +ComPtr#lt; ID2D1Bitmap #gt; bitmap
-            +ComPtr#lt; IDWriteTextLayout #gt; captionLayout
+            +ComPtr#lt;ID2D1Bitmap#gt; bitmap
+            +ComPtr#lt;IDWriteTextLayout#gt; captionLayout
             +float x
             +float y
             +float width
@@ -781,7 +834,7 @@ classDiagram
         }
         class graphics__WikiTextSegment["WikiTextSegment"] {
             <<struct>>
-            +ComPtr#lt; IDWriteTextLayout #gt; layout
+            +ComPtr#lt;IDWriteTextLayout#gt; layout
             +float yTop
             +float height
             +size_t textStart
@@ -789,11 +842,11 @@ classDiagram
         }
         class graphics__WikiTextureGenerationState["WikiTextureGenerationState"] {
             <<struct>>
-            +std::wstring title
-            +std::wstring articleText
-            +std::vector#lt; std::pair#lt; std::wstring, std::string #gt; #gt; links
-            +std::vector#lt; PendingWikiImage #gt; pendingImages
-            +std::string targetPage
+            +wstring title
+            +wstring articleText
+            +vector#lt;pair#lt;wstring, string#gt;#gt; links
+            +vector#lt;PendingWikiImage#gt; pendingImages
+            +string targetPage
             +uint32_t requestedWidth
             +uint32_t requestedHeight
             +uint32_t actualWidth
@@ -806,123 +859,123 @@ classDiagram
             +float titleTopY
             +float separatorY
             +DWRITE_TEXT_METRICS titleMetrics
-            +ComPtr#lt; IDWriteTextLayout #gt; titleLayout
-            +std::vector#lt; WikiTextSegment #gt; textSegments
-            +std::vector#lt; WikiPlacedImage #gt; placedImages
+            +ComPtr#lt;IDWriteTextLayout#gt; titleLayout
+            +vector#lt;WikiTextSegment#gt; textSegments
+            +vector#lt;WikiPlacedImage#gt; placedImages
             +float contentEndY
-            +std::vector#lt; bool #gt; linkMatched
+            +vector#lt;bool#gt; linkMatched
             +bool brushesInitialized
             +bool drawingEffectsApplied
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bText
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bLink
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bTarget
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bBorder
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bBackLink
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bBackTarget
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bGlow
-            +ComPtr#lt; ID2D1SolidColorBrush #gt; bWhite
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bText
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bLink
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bTarget
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bBorder
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bBackLink
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bBackTarget
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bGlow
+            +ComPtr#lt;ID2D1SolidColorBrush#gt; bWhite
             +WikiTextureResult result
             +bool started
             +bool completed
             +bool failed
-            +std::shared_ptr#lt; WikiHtmlRenderState #gt; htmlState
-            +std::string htmlCacheKey
+            +shared_ptr#lt;WikiHtmlRenderState#gt; htmlState
+            +string htmlCacheKey
         }
         class graphics__WikiTextureGenerator["WikiTextureGenerator"] {
-            -std::vector#lt; HtmlCacheEntry #gt; m_htmlCache
-            -ComPtr#lt; ID2D1Factory1 #gt; m_d2dFactory
-            -ComPtr#lt; ID2D1DeviceContext #gt; m_d2dContext
-            -ComPtr#lt; ID2D1Device #gt; m_d2dDevice
-            -ComPtr#lt; IDWriteFactory #gt; m_dwriteFactory
-            -ComPtr#lt; IDWriteTextFormat #gt; m_titleFormat
-            -ComPtr#lt; IDWriteTextFormat #gt; m_bodyFormat
-            -ComPtr#lt; IDWriteTextFormat #gt; m_captionFormat
-            -ComPtr#lt; ID3D11Device #gt; m_d3dDevice
-            -ComPtr#lt; ID3D11Texture2D #gt; m_offscreenTexture
-            -ComPtr#lt; ID2D1Bitmap1 #gt; m_offscreenBitmap
+            -vector#lt;HtmlCacheEntry#gt; m_htmlCache
+            -ComPtr#lt;ID2D1Factory1#gt; m_d2dFactory
+            -ComPtr#lt;ID2D1DeviceContext#gt; m_d2dContext
+            -ComPtr#lt;ID2D1Device#gt; m_d2dDevice
+            -ComPtr#lt;IDWriteFactory#gt; m_dwriteFactory
+            -ComPtr#lt;IDWriteTextFormat#gt; m_titleFormat
+            -ComPtr#lt;IDWriteTextFormat#gt; m_bodyFormat
+            -ComPtr#lt;IDWriteTextFormat#gt; m_captionFormat
+            -ComPtr#lt;ID3D11Device#gt; m_d3dDevice
+            -ComPtr#lt;ID3D11Texture2D#gt; m_offscreenTexture
+            -ComPtr#lt;ID2D1Bitmap1#gt; m_offscreenBitmap
             +WikiTextureGenerator()
             +#126;WikiTextureGenerator()
-            +WikiTextureGenerator(const WikiTextureGenerator #amp;)
-            +operator=(const WikiTextureGenerator #amp;) WikiTextureGenerator #amp;
-            +Initialize(ID3D11Device #42; device) bool
+            +WikiTextureGenerator(const WikiTextureGenerator#amp;)
+            +operator=(const WikiTextureGenerator#amp;) WikiTextureGenerator#amp;
+            +Initialize(ID3D11Device#42; device) bool
             +Shutdown() void
-            +GenerateTexture(const std::wstring #amp; title, const std::wstring #amp; articleText, const std::vector#lt; std::pair#lt; std::wstring, std::string #gt; #gt; #amp; links, const std::string #amp; targetPage, uint32_t width, uint32_t height, std::vector#lt; PendingWikiImage #gt; pendingImages, const std::string #amp; articleHtml) WikiTextureResult
-            +BeginGenerateTexture(WikiTextureGenerationState #amp; state, const std::wstring #amp; title, const std::wstring #amp; articleText, const std::vector#lt; std::pair#lt; std::wstring, std::string #gt; #gt; #amp; links, const std::string #amp; targetPage, uint32_t width, uint32_t height, std::vector#lt; PendingWikiImage #gt; pendingImages, const std::string #amp; articleHtml) bool
-            +GenerateNextTile(WikiTextureGenerationState #amp; state) bool
-            -BeginHtmlTexture(WikiTextureGenerationState #amp;, const std::string #amp;, const std::string #amp;, const std::vector#lt; PendingWikiImage #gt; #amp;) bool
-            -GenerateHtmlTile(WikiTextureGenerationState #amp;) bool
+            +GenerateTexture(const wstring#amp;, const wstring#amp;, const vector#lt;pair#lt;wstring, string#gt;#gt;#amp;, const string#amp;, uint32_t, uint32_t, vector#lt;PendingWikiImage#gt;, const string#amp;) WikiTextureResult
+            +BeginGenerateTexture(WikiTextureGenerationState#amp;, const wstring#amp;, const wstring#amp;, const vector#lt;pair#lt;wstring, string#gt;#gt;#amp;, const string#amp;, uint32_t, uint32_t, vector#lt;PendingWikiImage#gt;, const string#amp;) bool
+            +GenerateNextTile(WikiTextureGenerationState#amp; state) bool
+            -BeginHtmlTexture(WikiTextureGenerationState#amp;, const string#amp;, const string#amp;, const vector#lt;PendingWikiImage#gt;#amp;) bool
+            -GenerateHtmlTile(WikiTextureGenerationState#amp;) bool
             -CreateOffscreenTarget(uint32_t width, uint32_t height) bool
-            -CreateBitmapFromPixels(const uint8_t #42; bgra, uint32_t width, uint32_t height) ComPtr#lt; ID2D1Bitmap #gt;
+            -CreateBitmapFromPixels(const uint8_t#42; bgra, uint32_t width, uint32_t height) ComPtr#lt;ID2D1Bitmap#gt;
         }
         class graphics__WikiTextureGenerator__HtmlCacheEntry["WikiTextureGenerator::HtmlCacheEntry"] {
             <<struct>>
-            +std::string key
+            +string key
             +WikiTextureResult result
         }
         class graphics__WikiTextureResult["WikiTextureResult"] {
             <<struct>>
-            +std::vector#lt; Tile #gt; tiles
-            +ComPtr#lt; ID3D11Texture2D #gt; texture
-            +ComPtr#lt; ID3D11ShaderResourceView #gt; srv
+            +vector#lt;Tile#gt; tiles
+            +ComPtr#lt;ID3D11Texture2D#gt; texture
+            +ComPtr#lt;ID3D11ShaderResourceView#gt; srv
             +uint32_t width
             +uint32_t height
-            +std::vector#lt; LinkRegion #gt; links
-            +std::vector#lt; ImageRegion #gt; images
-            +std::vector#lt; HeadingRegion #gt; headings
-            +std::vector#lt; ImageRegion #gt; tables
+            +vector#lt;LinkRegion#gt; links
+            +vector#lt;ImageRegion#gt; images
+            +vector#lt;HeadingRegion#gt; headings
+            +vector#lt;ImageRegion#gt; tables
             +float layoutWidth
             +float layoutHeight
         }
         class graphics__WikiTextureResult__Tile["WikiTextureResult::Tile"] {
             <<struct>>
-            +ComPtr#lt; ID3D11Texture2D #gt; texture
-            +ComPtr#lt; ID3D11ShaderResourceView #gt; srv
+            +ComPtr#lt;ID3D11Texture2D#gt; texture
+            +ComPtr#lt;ID3D11ShaderResourceView#gt; srv
             +uint32_t width
             +uint32_t height
             +float offsetY
         }
         class graphics__anonymous_namespace_ObjLoader_cpp___FastObjParser["FastObjParser"] {
-            -std::string m_path
-            -std::string m_buffer
+            -string m_path
+            -string m_buffer
             -size_t m_cursor
             -int m_line
-            -std::vector#lt; XMFLOAT3 #gt; m_positions
-            -std::vector#lt; XMFLOAT2 #gt; m_texCoords
-            -std::vector#lt; XMFLOAT3 #gt; m_normals
-            -std::unordered_map#lt; ObjVertexIndex, uint32_t, ObjVertexIndexHash #gt; m_indexMap
-            +FastObjParser(const std::string #amp; path)
-            +Parse(std::vector#lt; Vertex #gt; #amp; outVertices, std::vector#lt; uint32_t #gt; #amp; outIndices) bool
+            -vector#lt;XMFLOAT3#gt; m_positions
+            -vector#lt;XMFLOAT2#gt; m_texCoords
+            -vector#lt;XMFLOAT3#gt; m_normals
+            -unordered_map#lt;ObjVertexIndex, uint32_t, ObjVertexIndexHash#gt; m_indexMap
+            +FastObjParser(const string#amp; path)
+            +Parse(vector#lt;Vertex#gt;#amp; outVertices, vector#lt;uint32_t#gt;#amp; outIndices) bool
             -ReadFile() bool
-            -Peek(std::string_view sv) char #123;const#125;
-            -SkipWhitespace(std::string_view sv) void
-            -SkipLine(std::string_view sv) void
-            -ReadToken(std::string_view sv) std::string_view
-            -ParseFloat(std::string_view sv) float
-            -ParseInt(std::string_view sv) int
-            -ParsePosition(std::string_view sv) void
-            -ParseTexCoord(std::string_view sv) void
-            -ParseNormal(std::string_view sv) void
-            -ParseFace(std::string_view sv, std::vector#lt; Vertex #gt; #amp; outVertices, std::vector#lt; uint32_t #gt; #amp; outIndices) void
+            -Peek(string_view sv) char #123;const#125;
+            -SkipWhitespace(string_view sv) void
+            -SkipLine(string_view sv) void
+            -ReadToken(string_view sv) string_view
+            -ParseFloat(string_view sv) float
+            -ParseInt(string_view sv) int
+            -ParsePosition(string_view sv) void
+            -ParseTexCoord(string_view sv) void
+            -ParseNormal(string_view sv) void
+            -ParseFace(string_view sv, vector#lt;Vertex#gt;#amp; outVertices, vector#lt;uint32_t#gt;#amp; outIndices) void
             -FixIndex(int idx, size_t size) int
-            -AddVertex(const ObjVertexIndex #amp; idx, std::vector#lt; Vertex #gt; #amp; outVertices, std::vector#lt; uint32_t #gt; #amp; outIndices) void
+            -AddVertex(const ObjVertexIndex#amp;, vector#lt;Vertex#gt;#amp;, vector#lt;uint32_t#gt;#amp;) void
         }
         class graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndex["ObjVertexIndex"] {
             <<struct>>
             +int v
             +int vt
             +int vn
-            +operator==(const ObjVertexIndex #amp; other) bool #123;const#125;
+            +operator==(const ObjVertexIndex#amp; other) bool #123;const#125;
         }
         class graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndexHash["ObjVertexIndexHash"] {
             <<struct>>
-            +operator#40;#41;(const ObjVertexIndex #amp; k) size_t #123;const#125;
+            +operator#40;#41;(const ObjVertexIndex#amp; k) size_t #123;const#125;
         }
-        class graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance["MeshInstance"] {
+        class iso__graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance["MeshInstance"] {
             <<struct>>
-            +const aiMesh #42; mesh
+            +const aiMesh#42; mesh
             +uint32_t baseIndex
         }
-        class graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan["HeadingSpan"] {
+        class iso__graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan["HeadingSpan"] {
             <<struct>>
             +size_t pos
             +size_t length
@@ -931,63 +984,63 @@ classDiagram
         class graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___ImagePlacement["ImagePlacement"] {
             <<struct>>
             +size_t insertionPos
-            +const PendingWikiImage #42; image
+            +const PendingWikiImage#42; image
         }
     }
-    namespace graphics__html {
+    namespace graphics.html {
         class graphics__html__CourseHtmlContainer["CourseHtmlContainer"] {
             -litehtml::document::ptr m_document
             -float m_width
             -float m_height
-            -std::vector#lt; Link #gt; m_links
-            -std::vector#lt; Region #gt; m_regions
+            -vector#lt;Link#gt; m_links
+            -vector#lt;Region#gt; m_regions
             +#126;CourseHtmlContainer()
-            +Layout(const std::string #amp; preparedHtml, const std::string #amp; target) bool
+            +Layout(const string#amp; preparedHtml, const string#amp; target) bool
             +Draw(float top, float height) void
             +Width() float #123;const#125;
             +Height() float #123;const#125;
-            +Links() const std::vector#lt; Link #gt; #amp; #123;const#125;
-            +Regions() const std::vector#lt; Region #gt; #amp; #123;const#125;
+            +Links() const vector#lt;Link#gt;#amp; #123;const#125;
+            +Regions() const vector#lt;Region#gt;#amp; #123;const#125;
             +ClearDocument() void
             +pt_to_px(float pt) litehtml::pixel_t #123;const#125;
             +get_default_font_size() litehtml::pixel_t #123;const#125;
-            +get_default_font_name() const char #42; #123;const#125;
-            +load_image(const char #42;, const char #42;, bool) void
-            +set_caption(const char #42;) void
-            +set_base_url(const char #42;) void
-            +link(const litehtml::document::ptr #amp;, const litehtml::element::ptr #amp;) void
-            +on_anchor_click(const char #42;, const litehtml::element::ptr #amp;) void
-            +on_mouse_event(const litehtml::element::ptr #amp;, litehtml::mouse_event) void
-            +set_cursor(const char #42;) void
-            +transform_text(std::string #amp;, litehtml::text_transform) void
-            +import_css(std::string #amp; text, const std::string #amp;, std::string #amp;) void
-            +create_element(const char #42;, const litehtml::string_map #amp;, const litehtml::document::ptr #amp;) litehtml::element::ptr
-            +get_viewport(litehtml::position #amp; p) void #123;const#125;
-            +get_media_features(litehtml::media_features #amp; media) void #123;const#125;
-            +get_language(std::string #amp; language, std::string #amp; culture) void #123;const#125;
-            +split_text(const char #42;, const std::function#lt; void#40;const char #42;#41;#gt; #amp;, const std::function#lt; void#40;const char #42;#41;#gt; #amp;) void
-            +draw_linear_gradient(litehtml::uint_ptr, const litehtml::background_layer #amp;, const litehtml::background_layer::linear_gradient #amp;) void
-            +draw_radial_gradient(litehtml::uint_ptr, const litehtml::background_layer #amp;, const litehtml::background_layer::radial_gradient #amp;) void
-            +draw_conic_gradient(litehtml::uint_ptr, const litehtml::background_layer #amp;, const litehtml::background_layer::conic_gradient #amp;) void
-            -Collect(const litehtml::element::ptr #amp; el) void
+            +get_default_font_name() const char#42; #123;const#125;
+            +load_image(const char#42;, const char#42;, bool) void
+            +set_caption(const char#42;) void
+            +set_base_url(const char#42;) void
+            +link(const litehtml::document::ptr#amp;, const litehtml::element::ptr#amp;) void
+            +on_anchor_click(const char#42;, const litehtml::element::ptr#amp;) void
+            +on_mouse_event(const litehtml::element::ptr#amp;, litehtml::mouse_event) void
+            +set_cursor(const char#42;) void
+            +transform_text(string#amp;, litehtml::text_transform) void
+            +import_css(string#amp; text, const string#amp;, string#amp;) void
+            +create_element(const char#42;, const litehtml::string_map#amp;, const litehtml::document::ptr#amp;) litehtml::element::ptr
+            +get_viewport(litehtml::position#amp; p) void #123;const#125;
+            +get_media_features(litehtml::media_features#amp; media) void #123;const#125;
+            +get_language(string#amp; language, string#amp; culture) void #123;const#125;
+            +split_text(const char#42;, const function#lt;void#40;const char#42;#41;#gt;#amp;, const function#lt;void#40;const char#42;#41;#gt;#amp;) void
+            +draw_linear_gradient(litehtml::uint_ptr, const litehtml::background_layer#amp;, const litehtml::background_layer::linear_gradient#amp;) void
+            +draw_radial_gradient(litehtml::uint_ptr, const litehtml::background_layer#amp;, const litehtml::background_layer::radial_gradient#amp;) void
+            +draw_conic_gradient(litehtml::uint_ptr, const litehtml::background_layer#amp;, const litehtml::background_layer::conic_gradient#amp;) void
+            -Collect(const litehtml::element::ptr#amp; el) void
         }
         class graphics__html__Link["Link"] {
             <<struct>>
-            +std::uint32_t elementId
-            +std::string target
-            +std::vector#lt; Rect #gt; fragments
+            +uint32_t elementId
+            +string target
+            +vector#lt;Rect#gt; fragments
             +Rect representative
         }
         class graphics__html__PreparedArticle["PreparedArticle"] {
             <<struct>>
-            +std::string html
-            +std::vector#lt; std::string #gt; imageUrls
-            +std::string error
+            +string html
+            +vector#lt;string#gt; imageUrls
+            +string error
         }
         class graphics__html__RasterSize["RasterSize"] {
             <<struct>>
-            +std::uint32_t width
-            +std::uint32_t height
+            +uint32_t width
+            +uint32_t height
             +float scaleX
             +float scaleY
         }
@@ -1004,7 +1057,7 @@ classDiagram
             +RegionKind kind
             +int level
         }
-        class graphics__html__RegionKind["RegionKind"] {
+        class iso__graphics__html__RegionKind["RegionKind"] {
             <<enumeration>>
             Heading
             Image
@@ -1013,14 +1066,14 @@ classDiagram
         class graphics__html__anonymous_namespace_CourseHtml_cpp___Serializer["Serializer"] {
             <<struct>>
             +PreparedArticle result
-            +std::size_t nodes
-            +std::size_t maxImages
-            +const std::unordered_set#lt; std::string #gt; #42; allowedImageUrls
-            +Visit(const GumboNode #42; node, int depth) void
+            +size_t nodes
+            +size_t maxImages
+            +const unordered_set#lt;string#gt;#42; allowedImageUrls
+            +Visit(const GumboNode#42; node, int depth) void
         }
     }
-    namespace graphics__skybox_detail {
-        class graphics__skybox_detail__ThemeParams["ThemeParams"] {
+    namespace graphics.skybox_detail {
+        class iso__graphics__skybox_detail__ThemeParams["ThemeParams"] {
             <<struct>>
             +float starMult
             +float cloudMult
@@ -1039,16 +1092,40 @@ classDiagram
             +float ribbonStrength
             +float ribbonFrequency
             +float ribbonSharpness
-            +DirectX::XMFLOAT3 tint
-            +DirectX::XMFLOAT3 accentColor
-            +DirectX::XMFLOAT3 nebulaColor
-            +DirectX::XMFLOAT3 ribbonColor
+            +XMFLOAT3 tint
+            +XMFLOAT3 accentColor
+            +XMFLOAT3 nebulaColor
+            +XMFLOAT3 ribbonColor
         }
     }
-    %% 継承
+    %% 他モジュール / 外部の参照ノード
+    class core__DisplaySettings["core::DisplaySettings"]
+    class core__GameContext["core::GameContext"]
+    class core__GpuFrameSample["core::GpuFrameSample"]
+    class game__components__UIButton["game::components::UIButton"]
+    class game__components__UIText["game::components::UIText"]
+    class game__controllers__ArticleTransitionController["game::controllers::ArticleTransitionController"]
+    class game__controllers__ClubController["game::controllers::ClubController"]
+    class game__scenes__LoadingScene["game::scenes::LoadingScene"]
+    class game__scenes__PageDataAsyncResult["game::scenes::PageDataAsyncResult"]
+    class game__scenes__TitleScene["game::scenes::TitleScene"]
+    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
+    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
+    class game__systems__ShadowRenderState["game::systems::ShadowRenderState"]
+    class game__systems__SlopeVisualizationMeshBuilder__BuildResult["game::systems::SlopeVisualizationMeshBuilder::BuildResult"]
+    class game__systems__TerrainBackdropChunk["game::systems::TerrainBackdropChunk"]
+    class game__systems__TerrainData["game::systems::TerrainData"]
+    class game__systems__UIButtonRenderSystem["game::systems::UIButtonRenderSystem"]
+    class game__systems__UIImageRenderSystem["game::systems::UIImageRenderSystem"]
+    class game__systems__UIRenderSystem["game::systems::UIRenderSystem"]
+    class game__systems__UIRenderSystem__EntityTextState["game::systems::UIRenderSystem::EntityTextState"]
+    class game__systems__WikiTerrainSystem["game::systems::WikiTerrainSystem"]
+    class game__systems__WikiTerrainSystem__TileMeshCache["game::systems::WikiTerrainSystem::TileMeshCache"]
+    class litehtml__document_container["litehtml::document_container"]
+    class resources__ResourceManager["resources::ResourceManager"]
+    %% 関係
     graphics__html__CourseHtmlContainer <|-- graphics__WikiHtmlRenderState
     litehtml__document_container <|-- graphics__html__CourseHtmlContainer
-    %% メンバー由来の関係
     core__DisplaySettings o-- "0..1" graphics__GraphicsDevice : m_graphics
     core__GameContext o-- "0..1" graphics__GraphicsDevice : graphics
     core__GameContext o-- "0..1" graphics__TextRenderer : textRenderer
@@ -1061,14 +1138,12 @@ classDiagram
     game__scenes__PageDataAsyncResult *-- "0..*" graphics__PendingWikiImage : pendingImages
     game__scenes__TitleScene *-- "0..1" graphics__VideoPlayer : m_videoPlayer
     game__scenes__WikiGolfScene *-- "0..1" graphics__SkyboxTextureGenerator : m_skyboxGenerator
-    game__scenes__WikiGolfScene --> "1" graphics__SkyboxTheme : m_currentSkyboxTheme
     game__scenes__WikiGolfScene *-- "0..1" graphics__WikiTextureGenerator : m_textureGenerator
     game__scenes__WikiPageLoader *-- "0..*" graphics__LinkRegion : m_buildGameplayLinks
     game__scenes__WikiPageLoader o-- "0..1" graphics__SkyboxTextureGenerator : m_skyboxGenerator
     game__scenes__WikiPageLoader *-- "1" graphics__WikiTextureGenerationState : m_textureState
     game__scenes__WikiPageLoader o-- "0..1" graphics__WikiTextureGenerator : m_textureGenerator
     game__scenes__WikiPageLoader *-- "0..1" graphics__WikiTextureResult : m_wikiTexture
-    game__systems__EnvironmentSoundSystem --> "0..*" graphics__SkyboxTheme : m_currentTheme, m_previousTheme
     game__systems__ShadowRenderState *-- "1" graphics__Shader : depthShader
     game__systems__SlopeVisualizationMeshBuilder__BuildResult *-- "0..*" graphics__Vertex : vertices
     game__systems__TerrainBackdropChunk *-- "0..*" graphics__Vertex : vertices
@@ -1084,15 +1159,12 @@ classDiagram
     graphics__AnimationChannel *-- "0..*" graphics__AnimKeyQuat : rotationKeys
     graphics__AnimationChannel *-- "0..*" graphics__AnimKeyVec3 : positionKeys, scaleKeys
     graphics__AnimationClip *-- "0..*" graphics__AnimationChannel : channels
-    graphics__DlssUpscaler --> "1" graphics__DlssUpscaler__Quality : m_featureQuality
-    graphics__DlssUpscaler__EvaluateParams --> "1" graphics__DlssUpscaler__Quality : quality
     graphics__GraphicsDevice *-- "0..*" core__GpuFrameSample : m_readyGpuSamples
     graphics__GraphicsDevice *-- "1" graphics__DlssUpscaler : m_dlss
     graphics__GraphicsDevice o-- "0..1" graphics__GraphicsDevice__GpuFrameQueries : m_currentGpuQueryFrame
     graphics__GraphicsDevice *-- "0..*" graphics__GraphicsDevice__GpuFrameQueries : m_gpuQueryFrames
     graphics__GraphicsDevice o-- "0..1" graphics__GraphicsDevice__GpuFrameTimerQueries : m_currentGpuFrameTimer
     graphics__GraphicsDevice *-- "0..*" graphics__GraphicsDevice__GpuFrameTimerQueries : m_gpuFrameTimers
-    graphics__GraphicsDevice --> "1" graphics__GraphicsDevice__TemporalMode : m_temporalMode
     graphics__GraphicsDevice *-- "1" graphics__PostProcessParams : m_postProcessParams
     graphics__GraphicsDevice *-- "1" graphics__QualitySettings : m_quality
     graphics__GraphicsDevice *-- "0..*" graphics__Shader : m_upscaleShader, m_fxaaShader, m_postProcessShader ...+2
@@ -1115,9 +1187,6 @@ classDiagram
     graphics__TextRenderer *-- "0..*" graphics__TextRenderer__TextLayoutKey : m_layoutCache
     graphics__TextRenderer *-- "0..*" graphics__TextRenderer__TextLayoutKeyHash : m_layoutCache
     graphics__TextRenderer__RasterCacheKey *-- "1" graphics__TextStyle : style
-    graphics__TextRenderer__TextLayoutKey --> "1" graphics__TextAlign : align
-    graphics__TextStyle --> "1" graphics__TextAlign : align
-    graphics__TextStyle --> "1" graphics__TextVAlign : valign
     graphics__VideoPlayer *-- "0..*" graphics__VideoPlayer__Frame : m_frameQueue
     graphics__WikiHtmlRenderState *-- "0..*" graphics__WikiHtmlRenderState__Font : fonts
     graphics__WikiHtmlRenderState *-- "1" graphics__html__RasterSize : raster
@@ -1139,87 +1208,26 @@ classDiagram
     graphics__html__CourseHtmlContainer *-- "0..*" graphics__html__Region : m_regions
     graphics__html__Link *-- "0..*" graphics__html__Rect : fragments, representative
     graphics__html__Region *-- "1" graphics__html__Rect : rect
-    graphics__html__Region --> "1" graphics__html__RegionKind : kind
     graphics__html__anonymous_namespace_CourseHtml_cpp___Serializer *-- "1" graphics__html__PreparedArticle : result
     resources__ResourceManager o-- "0..1" graphics__GraphicsDevice : m_device
     resources__ResourceManager *-- "1" graphics__Mesh : m_meshPool
     resources__ResourceManager *-- "1" graphics__Shader : m_shaderPool
-    %% ネスト型
-    graphics__DlssUpscaler .. graphics__DlssUpscaler__EvaluateParams : nested
-    graphics__FontManager .. graphics__FontManager__BundledFamilyOverride : nested
-    graphics__GraphicsDevice .. graphics__GraphicsDevice__FullscreenConstants : nested
-    graphics__GraphicsDevice .. graphics__GraphicsDevice__GpuTimestampQueries : nested
-    graphics__GraphicsDevice .. graphics__GraphicsDevice__TemporalShaderConstants : nested
-    graphics__SkeletalModel .. graphics__SkeletalModel__PoseLayer : nested
-    %% 依存 (宣言 / 生成 / ECS)
-    game__controllers__StartGoalIntroductionPanel ..> graphics__TextStyle
-    game__controllers__hud__AchievementToastPanel ..> graphics__TextRenderer
-    game__scenes__HolePlacementPlanner ..> graphics__LinkRegion
-    game__scenes__TitleScene ..> graphics__VideoPlayer : 生成
-    game__scenes__TutorialCourseLayout ..> graphics__LinkRegion
-    game__scenes__TutorialCourseLayout ..> graphics__WikiTextureResult
-    game__scenes__WikiGolfScene ..> graphics__SkyboxTextureGenerator : 生成
-    game__scenes__WikiGolfScene ..> graphics__WikiTextureGenerator : 生成
-    game__scenes__WikiPageDataFetcher ..> graphics__PendingWikiImage
-    game__scenes__WikiPageLoader ..> graphics__WikiTextureResult : 生成
-    game__systems__AchievementManager ..> graphics__TextRenderer
-    game__systems__TerrainLayoutRules ..> graphics__Vertex
-    game__systems__TerrainObstacleLayout ..> graphics__WikiTextureResult
-    game__systems__UIRenderSystem ..> graphics__TextStyle
-    game__systems__WikiTerrainSystem ..> graphics__WikiTextureResult
-    graphics__FbxLoader ..> graphics__EmbeddedModelTextures
-    graphics__FbxLoader ..> graphics__Vertex
-    graphics__FontManager ..> graphics__TextAlign
-    graphics__GraphicsDevice ..> graphics__AdapterInfo
-    graphics__Mesh ..> graphics__Vertex
-    graphics__MeshPrimitives ..> graphics__Mesh
-    graphics__ObjLoader ..> graphics__Vertex
-    graphics__SkyboxTextureGenerator ..> graphics__SkyboxTheme
-    graphics__TextRenderer ..> graphics__TextAlign
-    graphics__TextRenderer ..> graphics__TextStyle
-    graphics__TextRenderer__RasterCacheKeyHash ..> graphics__TextRenderer__RasterCacheKey
-    graphics__TextRenderer__TextLayoutKeyHash ..> graphics__TextRenderer__TextLayoutKey
-    graphics__WikiTextureGenerator ..> graphics__PendingWikiImage
+    graphics__DlssUpscaler .. graphics__DlssUpscaler__EvaluateParams
+    graphics__DlssUpscaler .. graphics__DlssUpscaler__Quality
+    graphics__FontManager .. graphics__FontManager__BundledFamilyOverride
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__FullscreenConstants
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__GpuTimestampQueries
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__TemporalMode
+    graphics__GraphicsDevice .. graphics__GraphicsDevice__TemporalShaderConstants
+    graphics__SkeletalModel .. graphics__SkeletalModel__PoseLayer
     graphics__WikiTextureGenerator ..> graphics__WikiHtmlRenderState : 生成
-    graphics__WikiTextureGenerator ..> graphics__WikiTextureGenerationState
-    graphics__WikiTextureGenerator ..> graphics__WikiTextureResult
-    graphics__anonymous_namespace_ObjLoader_cpp___FastObjParser ..> graphics__Vertex
-    graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndexHash ..> graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndex
-    resources__ResourceManager ..> graphics__Vertex
-    %% 他モジュールの参照ノード (メンバーは該当モジュールの図を参照)
-    class core__DisplaySettings["core::DisplaySettings"]
-    class core__GameContext["core::GameContext"]
-    class core__GpuFrameSample["core::GpuFrameSample"]
-    class game__components__UIButton["game::components::UIButton"]
-    class game__components__UIText["game::components::UIText"]
-    class game__controllers__ArticleTransitionController["game::controllers::ArticleTransitionController"]
-    class game__controllers__ClubController["game::controllers::ClubController"]
-    class game__controllers__StartGoalIntroductionPanel["game::controllers::StartGoalIntroductionPanel"]
-    class game__controllers__hud__AchievementToastPanel["game::controllers::hud::AchievementToastPanel"]
-    class game__scenes__HolePlacementPlanner["game::scenes::HolePlacementPlanner"]
-    class game__scenes__LoadingScene["game::scenes::LoadingScene"]
-    class game__scenes__PageDataAsyncResult["game::scenes::PageDataAsyncResult"]
-    class game__scenes__TitleScene["game::scenes::TitleScene"]
-    class game__scenes__TutorialCourseLayout["game::scenes::TutorialCourseLayout"]
-    class game__scenes__WikiGolfScene["game::scenes::WikiGolfScene"]
-    class game__scenes__WikiPageDataFetcher["game::scenes::WikiPageDataFetcher"]
-    class game__scenes__WikiPageLoader["game::scenes::WikiPageLoader"]
-    class game__systems__AchievementManager["game::systems::AchievementManager"]
-    class game__systems__EnvironmentSoundSystem["game::systems::EnvironmentSoundSystem"]
-    class game__systems__ShadowRenderState["game::systems::ShadowRenderState"]
-    class game__systems__SlopeVisualizationMeshBuilder__BuildResult["game::systems::SlopeVisualizationMeshBuilder::BuildResult"]
-    class game__systems__TerrainBackdropChunk["game::systems::TerrainBackdropChunk"]
-    class game__systems__TerrainData["game::systems::TerrainData"]
-    class game__systems__TerrainLayoutRules["game::systems::TerrainLayoutRules"]
-    class game__systems__TerrainObstacleLayout["game::systems::TerrainObstacleLayout"]
-    class game__systems__UIButtonRenderSystem["game::systems::UIButtonRenderSystem"]
-    class game__systems__UIImageRenderSystem["game::systems::UIImageRenderSystem"]
-    class game__systems__UIRenderSystem["game::systems::UIRenderSystem"]
-    class game__systems__UIRenderSystem__EntityTextState["game::systems::UIRenderSystem::EntityTextState"]
-    class game__systems__WikiTerrainSystem["game::systems::WikiTerrainSystem"]
-    class game__systems__WikiTerrainSystem__TileMeshCache["game::systems::WikiTerrainSystem::TileMeshCache"]
-    class resources__ResourceManager["resources::ResourceManager"]
-    %% 外部クラス (継承元のみ)
-    class litehtml__document_container["litehtml::document_container"] {
-        <<external>>
-    }
+    %% 孤立クラスを格子に並べるための配置専用の線 (themeCSS で非表示)
+    iso__graphics__FbxLoader .. iso__graphics__EmbeddedModelTextures
+    iso__graphics__ObjLoader .. iso__graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance
+    iso__graphics__MeshPrimitives .. iso__graphics__TextAlign
+    iso__graphics__EmbeddedModelTextures .. iso__graphics__SkyboxTheme
+    iso__graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance .. iso__graphics__TextVAlign
+    iso__graphics__SkyboxTheme .. iso__graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan
+    %% 配色
+    cssClass "iso__graphics__AdapterInfo,graphics__AnimKeyQuat,graphics__AnimKeyVec3,graphics__AnimationChannel,graphics__AnimationClip,graphics__Bone,graphics__BrushCache,graphics__DlssUpscaler,graphics__DlssUpscaler__EvaluateParams,graphics__DlssUpscaler__Quality,iso__graphics__EmbeddedModelTextures,iso__graphics__FbxLoader,graphics__FontManager,graphics__FontManager__BundledFamilyOverride,graphics__GraphicsDevice,graphics__GraphicsDevice__FullscreenConstants,graphics__GraphicsDevice__GpuFrameQueries,graphics__GraphicsDevice__GpuFrameTimerQueries,graphics__GraphicsDevice__GpuTimestampQueries,graphics__GraphicsDevice__TemporalMode,graphics__GraphicsDevice__TemporalShaderConstants,graphics__HeadingRegion,graphics__ImageRegion,graphics__LinkFragment,graphics__LinkRegion,graphics__Mesh,iso__graphics__MeshPrimitives,iso__graphics__ObjLoader,graphics__PendingWikiImage,graphics__PostProcessParams,graphics__QualitySettings,graphics__ScopedGpuTimer,graphics__Shader,graphics__SkeletalModel,graphics__SkeletalModel__PoseLayer,graphics__SkeletonNode,graphics__SkyboxTextureGenerator,iso__graphics__SkyboxTheme,iso__graphics__TextAlign,graphics__TextRenderer,graphics__TextRenderer__RasterCacheEntry,graphics__TextRenderer__RasterCacheKey,graphics__TextRenderer__RasterCacheKeyHash,graphics__TextRenderer__SrvBitmapCacheEntry,graphics__TextRenderer__TextLayoutEntry,graphics__TextRenderer__TextLayoutKey,graphics__TextRenderer__TextLayoutKeyHash,graphics__TextStyle,iso__graphics__TextVAlign,graphics__Vertex,graphics__VertexBoneWeights,graphics__VideoPlayer,graphics__VideoPlayer__Frame,graphics__WikiHtmlRenderState,graphics__WikiHtmlRenderState__Font,graphics__WikiPlacedImage,graphics__WikiTextSegment,graphics__WikiTextureGenerationState,graphics__WikiTextureGenerator,graphics__WikiTextureGenerator__HtmlCacheEntry,graphics__WikiTextureResult,graphics__WikiTextureResult__Tile,graphics__anonymous_namespace_ObjLoader_cpp___FastObjParser,graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndex,graphics__anonymous_namespace_ObjLoader_cpp___ObjVertexIndexHash,iso__graphics__anonymous_namespace_SkeletalModel_cpp___MeshInstance,iso__graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___HeadingSpan,graphics__anonymous_namespace_WikiTextureGeneratorLayout_cpp___ImagePlacement,graphics__html__CourseHtmlContainer,graphics__html__Link,graphics__html__PreparedArticle,graphics__html__RasterSize,graphics__html__Rect,graphics__html__Region,iso__graphics__html__RegionKind,graphics__html__anonymous_namespace_CourseHtml_cpp___Serializer,iso__graphics__skybox_detail__ThemeParams" graphics
+    cssClass "core__DisplaySettings,core__GameContext,core__GpuFrameSample,game__components__UIButton,game__components__UIText,game__controllers__ArticleTransitionController,game__controllers__ClubController,game__scenes__LoadingScene,game__scenes__PageDataAsyncResult,game__scenes__TitleScene,game__scenes__WikiGolfScene,game__scenes__WikiPageLoader,game__systems__ShadowRenderState,game__systems__SlopeVisualizationMeshBuilder__BuildResult,game__systems__TerrainBackdropChunk,game__systems__TerrainData,game__systems__UIButtonRenderSystem,game__systems__UIImageRenderSystem,game__systems__UIRenderSystem,game__systems__UIRenderSystem__EntityTextState,game__systems__WikiTerrainSystem,game__systems__WikiTerrainSystem__TileMeshCache,litehtml__document_container,resources__ResourceManager" refnode
