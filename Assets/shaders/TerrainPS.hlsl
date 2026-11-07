@@ -28,11 +28,47 @@ cbuffer ConstantBuffer : register(b0) {
     float4 CameraPos;      /**< カメラワールド座標 */
     matrix ShadowViewProjection; /**< 光源ビュー射影行列 */
     float4 ShadowParams;   /**< x: シャドウ有効 */
+    float4 ArticleOverlayUv; /**< 記事テクスチャのUV: u = x*X + 0.5, v = z*Y + Z。X が 0 なら記事なし */
 };
 
 Texture2DArray g_AlbedoArray : register(t0); /**< アルベドテクスチャ配列（8層） */
 Texture2DArray g_NormalArray : register(t1); /**< ノーマルマップ配列（8層） */
 SamplerState g_Sampler : register(s0);       /**< サンプラーステート */
+Texture2D g_ArticleOverlay : register(t2);   /**< 地表に乗算で重ねる記事テクスチャ */
+SamplerState g_ArticleOverlaySampler : register(s2);
+
+/**
+ * @brief 記事オーバーレイの濃淡用ノイズ（以前の BasicPS と同じ式）。
+ */
+float OverlayHash21(float2 p) {
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
+}
+
+float OverlayNoise2d(float2 p) {
+    float2 i = floor(p);
+    float2 f = frac(p);
+    float a = OverlayHash21(i);
+    float b = OverlayHash21(i + float2(1, 0));
+    float c = OverlayHash21(i + float2(0, 1));
+    float d = OverlayHash21(i + float2(1, 1));
+    float2 u = f * f * (3.0 - 2.0 * f);
+    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+}
+
+float OverlayFbm(float2 p) {
+    float v = 0.0;
+    float a = 0.5;
+    float2 shift = float2(37.0, 17.0);
+    [unroll]
+    for (int i = 0; i < 4; ++i) {
+        v += a * OverlayNoise2d(p);
+        p = p * 2.0 + shift;
+        a *= 0.5;
+    }
+    return v;
+}
 
 #include "ShadowSampling.hlsli"
 #include "GolfCupClip.hlsli"
@@ -366,7 +402,28 @@ float4 ShadeMain(PS_INPUT input) {
     float fogFactor = saturate((dist - fogStart) / (fogEnd - fogStart)) * CameraPos.w;
     float3 fogColor = float3(0.75f, 0.85f, 0.95f);
     finalColor.rgb = lerp(finalColor.rgb, fogColor, fogFactor);
-    
+
+    // 7. 記事オーバーレイ
+    // 以前は同じ形のメッシュを BasicPS で描き、乗算ブレンドで重ねていた。
+    // ここで同じ式を掛けることで、地表をもう一度描く分をなくす（見た目は同じ）。
+    [branch]
+    if (ArticleOverlayUv.x != 0.0f) {
+        float2 overlayUv = float2(input.WorldPos.x * ArticleOverlayUv.x + 0.5f,
+                                  input.WorldPos.z * ArticleOverlayUv.y + ArticleOverlayUv.z);
+        float4 overlayTex = g_ArticleOverlay.Sample(g_ArticleOverlaySampler, overlayUv);
+        // BasicPS の clip(alpha - 0.02) と同じく、ほぼ透明な所は重ねない
+        if (overlayTex.a >= 0.02f) {
+            // BasicPS で頂点アルファ1（グリーン扱い）のときの濃淡
+            float overlayShade = (OverlayFbm(input.WorldPos.xz * 0.8f) - 0.5f) * 0.07f;
+            float3 overlayColor = saturate(overlayTex.rgb * (1.0f + overlayShade));
+            float3 geometricNormal = normalize(input.Normal);
+            float overlayDiffuse = max(dot(geometricNormal, -normalize(LightDir.xyz)), 0.0f);
+            float overlayLighting = saturate(overlayDiffuse * shadow + 0.3f);
+            finalColor.rgb *= overlayColor * overlayLighting;
+            finalColor.a = overlayTex.a;
+        }
+    }
+
     return finalColor;
 }
 

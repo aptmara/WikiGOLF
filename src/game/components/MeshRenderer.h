@@ -63,6 +63,15 @@ struct MeshRenderer {
 
   // ミニマップ描画対象への登録（デフォルトは除外）
   MinimapRenderMode minimapMode = MinimapRenderMode::None;
+
+  // 本描画で描くか。false ならミニマップだけに使う（地形に焼き込んだ記事オーバーレイなど）。
+  bool drawInMainPass = true;
+
+  // 地形シェーダー用: 地表に乗算で重ねる記事テクスチャ。
+  // 以前は同じ形のメッシュをもう一枚、乗算ブレンドで重ね描きしていたのを、地形の描画で一緒に行う。
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> articleOverlaySRV;
+  // ワールド座標→記事テクスチャ UV。u = x * X + 0.5、v = z * Y + Z。W は未使用。
+  DirectX::XMFLOAT4 articleOverlayUv = {0, 0, 0, 0};
 };
 
 } // namespace game::components

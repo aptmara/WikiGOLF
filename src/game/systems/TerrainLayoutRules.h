@@ -45,6 +45,26 @@ public:
         float fieldWidth, float zTop, float zBottom, float flatY,
         std::vector<std::uint32_t>& outIndices);
 
+    /**
+     * @brief 地形タイルのワールド座標から記事テクスチャ UV を求める係数を返します。
+     * @details u = x * X + 0.5、v = z * Y + Z（W は 0）。地形シェーダーで記事を重ねるときに使う。
+     *          タイルの頂点に付けていた UV（u: 横 0..1、v: タイル内 0..1）と同じ値になる。
+     * @param fieldWidth フィールドの幅
+     * @param fieldDepth フィールドの奥行き
+     * @param vStart タイルの開始位置（記事全体の高さに対する割合）
+     * @param vEnd タイルの終了位置（同上）
+     */
+    static DirectX::XMFLOAT4 ComputeArticleOverlayUv(float fieldWidth,
+                                                     float fieldDepth,
+                                                     float vStart, float vEnd) {
+        const float vSpan = vEnd - vStart;
+        if (fieldWidth <= 0.0f || fieldDepth <= 0.0f || vSpan <= 0.0f) {
+            return {0.0f, 0.0f, 0.0f, 0.0f};
+        }
+        return {1.0f / fieldWidth, -1.0f / (fieldDepth * vSpan),
+                (0.5f - vStart) / vSpan, 0.0f};
+    }
+
     /** @brief 頂点列から最大Y座標を取得します。*/
     static float ComputeMaxVertexHeight(
         const std::vector<graphics::Vertex>& vertices);

@@ -41,7 +41,11 @@ struct VSConstants {
   XMFLOAT4 cameraPos;
   XMMATRIX shadowViewProjection;
   XMFLOAT4 shadowParams;
+  XMFLOAT4 articleOverlayUv; // TerrainPS 用: 記事テクスチャの UV 変換（W未使用。X が 0 なら記事なし）
 };
+
+// 地形に乗算で重ねる記事テクスチャのスロット（TerrainPS の t2 / s2）
+constexpr UINT kArticleOverlaySlot = 2;
 
 // GolfCupClip.hlsli の GolfCupBuffer と同じレイアウト
 constexpr size_t kGolfCupClipMaxCount = 32;
@@ -423,6 +427,7 @@ void RenderSystem(core::GameContext &ctx) {
     resources::ShaderHandle shader;
     ID3D11ShaderResourceView *textureSRV = nullptr;
     ID3D11ShaderResourceView *normalMapSRV = nullptr;
+    ID3D11ShaderResourceView *articleOverlaySRV = nullptr;
     components::BlendMode blendMode;
     bool isTransparent;
     bool twoSided = false;
@@ -431,6 +436,7 @@ void RenderSystem(core::GameContext &ctx) {
     bool operator==(const RenderKey &o) const {
       return mesh == o.mesh && shader == o.shader &&
              textureSRV == o.textureSRV && normalMapSRV == o.normalMapSRV &&
+             articleOverlaySRV == o.articleOverlaySRV &&
              blendMode == o.blendMode && isTransparent == o.isTransparent &&
              twoSided == o.twoSided &&
              usesHtmlTerrainSampler == o.usesHtmlTerrainSampler;
@@ -447,6 +453,7 @@ void RenderSystem(core::GameContext &ctx) {
       h = h * 31 + k.shader.generation;
       h = h * 31 + reinterpret_cast<size_t>(k.textureSRV);
       h = h * 31 + reinterpret_cast<size_t>(k.normalMapSRV);
+      h = h * 31 + reinterpret_cast<size_t>(k.articleOverlaySRV);
       h = h * 31 + static_cast<size_t>(k.blendMode);
       h = h * 31 + (k.isTransparent ? 1 : 0);
       h = h * 31 + (k.twoSided ? 1 : 0);
@@ -461,6 +468,7 @@ void RenderSystem(core::GameContext &ctx) {
     XMMATRIX prevWorldMatrix;
     XMFLOAT4 color;
     XMFLOAT4 flags;
+    XMFLOAT4 articleOverlayUv = {0, 0, 0, 0};
     float viewDepth = 0.0f;
   };
 
@@ -528,7 +536,7 @@ void RenderSystem(core::GameContext &ctx) {
     world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity e, components::Transform &t, components::MeshRenderer &r) {
         ++stats.candidates;
-        if (!r.isVisible) {
+        if (!r.isVisible || !r.drawInMainPass) {
           ++stats.invisibleSkipped;
           return;
         }
@@ -584,6 +592,8 @@ void RenderSystem(core::GameContext &ctx) {
         key.shader = r.shader;
         key.textureSRV = r.textureSRV.Get();
         key.normalMapSRV = r.normalMapSRV.Get();
+        key.articleOverlaySRV =
+            r.shader == terrainHandle ? r.articleOverlaySRV.Get() : nullptr;
         key.blendMode = r.blendMode;
         key.isTransparent = r.isTransparent;
         key.usesHtmlTerrainSampler =
@@ -596,6 +606,9 @@ void RenderSystem(core::GameContext &ctx) {
         inst.worldMatrix = t.GetWorldMatrix();
         inst.prevWorldMatrix = previousWorldOf(e, inst.worldMatrix);
         inst.color = r.color;
+        if (key.articleOverlaySRV) {
+          inst.articleOverlayUv = r.articleOverlayUv;
+        }
         inst.viewDepth = XMVectorGetZ(XMVector3TransformCoord(
             XMLoadFloat3(&t.position), XMMatrixTranspose(view)));
 
@@ -696,6 +709,15 @@ void RenderSystem(core::GameContext &ctx) {
         key.usesHtmlTerrainSampler ? state->htmlTerrainSampler.Get()
                                    : state->sampler.Get();
     context->PSSetSamplers(0, 1, &textureSampler);
+
+    // 地形に焼き込む記事テクスチャ。以前の重ね描きと同じサンプラーで読む
+    if (key.articleOverlaySRV) {
+      context->PSSetShaderResources(kArticleOverlaySlot, 1, &key.articleOverlaySRV);
+      context->PSSetSamplers(kArticleOverlaySlot, 1,
+                             state->htmlTerrainSampler.GetAddressOf());
+    } else {
+      context->PSSetShaderResources(kArticleOverlaySlot, 1, &nullSRV);
+    }
     if (shadowEnabled) {
       ID3D11ShaderResourceView *shadowResource =
           shadowState->shaderResourceView.Get();
@@ -744,6 +766,7 @@ void RenderSystem(core::GameContext &ctx) {
         constants->world = XMMatrixIdentity();
         constants->materialColor = XMFLOAT4(1, 1, 1, 1);
         constants->materialFlags = XMFLOAT4(0, 0, 0, 0);
+        constants->articleOverlayUv = XMFLOAT4(0, 0, 0, 0);
         context->Unmap(state->cBuffer.Get(), 0);
       }
       context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
@@ -790,6 +813,7 @@ void RenderSystem(core::GameContext &ctx) {
           constants->shadowViewProjection = shadowViewProjection;
           constants->shadowParams =
               XMFLOAT4(shadowEnabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+          constants->articleOverlayUv = inst.articleOverlayUv;
           context->Unmap(state->cBuffer.Get(), 0);
         }
 

@@ -13,6 +13,7 @@ cbuffer ConstantBuffer : register(b0) {
     float4 CameraPos;      /**< カメラワールド座標 */
     matrix ShadowViewProjection; /**< 光源ビュー射影行列 */
     float4 ShadowParams;   /**< x: シャドウ有効 */
+    float4 ArticleOverlayUv; /**< TerrainPS 用（ここでは使わない） */
 };
 
 /**

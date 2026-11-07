@@ -346,6 +346,10 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     mr.isTransparent = false;
     mr.customFlags   = {2.0f, 0.0f, 0.0f, 0.0f};
     mr.minimapMode   = game::components::MinimapRenderMode::VertexColor;
+    // 記事は地形の描画で一緒に重ねる（オーバーレイのメッシュはミニマップ専用）
+    mr.articleOverlaySRV = tile.srv;
+    mr.articleOverlayUv =
+        TerrainLayoutRules::ComputeArticleOverlayUv(fieldW, fieldD, vStart, vEnd);
 
     // ミニマップ専用の間引き済みメッシュ（本描画用のフル解像度メッシュとは別物）
     {
@@ -430,6 +434,8 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     ovMr.clipsGolfCupOpening = true;
     ovMr.customFlags = {1.0f, 0.0f, 1.0f, 0.0f};
     ovMr.minimapMode = game::components::MinimapRenderMode::Textured;
+    // 本描画では地形シェーダーが記事を重ねるので、ここはミニマップ専用
+    ovMr.drawInMainPass = false;
 
     // ミニマップ専用の平面2三角形メッシュ（本描画用の地形追従メッシュとは別物）
     {

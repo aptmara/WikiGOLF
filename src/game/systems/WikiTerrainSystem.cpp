@@ -317,6 +317,10 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     meshRenderer.isTransparent = false;
     meshRenderer.customFlags = {2.0f, 0.0f, 0.0f, 0.0f}; // x:UVスケール、y:未使用
     meshRenderer.minimapMode = MinimapRenderMode::VertexColor;
+    // 記事は地形の描画で一緒に重ねる（オーバーレイのメッシュはミニマップ専用）
+    meshRenderer.articleOverlaySRV = tile.srv;
+    meshRenderer.articleOverlayUv =
+        TerrainLayoutRules::ComputeArticleOverlayUv(width, depth, vStart, vEnd);
 
     // ミニマップ専用の間引き済みメッシュ（本描画用のフル解像度メッシュとは別物）
     float tileMaxHeight = 0.0f;
@@ -370,6 +374,8 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     overlayRenderer.clipsGolfCupOpening = true;
     overlayRenderer.customFlags = {1.0f, 0.0f, 1.0f, 0.0f}; // readabilityMode=0 (乗算で対応)
     overlayRenderer.minimapMode = MinimapRenderMode::Textured;
+    // 本描画では地形シェーダーが記事を重ねるので、ここはミニマップ専用
+    overlayRenderer.drawInMainPass = false;
 
     // ミニマップ専用の平面2三角形メッシュ（本描画用の地形追従メッシュとは別物）
     {

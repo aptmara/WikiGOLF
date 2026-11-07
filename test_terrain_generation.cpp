@@ -1,6 +1,7 @@
 #include "src/game/systems/SkyGlobeLayout.h"
 #include "src/game/systems/TerrainBackdrop.h"
 #include "src/game/systems/TerrainGenerator.h"
+#include "src/game/systems/TerrainLayoutRules.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -663,6 +664,32 @@ int main() {
               "Medium starts the distance LOD one step coarser");
         CHECK(ultra.visible && high.visible && medium.visible && !low.visible,
               "Low hides the sky globes during play");
+      }
+
+      // 地形シェーダーで重ねる記事の UV が、以前のオーバーレイ頂点の UV と一致する
+      {
+        const float fieldW = 180.0f;
+        const float fieldD = 960.0f;
+        const float vStart = 0.25f;
+        const float vEnd = 0.5f;
+        const auto uv = game::systems::TerrainLayoutRules::ComputeArticleOverlayUv(
+            fieldW, fieldD, vStart, vEnd);
+        float maxError = 0.0f;
+        const int resX = 9;
+        const int tileResZ = 7;
+        for (int z = 0; z < tileResZ; ++z) {
+          const float vLocal = static_cast<float>(z) / (tileResZ - 1);
+          const float worldZ = fieldD * (0.5f - (vStart + vLocal * (vEnd - vStart)));
+          for (int x = 0; x < resX; ++x) {
+            const float u = static_cast<float>(x) / (resX - 1);
+            const float worldX = fieldW * (u - 0.5f);
+            maxError = std::max(maxError, std::abs(worldX * uv.x + 0.5f - u));
+            maxError = std::max(maxError, std::abs(worldZ * uv.y + uv.z - vLocal));
+          }
+        }
+        CHECK(maxError < 1.0e-4f, "Article overlay UV in the terrain shader matches the old overlay mesh UV");
+        CHECK(game::systems::TerrainLayoutRules::ComputeArticleOverlayUv(fieldW, fieldD, 0.5f, 0.5f).x == 0.0f,
+              "An empty tile turns the article overlay off");
       }
 
       // 手前・奥の縁と角もコースと隙間なくつながる
