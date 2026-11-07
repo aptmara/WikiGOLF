@@ -4,6 +4,8 @@
  * @brief コースの外の空に浮かべる パズル地球儀の配置を決めます。
  */
 
+#include "../../core/GraphicsPreset.h"
+
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
@@ -43,6 +45,42 @@ inline int SelectSkyGlobeLod(float distance, float radius, int current) {
   if (ratio > toLod2) return 2;
   if (ratio > toLod1) return 1;
   return 0;
+}
+
+/** @brief 画質プリセットごとの、空の地球儀の出し方。 */
+struct SkyGlobeQuality {
+  bool visible = true;     // false なら空の地球儀を出さない
+  bool useDistanceLod = true; // false なら距離によらず minLod に固定する
+  int minLod = 0;          // 使ういちばん細かい LOD
+};
+
+/**
+ * @brief 画質プリセットから空の地球儀の出し方を決めます。
+ * @details ExHigh 以上は LOD を使わず常に最高精細。High は距離で切り替える。
+ *          Mid は距離 LOD を 1 段粗いところから始める。Low は空の地球儀を出さない
+ *          （タイトル画面の地球儀は別に描くので影響しない）。
+ */
+inline SkyGlobeQuality GetSkyGlobeQuality(core::GraphicsPreset preset) {
+  switch (preset) {
+  case core::GraphicsPreset::Low:
+    return {false, true, 0};
+  case core::GraphicsPreset::Medium:
+    return {true, true, 1};
+  case core::GraphicsPreset::ExHigh:
+  case core::GraphicsPreset::Ultra:
+    return {true, false, 0};
+  case core::GraphicsPreset::High:
+  default:
+    return {true, true, 0};
+  }
+}
+
+/** @brief 距離で選んだ LOD に、画質プリセットの決まりを当てはめます。 */
+inline int ApplySkyGlobeQualityToLod(const SkyGlobeQuality &quality, int distanceLod) {
+  if (!quality.useDistanceLod) {
+    return quality.minLod;
+  }
+  return std::max(distanceLod, quality.minLod);
 }
 
 /** @brief 最小と最大のスケール。 */

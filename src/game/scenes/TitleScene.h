@@ -160,6 +160,23 @@ private:
    * @param ctx ゲームコンテキスト
 */
   void UpdateCourseSelect(core::GameContext& ctx);
+
+  /**
+   * @brief 入力中のスタートとゴールを確認します（「確認」ボタンと同じ処理）。
+   * @param ctx ゲームコンテキスト
+*/
+  void RequestCourseCheck(core::GameContext& ctx);
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  bool m_debugCourseAutoChecked = false; /**< 計測用の自動コース指定を一度だけ見る */
+  bool m_debugCourseAutoStart = false;   /**< 確認が通ったら自動でスタートする */
+
+  /**
+   * @brief 計測用に、環境変数のページでコース選択を確認まで進めます。
+   * @param ctx ゲームコンテキスト
+*/
+  void TryDebugCourseAutoStart(core::GameContext& ctx);
+#endif
 };
 
 } // namespace game::scenes

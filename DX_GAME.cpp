@@ -29,7 +29,9 @@
 #include "src/graphics/TextRenderer.h"
 #include "src/resources/ResourceManager.h"
 #ifdef WIKIGOLF_DEBUG_TOOLS
+#include "src/game/devtools/DebugAutoStart.h"
 #include "src/game/devtools/DebugBuildConfig.h"
+#include "src/game/devtools/DebugSceneNavigator.h"
 #include "src/game/devtools/DebugTimeController.h"
 #include "src/game/devtools/DebugRenderState.h"
 #include "src/game/devtools/DebugTerrainVisibility.h"
@@ -423,6 +425,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   core::SceneManager sceneManager;
   ctx.sceneManager = &sceneManager;
   sceneManager.ChangeScene(std::make_unique<game::scenes::TitleScene>());
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  // 計測用: 環境変数で起動直後のシーン移動と自動終了を指定できる
+  const auto debugAutoStart = game::debug::ReadDebugAutoStartOptions();
+  bool debugAutoStartPending = debugAutoStart.startScene.has_value();
+  uint64_t debugFrameCount = 0;
+  const auto debugLaunchedAt = std::chrono::steady_clock::now();
+#endif
 
   // メインループ
   MSG msg = {0};
@@ -454,6 +463,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         debugTime.CycleTimeScale();
       }
       ctx.dt = debugTime.SimulationDelta(dt);
+      ++debugFrameCount;
+      // タイトルの初期化が済んでから移る
+      if (debugAutoStartPending && debugFrameCount >= 3) {
+        debugAutoStartPending = false;
+        game::debug::DebugSceneNavigator::Navigate(ctx, *debugAutoStart.startScene);
+      }
+      if (debugAutoStart.exitAfterSeconds > 0.0f &&
+          std::chrono::duration<float>(std::chrono::steady_clock::now() -
+                                       debugLaunchedAt)
+                  .count() >= debugAutoStart.exitAfterSeconds) {
+        ctx.shouldClose = true;
+      }
 #endif
 
       // 表示用FPSを指数移動平均で平滑化（瞬間値のちらつきを抑える）

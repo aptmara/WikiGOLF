@@ -6,6 +6,7 @@
 #include "TextRenderer.h"
 #include "TextRendererInternals.h"
 #include <algorithm>
+#include <cmath>
 #include <d2d1_1.h>
 #include <d2d1effects.h>
 #include <wincodec.h>
@@ -93,6 +94,13 @@ void TextRenderer::DrawImageBitmap(
   }
 
   const auto virtualToScreen = ComputeVirtualToScreenTransform();
+  if (grayscaleTint) {
+    // 色ごとに一度だけ変換した画像を使い、エフェクトを毎回通さない
+    if (ID2D1Bitmap1 *tinted = GetOrCreateTintedBitmap(bitmap, tintColor)) {
+      bitmap = tinted;
+      grayscaleTint = false;
+    }
+  }
   if (!grayscaleTint) {
     if (rotation != 0.0f) {
       const float centerX = (destRect.left + destRect.right) * 0.5f;
@@ -152,6 +160,96 @@ void TextRenderer::DrawImageBitmap(
   m_d2dContext->DrawImage(m_imageColorMatrixEffect.Get());
   m_imageColorMatrixEffect->SetInput(0, nullptr);
   m_d2dContext->SetTransform(virtualToScreen);
+}
+
+ID2D1Bitmap1 *TextRenderer::GetOrCreateTintedBitmap(
+    ID2D1Bitmap1 *bitmap, const DirectX::XMFLOAT4 &tintColor) {
+  auto toByte = [](float v) {
+    return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
+  };
+  const uint32_t r8 = toByte(tintColor.x);
+  const uint32_t g8 = toByte(tintColor.y);
+  const uint32_t b8 = toByte(tintColor.z);
+  const uint32_t a8 = toByte(tintColor.w);
+  const TintedBitmapKey key{bitmap, (r8 << 24) | (g8 << 16) | (b8 << 8) | a8};
+  if (auto it = m_tintedBitmapCache.find(key); it != m_tintedBitmapCache.end()) {
+    return it->second.tinted.Get();
+  }
+
+  // 色が連続的に変わる使い方でも際限なく増えないよう上限を設ける
+  constexpr size_t kMaxTintedBitmaps = 256;
+  if (m_tintedBitmapCache.size() >= kMaxTintedBitmaps) {
+    m_tintedBitmapCache.clear();
+  }
+
+  if (!m_imageColorMatrixEffect &&
+      FAILED(m_d2dContext->CreateEffect(CLSID_D2D1ColorMatrix,
+                                        &m_imageColorMatrixEffect))) {
+    return nullptr;
+  }
+
+  // 目印は画面上で最大でも数十ピクセルなので、元画像を大きいまま持たず縮めておく
+  constexpr float kMaxTintedSize = 128.0f;
+  const auto sourceSize = bitmap->GetSize();
+  if (sourceSize.width <= 0.0f || sourceSize.height <= 0.0f) {
+    return nullptr;
+  }
+  const float scale = std::min(1.0f, kMaxTintedSize / std::max(sourceSize.width, sourceSize.height));
+  const UINT32 pxW = std::max<UINT32>(1, static_cast<UINT32>(std::ceil(sourceSize.width * scale)));
+  const UINT32 pxH = std::max<UINT32>(1, static_cast<UINT32>(std::ceil(sourceSize.height * scale)));
+
+  D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
+      D2D1_BITMAP_OPTIONS_TARGET,
+      D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+  ComPtr<ID2D1Bitmap1> tinted;
+  if (FAILED(m_d2dContext->CreateBitmap(D2D1::SizeU(pxW, pxH), nullptr, 0,
+                                        &props, &tinted))) {
+    return nullptr;
+  }
+
+  // 不透明度は描画時に掛けるので、ここでは色だけを焼き込む（従来の行列で opacity=1 とした形）
+  const float tintR = static_cast<float>(r8) / 255.0f;
+  const float tintG = static_cast<float>(g8) / 255.0f;
+  const float tintB = static_cast<float>(b8) / 255.0f;
+  D2D1_MATRIX_5X4_F matrix{};
+  matrix._11 = 0.2126f * tintR;
+  matrix._21 = 0.7152f * tintR;
+  matrix._31 = 0.0722f * tintR;
+  matrix._12 = 0.2126f * tintG;
+  matrix._22 = 0.7152f * tintG;
+  matrix._32 = 0.0722f * tintG;
+  matrix._13 = 0.2126f * tintB;
+  matrix._23 = 0.7152f * tintB;
+  matrix._33 = 0.0722f * tintB;
+  matrix._44 = static_cast<float>(a8) / 255.0f;
+  m_imageColorMatrixEffect->SetInput(0, bitmap);
+  m_imageColorMatrixEffect->SetValue(D2D1_COLORMATRIX_PROP_COLOR_MATRIX, matrix);
+  m_imageColorMatrixEffect->SetValue(D2D1_COLORMATRIX_PROP_ALPHA_MODE,
+                                     D2D1_COLORMATRIX_ALPHA_MODE_PREMULTIPLIED);
+
+  ComPtr<ID2D1Image> prevTarget;
+  m_d2dContext->GetTarget(&prevTarget);
+  D2D1_MATRIX_3X2_F prevTransform;
+  m_d2dContext->GetTransform(&prevTransform);
+
+  m_d2dContext->SetTarget(tinted.Get());
+  m_d2dContext->Clear(D2D1::ColorF(0, 0, 0, 0));
+  m_d2dContext->SetTransform(D2D1::Matrix3x2F::Scale(
+      static_cast<float>(pxW) / sourceSize.width,
+      static_cast<float>(pxH) / sourceSize.height));
+  m_d2dContext->DrawImage(m_imageColorMatrixEffect.Get(), nullptr, nullptr,
+                          D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC);
+
+  m_d2dContext->SetTarget(prevTarget.Get());
+  m_d2dContext->SetTransform(prevTransform);
+  m_imageColorMatrixEffect->SetInput(0, nullptr);
+
+  TintedBitmapCacheEntry entry;
+  entry.source = bitmap;
+  entry.tinted = tinted;
+  ID2D1Bitmap1 *result = tinted.Get();
+  m_tintedBitmapCache.emplace(key, std::move(entry));
+  return result;
 }
 
 void TextRenderer::RenderImage(const std::string &filePath,

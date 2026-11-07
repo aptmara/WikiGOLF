@@ -506,7 +506,22 @@ void RenderGrassField(core::GameContext &ctx, const GrassFieldFrameInput &input)
   }
 
   PROFILE_SCOPE("RenderSystem.Grass");
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  // 計測用: WIKIGOLF_DEBUG_GRASS_FULL=1 で負荷による自動の間引きを止め、常に全密度で描く
+  static const bool s_debugGrassFull = [] {
+    char *value = nullptr;
+    size_t length = 0;
+    const bool enabled = _dupenv_s(&value, &length, "WIKIGOLF_DEBUG_GRASS_FULL") == 0 &&
+                         value && value[0] == '1';
+    std::free(value);
+    return enabled;
+  }();
+  if (!s_debugGrassFull) {
+    UpdateGrassGpuLoad(state->load, ctx.graphics.GetLatestGpuFrameMs());
+  }
+#else
   UpdateGrassGpuLoad(state->load, ctx.graphics.GetLatestGpuFrameMs());
+#endif
   const float distanceScale = GrassDistanceScaleForBudget(state->load.budgetScale);
 
   const float time = ctx.time;

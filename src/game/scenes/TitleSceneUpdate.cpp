@@ -165,6 +165,12 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
     }
   }
 
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  if (m_state == TitleState::MainMenu && !newGame) {
+    TryDebugCourseAutoStart(ctx);
+  }
+#endif
+
   if (m_state == TitleState::CourseSelect) {
     UpdateCourseSelect(ctx);
   } else if (!newGame) {

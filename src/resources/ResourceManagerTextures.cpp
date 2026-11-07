@@ -18,6 +18,65 @@
 #include <wrl/client.h>
 
 namespace resources {
+namespace {
+
+/**
+ * @brief RGBA8 の画素から全段のミップを CPU で作り、初期データ付きのテクスチャを作ります。
+ * @details ロード用スレッドからも呼べるよう、即時コンテキストが要る GenerateMips は
+ *          使わない。ミップなしで斜めや遠くから見ると、原寸のテクスチャを飛び飛びに
+ *          読んで内蔵 GPU では帯域を使い切るため、3D で貼るテクスチャには必ず付ける。
+ * @param pixels 最上段の画素（中身は移される）
+ * @param outMipLevels 作ったミップの段数
+ */
+HRESULT CreateMippedTexture2D(ID3D11Device *device, std::vector<BYTE> pixels,
+                              UINT width, UINT height,
+                              Microsoft::WRL::ComPtr<ID3D11Texture2D> &outTexture,
+                              UINT &outMipLevels) {
+  std::vector<std::vector<BYTE>> mips;
+  std::vector<D3D11_SUBRESOURCE_DATA> initData;
+  mips.push_back(std::move(pixels));
+  initData.push_back({nullptr, width * 4, 0});
+  for (UINT w = width, h = height; w > 1 || h > 1;) {
+    const UINT nextW = (std::max)(w / 2, 1u);
+    const UINT nextH = (std::max)(h / 2, 1u);
+    std::vector<BYTE> next(static_cast<size_t>(nextW) * nextH * 4);
+    const std::vector<BYTE> &src = mips.back();
+    for (UINT y = 0; y < nextH; ++y) {
+      const UINT y0 = y * 2;
+      const UINT y1 = (std::min)(y0 + 1, h - 1);
+      for (UINT x = 0; x < nextW; ++x) {
+        const UINT x0 = x * 2;
+        const UINT x1 = (std::min)(x0 + 1, w - 1);
+        for (UINT c = 0; c < 4; ++c) {
+          const UINT sum = src[(y0 * w + x0) * 4 + c] + src[(y0 * w + x1) * 4 + c] +
+                           src[(y1 * w + x0) * 4 + c] + src[(y1 * w + x1) * 4 + c];
+          next[(y * nextW + x) * 4 + c] = static_cast<BYTE>((sum + 2) / 4);
+        }
+      }
+    }
+    mips.push_back(std::move(next));
+    initData.push_back({nullptr, nextW * 4, 0});
+    w = nextW;
+    h = nextH;
+  }
+  for (size_t level = 0; level < mips.size(); ++level) {
+    initData[level].pSysMem = mips[level].data();
+  }
+
+  D3D11_TEXTURE2D_DESC desc = {};
+  desc.Width = width;
+  desc.Height = height;
+  desc.MipLevels = static_cast<UINT>(mips.size());
+  desc.ArraySize = 1;
+  desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+  desc.SampleDesc.Count = 1;
+  desc.Usage = D3D11_USAGE_DEFAULT;
+  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+  outMipLevels = desc.MipLevels;
+  return device->CreateTexture2D(&desc, initData.data(), &outTexture);
+}
+
+} // namespace
 
 Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>
 ResourceManager::LoadTextureSRV(const std::string &path) {
@@ -92,22 +151,10 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
     return {};
   }
 
-  D3D11_TEXTURE2D_DESC desc = {};
-  desc.Width = width;
-  desc.Height = height;
-  desc.MipLevels = 1;
-  desc.ArraySize = 1;
-  desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-  desc.SampleDesc.Count = 1;
-  desc.Usage = D3D11_USAGE_DEFAULT;
-  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-  D3D11_SUBRESOURCE_DATA initData = {};
-  initData.pSysMem = pixels.data();
-  initData.SysMemPitch = stride;
-
   Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-  hr = m_device.GetDevice()->CreateTexture2D(&desc, &initData, &texture);
+  UINT mipLevels = 1;
+  hr = CreateMippedTexture2D(m_device.GetDevice(), std::move(pixels), width,
+                             height, texture, mipLevels);
   if (FAILED(hr)) {
     LOG_ERROR("Resource", "CreateTexture2D failed for {} (hr=0x{:08X})", path,
               static_cast<uint32_t>(hr));
@@ -123,10 +170,10 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
   }
 
   D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-  srvDesc.Format = desc.Format;
+  srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
   srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
   srvDesc.Texture2D.MostDetailedMip = 0;
-  srvDesc.Texture2D.MipLevels = 1;
+  srvDesc.Texture2D.MipLevels = mipLevels;
 
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
   hr = m_device.GetDevice()->CreateShaderResourceView(texture.Get(), &srvDesc,
@@ -139,8 +186,8 @@ ResourceManager::LoadTextureSRV(const std::string &path) {
   }
 
   m_textureCache[path] = srv;
-  LOG_INFO("Resource", "Loaded Texture: {} ({}x{}, {} ms)", path, width,
-           height, ElapsedMs(startedAt));
+  LOG_INFO("Resource", "Loaded Texture: {} ({}x{}, {} mips, {} ms)", path, width,
+           height, mipLevels, ElapsedMs(startedAt));
   return srv;
 }
 
@@ -242,15 +289,19 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
   if (validLayers.empty())
     return {};
 
+  // 地形は遠くまで広がるため、ミップなしだと遠景で原寸のテクスチャを飛び飛びに読み、
+  // 内蔵 GPU では帯域を使い切って極端に重くなる（ちらつきの原因にもなる）。
+  // 全段のミップを作り、GPU で縮小して埋める。
   D3D11_TEXTURE2D_DESC desc = {};
   desc.Width = commonWidth;
   desc.Height = commonHeight;
-  desc.MipLevels = 1;
+  desc.MipLevels = 0;
   desc.ArraySize = static_cast<UINT>(validLayers.size());
   desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
   desc.SampleDesc.Count = 1;
   desc.Usage = D3D11_USAGE_DEFAULT;
-  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+  desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
   Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
   HRESULT hr = m_device.GetDevice()->CreateTexture2D(&desc, nullptr, &texture);
@@ -258,6 +309,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
     LOG_ERROR("Resource", "Array: CreateTexture2D failed (hr=0x{:08X})", (uint32_t)hr);
     return {};
   }
+  texture->GetDesc(&desc);
 
   for (size_t layer = 0; layer < validLayers.size(); ++layer) {
     const DecodedLayer &decoded = layers[validLayers[layer]];
@@ -266,7 +318,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
       return {};
     }
     const UINT subresource =
-        D3D11CalcSubresource(0, static_cast<UINT>(layer), 1);
+        D3D11CalcSubresource(0, static_cast<UINT>(layer), desc.MipLevels);
     m_device.GetContext()->UpdateSubresource(
         texture.Get(), subresource, nullptr, decoded.pixels.data(), commonWidth * 4,
         static_cast<UINT>(decoded.pixels.size()));
@@ -277,7 +329,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
   srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
   srvDesc.Texture2DArray.ArraySize = desc.ArraySize;
   srvDesc.Texture2DArray.FirstArraySlice = 0;
-  srvDesc.Texture2DArray.MipLevels = 1;
+  srvDesc.Texture2DArray.MipLevels = desc.MipLevels;
   srvDesc.Texture2DArray.MostDetailedMip = 0;
 
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
@@ -286,6 +338,7 @@ ResourceManager::LoadTextureArraySRV(const std::string &name,
     LOG_ERROR("Resource", "Array: CreateSRV failed (hr=0x{:08X})", (uint32_t)hr);
     return {};
   }
+  m_device.GetContext()->GenerateMips(srv.Get());
 
   m_textureCache[name] = srv;
   LOG_INFO("Resource", "Loaded TextureArray: {} (Layers:{}, {}x{})", name,
@@ -377,51 +430,10 @@ ResourceManager::LoadTextureSRVFromMemory(const std::string &cacheKey,
     return {};
   }
 
-  // ロード用スレッドからも呼べるよう、即時コンテキストが要る GenerateMips は使わず
-  // CPU で全段のミップを作って初期データとして渡す。
-  std::vector<std::vector<BYTE>> mips;
-  std::vector<D3D11_SUBRESOURCE_DATA> initData;
-  mips.push_back(std::move(pixels));
-  initData.push_back({nullptr, width * 4, 0});
-  for (UINT w = width, h = height; w > 1 || h > 1;) {
-    const UINT nextW = (std::max)(w / 2, 1u);
-    const UINT nextH = (std::max)(h / 2, 1u);
-    std::vector<BYTE> next(static_cast<size_t>(nextW) * nextH * 4);
-    const std::vector<BYTE> &src = mips.back();
-    for (UINT y = 0; y < nextH; ++y) {
-      const UINT y0 = y * 2;
-      const UINT y1 = (std::min)(y0 + 1, h - 1);
-      for (UINT x = 0; x < nextW; ++x) {
-        const UINT x0 = x * 2;
-        const UINT x1 = (std::min)(x0 + 1, w - 1);
-        for (UINT c = 0; c < 4; ++c) {
-          const UINT sum = src[(y0 * w + x0) * 4 + c] + src[(y0 * w + x1) * 4 + c] +
-                           src[(y1 * w + x0) * 4 + c] + src[(y1 * w + x1) * 4 + c];
-          next[(y * nextW + x) * 4 + c] = static_cast<BYTE>((sum + 2) / 4);
-        }
-      }
-    }
-    mips.push_back(std::move(next));
-    initData.push_back({nullptr, nextW * 4, 0});
-    w = nextW;
-    h = nextH;
-  }
-  for (size_t level = 0; level < mips.size(); ++level) {
-    initData[level].pSysMem = mips[level].data();
-  }
-
-  D3D11_TEXTURE2D_DESC desc = {};
-  desc.Width = width;
-  desc.Height = height;
-  desc.MipLevels = static_cast<UINT>(mips.size());
-  desc.ArraySize = 1;
-  desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-  desc.SampleDesc.Count = 1;
-  desc.Usage = D3D11_USAGE_DEFAULT;
-  desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
   Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-  hr = m_device.GetDevice()->CreateTexture2D(&desc, initData.data(), &texture);
+  UINT mipLevels = 1;
+  hr = CreateMippedTexture2D(m_device.GetDevice(), std::move(pixels), width,
+                             height, texture, mipLevels);
   if (FAILED(hr)) {
     LOG_ERROR("Resource", "CreateTexture2D failed for {} (hr=0x{:08X})",
               cacheKey, static_cast<uint32_t>(hr));
@@ -429,10 +441,10 @@ ResourceManager::LoadTextureSRVFromMemory(const std::string &cacheKey,
   }
 
   D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-  srvDesc.Format = desc.Format;
+  srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
   srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
   srvDesc.Texture2D.MostDetailedMip = 0;
-  srvDesc.Texture2D.MipLevels = desc.MipLevels;
+  srvDesc.Texture2D.MipLevels = mipLevels;
 
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
   hr = m_device.GetDevice()->CreateShaderResourceView(texture.Get(), &srvDesc,
@@ -446,7 +458,7 @@ ResourceManager::LoadTextureSRVFromMemory(const std::string &cacheKey,
 
   m_textureCache[cacheKey] = srv;
   LOG_INFO("Resource", "Loaded In-Memory Texture: {} ({}x{}, {} mips)", cacheKey,
-           width, height, desc.MipLevels);
+           width, height, mipLevels);
   return srv;
 }
 

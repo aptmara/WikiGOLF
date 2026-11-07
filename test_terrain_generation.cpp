@@ -644,6 +644,25 @@ int main() {
         CHECK(SelectSkyGlobeLod(57.0f * 10.0f, 10.0f, 0) == 0 &&
                   SelectSkyGlobeLod(53.0f * 10.0f, 10.0f, 1) == 1,
               "LOD switching has hysteresis around the threshold");
+
+        // 画質プリセットごとの出し方: ExHigh 以上は常に最高精細、下がるほど粗く、Low は出さない
+        using core::GraphicsPreset;
+        const auto ultra = GetSkyGlobeQuality(GraphicsPreset::Ultra);
+        const auto exHigh = GetSkyGlobeQuality(GraphicsPreset::ExHigh);
+        const auto high = GetSkyGlobeQuality(GraphicsPreset::High);
+        const auto medium = GetSkyGlobeQuality(GraphicsPreset::Medium);
+        const auto low = GetSkyGlobeQuality(GraphicsPreset::Low);
+        CHECK(ApplySkyGlobeQualityToLod(ultra, 2) == 0 &&
+                  ApplySkyGlobeQualityToLod(exHigh, 2) == 0,
+              "ExHigh and Ultra always use the original globe model");
+        CHECK(ApplySkyGlobeQualityToLod(high, 0) == 0 &&
+                  ApplySkyGlobeQualityToLod(high, 2) == 2,
+              "High follows the distance LOD");
+        CHECK(ApplySkyGlobeQualityToLod(medium, 0) == 1 &&
+                  ApplySkyGlobeQualityToLod(medium, 2) == 2,
+              "Medium starts the distance LOD one step coarser");
+        CHECK(ultra.visible && high.visible && medium.visible && !low.visible,
+              "Low hides the sky globes during play");
       }
 
       // 手前・奥の縁と角もコースと隙間なくつながる

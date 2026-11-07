@@ -107,23 +107,29 @@ void GraphicsDevice::ResolveGpuProfilerQueries() {
       continue;
     }
 
+    uint64_t frameStart = 0;
+    uint64_t frameEnd = 0;
+    HRESULT startResult = E_FAIL;
+    HRESULT endResult = E_FAIL;
+    if (SUCCEEDED(disjointResult)) {
+      startResult =
+          m_context->GetData(frame.frameStart.Get(), &frameStart,
+                             sizeof(frameStart), D3D11_ASYNC_GETDATA_DONOTFLUSH);
+      endResult =
+          m_context->GetData(frame.frameEnd.Get(), &frameEnd, sizeof(frameEnd),
+                             D3D11_ASYNC_GETDATA_DONOTFLUSH);
+      // AMD のドライバは Disjoint の結果を先に返し、タイムスタンプが後から揃うことがある。
+      // ここで捨てると GPU 時間が一度も取れないため、揃うまで次のフレームで待つ。
+      if (startResult == S_FALSE || endResult == S_FALSE) {
+        continue;
+      }
+    }
+
     core::GpuFrameSample sample;
     sample.frameIndex = frame.frameIndex;
     sample.valid = SUCCEEDED(disjointResult) && !disjoint.Disjoint &&
-                   disjoint.Frequency != 0;
-
-    uint64_t frameStart = 0;
-    uint64_t frameEnd = 0;
-    if (sample.valid) {
-      const HRESULT startResult =
-          m_context->GetData(frame.frameStart.Get(), &frameStart,
-                             sizeof(frameStart), D3D11_ASYNC_GETDATA_DONOTFLUSH);
-      const HRESULT endResult =
-          m_context->GetData(frame.frameEnd.Get(), &frameEnd, sizeof(frameEnd),
-                             D3D11_ASYNC_GETDATA_DONOTFLUSH);
-      sample.valid = startResult == S_OK && endResult == S_OK &&
-                     frameEnd >= frameStart;
-    }
+                   disjoint.Frequency != 0 && startResult == S_OK &&
+                   endResult == S_OK && frameEnd >= frameStart;
 
     if (sample.valid) {
       const double millisecondsPerTick =

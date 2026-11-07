@@ -213,6 +213,34 @@ private:
   };
   std::unordered_map<ID3D11Resource *, SrvBitmapCacheEntry> m_srvBitmapCache;
 
+  /**
+   * @brief 灰色化＋色付けした画像のキャッシュエントリ
+   * @details ミニマップのホール目印のように同じ画像を同じ色で何百個も描くとき、
+   *          毎回 D2D エフェクトを通すと元画像の全画素を個数分処理して非常に重い。
+   *          色ごとに一度だけ小さく変換して保存し、以降は普通の画像として描く。
+   */
+  struct TintedBitmapCacheEntry {
+    ComPtr<ID2D1Bitmap1> source; ///< キーのアドレスが再利用されないよう元画像を保持する
+    ComPtr<ID2D1Bitmap1> tinted;
+  };
+  struct TintedBitmapKey {
+    ID2D1Bitmap1 *source = nullptr;
+    uint32_t tintRgba = 0;
+    bool operator==(const TintedBitmapKey &o) const {
+      return source == o.source && tintRgba == o.tintRgba;
+    }
+  };
+  struct TintedBitmapKeyHash {
+    size_t operator()(const TintedBitmapKey &k) const {
+      return std::hash<const void *>()(k.source) ^ (static_cast<size_t>(k.tintRgba) * 0x9E3779B97F4A7C15ull);
+    }
+  };
+  std::unordered_map<TintedBitmapKey, TintedBitmapCacheEntry, TintedBitmapKeyHash> m_tintedBitmapCache;
+
+  /** @brief 灰色化＋色付け済みの画像を返します（なければ作って保存）。失敗時は nullptr。 */
+  ID2D1Bitmap1 *GetOrCreateTintedBitmap(ID2D1Bitmap1 *bitmap,
+                                        const DirectX::XMFLOAT4 &tintColor);
+
   // サブシステム
   FontManager m_fontManager;
   BrushCache m_brushCache;
@@ -287,7 +315,12 @@ private:
   };
   struct RasterCacheEntry {
     ComPtr<ID2D1Bitmap1> bitmap;
-    float marginVirtual = 0.0f; // オフスクリーン生成時に付与した余白（仮想座標系）
+    // ビットマップが覆う範囲。描画先の rect 左上からの位置と大きさ（仮想座標系）。
+    // 文字や背景が実際に描かれる範囲だけに切り詰めてある。
+    float offsetX = 0.0f;
+    float offsetY = 0.0f;
+    float coverWidth = 0.0f;
+    float coverHeight = 0.0f;
     size_t approxBytes = 0;
     uint64_t lastUsedFrame = 0;
   };

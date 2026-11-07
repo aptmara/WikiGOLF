@@ -52,15 +52,70 @@ void TextRenderer::RenderTextCached(const std::wstring &text,
     }
     margin = (std::max)(margin, 1.0f);
 
+    // ビットマップが覆う範囲（rect 左上からの相対、仮想座標系）。
+    // 幅や高さを省いた UI 文字は rect が画面の端まで伸びるため、そのままでは
+    // 全画面に近い透明なビットマップを毎フレーム合成することになり、内蔵 GPU では
+    // UI だけで十数 ms かかる。DrawTextCore が実際に描く範囲（文字の字面、背景の
+    // 四角、枠線・縁取り・影）だけに切り詰める。
+    float coverLeft = -margin;
+    float coverTop = -margin;
+    float coverRight = width + margin;
+    float coverBottom = height + margin;
+    if (IDWriteTextFormat *format = m_fontManager.GetFormat(
+            style.fontFamily, style.fontSize, style.align)) {
+      if (TextLayoutEntry *entry = GetOrCreateTextLayoutEntry(
+              text, format, style.fontFamily, style.fontSize, style.align,
+              width, height)) {
+        if (IDWriteTextLayout *layout = entry->layout.Get()) {
+          DWRITE_TEXT_METRICS metrics{};
+          DWRITE_OVERHANG_METRICS overhang{};
+          if (SUCCEEDED(layout->GetMetrics(&metrics)) &&
+              SUCCEEDED(layout->GetOverhangMetrics(&overhang))) {
+            // 字面: レイアウト枠からのはみ出し量（内側なら負）で求める
+            float inkLeft = -overhang.left;
+            float inkTop = -overhang.top;
+            float inkRight = width + overhang.right;
+            float inkBottom = height + overhang.bottom;
+            // 背景の四角（DrawTextCore と同じく、文字の大きさ＋余白）
+            if (style.bgColor.w > 0.0f) {
+              float offsetX = 0.0f;
+              if (style.align == TextAlign::Center) {
+                offsetX = (width - metrics.width) * 0.5f;
+              } else if (style.align == TextAlign::Right) {
+                offsetX = width - metrics.width;
+              }
+              constexpr float kBackgroundPadding = 8.0f;
+              inkLeft = (std::min)(inkLeft, offsetX - kBackgroundPadding);
+              inkTop = (std::min)(inkTop, -kBackgroundPadding * 0.5f);
+              inkRight = (std::max)(inkRight,
+                                    offsetX + metrics.width + kBackgroundPadding);
+              inkBottom = (std::max)(inkBottom,
+                                     metrics.height + kBackgroundPadding * 0.5f);
+            }
+            coverLeft = (std::max)(coverLeft, inkLeft - margin);
+            coverTop = (std::max)(coverTop, inkTop - margin);
+            coverRight = (std::min)(coverRight, inkRight + margin);
+            coverBottom = (std::min)(coverBottom, inkBottom + margin);
+            if (coverRight <= coverLeft || coverBottom <= coverTop) {
+              coverLeft = -margin;
+              coverTop = -margin;
+              coverRight = coverLeft + 1.0f;
+              coverBottom = coverTop + 1.0f;
+            }
+          }
+        }
+      }
+    }
+
     // オフスクリーンのラスタ密度は、実際に画面へ合成する際の一様スケールに
     // 合わせる（非一様スケールだとレターボックス時の縮小率とズレて滲む）。
     const float scaleX = ComputeUniformScale();
     const float scaleY = scaleX;
 
     const UINT32 pxW = static_cast<UINT32>(
-        (std::max)(1.0f, std::ceil((width + margin * 2.0f) * scaleX)));
+        (std::max)(1.0f, std::ceil((coverRight - coverLeft) * scaleX)));
     const UINT32 pxH = static_cast<UINT32>(
-        (std::max)(1.0f, std::ceil((height + margin * 2.0f) * scaleY)));
+        (std::max)(1.0f, std::ceil((coverBottom - coverTop) * scaleY)));
 
     const size_t approxBytes = static_cast<size_t>(pxW) * pxH * 4u;
 
@@ -107,7 +162,7 @@ void TextRenderer::RenderTextCached(const std::wstring &text,
     m_d2dContext->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
 
     D2D1_RECT_F localRect =
-        D2D1::RectF(margin, margin, margin + width, margin + height);
+        D2D1::RectF(-coverLeft, -coverTop, -coverLeft + width, -coverTop + height);
     DrawTextCore(text, localRect, style);
 
     // ターゲット/変換行列/アンチエイリアスモードを復元
@@ -117,7 +172,11 @@ void TextRenderer::RenderTextCached(const std::wstring &text,
 
     RasterCacheEntry entry;
     entry.bitmap = offscreen;
-    entry.marginVirtual = margin;
+    entry.offsetX = coverLeft;
+    entry.offsetY = coverTop;
+    // 画素数を切り上げた分も含め、ビットマップを引き伸ばさずに貼れる大きさにする
+    entry.coverWidth = static_cast<float>(pxW) / scaleX;
+    entry.coverHeight = static_cast<float>(pxH) / scaleY;
     entry.approxBytes = approxBytes;
     entry.lastUsedFrame = m_frameCounter;
 
@@ -135,11 +194,11 @@ void TextRenderer::RenderTextCached(const std::wstring &text,
     return;
   }
 
-  const float margin = it->second.marginVirtual;
+  const auto &cached = it->second;
+  const float left = rect.left + cached.offsetX;
+  const float top = rect.top + cached.offsetY;
   D2D1_RECT_F destRect =
-      D2D1::RectF(rect.left - margin, rect.top - margin,
-                 rect.left - margin + width + margin * 2.0f,
-                 rect.top - margin + height + margin * 2.0f);
+      D2D1::RectF(left, top, left + cached.coverWidth, top + cached.coverHeight);
   m_d2dContext->DrawBitmap(it->second.bitmap.Get(), destRect, 1.0f,
                            D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
 }

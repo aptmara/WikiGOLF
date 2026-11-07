@@ -189,6 +189,85 @@ void TitleScene::SetCourseSelectVisible(core::GameContext& ctx, bool visible) {
 }
 
 /**
+ * @brief 入力中のスタートとゴールを確認します（「確認」ボタンと同じ処理）。
+*/
+void TitleScene::RequestCourseCheck(core::GameContext& ctx) {
+  if (!m_checking && !m_startString.empty() && !m_goalString.empty()) {
+    std::string startUtf8 = title_scene_detail::ExtractWikiTitle(core::ToString(m_startString));
+    std::string goalUtf8 = title_scene_detail::ExtractWikiTitle(core::ToString(m_goalString));
+
+    if (startUtf8 == goalUtf8) {
+      if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"スタートとゴールに同じ記事は指定できません。";
+      m_readyToStart = false;
+    } else if (game::systems::ContentFilter::Instance().IsTitleBlocked(startUtf8) ||
+               game::systems::ContentFilter::Instance().IsTitleBlocked(goalUtf8)) {
+      if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) {
+        p->text = game::systems::ContentFilter::Instance().IsSafeMode()
+                      ? L"指定した記事は、セーフモードまたは内容の制限により使用できません。"
+                      : L"指定した記事は、内容の制限により使用できません。";
+      }
+      m_readyToStart = false;
+    } else {
+      m_checking = true;
+      if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"確認中...";
+      m_checkTask = std::async(std::launch::async, [startUtf8, goalUtf8]() {
+        auto trimW = [](const std::string& str, size_t maxLen) {
+          std::wstring w = core::ToWString(str);
+          if (w.length() <= maxLen) return core::ToString(w);
+          return core::ToString(w.substr(0, maxLen) + L"...");
+        };
+        game::systems::WikiClient wiki;
+        std::string extStart = wiki.FetchPageExtract(startUtf8, 100);
+        if (extStart.empty() || extStart == "ERROR" || extStart == "(Failed to fetch extract)") return std::string("ERROR");
+        std::string extGoal = wiki.FetchPageExtract(goalUtf8, 100);
+        if (extGoal.empty() || extGoal == "ERROR" || extGoal == "(Failed to fetch extract)") return std::string("ERROR");
+        return "【" + startUtf8 + "】\n" + trimW(extStart, 80) + "\n\n【" + goalUtf8 + "】\n" + trimW(extGoal, 80);
+      });
+    }
+  } else if (m_startString.empty() || m_goalString.empty()) {
+    if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"スタートとゴールの両方を入力してください。";
+  }
+}
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+/**
+ * @brief 計測用に、環境変数で指定したページでコース選択を開いて確認まで進めます。
+ * @details WIKIGOLF_DEBUG_COURSE_START と WIKIGOLF_DEBUG_COURSE_GOAL（省略時は「東京」）。
+ *          開く・入力する・確認する・スタートを押す、をプレイヤーと同じ経路で行う。
+ */
+void TitleScene::TryDebugCourseAutoStart(core::GameContext& ctx) {
+  if (m_debugCourseAutoChecked) return;
+  m_debugCourseAutoChecked = true;
+
+  auto readEnv = [](const wchar_t* name) {
+    std::wstring result;
+    wchar_t* value = nullptr;
+    size_t length = 0;
+    if (_wdupenv_s(&value, &length, name) == 0 && value) {
+      result = value;
+      std::free(value);
+    }
+    return result;
+  };
+  std::wstring start = readEnv(L"WIKIGOLF_DEBUG_COURSE_START");
+  if (start.empty()) return;
+  std::wstring goal = readEnv(L"WIKIGOLF_DEBUG_COURSE_GOAL");
+  if (goal.empty()) goal = L"東京";
+
+  LOG_INFO("TitleScene", "Debug auto course: Start='{}', Goal='{}'", core::ToString(start), core::ToString(goal));
+  m_state = TitleState::CourseSelect;
+  SetMainMenuVisible(ctx, false);
+  SetCourseSelectVisible(ctx, true);
+  m_focusIndex = 0;
+  m_startString = std::move(start);
+  m_goalString = std::move(goal);
+  m_readyToStart = false;
+  m_debugCourseAutoStart = true;
+  RequestCourseCheck(ctx);
+}
+#endif
+
+/**
  * @brief コース選択UIの毎フレーム更新処理を行います。
 */
 void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
@@ -327,41 +406,7 @@ void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
         m_readyToStart = false;
       } else if (btn.action == "cs_check") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
-        if (!m_checking && !m_startString.empty() && !m_goalString.empty()) {
-          std::string startUtf8 = title_scene_detail::ExtractWikiTitle(core::ToString(m_startString));
-          std::string goalUtf8 = title_scene_detail::ExtractWikiTitle(core::ToString(m_goalString));
-
-          if (startUtf8 == goalUtf8) {
-            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"スタートとゴールに同じ記事は指定できません。";
-            m_readyToStart = false;
-          } else if (game::systems::ContentFilter::Instance().IsTitleBlocked(startUtf8) ||
-                     game::systems::ContentFilter::Instance().IsTitleBlocked(goalUtf8)) {
-            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) {
-              p->text = game::systems::ContentFilter::Instance().IsSafeMode()
-                            ? L"指定した記事は、セーフモードまたは内容の制限により使用できません。"
-                            : L"指定した記事は、内容の制限により使用できません。";
-            }
-            m_readyToStart = false;
-          } else {
-            m_checking = true;
-            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"確認中...";
-            m_checkTask = std::async(std::launch::async, [startUtf8, goalUtf8]() {
-              auto trimW = [](const std::string& str, size_t maxLen) {
-                std::wstring w = core::ToWString(str);
-                if (w.length() <= maxLen) return core::ToString(w);
-                return core::ToString(w.substr(0, maxLen) + L"...");
-              };
-              game::systems::WikiClient wiki;
-              std::string extStart = wiki.FetchPageExtract(startUtf8, 100);
-              if (extStart.empty() || extStart == "ERROR" || extStart == "(Failed to fetch extract)") return std::string("ERROR");
-              std::string extGoal = wiki.FetchPageExtract(goalUtf8, 100);
-              if (extGoal.empty() || extGoal == "ERROR" || extGoal == "(Failed to fetch extract)") return std::string("ERROR");
-              return "【" + startUtf8 + "】\n" + trimW(extStart, 80) + "\n\n【" + goalUtf8 + "】\n" + trimW(extGoal, 80);
-            });
-          }
-        } else if (m_startString.empty() || m_goalString.empty()) {
-            if (auto* p = ctx.world.Get<components::UIText>(m_previewText)) p->text = L"スタートとゴールの両方を入力してください。";
-        }
+        RequestCourseCheck(ctx);
       } else if (btn.action == "cs_start" && m_readyToStart) {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
         doStart = true;
@@ -375,6 +420,15 @@ void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
     m_state = TitleState::MainMenu;
     m_focusIndex = 0;
   }
+#ifdef WIKIGOLF_DEBUG_TOOLS
+  // 計測用の自動操作: 確認が通ったら「スタート！」を押したのと同じ扱いにする
+  if (m_debugCourseAutoStart && m_readyToStart && !m_checking) {
+    m_debugCourseAutoStart = false;
+    LOG_INFO("TitleScene", "Debug auto course: pressing start.");
+    doStart = true;
+  }
+#endif
+
   if (doStart) {
     StopIntroAudio(ctx);
     game::components::WikiGlobalData data;

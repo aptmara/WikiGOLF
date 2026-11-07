@@ -188,44 +188,71 @@ float4 ShadeMain(PS_INPUT input) {
     float pixelFootprint = max(length(ddx(input.WorldPos)),
                                length(ddy(input.WorldPos)));
 
+    // 以下の手続き模様は、どれも「地表の種類の重み × 模様」で足される。
+    // 重みが 0 の地表では結果に効かないため、計算そのものを飛ばして負荷を下げる
+    // （内蔵 GPU では地形の画素処理がフレームの大半を占める）。
+    const float kDetailWeightEpsilon = 0.001f;
+
     // バンカー専用の微細な砂粒と、風でできた複数スケールの波紋。
     float2 sandWorld = input.WorldPos.xz;
-    float sandGrainFade = ProceduralDetailFade(pixelFootprint, 145.0f);
-    float sandGrainFineFade = ProceduralDetailFade(pixelFootprint, 310.0f);
-    float sandGrain =
-        lerp(0.5f, SandHash(floor(sandWorld * 145.0f)), sandGrainFade);
-    float sandGrainFine =
-        lerp(0.5f, SandHash(floor(sandWorld * 310.0f + 17.0f)), sandGrainFineFade);
-    float windRippleA = sin(dot(sandWorld, float2(0.94f, 0.34f)) * 18.0f +
-                            sin(sandWorld.y * 2.7f) * 0.65f);
-    float windRippleB = sin(dot(sandWorld, float2(-0.28f, 0.96f)) * 7.5f +
-                            windRippleA * 0.55f);
-    float sandShade = 0.91f + sandGrain * 0.13f + sandGrainFine * 0.045f +
-                      windRippleA * 0.035f + windRippleB * 0.022f;
-    float3 warmSand = baseColor.rgb * sandShade * float3(1.06f, 1.00f, 0.88f);
-    baseColor.rgb = lerp(baseColor.rgb, warmSand, bunkerWeight);
+    float sandGrainFade = 0.0f;
+    float sandGrainFineFade = 0.0f;
+    float sandGrain = 0.5f;
+    float sandGrainFine = 0.5f;
+    [branch]
+    if (bunkerWeight > kDetailWeightEpsilon) {
+        sandGrainFade = ProceduralDetailFade(pixelFootprint, 145.0f);
+        sandGrainFineFade = ProceduralDetailFade(pixelFootprint, 310.0f);
+        sandGrain =
+            lerp(0.5f, SandHash(floor(sandWorld * 145.0f)), sandGrainFade);
+        sandGrainFine =
+            lerp(0.5f, SandHash(floor(sandWorld * 310.0f + 17.0f)), sandGrainFineFade);
+        float windRippleA = sin(dot(sandWorld, float2(0.94f, 0.34f)) * 18.0f +
+                                sin(sandWorld.y * 2.7f) * 0.65f);
+        float windRippleB = sin(dot(sandWorld, float2(-0.28f, 0.96f)) * 7.5f +
+                                windRippleA * 0.55f);
+        float sandShade = 0.91f + sandGrain * 0.13f + sandGrainFine * 0.045f +
+                          windRippleA * 0.035f + windRippleB * 0.022f;
+        float3 warmSand = baseColor.rgb * sandShade * float3(1.06f, 1.00f, 0.88f);
+        baseColor.rgb = lerp(baseColor.rgb, warmSand, bunkerWeight);
+    }
 
     // 中遠距離でも短芝が連続面に見えるよう、刈り方向へ伸びる
     // 複数スケールの微細繊維と、葉が倒れる向きの反転を加える。
     float2 turfWorld = input.WorldPos.xz;
-    float fairwayFiber = lerp(kTurfFiberMean,
-        TurfFibers(turfWorld, float2(0.0f, 1.0f), 18.0f),
-        ProceduralDetailFade(pixelFootprint, 18.0f));
-    float fairwayFiberFine = lerp(kTurfFiberMean,
-        TurfFibers(turfWorld + 9.4f, float2(0.0f, 1.0f), 38.0f),
-        ProceduralDetailFade(pixelFootprint, 38.0f));
-    float roughFiber = lerp(kTurfFiberMean,
-        TurfFibers(turfWorld, float2(0.64f, 0.77f), 11.0f),
-        ProceduralDetailFade(pixelFootprint, 11.0f));
-    float roughFiberFine = lerp(kTurfFiberMean,
-        TurfFibers(turfWorld + 13.7f, float2(-0.38f, 0.92f), 24.0f),
-        ProceduralDetailFade(pixelFootprint, 24.0f));
-    float greenFiber = lerp(kTurfFiberMean,
-        TurfFibers(turfWorld, float2(1.0f, 0.0f), 30.0f),
-        ProceduralDetailFade(pixelFootprint, 30.0f));
-    float greenFiberFine = lerp(kTurfFiberMean,
-        TurfFibers(turfWorld + 21.6f, float2(1.0f, 0.0f), 56.0f),
-        ProceduralDetailFade(pixelFootprint, 56.0f));
+    float fairwayFiber = kTurfFiberMean;
+    float fairwayFiberFine = kTurfFiberMean;
+    float roughFiber = kTurfFiberMean;
+    float roughFiberFine = kTurfFiberMean;
+    float greenFiber = kTurfFiberMean;
+    float greenFiberFine = kTurfFiberMean;
+    [branch]
+    if (fairwayWeight > kDetailWeightEpsilon) {
+        fairwayFiber = lerp(kTurfFiberMean,
+            TurfFibers(turfWorld, float2(0.0f, 1.0f), 18.0f),
+            ProceduralDetailFade(pixelFootprint, 18.0f));
+        fairwayFiberFine = lerp(kTurfFiberMean,
+            TurfFibers(turfWorld + 9.4f, float2(0.0f, 1.0f), 38.0f),
+            ProceduralDetailFade(pixelFootprint, 38.0f));
+    }
+    [branch]
+    if (roughWeight > kDetailWeightEpsilon) {
+        roughFiber = lerp(kTurfFiberMean,
+            TurfFibers(turfWorld, float2(0.64f, 0.77f), 11.0f),
+            ProceduralDetailFade(pixelFootprint, 11.0f));
+        roughFiberFine = lerp(kTurfFiberMean,
+            TurfFibers(turfWorld + 13.7f, float2(-0.38f, 0.92f), 24.0f),
+            ProceduralDetailFade(pixelFootprint, 24.0f));
+    }
+    [branch]
+    if (greenWeight > kDetailWeightEpsilon) {
+        greenFiber = lerp(kTurfFiberMean,
+            TurfFibers(turfWorld, float2(1.0f, 0.0f), 30.0f),
+            ProceduralDetailFade(pixelFootprint, 30.0f));
+        greenFiberFine = lerp(kTurfFiberMean,
+            TurfFibers(turfWorld + 21.6f, float2(1.0f, 0.0f), 56.0f),
+            ProceduralDetailFade(pixelFootprint, 56.0f));
+    }
 
     float fairwayStripeWave = sin(turfWorld.x * (6.28318f / 3.2f));
     float greenStripeWave = sin(turfWorld.y * (6.28318f / 1.8f));
@@ -282,11 +309,14 @@ float4 ShadeMain(PS_INPUT input) {
     N = normalize(lerp(N, fairwayMowNormal, fairwayWeight * 0.82f));
     N = normalize(lerp(N, greenMowNormal, greenWeight * 0.72f));
 
-    float sandDx = (SandHash(floor((sandWorld + float2(0.008f, 0.0f)) * 145.0f)) -
-                    sandGrain) * sandGrainFade;
-    float sandDz = (SandHash(floor((sandWorld + float2(0.0f, 0.008f)) * 145.0f)) -
-                    sandGrain) * sandGrainFade;
-    N = normalize(N + float3(sandDx, 0.0f, sandDz) * bunkerWeight * 0.18f);
+    [branch]
+    if (bunkerWeight > kDetailWeightEpsilon) {
+        float sandDx = (SandHash(floor((sandWorld + float2(0.008f, 0.0f)) * 145.0f)) -
+                        sandGrain) * sandGrainFade;
+        float sandDz = (SandHash(floor((sandWorld + float2(0.0f, 0.008f)) * 145.0f)) -
+                        sandGrain) * sandGrainFade;
+        N = normalize(N + float3(sandDx, 0.0f, sandDz) * bunkerWeight * 0.18f);
+    }
 
     // 4. ライティング
     float3 L = normalize(-LightDir.xyz); 
@@ -318,11 +348,14 @@ float4 ShadeMain(PS_INPUT input) {
     finalColor.rgb += lightColor * turfSheen;
 
     // ごく一部の砂粒だけが強く反射し、均一な黄色い面に見えるのを防ぐ。
-    float viewFacing = saturate(dot(N, V));
-    float grainSparkle = pow(saturate(sandGrainFine), 24.0f) *
-                         pow(viewFacing, 5.0f) * diff * sandGrainFineFade;
-    finalColor.rgb += bunkerWeight * grainSparkle *
-                      float3(0.42f, 0.31f, 0.13f);
+    [branch]
+    if (bunkerWeight > kDetailWeightEpsilon) {
+        float viewFacing = saturate(dot(N, V));
+        float grainSparkle = pow(saturate(sandGrainFine), 24.0f) *
+                             pow(viewFacing, 5.0f) * diff * sandGrainFineFade;
+        finalColor.rgb += bunkerWeight * grainSparkle *
+                          float3(0.42f, 0.31f, 0.13f);
+    }
     
     // 6. フォグ
     // CameraPos.w はマップビュー時に0(フォグ無効)、通常時は1になる

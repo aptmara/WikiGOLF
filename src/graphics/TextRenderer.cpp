@@ -202,6 +202,7 @@ void TextRenderer::Shutdown() {
   m_brushCache.Clear();
   m_bitmapCache.clear();
   m_srvBitmapCache.clear();
+  m_tintedBitmapCache.clear();
   m_layoutCache.clear();
   m_rasterCache.clear();
   m_rasterCacheBytes = 0;

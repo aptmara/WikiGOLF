@@ -530,18 +530,32 @@ void WikiTerrainSystem::UpdateSkyGlobes(core::GameContext &ctx, float dt) {
         }
       });
 
+  // 画質プリセットで出し方を変える。設定画面で変えてもすぐ反映されるよう毎フレーム読む。
+  core::GraphicsPreset preset = core::GraphicsPreset::High;
+  if (ctx.displaySettings) {
+    preset = ctx.displaySettings->GetEffectiveGraphicsPreset();
+  }
+  const SkyGlobeQuality quality = GetSkyGlobeQuality(preset);
+
   for (auto &globe : m_skyGlobes) {
     auto *transform = ctx.world.Get<Transform>(globe.entity);
     if (!transform) {
       continue;
     }
-    if (hasCamera) {
+    if (auto *renderer = ctx.world.Get<MeshRenderer>(globe.entity)) {
+      renderer->isVisible = quality.visible;
+    }
+    if (!quality.visible) {
+      continue;
+    }
+    if (hasCamera || !quality.useDistanceLod) {
       const float dx = globe.basePosition.x - cameraPosition.x;
       const float dy = globe.basePosition.y - cameraPosition.y;
       const float dz = globe.basePosition.z - cameraPosition.z;
       const float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
-      const int lod = SelectSkyGlobeLod(distance, globe.scale * kSkyGlobeModelRadius,
-                                        globe.lod);
+      const int distanceLod = SelectSkyGlobeLod(
+          distance, globe.scale * kSkyGlobeModelRadius, globe.lod);
+      const int lod = ApplySkyGlobeQualityToLod(quality, distanceLod);
       if (lod != globe.lod) {
         if (auto *renderer = ctx.world.Get<MeshRenderer>(globe.entity)) {
           ApplyGlobeModel(*renderer, ctx.resource, lod);
