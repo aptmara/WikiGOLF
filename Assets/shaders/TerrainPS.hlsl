@@ -181,8 +181,8 @@ void FindMaterialBlend(float3 color, out float layerA, out float layerB,
  * @return 陰影・マテリアル合成済みピクセルカラー
  */
 float4 ShadeMain(PS_INPUT input) {
-    // カップの開口部は描かず、下のカップ内壁を見せる
-    ClipGolfCupOpening(input.WorldPos);
+    // カップの開口部のくり抜きは、先に深度だけを書くパス（TerrainDepthPS）で済ませてある。
+    // ここで discard すると隠れた画素を早期に捨てられなくなるので、行わない。
 
     // UVスケール適用
     float uvScale = max(MaterialFlags.z, 1.0f);

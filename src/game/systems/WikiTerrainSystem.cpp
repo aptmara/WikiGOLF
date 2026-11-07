@@ -321,6 +321,7 @@ void WikiTerrainSystem::CreateFloor(core::GameContext &ctx,
     meshRenderer.articleOverlaySRV = tile.srv;
     meshRenderer.articleOverlayUv =
         TerrainLayoutRules::ComputeArticleOverlayUv(width, depth, vStart, vEnd);
+    meshRenderer.terrainBoundsXZ = {-width * 0.5f, zBottom, width * 0.5f, zTop};
 
     // ミニマップ専用の間引き済みメッシュ（本描画用のフル解像度メッシュとは別物）
     float tileMaxHeight = 0.0f;
@@ -457,6 +458,17 @@ void WikiTerrainSystem::CreateBackdropMeshes(
     mr.normalMapSRV = normal;
     mr.hasNormalMap = static_cast<bool>(normal);
     mr.customFlags = {2.0f, 0.0f, 0.0f, 0.0f};
+    // XZ 範囲（カップに掛からない山並みは、深度パスでくり抜き処理を省く）
+    if (!chunks[i].vertices.empty()) {
+      XMFLOAT4 bounds = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX};
+      for (const auto &v : chunks[i].vertices) {
+        bounds.x = (std::min)(bounds.x, v.position.x);
+        bounds.y = (std::min)(bounds.y, v.position.z);
+        bounds.z = (std::max)(bounds.z, v.position.x);
+        bounds.w = (std::max)(bounds.w, v.position.z);
+      }
+      mr.terrainBoundsXZ = bounds;
+    }
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
   }

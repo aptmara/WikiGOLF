@@ -350,6 +350,8 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
     mr.articleOverlaySRV = tile.srv;
     mr.articleOverlayUv =
         TerrainLayoutRules::ComputeArticleOverlayUv(fieldW, fieldD, vStart, vEnd);
+    mr.terrainBoundsXZ = {-fieldW * 0.5f, fieldD * (0.5f - vEnd),
+                          fieldW * 0.5f, fieldD * (0.5f - vStart)};
 
     // ミニマップ専用の間引き済みメッシュ（本描画用のフル解像度メッシュとは別物）
     {

@@ -73,6 +73,7 @@ struct RenderState {
   ComPtr<ID3D11BlendState> multiplyBlendState;
   ComPtr<ID3D11BlendState> addBlendState;
   ComPtr<ID3D11DepthStencilState> transparentDepthState;
+  ComPtr<ID3D11DepthStencilState> depthEqualState;
   ComPtr<ID3D11RasterizerState> twoSidedRasterizerState;
   ComPtr<ID3D11Buffer> instancedBuffer;
   ComPtr<ID3D11ShaderResourceView> instancedSRV;
@@ -221,6 +222,14 @@ void RenderSystem(core::GameContext &ctx) {
     device->CreateDepthStencilState(&transparentDepthDesc,
                                    &newState.transparentDepthState);
 
+    // 地形の本描画: 先に深度だけ書いたので、深度が一致する画素だけを塗る
+    D3D11_DEPTH_STENCIL_DESC depthEqualDesc = {};
+    depthEqualDesc.DepthEnable = TRUE;
+    depthEqualDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+    depthEqualDesc.DepthFunc = D3D11_COMPARISON_EQUAL;
+    device->CreateDepthStencilState(&depthEqualDesc,
+                                   &newState.depthEqualState);
+
     D3D11_RASTERIZER_DESC rasterizerDesc = {};
     rasterizerDesc.FillMode = D3D11_FILL_SOLID;
     rasterizerDesc.CullMode = D3D11_CULL_NONE;
@@ -336,6 +345,9 @@ void RenderSystem(core::GameContext &ctx) {
     return XMLoadFloat4x4(&it->second);
   };
 
+  // 今フレームでくり抜くカップ（地形タイルごとに、掛かるかどうかを判定するのに使う）
+  std::vector<XMFLOAT4> activeCups;
+
   // カップの開口部（地形・オーバーレイ・芝をくり抜く円）をカメラに近い順に設定する
   if (state->golfCupBuffer) {
     PROFILE_SCOPE("RenderSystem.GolfCupClip");
@@ -371,6 +383,10 @@ void RenderSystem(core::GameContext &ctx) {
                       [](const CupCandidate &a, const CupCandidate &b) {
                         return a.distanceSq < b.distanceSq;
                       });
+    activeCups.reserve(cupCount);
+    for (size_t i = 0; i < cupCount; ++i) {
+      activeCups.push_back(candidates[i].cup);
+    }
 
     D3D11_MAPPED_SUBRESOURCE mappedCups;
     if (SUCCEEDED(context->Map(state->golfCupBuffer.Get(), 0,
@@ -400,6 +416,27 @@ void RenderSystem(core::GameContext &ctx) {
   auto particleQuad = ctx.resource.LoadMesh("builtin/quad");
   auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
   auto terrainHandle = ctx.resource.FindShader("Terrain");
+  // 地形の深度だけを書くパス。頂点シェーダーは本描画と同じものを使い、深度を一致させる。
+  // TerrainPS はカップのくり抜きをしないので、地形があるときは必ず用意する。
+  // カップに掛かるタイルはくり抜き付き（TerrainDepth）、それ以外は何もしない版（TerrainDepthFast）。
+  auto terrainDepthHandle = ctx.resource.FindShader("TerrainDepth");
+  auto terrainDepthFastHandle = ctx.resource.FindShader("TerrainDepthFast");
+  if (ctx.resource.GetShader(terrainHandle)) {
+    if (!ctx.resource.GetShader(terrainDepthHandle)) {
+      terrainDepthHandle = ctx.resource.LoadShader(
+          "TerrainDepth", L"Assets/shaders/TerrainVS.hlsl",
+          L"Assets/shaders/TerrainDepthPS.hlsl");
+    }
+    if (!ctx.resource.GetShader(terrainDepthFastHandle)) {
+      terrainDepthFastHandle = ctx.resource.LoadShader(
+          "TerrainDepthFast", L"Assets/shaders/TerrainVS.hlsl",
+          L"Assets/shaders/TerrainDepthFastPS.hlsl");
+    }
+  }
+  const bool terrainDepthPrepassEnabled =
+      ctx.resource.GetShader(terrainHandle) &&
+      ctx.resource.GetShader(terrainDepthHandle) &&
+      ctx.resource.GetShader(terrainDepthFastHandle) && state->depthEqualState;
   // GolfBall は BasicVS.hlsl をそのまま使うピクセルシェーダーのみの派生なので、
   // Basic と同じくインスタンス化対応として扱う必要がある（含めないと
   // g_instances がバインドされない非インスタンス経路に落ち、実質描画されない）。
@@ -432,11 +469,13 @@ void RenderSystem(core::GameContext &ctx) {
     bool isTransparent;
     bool twoSided = false;
     bool usesHtmlTerrainSampler = false;
+    bool terrainCupClip = false; // 地形の深度パスでカップのくり抜きが要るか
 
     bool operator==(const RenderKey &o) const {
       return mesh == o.mesh && shader == o.shader &&
              textureSRV == o.textureSRV && normalMapSRV == o.normalMapSRV &&
              articleOverlaySRV == o.articleOverlaySRV &&
+             terrainCupClip == o.terrainCupClip &&
              blendMode == o.blendMode && isTransparent == o.isTransparent &&
              twoSided == o.twoSided &&
              usesHtmlTerrainSampler == o.usesHtmlTerrainSampler;
@@ -458,6 +497,7 @@ void RenderSystem(core::GameContext &ctx) {
       h = h * 31 + (k.isTransparent ? 1 : 0);
       h = h * 31 + (k.twoSided ? 1 : 0);
       h = h * 31 + (k.usesHtmlTerrainSampler ? 1 : 0);
+      h = h * 31 + (k.terrainCupClip ? 1 : 0);
       return h;
     }
   };
@@ -594,6 +634,21 @@ void RenderSystem(core::GameContext &ctx) {
         key.normalMapSRV = r.normalMapSRV.Get();
         key.articleOverlaySRV =
             r.shader == terrainHandle ? r.articleOverlaySRV.Get() : nullptr;
+        if (r.shader == terrainHandle) {
+          const auto &b = r.terrainBoundsXZ;
+          if (b.z <= b.x || b.w <= b.y) {
+            key.terrainCupClip = !activeCups.empty(); // 範囲が分からないときは安全側
+          } else {
+            for (const auto &cup : activeCups) {
+              const float margin = cup.w + 0.5f;
+              if (cup.x + margin >= b.x && cup.x - margin <= b.z &&
+                  cup.z + margin >= b.y && cup.z - margin <= b.w) {
+                key.terrainCupClip = true;
+                break;
+              }
+            }
+          }
+        }
         key.blendMode = r.blendMode;
         key.isTransparent = r.isTransparent;
         key.usesHtmlTerrainSampler =
@@ -656,11 +711,16 @@ void RenderSystem(core::GameContext &ctx) {
   }
 
   // バケットごとの描画関数
-  auto DrawBucket = [&](const RenderKey &key, const std::vector<RenderInstance> &instances) {
+  // depthPrepass=true: 地形の深度だけを書く（TerrainDepth シェーダー、色は書かない）
+  auto DrawBucket = [&](const RenderKey &key, const std::vector<RenderInstance> &instances,
+                        bool depthPrepass = false) {
     if (instances.empty()) return;
 
     auto *mesh = ctx.resource.GetMesh(key.mesh);
-    auto *shader = ctx.resource.GetShader(key.shader);
+    auto *shader = ctx.resource.GetShader(
+        !depthPrepass ? key.shader
+        : key.terrainCupClip ? terrainDepthHandle
+                             : terrainDepthFastHandle);
 
     if (!mesh || !shader) {
       stats.missingResourceSkipped += instances.size();
@@ -670,6 +730,9 @@ void RenderSystem(core::GameContext &ctx) {
     ID3D11DepthStencilState *depthState = nullptr;
     if (key.isTransparent) {
       depthState = state->transparentDepthState.Get();
+    } else if (!depthPrepass && terrainDepthPrepassEnabled &&
+               key.shader == terrainHandle) {
+      depthState = state->depthEqualState.Get();
     }
     context->OMSetDepthStencilState(depthState, 0);
 
@@ -861,6 +924,17 @@ void RenderSystem(core::GameContext &ctx) {
       if (key.shader == basicHandle) return "GPU.Meshes.Basic";
       return "GPU.Meshes.Other";
     };
+
+    // 地形は先に深度だけを書き、カップの開口部もここでくり抜く。
+    // 本描画は深度が一致する画素だけを塗るので、隠れた画素の重い計算が走らない。
+    if (terrainDepthPrepassEnabled) {
+      graphics::ScopedGpuTimer gpuTimer(ctx.graphics, "GPU.Meshes.TerrainDepth");
+      for (const auto &pair : opaqueBuckets) {
+        if (pair.first.shader == terrainHandle) {
+          DrawBucket(pair.first, pair.second, true);
+        }
+      }
+    }
 
     // 不透明描画実行
     for (const auto &pair : opaqueBuckets) {

@@ -42,6 +42,11 @@ void LoadingScene::BuildGameplayPreloadQueue() {
   m_preloadTasks.emplace_back([](core::GameContext &ctx) {
     ctx.resource.LoadShader("Terrain", L"Assets/shaders/TerrainVS.hlsl",
                             L"Assets/shaders/TerrainPS.hlsl");
+    // 地形の深度だけを先に書くパス（カップのくり抜きもここで行う）
+    ctx.resource.LoadShader("TerrainDepth", L"Assets/shaders/TerrainVS.hlsl",
+                            L"Assets/shaders/TerrainDepthPS.hlsl");
+    ctx.resource.LoadShader("TerrainDepthFast", L"Assets/shaders/TerrainVS.hlsl",
+                            L"Assets/shaders/TerrainDepthFastPS.hlsl");
   });
   m_preloadTasks.emplace_back([](core::GameContext &ctx) {
     ctx.resource.LoadShader("Wall", L"Assets/shaders/WallVS.hlsl",

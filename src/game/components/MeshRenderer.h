@@ -72,6 +72,10 @@ struct MeshRenderer {
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> articleOverlaySRV;
   // ワールド座標→記事テクスチャ UV。u = x * X + 0.5、v = z * Y + Z。W は未使用。
   DirectX::XMFLOAT4 articleOverlayUv = {0, 0, 0, 0};
+
+  // 地形タイルの XZ 範囲（minX, minZ, maxX, maxZ）。カップに掛かるタイルだけ
+  // くり抜き付きで深度を書くために使う。未設定（max <= min）なら常にくり抜き付き。
+  DirectX::XMFLOAT4 terrainBoundsXZ = {0, 0, 0, 0};
 };
 
 } // namespace game::components
