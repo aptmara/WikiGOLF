@@ -59,6 +59,7 @@ bool ArticlePaperEffect::Spawn(core::GameContext &ctx, const Setup &setup) {
 
   using namespace DirectX;
   m_eye = setup.cameraPosition;
+  m_dimColor = setup.dimColor;
   const XMVECTOR eye = XMLoadFloat3(&setup.cameraPosition);
   const XMVECTOR view = XMVector3Normalize(
       XMVectorSubtract(XMLoadFloat3(&setup.focusPosition), eye));
@@ -124,7 +125,8 @@ bool ArticlePaperEffect::Spawn(core::GameContext &ctx, const Setup &setup) {
     m_strips.push_back({entity, {0.0f, strip.bottomOffset, 0.0f}});
   }
 
-  Update(ctx, 0.0f, 1.0f);
+  // 白い紙が1フレームでも見えないよう、暗い状態で立てる
+  Update(ctx, 0.0f, 1.0f, 0.0f);
   return true;
 }
 
@@ -178,7 +180,7 @@ void ArticlePaperEffect::AddBand(core::GameContext &ctx, float virtualTop,
   renderer.blendMode = components::BlendMode::Alpha;
   // FadeFactor 0 は記事を貼らない白紙。色は color で付ける
   renderer.customFlags = {0.0f, 0.0f, 0.0f, 0.0f};
-  m_strips.push_back({entity, bottom.local});
+  m_strips.push_back({entity, bottom.local, color});
 }
 
 void ArticlePaperEffect::Attach(ecs::Entity entity,
@@ -209,7 +211,9 @@ DirectX::XMFLOAT3 ArticlePaperEffect::ToWorld(const DirectX::XMFLOAT3 &local,
 }
 
 void ArticlePaperEffect::Update(core::GameContext &ctx, float fallProgress,
-                                float opacity) {
+                                float opacity, float brightness) {
+  const float t = std::clamp(brightness, 0.0f, 1.0f);
+  auto mix = [t](float dim, float full) { return dim + (full - dim) * t; };
   const float angle = utils::CalculatePaperAngle(fallProgress, m_standAngle);
   DirectX::XMFLOAT4 rotation;
   DirectX::XMStoreFloat4(
@@ -223,7 +227,9 @@ void ArticlePaperEffect::Update(core::GameContext &ctx, float fallProgress,
     }
     if (auto *renderer =
             ctx.world.Get<components::MeshRenderer>(strip.entity)) {
-      renderer->color.w = opacity;
+      renderer->color = {mix(m_dimColor.x, strip.color.x),
+                         mix(m_dimColor.y, strip.color.y),
+                         mix(m_dimColor.z, strip.color.z), opacity};
       renderer->isVisible = opacity > 0.01f;
     }
   }

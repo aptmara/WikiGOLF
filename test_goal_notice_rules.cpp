@@ -21,6 +21,30 @@ int main() {
   assert(Near(CalculatePaperAngle(0.0f, 0.4f), 0.4f));
   assert(Near(CalculatePaperAngle(1.0f, 0.4f), DirectX::XM_PIDIV2));
 
+  // 紙はロード画面の背景色から明るくなり、時刻 0 で本来の色になる
+  for (const ArticleArrivalTiming &arrival : {kRoundStartArrival, kShortArrival}) {
+    assert(arrival.fadeInDuration > 0.0f);
+    assert(CalculatePaperBrightness(arrival.Begin(), arrival) == 0.0f);
+    assert(Near(CalculatePaperBrightness(0.0f, arrival), 1.0f));
+    assert(CalculatePaperBrightness(arrival.fallStart, arrival) == 1.0f);
+    // 明るくなる間は紙は立ったまま、不透明のまま（後ろの地形を透かさない）
+    assert(CalculatePaperFallProgress(arrival.Begin(), arrival) == 0.0f);
+    assert(CalculatePaperOpacity(arrival.Begin(), arrival) == 1.0f);
+    // 入力は前の画面の分を無視する
+    assert(ResolveGoalNoticeAdvance(arrival.Begin() + 0.1f, arrival) ==
+           arrival.Begin() + 0.1f);
+  }
+  // 立ち上がりは速め（中間で半分より明るい）で、単調に増える
+  const float midFade = timing.Begin() + timing.fadeInDuration * 0.5f;
+  assert(CalculatePaperBrightness(midFade, timing) > 0.5f);
+  assert(CalculatePaperBrightness(midFade, timing) <
+         CalculatePaperBrightness(midFade + 0.05f, timing));
+  // 道のりは紙が明るくなり切るまで出さない
+  assert(CalculateRouteOpacity(timing.Begin(), timing) == 0.0f);
+  assert(CalculateRouteLineProgress(timing.Begin()) == 0.0f);
+  // 明るくなる時間を持たない設定は、最初から本来の色
+  assert(CalculatePaperBrightness(-1.0f, ArticleArrivalTiming{1.0f, 1.0f}) == 1.0f);
+
   // 紙は倒れる時間の後半で消える
   assert(CalculatePaperOpacity(timing.fallStart, timing) == 1.0f);
   assert(Near(CalculatePaperOpacity(

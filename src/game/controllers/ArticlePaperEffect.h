@@ -42,6 +42,8 @@ public:
     float cameraFov = 0.0f;
     float cameraAspect = 16.0f / 9.0f;
     std::function<float(float, float)> groundHeight; ///< 地面の高さ (x, z)
+    /** @brief 明るさ 0 のときの色です。直前の画面の背景色に合わせます。*/
+    DirectX::XMFLOAT3 dimColor{1.0f, 1.0f, 1.0f};
   };
 
   /**
@@ -61,11 +63,13 @@ public:
   bool Spawn(core::GameContext &ctx, const Setup &setup);
 
   /**
-   * @brief 紙の傾きと不透明度を更新します。
+   * @brief 紙の傾きと不透明度、明るさを更新します。
    * @param fallProgress 0で立った状態、1で地面と平行です。
    * @param opacity 不透明度です。貼り付けた物体にも同じ値を使います。
+   * @param brightness 0で Setup::dimColor、1で本来の色です。紙と帯だけに使います。
   */
-  void Update(core::GameContext &ctx, float fallProgress, float opacity);
+  void Update(core::GameContext &ctx, float fallProgress, float opacity,
+              float brightness = 1.0f);
 
   /** @brief 紙と貼り付けた物体を破棄します。*/
   void Shutdown(core::GameContext &ctx);
@@ -101,6 +105,7 @@ private:
   struct StripEntity {
     ecs::Entity entity = UINT32_MAX;
     DirectX::XMFLOAT3 local{}; ///< 帯の下辺中央の位置
+    DirectX::XMFLOAT3 color{1.0f, 1.0f, 1.0f}; ///< 明るさ 1 のときの色
   };
 
   /** @brief 紙に貼り付けた物体です。*/
@@ -116,6 +121,7 @@ private:
   std::vector<AttachedEntity> m_attached;
   DirectX::XMFLOAT3 m_hinge{};  ///< 紙の下辺の中央（倒れるときの軸）
   DirectX::XMFLOAT3 m_eye{};    ///< 紙を立てたときのカメラ位置
+  DirectX::XMFLOAT3 m_dimColor{1.0f, 1.0f, 1.0f}; ///< 明るさ 0 のときの色
   float m_standAngle = 0.0f;
   float m_distance = 0.0f;      ///< カメラから紙までの距離
   float m_paperWidth = 0.0f;

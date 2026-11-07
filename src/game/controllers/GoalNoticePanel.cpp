@@ -25,7 +25,9 @@ void GoalNoticePanel::Initialize(core::GameContext &ctx,
   m_courseInfo.Initialize(ctx);
   m_courseInfo.SetPages(ctx, content.currentTitle, content.goalTitle);
   m_courseInfo.SetVisible(ctx, true);
-  m_courseInfo.SetOpacity(ctx, 1.0f);
+  // 紙が明るくなるのに合わせて出す（Update）
+  m_courseInfoOpacity = 0.0f;
+  m_courseInfo.SetOpacity(ctx, m_courseInfoOpacity);
 
   if (content.useVeil) {
     m_veil = m_entityOwner.Create(ctx.world);
@@ -41,6 +43,12 @@ void GoalNoticePanel::Update(core::GameContext &ctx, float elapsed,
   if (auto *text = ctx.world.Get<components::UIText>(m_veil)) {
     text->opacity = utils::CalculatePaperOpacity(elapsed, timing);
     text->visible = text->opacity > 0.001f;
+  }
+  const float courseInfoOpacity =
+      utils::CalculatePaperBrightness(elapsed, timing);
+  if (courseInfoOpacity != m_courseInfoOpacity) {
+    m_courseInfoOpacity = courseInfoOpacity;
+    m_courseInfo.SetOpacity(ctx, m_courseInfoOpacity);
   }
 }
 

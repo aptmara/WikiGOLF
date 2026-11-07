@@ -47,6 +47,12 @@ constexpr float kShotCaptionPadding = 20.0f;
 constexpr std::size_t kMaximumFeaturedOneHopHoles = 3;
 constexpr std::size_t kLongShotTitleCharacters = 18;
 
+// 読み込みが 100% になってから、その表示を見せておく時間（秒）
+constexpr float kBuildCompleteHold = 0.5f;
+
+// ロード画面の背景色。記事の紙はこの色から明るくなるので、切り替わりが目立たない
+constexpr DirectX::XMFLOAT3 kTransitionBackgroundColor = {0.08f, 0.14f, 0.28f};
+
 /**
  * @brief 開始時刻からの経過時間をミリ秒で返します。
 */
@@ -221,7 +227,8 @@ void ArticleTransitionController::SpawnEntities(core::GameContext& ctx) {
     auto& bgMr = ctx.world.Add<components::MeshRenderer>(m_bgEntity);
     bgMr.mesh = ctx.resource.LoadMesh("builtin/cube");
     bgMr.shader = shaderHandle;
-    bgMr.color = {0.08f, 0.14f, 0.28f, 1.0f};
+    bgMr.color = {kTransitionBackgroundColor.x, kTransitionBackgroundColor.y,
+                  kTransitionBackgroundColor.z, 1.0f};
     bgMr.isTransparent = false;
     bgMr.isVisible = true;
 
@@ -431,10 +438,19 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                              "total={}ms",
                              m_targetPage, ElapsedMs(m_buildStartedAt),
                              ElapsedMs(m_transitionStartedAt));
-                    BeginCourseIntroduction(ctx);
+                    // 表示は次のフレームで 100% になる。それを見せてから紹介へ移る
+                    m_buildCompleteTimer = 0.0f;
+                    m_phase = Phase::BuildComplete;
                 }
             } else {
                 m_phase = Phase::FadeOut;
+            }
+            break;
+
+        case Phase::BuildComplete:
+            m_buildCompleteTimer += dt;
+            if (m_buildCompleteTimer >= kBuildCompleteHold) {
+                BeginCourseIntroduction(ctx);
             }
             break;
 
@@ -823,21 +839,15 @@ void ArticleTransitionController::BeginArticleArrival(
     core::GameContext& ctx, const scenes::CourseIntroductionData& data,
     const DirectX::XMFLOAT3& cameraPosition,
     const DirectX::XMFLOAT3& focusPosition) {
-    // ロード画面の文字は巡回で再利用するまで隠す
-    const std::array<ecs::Entity, 3> loadingUi = {
-        m_textEntity, m_progressTextEntity, m_captionTextEntity};
-    for (ecs::Entity entity : loadingUi) {
-        if (auto* text = ctx.world.Get<components::UIText>(entity)) {
-            text->visible = false;
-        }
-    }
+    // ロード画面の文字は、紙が明るくなるのに合わせて消す（UpdateArrivalFadeIn）
 
     // ラウンド開始時だけゴールを案内して巡回する。2記事目以降は紙が倒れるだけ
     m_arrivalIsRoundStart = m_goalNoticeRequested;
     m_goalNoticeRequested = false;
     m_arrivalTiming = m_arrivalIsRoundStart ? game::utils::kRoundStartArrival
                                             : game::utils::kShortArrival;
-    m_arrivalElapsed = 0.0f;
+    // 紙は背景色から明るくなる。明るくなり切った時刻が 0
+    m_arrivalElapsed = m_arrivalTiming.Begin();
 
     ArticlePaperEffect::Setup paper;
     if (const auto* tiles = m_pageLoader->GetArticleTiles()) {
@@ -857,6 +867,7 @@ void ArticleTransitionController::BeginArticleArrival(
     }
     // カメラの値は生成時のままなので、描画と同じ実際の縦横比を使う
     paper.cameraAspect = ctx.graphics.GetAspectRatio();
+    paper.dimColor = kTransitionBackgroundColor;
     paper.groundHeight = [loader = m_pageLoader](float x, float z) {
         return loader->GetTerrainVisualHeight(x, z);
     };
@@ -893,9 +904,10 @@ void ArticleTransitionController::BeginArticleArrival(
         ShowIntroductionSkipButton(ctx);
     }
     m_goalNoticePanel.Initialize(ctx, content);
-    m_goalNoticePanel.Update(ctx, 0.0f, m_arrivalTiming);
-    m_goalRoute.Update(ctx, 0.0f, m_arrivalTiming, m_articlePaper);
-    m_articlePaper.Update(ctx, 0.0f, 1.0f);
+    m_goalNoticePanel.Update(ctx, m_arrivalElapsed, m_arrivalTiming);
+    m_goalRoute.Update(ctx, m_arrivalElapsed, m_arrivalTiming, m_articlePaper);
+    m_articlePaper.Update(ctx, 0.0f, 1.0f, 0.0f);
+    UpdateArrivalFadeIn(ctx);
 
     LOG_INFO("Transition", "Article arrival page='{}' roundStart={} paper={}",
              data.pageName, m_arrivalIsRoundStart, hasPaper);
@@ -924,7 +936,10 @@ void ArticleTransitionController::UpdateArticleArrival(
         ctx,
         game::utils::CalculatePaperFallProgress(m_arrivalElapsed,
                                                 m_arrivalTiming),
-        game::utils::CalculatePaperOpacity(m_arrivalElapsed, m_arrivalTiming));
+        game::utils::CalculatePaperOpacity(m_arrivalElapsed, m_arrivalTiming),
+        game::utils::CalculatePaperBrightness(m_arrivalElapsed,
+                                              m_arrivalTiming));
+    UpdateArrivalFadeIn(ctx);
     m_goalNoticePanel.Update(ctx, m_arrivalElapsed, m_arrivalTiming);
 
     if (m_arrivalElapsed < m_arrivalTiming.End()) {
@@ -942,6 +957,27 @@ void ArticleTransitionController::UpdateArticleArrival(
     m_introductionShotTimer = 0.0f;
     m_phase = Phase::CourseIntroduction;
     ApplyCourseIntroductionShot(ctx);
+}
+
+void ArticleTransitionController::UpdateArrivalFadeIn(core::GameContext& ctx) {
+    const float brightness =
+        game::utils::CalculatePaperBrightness(m_arrivalElapsed, m_arrivalTiming);
+    // ロード画面の文字は紙と入れ替わるように消し、巡回で再利用するまで隠す
+    const std::array<ecs::Entity, 3> loadingUi = {
+        m_textEntity, m_progressTextEntity, m_captionTextEntity};
+    for (ecs::Entity entity : loadingUi) {
+        if (auto* text = ctx.world.Get<components::UIText>(entity)) {
+            if (brightness >= 1.0f) {
+                text->visible = false;
+                text->opacity = 1.0f;
+            } else if (text->visible) {
+                text->opacity = 1.0f - brightness;
+            }
+        }
+    }
+    if (auto* skip = ctx.world.Get<components::UIText>(m_introductionSkipEntity)) {
+        skip->opacity = brightness;
+    }
 }
 
 void ArticleTransitionController::ShowIntroductionSkipButton(
@@ -1152,6 +1188,7 @@ void ArticleTransitionController::FinishCourseIntroduction(
     for (ecs::Entity entity : introductionUi) {
         if (auto* text = ctx.world.Get<components::UIText>(entity)) {
             text->visible = false;
+            text->opacity = 1.0f; // 紙が明るくなる途中で飛ばされた場合に戻す
         }
     }
     m_fadeAlpha = 0.0f;

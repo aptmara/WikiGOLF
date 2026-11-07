@@ -13,18 +13,40 @@
 
 namespace game::utils {
 
-/** @brief 記事の紙が立っている時間と、倒れる時間です（秒）。*/
+/**
+ * @brief 記事の紙が立っている時間と、倒れる時間です（秒）。
+ * @details 時刻 0 は紙が明るくなり切った瞬間です。演出は -fadeInDuration から
+ *          始まり、その間に紙はロード画面の背景色から明るくなります。
+*/
 struct ArticleArrivalTiming {
-  float fallStart = 0.0f;    ///< 紙が倒れ始める時刻
-  float fallDuration = 0.0f; ///< 倒れ終わるまでの時間
+  float fallStart = 0.0f;      ///< 紙が倒れ始める時刻
+  float fallDuration = 0.0f;   ///< 倒れ終わるまでの時間
+  float fadeInDuration = 0.0f; ///< 暗い紙が明るくなり切るまでの時間
 
+  constexpr float Begin() const { return -fadeInDuration; }
   constexpr float End() const { return fallStart + fallDuration; }
 };
 
 /** @brief ラウンド開始時。道のりと旗が立ち終わってから読む時間を取ります。*/
-inline constexpr ArticleArrivalTiming kRoundStartArrival{3.4f, 0.8f};
+inline constexpr ArticleArrivalTiming kRoundStartArrival{3.4f, 0.8f, 0.45f};
 /** @brief 2記事目以降。紙が倒れるだけの短縮版です。*/
-inline constexpr ArticleArrivalTiming kShortArrival{0.25f, 0.95f};
+inline constexpr ArticleArrivalTiming kShortArrival{0.25f, 0.95f, 0.3f};
+
+/**
+ * @brief 紙の明るさを返します。0 でロード画面の背景色、1 で本来の色です。
+ * @details 暗い画面から白い紙へ一気に切り替わらないよう、立ち上がりを速めに
+ *          して（ease out）明るくします。
+*/
+inline float CalculatePaperBrightness(float elapsed,
+                                      const ArticleArrivalTiming &timing) {
+  if (timing.fadeInDuration <= 0.0f) {
+    return 1.0f;
+  }
+  const float t = std::clamp(
+      (elapsed - timing.Begin()) / timing.fadeInDuration, 0.0f, 1.0f);
+  const float rest = 1.0f - t;
+  return 1.0f - rest * rest;
+}
 
 inline constexpr float kGoalNoticeInputLock = 0.2f; ///< 前の画面の入力を拾わない時間
 

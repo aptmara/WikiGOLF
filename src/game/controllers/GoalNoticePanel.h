@@ -35,7 +35,7 @@ public:
   /** @brief UI Entityを生成します。*/
   void Initialize(core::GameContext &ctx, const Content &content);
 
-  /** @brief 経過時間に合わせて、紙の代わりの幕を薄くします。*/
+  /** @brief 経過時間に合わせて、右上の表示を出し、紙の代わりの幕を薄くします。*/
   void Update(core::GameContext &ctx, float elapsed,
               const utils::ArticleArrivalTiming &timing);
 
@@ -44,6 +44,7 @@ public:
 
 private:
   hud::CourseInfoPanel m_courseInfo;
+  float m_courseInfoOpacity = 1.0f; ///< 右上のゴール表示の不透明度
   ecs::EntityOwner m_entityOwner;
   ecs::Entity m_veil = UINT32_MAX;
 };

@@ -79,6 +79,8 @@ private:
                              const DirectX::XMFLOAT3& cameraPosition,
                              const DirectX::XMFLOAT3& focusPosition);
     void UpdateArticleArrival(core::GameContext& ctx, float dt);
+    /** @brief 紙が明るくなる間、ロード画面の文字を消していきます。*/
+    void UpdateArrivalFadeIn(core::GameContext& ctx);
     /** @brief スキップボタンを紹介演出用の見た目にする*/
     void ShowIntroductionSkipButton(core::GameContext& ctx);
     /** @brief スキップボタンのホバー表示を更新し、クリックされたら true を返す*/
@@ -94,6 +96,7 @@ private:
         Loading,
         ErrorWait,
         Building,
+        BuildComplete, ///< 100% を見せてから紹介へ移るまでの待ち
         ArticleArrival,
         CourseIntroduction,
         FadeOut
@@ -191,6 +194,7 @@ private:
 
     bool m_hasError = false;
     float m_errorTimer = 0.0f;
+    float m_buildCompleteTimer = 0.0f; ///< 100% を表示してからの経過時間
     std::wstring m_errorMsg;
 };
 
