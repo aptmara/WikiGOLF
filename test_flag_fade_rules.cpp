@@ -33,5 +33,15 @@ int main() {
       camera, {0.0f, 1.5f, 10.0f}, {0.0f, 1.5f, 8.0f});
   assert(behindGolferAlpha == 1.0f);
 
+  // ロボットは遮らないが、ボールを遮る旗は薄くなる
+  const float blocksBallAlpha = CalculateFlagFadeAlpha(
+      camera, {6.0f, 1.5f, 6.0f}, {0.0f, 1.5f, 8.0f}, {8.0f, 1.5f, 8.0f});
+  assert(blocksBallAlpha == 0.0f);
+
+  // どちらも遮らない旗はそのまま
+  const float clearBothAlpha = CalculateFlagFadeAlpha(
+      camera, {-6.0f, 1.5f, 4.0f}, {0.0f, 1.5f, 8.0f}, {8.0f, 1.5f, 8.0f});
+  assert(clearBothAlpha == 1.0f);
+
   return 0;
 }

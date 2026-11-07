@@ -51,6 +51,11 @@ void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
 
   DirectX::XMFLOAT3 golferCenter = m_clubController->GetGolferPosition();
   golferCenter.y += m_clubController->GetGolferHeight() * 0.5f;
+  // ボールが無いときはロボットの線だけで判定する
+  DirectX::XMFLOAT3 ballPosition = golferCenter;
+  if (const auto *ballTransform = ctx.world.Get<Transform>(m_ballEntity)) {
+    ballPosition = ballTransform->position;
+  }
 
   constexpr float kFadeSpeed = 5.0f;
   ctx.world.Query<HoleFlag>().Each([&](ecs::Entity entity, HoleFlag &flag) {
@@ -64,7 +69,7 @@ void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
     DirectX::XMFLOAT3 flagCenter = holeTransform->position;
     flagCenter.y += 1.5f;
     const float targetAlpha = game::utils::CalculateFlagFadeAlpha(
-        cameraTransform->position, flagCenter, golferCenter);
+        cameraTransform->position, flagCenter, golferCenter, ballPosition);
     const float fadeStep = kFadeSpeed * dt;
     flag.fadeAlpha +=
         std::clamp(targetAlpha - flag.fadeAlpha, -fadeStep, fadeStep);
