@@ -13,6 +13,10 @@
 #define GRASS_MAX_LOD_COUNT 8
 #define GRASS_LEAVES_PER_SHOOT 3
 #define GRASS_TILE_NEAR_CUP 1u
+#define GRASS_MAX_IMPULSES 8
+#define GRASS_IMPULSE_SWING 0
+#define GRASS_IMPULSE_LANDING 1
+#define GRASS_IMPULSE_CUPIN 2
 
 cbuffer GrassFrame : register(b5) {
     matrix GrassViewProjection;  /**< ジッター込み、転置済み */
@@ -21,7 +25,7 @@ cbuffer GrassFrame : register(b5) {
     float4 GrassLight;           /**< xyz: 光の向き、w: 経過時間[秒] */
     float4 GrassShadowParams;    /**< x: 影有効(1/0) */
     float4 GrassFieldRect;       /**< xy: フィールドの最小 x,z、zw: 幅・奥行き */
-    float4 GrassFieldInfo;       /**< x: 高さのオフセット、y: 前フレームの経過時間、z: 前フレームからの秒数 */
+    float4 GrassFieldInfo;       /**< x: 高さのオフセット、y: 前フレームの経過時間、z: 前フレームからの秒数、w: 芝を揺らす出来事の数 */
     int4 GrassHeightInfo;        /**< xy: 高さマップの解像度 */
     float4 GrassWindOrigin;      /**< xy: 風テクスチャの原点、zw: 前フレームの原点 */
     float4 GrassWindParams;      /**< xy: 風下の向き、z: 風の強さ(0〜1)、w: 風速[m/s] */
@@ -34,6 +38,8 @@ cbuffer GrassFrame : register(b5) {
     float4 GrassLayerB[2];       /**< x: 葉の最大の高さ、y: LOD 段数、z: LOD0 のシュート数、w: 有効(1/0) */
     int4 GrassLayerWindow[2];    /**< xy: 窓の最初のタイル、zw: 窓のタイル数 */
     int4 GrassLayerGrid[2];      /**< xy: タイルの数、z: 1区画の容量 */
+    float4 GrassImpulseA[GRASS_MAX_IMPULSES]; /**< xy: 位置 xz、z: 起きた時刻、w: 種類 */
+    float4 GrassImpulseB[GRASS_MAX_IMPULSES]; /**< xy: なびく向き、z: 強さ */
 };
 
 cbuffer GrassDraw : register(b7) {

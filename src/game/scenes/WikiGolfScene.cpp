@@ -29,6 +29,7 @@
 #include "../systems/AchievementEvent.h"
 #include "../systems/AchievementEventBus.h"
 #include "../systems/AchievementManager.h"
+#include "../systems/GrassFieldRenderer.h"
 #include "../systems/PhysicsFriction.h"
 #include "../systems/PhysicsSystem.h"
 #include "../systems/SkyboxRenderSystem.h"
@@ -163,6 +164,12 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
 
       // カップイン時間進行 (1時間)
       m_timeOfDay.OnCupIn(1.0f);
+
+      game::components::GrassImpulse cupInImpulse;
+      cupInImpulse.kind = game::components::GrassImpulseKind::CupIn;
+      cupInImpulse.position = holeT->position;
+      cupInImpulse.strength = 1.0f;
+      game::systems::AddGrassImpulse(ctx, cupInImpulse);
 
       // ホールインワン演出の実行
       if (m_gameJuice) {

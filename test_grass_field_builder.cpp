@@ -97,6 +97,11 @@ int main() {
   const auto bunkerEdge = SampleGrassFieldTexel(*field, 4.1f, 15.0f);
   Check(bunkerEdge.allowed > 0.2f && bunkerEdge.allowed < 0.99f,
         "grass thins out towards the bunker edge");
+  for (float x = -3.6f; x <= 3.6f; x += 0.4f) {
+    Check(SampleGrassFieldTexel(*field, x, 15.0f).allowed < 0.01f &&
+              SampleGrassFieldTexel(*field, x, 10.9f).allowed < 0.01f,
+          "softening the edge never spreads grass into the bunker");
+  }
 
   const auto green = SampleGrassFieldTexel(*field, 16.0f, 0.0f);
   Check(green.green > 0.95f && green.turf > 0.95f, "green is short turf");

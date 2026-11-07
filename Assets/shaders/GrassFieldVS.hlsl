@@ -86,7 +86,7 @@ Blade BuildBlade(int2 tile, uint flags, uint bladeIndex) {
 
     // 境界がフィールドの格子に沿わないよう、読む位置を少しずらす
     uint fieldSeed = GrassHash(shootSeed + 13u);
-    float2 fieldJitter = (float2(GrassHashToFloat(fieldSeed), GrassHashToFloat(GrassHash(fieldSeed))) - 0.5f) * 0.5f;
+    float2 fieldJitter = (float2(GrassHashToFloat(fieldSeed), GrassHashToFloat(GrassHash(fieldSeed))) - 0.5f) * 0.3f;
     float4 field = g_Field.SampleLevel(g_LinearClamp, GrassFieldUv(shootXZ + fieldJitter), 0);
     float density = layer == GRASS_LAYER_ROUGH ? GrassRoughDensity(field) : GrassTurfDensity(field);
 
@@ -151,6 +151,10 @@ Blade BuildBlade(int2 tile, uint flags, uint bladeIndex) {
     }
 
     blade.alive = true;
+    // バンカーや水の縁では葉を短く起こし、砂の上へ倒れかからないようにする
+    float edge = saturate(field.a);
+    blade.height *= lerp(0.35f, 1.0f, edge);
+    blade.lean *= lerp(0.4f, 1.0f, edge);
     blade.lean = min(blade.lean * lerp(1.0f, 1.8f, overhead), 0.85f);
     blade.height *= lerp(0.35f, 1.0f, grow) * greenKeep;
     blade.width *= widthScale * lerp(0.6f, 1.0f, grow) * greenKeep;
@@ -167,6 +171,68 @@ Blade BuildBlade(int2 tile, uint flags, uint bladeIndex) {
     float3 dryColor = float3(0.62f, 0.62f, 0.32f);
     blade.color = lerp(baseColor, dryColor, dry) * tint;
     return blade;
+}
+
+/** @brief 輪の形（中心が radius、幅 width） */
+float GrassRing(float distanceToCenter, float radius, float width) {
+    float t = (distanceToCenter - radius) / width;
+    return exp(-t * t);
+}
+
+/**
+ * @brief ショット・着地・カップインで葉先が受けるずれ（しなやかさ 1 の葉）
+ * @details 寿命は GrassImpulseRules.h の GrassImpulseDuration と合わせる。
+ */
+float2 GrassImpulseOffset(float2 xz, float time) {
+    float2 offset = float2(0.0f, 0.0f);
+    uint count = min((uint)GrassFieldInfo.w, (uint)GRASS_MAX_IMPULSES);
+    [loop]
+    for (uint i = 0u; i < count; ++i) {
+        float4 a = GrassImpulseA[i];
+        float4 b = GrassImpulseB[i];
+        float age = time - a.z;
+        if (age < 0.0f) {
+            continue;
+        }
+        float2 relative = xz - a.xy;
+        float d = length(relative);
+        float2 radial = relative / max(d, 1.0e-3f);
+        float strength = b.z;
+        uint kind = (uint)(a.w + 0.5f);
+
+        if (kind == GRASS_IMPULSE_SWING) {
+            // 打った向きへ一気になびき、ばねのように揺り返して戻る
+            float reach = lerp(1.6f, 3.2f, strength);
+            float falloff = saturate(1.0f - d / reach);
+            falloff *= falloff;
+            float envelope = saturate(age / 0.06f) * exp(-age * 3.2f) * cos(age * 10.0f) *
+                             saturate((1.4f - age) / 0.3f);
+            offset += (b.xy * 0.20f + radial * 0.06f) * strength * falloff * envelope;
+        } else if (kind == GRASS_IMPULSE_LANDING) {
+            // 落ちた所から外へ押し倒す輪が広がり、通った後は少し揺り返す
+            float radius = age * 6.5f;
+            float reach = lerp(2.5f, 6.0f, strength);
+            float fade = saturate(1.0f - d / reach) * saturate((1.6f - age) / 0.6f);
+            float amplitude = 0.15f * strength;
+            float push = GrassRing(d, radius, 0.55f + age * 0.35f);
+            float behind = max(radius - d, 0.0f);
+            float rebound = sin(behind * 2.6f) * exp(-behind * 1.2f) * 0.35f;
+            float crater = exp(-d * d / 0.15f) * exp(-age * 2.0f) * 0.8f;
+            offset += radial * amplitude * ((push - rebound) * fade + crater);
+        } else {
+            // カップから波が3重に広がる
+            float fade = saturate((3.0f - age) / 0.8f) * saturate(1.0f - d / 9.0f);
+            [unroll]
+            for (int k = 0; k < 3; ++k) {
+                float waveAge = age - float(k) * 0.45f;
+                if (waveAge > 0.0f) {
+                    offset += radial * (0.13f - 0.03f * float(k)) * strength * fade *
+                              GrassRing(d, waveAge * 5.0f, 0.8f);
+                }
+            }
+        }
+    }
+    return offset;
 }
 
 /** @brief 風と踏み跡による葉先のずれ */
@@ -187,7 +253,7 @@ BladeMotion EvaluateMotion(Blade blade, Texture2D<float4> windTexture, float2 wi
     float2 windDir = GrassWindParams.xy;
     float2 crossWindDir = float2(-windDir.y, windDir.x);
     float windStrength = GrassWindParams.z;
-    float windAmplitude = lerp(0.004f, 0.115f, windStrength);
+    float windAmplitude = lerp(0.009f, 0.115f, windStrength);
     float gustEnvelope = wind.w;
     float travel = dot(blade.root.xz, windDir);
 
@@ -200,6 +266,8 @@ BladeMotion EvaluateMotion(Blade blade, Texture2D<float4> windTexture, float2 wi
     offset += windDir * bladeFlutter * windAmplitude * lerp(0.42f, 0.62f, gustEnvelope);
     offset += crossWindDir * crossFlutter * windAmplitude * 0.18f * (0.35f + gustEnvelope * 0.65f);
     offset *= blade.flex;
+    // 短い芝もショットの衝撃では見えるほど動かす
+    offset += GrassImpulseOffset(blade.root.xz, time) * (0.45f + 0.55f * blade.flex);
 
     float2 trampleRelative = blade.root.xz - trampleOrigin;
     float trampleSize = kTrampleTexelSize * kTrampleResolution;

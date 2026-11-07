@@ -5,6 +5,7 @@
 
 #include "GrassFieldRenderer.h"
 #include "GrassFieldRules.h"
+#include "GrassImpulseRules.h"
 #include "../../core/DisplaySettings.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -63,6 +64,8 @@ struct GrassFrameConstants {
   XMFLOAT4 layerB[kGrassLayerCount];
   XMINT4 layerWindow[kGrassLayerCount];
   XMINT4 layerGrid[kGrassLayerCount];
+  XMFLOAT4 impulseA[components::GrassImpulseEvents::kCapacity];
+  XMFLOAT4 impulseB[components::GrassImpulseEvents::kCapacity];
 };
 
 /** @brief GrassFieldCommon.hlsli の GrassDraw と同じ並び */
@@ -432,6 +435,7 @@ void ClearGrassField(core::GameContext &ctx) {
   cleared.version = source ? source->version + 1 : 1;
   world.SetGlobal(std::move(cleared));
   world.SetGlobal(components::GrassTrampleInput{});
+  world.SetGlobal(components::GrassImpulseEvents{});
   if (auto *state = world.GetGlobal<GrassFieldRendererState>()) {
     state->field.reset();
     state->heightSrv.Reset();
@@ -441,6 +445,16 @@ void ClearGrassField(core::GameContext &ctx) {
     }
     state->hasPrevious = false;
   }
+}
+
+void AddGrassImpulse(core::GameContext &ctx, components::GrassImpulse impulse) {
+  auto *events = ctx.world.GetGlobal<components::GrassImpulseEvents>();
+  if (!events) {
+    ctx.world.SetGlobal(components::GrassImpulseEvents{});
+    events = ctx.world.GetGlobal<components::GrassImpulseEvents>();
+  }
+  impulse.startTime = ctx.time;
+  PushGrassImpulse(*events, impulse);
 }
 
 void RenderGrassField(core::GameContext &ctx, const GrassFieldFrameInput &input) {
@@ -545,7 +559,20 @@ void RenderGrassField(core::GameContext &ctx, const GrassFieldFrameInput &input)
   frame.light = XMFLOAT4(0.5f, -1.0f, 0.5f, time);
   frame.shadowParams = XMFLOAT4(input.shadowEnabled ? 1.0f : 0.0f, 0, 0, 0);
   frame.fieldRect = XMFLOAT4(field.minX, field.minZ, field.width, field.depth);
-  frame.fieldInfo = XMFLOAT4(field.heightOffset, state->previousTime, deltaTime, 0.0f);
+  std::array<components::GrassImpulse, components::GrassImpulseEvents::kCapacity> impulses{};
+  uint32_t impulseCount = 0;
+  if (const auto *events = world.GetGlobal<components::GrassImpulseEvents>()) {
+    impulseCount = CollectActiveGrassImpulses(*events, time, impulses);
+  }
+  for (uint32_t i = 0; i < impulseCount; ++i) {
+    const auto &impulse = impulses[i];
+    frame.impulseA[i] = XMFLOAT4(impulse.position.x, impulse.position.z, impulse.startTime,
+                                 static_cast<float>(impulse.kind));
+    frame.impulseB[i] = XMFLOAT4(impulse.direction.x, impulse.direction.y, impulse.strength,
+                                 0.0f);
+  }
+  frame.fieldInfo = XMFLOAT4(field.heightOffset, state->previousTime, deltaTime,
+                             static_cast<float>(impulseCount));
   frame.heightInfo = XMINT4(field.heightResolutionX, field.heightResolutionZ, 0, 0);
   frame.windOrigin = XMFLOAT4(windOrigin.x, windOrigin.y, state->windOrigin.x,
                               state->windOrigin.y);

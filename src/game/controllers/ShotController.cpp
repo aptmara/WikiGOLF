@@ -12,6 +12,8 @@
 #include "../components/Transform.h"
 #include "../systems/AchievementEvent.h"
 #include "../systems/AchievementEventBus.h"
+#include "../systems/GrassFieldRenderer.h"
+#include "../systems/GrassImpulseRules.h"
 #include "../systems/TimeOfDaySystem.h"
 #include "../utils/CarryDistanceTable.h"
 #include "../utils/JudgeFeedback.h"
@@ -229,6 +231,18 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     }
     state->isBallGrounded = false;
     state->currentBallSpeed = power;
+
+    if (const auto* ballTransform = ctx.world.Get<game::components::Transform>(ballEntity)) {
+        const float length = std::sqrt(finalDir.x * finalDir.x + finalDir.z * finalDir.z);
+        game::components::GrassImpulse impulse;
+        impulse.kind = game::components::GrassImpulseKind::Swing;
+        impulse.position = ballTransform->position;
+        if (length > 1.0e-4f) {
+            impulse.direction = {finalDir.x / length, finalDir.z / length};
+        }
+        impulse.strength = game::systems::GrassSwingStrength(power);
+        game::systems::AddGrassImpulse(ctx, impulse);
+    }
 
     shot->phase = game::components::ShotState::Phase::Executing;
 

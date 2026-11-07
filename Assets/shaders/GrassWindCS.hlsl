@@ -2,6 +2,7 @@
  * @file GrassWindCS.hlsl
  * @brief カメラ周り 128m 四方の風を 1m 間隔で求める
  * @details 遠くまで伝わる風の帯、突風、風下へ流れるつむじ風と、その後ろの二次波を重ねる。
+ *          無風でも、ゆっくり渡るそよ風だけは常に流す。
  *          葉ごとの細かな揺れは GrassFieldVS.hlsl で足す。
  *          出力 xy: 葉先の横ずれ[m]（しなやかさ 1 の葉）、z: つむじ風の見た目の強さ、w: 突風の包絡
  */
@@ -34,6 +35,12 @@ void main(uint3 id : SV_DispatchThreadID) {
 
     float downwindLean = windAmplitude * windActivity * (0.18f + gustEnvelope * 0.48f);
     float2 offset = windDir * downwindLean;
+
+    // 無風でも止まって見えないよう、うねりながら渡る弱いそよ風を足す
+    float calmCross = dot(position, crossWindDir);
+    float calmWave = 0.5f + 0.5f * sin(travel * 0.23f - time * 0.95f +
+                                       sin(calmCross * 0.11f + time * 0.31f) * 1.3f);
+    offset += windDir * (0.010f + 0.024f * calmWave * calmWave);
 
     // 疎な局所風を風下へ流す。横帯ごとに間隔を空け、一部を間引く
     float alongPosition = travel;

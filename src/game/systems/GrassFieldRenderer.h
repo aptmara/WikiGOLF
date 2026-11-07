@@ -5,6 +5,7 @@
  */
 
 #include "../../core/GameContext.h"
+#include "../components/GrassField.h"
 #include <DirectXMath.h>
 #include <d3d11.h>
 
@@ -39,5 +40,11 @@ void RenderGrassField(core::GameContext &ctx, const GrassFieldFrameInput &input)
  * @details World はシーンをまたいで共有されるので、芝を生やしたシーンの終了時に呼ぶ。
  */
 void ClearGrassField(core::GameContext &ctx);
+
+/**
+ * @brief 芝を揺らす出来事を足します。
+ * @details kind・position・direction・strength を設定して渡す。起きた時刻は ctx.time を使う。
+ */
+void AddGrassImpulse(core::GameContext &ctx, components::GrassImpulse impulse);
 
 } // namespace game::systems

@@ -1,4 +1,7 @@
 #include "src/game/systems/GrassFieldRules.h"
+#include "src/game/systems/GrassImpulseRules.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -115,6 +118,45 @@ int main() {
   }
   Check(NearlyEqual(controller.budgetScale, 1.0f),
         "budget recovers fully with headroom");
+
+  {
+    using game::components::GrassImpulse;
+    using game::components::GrassImpulseEvents;
+    using game::components::GrassImpulseKind;
+    GrassImpulseEvents events;
+    for (uint32_t i = 0; i < GrassImpulseEvents::kCapacity + 3; ++i) {
+      GrassImpulse impulse;
+      impulse.kind = GrassImpulseKind::Landing;
+      impulse.startTime = static_cast<float>(i);
+      PushGrassImpulse(events, impulse);
+    }
+    Check(events.count == GrassImpulseEvents::kCapacity,
+          "impulse list never grows past its capacity");
+    float oldest = 1.0e9f;
+    for (const auto &impulse : events.items) {
+      oldest = std::min(oldest, impulse.startTime);
+    }
+    Check(NearlyEqual(oldest, 3.0f), "a full impulse list overwrites the oldest");
+
+    std::array<GrassImpulse, GrassImpulseEvents::kCapacity> active{};
+    const float now = 10.0f + GrassImpulseDuration(GrassImpulseKind::Landing) * 0.5f;
+    const uint32_t count = CollectActiveGrassImpulses(events, now, active);
+    Check(count > 0 && count < GrassImpulseEvents::kCapacity,
+          "only impulses still within their duration are active");
+    for (uint32_t i = 0; i < count; ++i) {
+      const float age = now - active[i].startTime;
+      Check(age >= 0.0f && age <= GrassImpulseDuration(active[i].kind),
+            "active impulses are within their lifetime");
+    }
+    Check(GrassImpulseDuration(GrassImpulseKind::CupIn) >
+              GrassImpulseDuration(GrassImpulseKind::Swing),
+          "cup-in waves last longer than a swing");
+    Check(NearlyEqual(GrassLandingStrength(0.0f), 0.25f) &&
+              NearlyEqual(GrassLandingStrength(100.0f), 1.0f),
+          "landing strength is clamped");
+    Check(GrassSwingStrength(10.0f) < GrassSwingStrength(40.0f),
+          "harder shots blow the grass more");
+  }
 
   if (failures == 0) {
     std::cout << "grass field rules: all tests passed\n";

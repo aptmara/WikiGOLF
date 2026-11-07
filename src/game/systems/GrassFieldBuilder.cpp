@@ -20,6 +20,13 @@ constexpr uint8_t kMaterialRough = 1;
 constexpr uint8_t kMaterialGreen = 3;
 
 constexpr float kInfiniteDistance = 1.0e9f;
+/**
+ * @brief 芝を生やさない所（バンカー・水など）の格子の中心から、生え始める距離と生えそろう距離[m]
+ * @details 地形の色は 0.8m 間隔の頂点の間で混ざるので、境目の半ばまでは砂に見える。
+ *          その外側から生やし始める。
+ */
+constexpr float kAllowedStartDistance = 0.55f;
+constexpr float kAllowedFullDistance = 1.3f;
 
 float SmoothStep(float edge0, float edge1, float x) {
   const float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
@@ -291,14 +298,19 @@ BuildGrassField(const GrassFieldTerrainView &terrain,
     }
     turf[i] = isTurf[i] ? 1.0f : 0.0f;
     green[i] = isGreen[i] ? 1.0f : 0.0f;
-    allowed[i] = isBlocked[i]
-                     ? 0.0f
-                     : SmoothStep(0.15f, 0.6f, blockedDistance[i] * cellSize);
+    allowed[i] = isBlocked[i] ? 0.0f
+                              : SmoothStep(kAllowedStartDistance, kAllowedFullDistance,
+                                           blockedDistance[i] * cellSize);
   }
   BoxBlur(rough, resX, resZ);
   BoxBlur(turf, resX, resZ);
   BoxBlur(green, resX, resZ);
+  // ぼかしで生やさない所の側へ染み出さないよう、ぼかす前の値を超えないようにする
+  const std::vector<float> sharpAllowed = allowed;
   BoxBlur(allowed, resX, resZ);
+  for (size_t i = 0; i < texelCount; ++i) {
+    allowed[i] = std::min(allowed[i], sharpAllowed[i]);
+  }
 
   field->fieldTexels.resize(texelCount);
   for (size_t i = 0; i < texelCount; ++i) {
