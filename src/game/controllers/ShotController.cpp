@@ -5,6 +5,7 @@
 
 #include "ShotController.h"
 #include "../../core/Input.h"
+#include "../../core/Logger.h"
 #include "../../ecs/World.h"
 #include "../../audio/AudioSystem.h"
 #include "../components/PhysicsComponents.h"
@@ -22,6 +23,7 @@
 #include "WikiGolfHUD.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace game::controllers {
 
@@ -53,10 +55,26 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
 
     const float dt = ctx.dt;
 
+    bool debugClick = false;
+#ifdef WIKIGOLF_DEBUG_TOOLS
+    debugClick = UpdateDebugAutoShot(ctx, canAim);
+#endif
+
     switch (shot->phase) {
     case game::components::ShotState::Phase::Idle: {
         if (!canAim) {
             shot->aimClickTracking = false;
+            break;
+        }
+
+        if (debugClick) {
+            shot->aimClickTracking = false;
+            shot->phase = game::components::ShotState::Phase::PowerCharging;
+            shot->powerGaugePos = 0.0f;
+            shot->powerGaugeDir = 1.0f;
+            if (ctx.audio) {
+                ctx.audio->PlaySE(ctx, "se_shot_charge.mp3", 0.7f);
+            }
             break;
         }
 
@@ -91,7 +109,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
 
     case game::components::ShotState::Phase::PowerCharging: {
         // パワー決定
-        if (ctx.input.GetMouseButtonDown(0)) {
+        if (ctx.input.GetMouseButtonDown(0) || debugClick) {
             shot->confirmedPower = shot->powerGaugePos;
             shot->phase = game::components::ShotState::Phase::ImpactTiming;
             shot->impactGaugePos = 0.0f;
@@ -133,7 +151,7 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
         }
 
         // インパクト決定
-        if (ctx.input.GetMouseButtonDown(0)) {
+        if (ctx.input.GetMouseButtonDown(0) || debugClick) {
             shot->confirmedImpact = shot->impactGaugePos;
             shot->swingCommitted = true;
 
@@ -189,6 +207,62 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
 
     return eventOut;
 }
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+bool ShotController::UpdateDebugAutoShot(core::GameContext& ctx, bool canAim) {
+    if (!m_debugAutoShotRead) {
+        m_debugAutoShotRead = true;
+        char* value = nullptr;
+        size_t length = 0;
+        if (_dupenv_s(&value, &length, "WIKIGOLF_DEBUG_AUTO_SHOT") == 0 && value) {
+            m_debugAutoShotWait = static_cast<float>(std::atof(value));
+            std::free(value);
+        }
+    }
+    if (!(m_debugAutoShotWait > 0.0f)) {
+        return false;
+    }
+    const auto* shot = ctx.world.GetGlobal<game::components::ShotState>();
+    if (!shot) {
+        return false;
+    }
+
+    const int phase = static_cast<int>(shot->phase);
+    if (phase != m_debugAutoShotPhase) {
+        m_debugAutoShotPhase = phase;
+        m_debugAutoShotTimer = 0.0f;
+    }
+    m_debugAutoShotTimer += ctx.dt;
+
+    using Phase = game::components::ShotState::Phase;
+    constexpr float kTargetPower = 0.7f;
+    constexpr float kImpactWindow = 0.04f;
+    constexpr float kImpactGiveUpSeconds = 3.0f;
+    switch (shot->phase) {
+    case Phase::Idle:
+        if (!canAim) {
+            m_debugAutoShotTimer = 0.0f;
+            return false;
+        }
+        return m_debugAutoShotTimer >= m_debugAutoShotWait;
+    case Phase::PowerCharging:
+        return shot->powerGaugePos >= kTargetPower;
+    case Phase::ImpactTiming:
+        if (shot->swingCommitted) {
+            return false;
+        }
+        // フレームが重くて判定帯を飛び越えても止まらないよう、一定時間で打つ
+        if (std::abs(shot->impactGaugePos - shot->impactPerfectCenter) <= kImpactWindow ||
+            m_debugAutoShotTimer >= kImpactGiveUpSeconds) {
+            LOG_INFO("Debug", "Debug auto shot: power={:.2f}", shot->confirmedPower);
+            return true;
+        }
+        return false;
+    default:
+        return false;
+    }
+}
+#endif
 
 void ShotController::ExecuteShot(core::GameContext& ctx,
                                  ecs::Entity ballEntity,

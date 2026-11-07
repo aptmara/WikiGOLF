@@ -54,6 +54,21 @@ public:
                      const ClubController::Club& club,
                      game::systems::TimeOfDaySystem* timeOfDay,
                      WikiGolfHUD* hud);
+
+#ifdef WIKIGOLF_DEBUG_TOOLS
+private:
+    /**
+     * @brief 計測用の自動ショット。クリックすべき瞬間なら true を返します。
+     * @details WIKIGOLF_DEBUG_AUTO_SHOT=秒 のとき、構えられる状態でその秒数待ってから、
+     *          パワー 7 割・インパクトはパーフェクト付近で打つ。未指定なら何もしない。
+     */
+    bool UpdateDebugAutoShot(core::GameContext& ctx, bool canAim);
+
+    bool m_debugAutoShotRead = false;
+    float m_debugAutoShotWait = 0.0f;   ///< 0 以下なら自動ショットしない
+    float m_debugAutoShotTimer = 0.0f;  ///< 今の段階に入ってからの秒数
+    int m_debugAutoShotPhase = -1;      ///< 前フレームの段階（変わったらタイマーを戻す）
+#endif
 };
 
 } // namespace game::controllers
