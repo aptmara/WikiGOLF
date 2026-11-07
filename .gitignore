@@ -51,6 +51,9 @@ tools/*
 # リンクグラフを作る道具は管理する
 !tools/linkgraph/
 !tools/linkgraph/**
+# 計測スクリプトは管理する
+!tools/bench/
+!tools/bench/**
 .gemini/
 .claude/
 libs/assimp-6.0.2/static/
