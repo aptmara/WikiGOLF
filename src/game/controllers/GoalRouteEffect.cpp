@@ -225,6 +225,8 @@ void GoalRouteEffect::CreateFlag(core::GameContext &ctx,
       renderer->isVisible = false;
       // 画面の手前にあるので、遠距離の描画打ち切りを使わない
       renderer->maxDrawDistance = 0.0f;
+      // 紙が倒れるときや布がなびくとき、紙に埋まらないよう手前に描く
+      renderer->drawsInFront = true;
     }
     if (part.role == PartRole::Cloth) {
       if (const auto *holeFlag = ctx.world.Get<components::HoleFlag>(entity)) {

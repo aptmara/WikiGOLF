@@ -67,6 +67,10 @@ struct MeshRenderer {
   // 本描画で描くか。false ならミニマップだけに使う（地形に焼き込んだ記事オーバーレイなど）。
   bool drawInMainPass = true;
 
+  // 他の物より必ず手前に描くか。深度を手前の狭い範囲へ詰めて最後に描くので、
+  // この指定の物どうしの前後関係は保ったまま、紙や地形に埋まらない（演出の旗など）。
+  bool drawsInFront = false;
+
   // 地形シェーダー用: 地表に乗算で重ねる記事テクスチャ。
   // 以前は同じ形のメッシュをもう一枚、乗算ブレンドで重ね描きしていたのを、地形の描画で一緒に行う。
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> articleOverlaySRV;
