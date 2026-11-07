@@ -1070,4 +1070,13 @@ if(MSVC)
 endif()
 add_test(NAME flag_fade_rules COMMAND test_flag_fade_rules)
 
+add_executable(test_occlusion_fade_rules test_occlusion_fade_rules.cpp)
+target_precompile_headers(test_occlusion_fade_rules REUSE_FROM wikigolf_pch)
+target_include_directories(test_occlusion_fade_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_occlusion_fade_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_occlusion_fade_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME occlusion_fade_rules COMMAND test_occlusion_fade_rules)
+
 wikigolf_add_debug_tests()

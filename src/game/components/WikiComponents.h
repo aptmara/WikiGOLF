@@ -52,6 +52,17 @@ struct Wall {};
 struct TerrainObject {};
 
 /**
+ * @brief カメラとボールの間に入ったら薄くする物体
+ * @details 同じ group の部品(木の幹と葉など)はまとめて同じだけ薄くします。
+ * 描画はロボットと同じドット状ディザーフェードを使います。
+*/
+struct CameraOcclusionFade {
+  uint32_t group = 0;     ///< まとめて薄くする部品の組番号
+  float baseAlpha = 1.0f; ///< フェード前の本来の不透明度
+  float fadeAlpha = 1.0f; ///< 遮蔽による現在の描画率
+};
+
+/**
  * @brief バリア接触エフェクト（波紋）
 */
 struct RippleEffect {

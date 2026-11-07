@@ -303,7 +303,8 @@ void WikiPageLoader::UpdateNearbyHoleSignboards(core::GameContext& ctx,
                             : fallbackGolferPosition;
                         const float targetAlpha =
                             game::utils::CalculateFlagFadeAlpha(
-                                camT->position, t.position, fadeTarget);
+                                camT->position, t.position, fadeTarget,
+                                ballPos);
                         constexpr float kFadeSpeed = 5.0f;
                         const float fadeStep = kFadeSpeed * ctx.dt;
                         mr->customFlags.x += std::clamp(

@@ -470,6 +470,7 @@ void RenderSystem(core::GameContext &ctx) {
     bool twoSided = false;
     bool usesHtmlTerrainSampler = false;
     bool terrainCupClip = false; // 地形の深度パスでカップのくり抜きが要るか
+    bool drawsInFront = false;
 
     bool operator==(const RenderKey &o) const {
       return mesh == o.mesh && shader == o.shader &&
@@ -478,7 +479,8 @@ void RenderSystem(core::GameContext &ctx) {
              terrainCupClip == o.terrainCupClip &&
              blendMode == o.blendMode && isTransparent == o.isTransparent &&
              twoSided == o.twoSided &&
-             usesHtmlTerrainSampler == o.usesHtmlTerrainSampler;
+             usesHtmlTerrainSampler == o.usesHtmlTerrainSampler &&
+             drawsInFront == o.drawsInFront;
     }
   };
 
@@ -498,6 +500,7 @@ void RenderSystem(core::GameContext &ctx) {
       h = h * 31 + (k.twoSided ? 1 : 0);
       h = h * 31 + (k.usesHtmlTerrainSampler ? 1 : 0);
       h = h * 31 + (k.terrainCupClip ? 1 : 0);
+      h = h * 31 + (k.drawsInFront ? 1 : 0);
       return h;
     }
   };
@@ -514,6 +517,8 @@ void RenderSystem(core::GameContext &ctx) {
 
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> opaqueBuckets;
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> transparentBuckets;
+  // 他の物より手前に描く物。不透明・半透明の後に、深度を手前へ詰めて描く
+  std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> inFrontBuckets;
 
   auto reserveAdditionalInstances = [](auto &instances,
                                        size_t additionalCount) {
@@ -702,7 +707,10 @@ void RenderSystem(core::GameContext &ctx) {
           key.twoSided = true;
         }
 
-        if (r.isTransparent) {
+        key.drawsInFront = r.drawsInFront;
+        if (r.drawsInFront) {
+          inFrontBuckets[key].push_back(inst);
+        } else if (r.isTransparent) {
           transparentBuckets[key].push_back(inst);
         } else {
           opaqueBuckets[key].push_back(inst);
@@ -969,6 +977,30 @@ void RenderSystem(core::GameContext &ctx) {
       graphics::ScopedGpuTimer gpuTimer(ctx.graphics, gpuCategoryOf(key));
       DrawBucket(key, transparentBatch);
       start = end;
+    }
+
+    // 手前に描く物は、深度を [0, kInFrontMaxDepth] へ詰めて最後に描く。
+    // 互いの前後関係は深度で保ちつつ、すでに描いた紙や地形より必ず手前になる
+    if (!inFrontBuckets.empty()) {
+      constexpr float kInFrontMaxDepth = 0.001f;
+      UINT viewportCount = 1;
+      D3D11_VIEWPORT sceneViewport = {};
+      context->RSGetViewports(&viewportCount, &sceneViewport);
+      const bool hasViewport = viewportCount == 1;
+      if (hasViewport) {
+        D3D11_VIEWPORT inFrontViewport = sceneViewport;
+        inFrontViewport.MinDepth = 0.0f;
+        inFrontViewport.MaxDepth = kInFrontMaxDepth;
+        context->RSSetViewports(1, &inFrontViewport);
+      }
+      for (const auto &pair : inFrontBuckets) {
+        graphics::ScopedGpuTimer gpuTimer(ctx.graphics,
+                                          gpuCategoryOf(pair.first));
+        DrawBucket(pair.first, pair.second);
+      }
+      if (hasViewport) {
+        context->RSSetViewports(1, &sceneViewport);
+      }
     }
     context->OMSetDepthStencilState(nullptr, 0);
 

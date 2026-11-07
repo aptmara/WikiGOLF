@@ -62,4 +62,19 @@ inline float CalculateFlagFadeAlpha(
   return (std::min)(proximityAlpha, occlusionAlpha);
 }
 
+/**
+ * @brief ロボットとボールのどちらかを遮っていれば薄くする描画率を返します。
+ * @details カメラからロボットへの線と、カメラからボールへの線の両方で判定し、
+ * 薄いほうを使います。ボールが飛んでロボットから離れても、ボールを隠しません。
+*/
+inline float CalculateFlagFadeAlpha(
+    const DirectX::XMFLOAT3 &cameraPosition,
+    const DirectX::XMFLOAT3 &flagPosition,
+    const DirectX::XMFLOAT3 &golferPosition,
+    const DirectX::XMFLOAT3 &ballPosition) {
+  return (std::min)(
+      CalculateFlagFadeAlpha(cameraPosition, flagPosition, golferPosition),
+      CalculateFlagFadeAlpha(cameraPosition, flagPosition, ballPosition));
+}
+
 } // namespace game::utils
