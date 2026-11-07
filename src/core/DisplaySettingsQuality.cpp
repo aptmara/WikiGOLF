@@ -24,6 +24,9 @@ void DisplaySettings::ApplyQualityToGraphics() {
   quality.fxaaEnabled = m_data.fxaaEnabled;
   quality.taaEnabled = m_data.taaEnabled;
   quality.dlssEnabled = m_data.dlssEnabled;
+  // プリセットで LOW を選んだとき（自動判定で LOW になったときも）だけ後処理を軽くする
+  quality.lightPostProcess = m_data.graphicsPreset != GraphicsPreset::Custom &&
+                             m_effectiveGraphicsPreset == GraphicsPreset::Low;
   m_graphics->ApplyQualitySettings(quality);
 }
 

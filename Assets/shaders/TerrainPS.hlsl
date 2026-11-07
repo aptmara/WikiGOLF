@@ -58,16 +58,11 @@ float OverlayNoise2d(float2 p) {
 }
 
 float OverlayFbm(float2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    float2 shift = float2(37.0, 17.0);
-    [unroll]
-    for (int i = 0; i < 4; ++i) {
-        v += a * OverlayNoise2d(p);
-        p = p * 2.0 + shift;
-        a *= 0.5;
-    }
-    return v;
+    // 以前は 4 段重ねていたが、3・4 段目は明るさを ±0.4% しか動かさないので省く。
+    // 省いた段の平均（0.125×0.5 + 0.0625×0.5）を足し、全体の明るさは前と揃える
+    float v = 0.5 * OverlayNoise2d(p);
+    v += 0.25 * OverlayNoise2d(p * 2.0 + float2(37.0, 17.0));
+    return v + 0.09375;
 }
 
 #include "ShadowSampling.hlsli"
@@ -262,6 +257,11 @@ float4 ShadeMain(PS_INPUT input) {
     float roughFiberFine = kTurfFiberMean;
     float greenFiber = kTurfFiberMean;
     float greenFiberFine = kTurfFiberMean;
+    // 最も粗い繊維（ラフ 11 本/m）が消える距離では、細かい繊維もすべて消えている。
+    // そこから先（遠くの地面・遠景の山並み）は繊維の計算をまとめて飛ばす。
+    // 消えた繊維は平均値になるだけなので、絵は変わらない
+    [branch]
+    if (ProceduralDetailFade(pixelFootprint, 11.0f) > 0.0f) {
     [branch]
     if (fairwayWeight > kDetailWeightEpsilon) {
         fairwayFiber = lerp(kTurfFiberMean,
@@ -288,6 +288,7 @@ float4 ShadeMain(PS_INPUT input) {
         greenFiberFine = lerp(kTurfFiberMean,
             TurfFibers(turfWorld + 21.6f, float2(1.0f, 0.0f), 56.0f),
             ProceduralDetailFade(pixelFootprint, 56.0f));
+    }
     }
 
     float fairwayStripeWave = sin(turfWorld.x * (6.28318f / 3.2f));

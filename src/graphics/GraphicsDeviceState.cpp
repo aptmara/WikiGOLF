@@ -149,9 +149,25 @@ void GraphicsDevice::ResolveGpuProfilerQueries() {
             m_context->GetData(scope.end.Get(), &end, sizeof(end),
                                D3D11_ASYNC_GETDATA_DONOTFLUSH);
         if (startResult == S_OK && endResult == S_OK && end >= start) {
+          core::GpuPipelineStats stats;
+          bool statsValid = false;
+          if (scope.pipelineIssued) {
+            D3D11_QUERY_DATA_PIPELINE_STATISTICS pipeline{};
+            statsValid = m_context->GetData(scope.pipeline.Get(), &pipeline,
+                                            sizeof(pipeline),
+                                            D3D11_ASYNC_GETDATA_DONOTFLUSH) == S_OK;
+            if (statsValid) {
+              stats.inputAssemblerVertices = pipeline.IAVertices;
+              stats.inputAssemblerPrimitives = pipeline.IAPrimitives;
+              stats.vertexShaderInvocations = pipeline.VSInvocations;
+              stats.pixelShaderInvocations = pipeline.PSInvocations;
+              stats.rasterizedPrimitives = pipeline.CPrimitives;
+            }
+          }
           core::AccumulateGpuScope(
               sample.scopes, scope.name,
-              static_cast<double>(end - start) * millisecondsPerTick);
+              static_cast<double>(end - start) * millisecondsPerTick,
+              statsValid ? &stats : nullptr);
         }
       }
 

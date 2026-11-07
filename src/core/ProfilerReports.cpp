@@ -21,7 +21,7 @@ void Profiler::OpenRawReports() {
     return;
   }
   m_framesFile << "frame,scene,cpu_frame_ms,fps,profiler_overhead_ms,process_cpu_percent,working_set_mb,private_mb,entity_count,gpu_valid,gpu_frame_ms,ia_vertices,ia_primitives,vs_invocations,ps_invocations,process_metrics_sampled,pipeline_stats_valid,gpu_query_latency_frames\n";
-  m_scopesFile << "frame,scene,domain,name,inclusive_ms,exclusive_ms,calls,function,file,line\n";
+  m_scopesFile << "frame,scene,domain,name,inclusive_ms,exclusive_ms,calls,function,file,line,ia_vertices,ia_primitives,vs_invocations,rasterized_primitives,ps_invocations\n";
   m_countersFile << "frame,scene,name,value\n";
   m_slowFramesFile << "frame,scene,cpu_frame_ms,gpu_frame_ms,rank,name,exclusive_ms,inclusive_ms,calls,function,file,line\n";
   m_framesFile << std::fixed << std::setprecision(4);
@@ -55,7 +55,17 @@ void Profiler::WriteFrameRows(const FrameData &frame) {
   for (const auto &scope : frame.gpuScopes) {
     m_scopesFile << frame.index << ',' << profiler_detail::CsvEscape(frame.scene)
                  << ",GPU," << profiler_detail::CsvEscape(scope.name) << ','
-                 << scope.milliseconds << ',' << scope.milliseconds << ",1,,,0\n";
+                 << scope.milliseconds << ',' << scope.milliseconds << ",1,,,0";
+    // 頂点・画素の処理数は、パイプライン統計を取ったフレームだけ書く（他は空欄）
+    if (scope.statsValid) {
+      m_scopesFile << ',' << scope.stats.inputAssemblerVertices << ','
+                   << scope.stats.inputAssemblerPrimitives << ','
+                   << scope.stats.vertexShaderInvocations << ','
+                   << scope.stats.rasterizedPrimitives << ','
+                   << scope.stats.pixelShaderInvocations << '\n';
+    } else {
+      m_scopesFile << ",,,,,\n";
+    }
   }
   for (const auto &[id, value] : frame.counters) {
     if (id < m_counterNames.size()) {

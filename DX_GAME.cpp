@@ -572,11 +572,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.ShadowMap");
                   game::systems::ShadowRenderSystem(ctx);
               }
-              {
-                  PROFILE_SCOPE("Render.Skybox");
-                  graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.Skybox");
-                  game::systems::SkyboxRenderSystem(ctx);
-              }
+              // 空は RenderSystem の中で、不透明物のあとに描く
               {
                   PROFILE_SCOPE("Render.Meshes");
                   graphics::ScopedGpuTimer gpuTimer(graphics, "GPU.Meshes");

@@ -181,10 +181,13 @@ bool InitializeSkyboxStates(ID3D11Device *device, SkyboxRenderState &state) {
   }
 
   // 深度ステンシルステート（深度書き込み無効、最遠景描画）
+  // 空は不透明な物を描いたあとに、深度 1.0（最遠）のまま描く。
+  // 何も描かれていない画素（深度が初期値 1.0）だけが通るので、
+  // 地形などに隠れる画素の空の計算を早期に捨てられる。
   D3D11_DEPTH_STENCIL_DESC dsDesc = {};
-  dsDesc.DepthEnable = FALSE; // 深度テスト無効（常に最背面）
+  dsDesc.DepthEnable = TRUE;
   dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-  dsDesc.DepthFunc = D3D11_COMPARISON_ALWAYS;
+  dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
   dsDesc.StencilEnable = FALSE;
 
   hr = device->CreateDepthStencilState(&dsDesc, &state.depthStencilState);

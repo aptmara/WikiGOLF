@@ -6,6 +6,7 @@
 #include "RenderSystem.h"
 #include "GrassFieldRenderer.h"
 #include "ShadowRenderSystem.h"
+#include "SkyboxRenderSystem.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
 #include "../../ecs/World.h"
@@ -441,6 +442,8 @@ void RenderSystem(core::GameContext &ctx) {
   // Basic と同じくインスタンス化対応として扱う必要がある（含めないと
   // g_instances がバインドされない非インスタンス経路に落ち、実質描画されない）。
   auto golfBallHandle = ctx.resource.FindShader("GolfBall");
+  const auto wallHandle = ctx.resource.FindShader("Wall");     // GPU 計測の分類用
+  const auto paperHandle = ctx.resource.FindShader("ArticlePaper");
   auto *shadowState = world.GetGlobal<ShadowRenderState>();
   const bool shadowEnabled =
       shadowState && shadowState->validThisFrame &&
@@ -924,12 +927,25 @@ void RenderSystem(core::GameContext &ctx) {
     RenderGrassField(ctx, grassInput);
 
     // GPU.Meshesの内訳。同名スコープはフレーム内で合算される
+    // 地形はコースのタイル（記事を重ねる）と遠景に、半透明は描くシェーダーごとに分ける
     const auto gpuCategoryOf = [&](const RenderKey &key) -> const char * {
       if (key.usesHtmlTerrainSampler) return "GPU.Meshes.HtmlOverlay";
-      if (key.shader == terrainHandle) return "GPU.Meshes.Terrain";
+      if (key.shader == terrainHandle) {
+        return key.articleOverlaySRV ? "GPU.Meshes.Terrain.Field"
+                                     : "GPU.Meshes.Terrain.Backdrop";
+      }
       if (key.shader == flagClothHandle) return "GPU.Meshes.Flag";
-      if (key.isTransparent) return "GPU.Meshes.Transparent";
+      if (key.isTransparent) {
+        if (key.shader == particleHandle) return "GPU.Meshes.Transparent.Particle";
+        if (key.shader == trailHandle) return "GPU.Meshes.Transparent.Trail";
+        if (key.shader == basicHandle) return "GPU.Meshes.Transparent.Basic";
+        if (key.shader == golfBallHandle) return "GPU.Meshes.Transparent.GolfBall";
+        if (key.shader == wallHandle) return "GPU.Meshes.Transparent.Wall";
+        if (key.shader == paperHandle) return "GPU.Meshes.Transparent.Paper";
+        return "GPU.Meshes.Transparent.Other";
+      }
       if (key.shader == basicHandle) return "GPU.Meshes.Basic";
+      if (key.shader == golfBallHandle) return "GPU.Meshes.GolfBall";
       return "GPU.Meshes.Other";
     };
 
@@ -939,6 +955,10 @@ void RenderSystem(core::GameContext &ctx) {
       graphics::ScopedGpuTimer gpuTimer(ctx.graphics, "GPU.Meshes.TerrainDepth");
       for (const auto &pair : opaqueBuckets) {
         if (pair.first.shader == terrainHandle) {
+          graphics::ScopedGpuTimer partTimer(
+              ctx.graphics, pair.first.terrainCupClip
+                                ? "GPU.Meshes.TerrainDepth.CupClip"
+                                : "GPU.Meshes.TerrainDepth.Fast");
           DrawBucket(pair.first, pair.second, true);
         }
       }
@@ -948,6 +968,14 @@ void RenderSystem(core::GameContext &ctx) {
     for (const auto &pair : opaqueBuckets) {
       graphics::ScopedGpuTimer gpuTimer(ctx.graphics, gpuCategoryOf(pair.first));
       DrawBucket(pair.first, pair.second);
+    }
+
+    // 空は不透明物のあと・半透明物の前に描く。深度テストで、何も描かれて
+    // いない画素だけを塗る（先に全画面を塗ると、地形に隠れる分まで計算する）
+    {
+      PROFILE_SCOPE("Render.Skybox");
+      graphics::ScopedGpuTimer gpuTimer(ctx.graphics, "GPU.Skybox");
+      SkyboxRenderSystem(ctx);
     }
 
     // 異なるメッシュ間も奥から手前へ合成。同じ描画状態が連続する部分だけまとめる。

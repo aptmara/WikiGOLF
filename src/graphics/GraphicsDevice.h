@@ -31,6 +31,8 @@ struct QualitySettings {
   bool fxaaEnabled = false; /**< 最終画面へのFXAA適用 */
   bool taaEnabled = false;  /**< テンポラルAA（MSAA無効時のみ。描画解像度<100%ならTAAU） */
   bool dlssEnabled = false; /**< DLSS（MSAA無効かつ対応GPUのみ。非対応ならTAAで代替） */
+  /** 軽い後処理（画質 LOW）。ブルームと拡大時のシャープ化を省く */
+  bool lightPostProcess = false;
 };
 
 /**
@@ -305,6 +307,9 @@ private:
     std::string name;
     ComPtr<ID3D11Query> start;
     ComPtr<ID3D11Query> end;
+    // 区間ごとの頂点・画素の処理数。パイプライン統計を取るフレームだけ使う
+    ComPtr<ID3D11Query> pipeline;
+    bool pipelineIssued = false;
   };
 
   struct GpuFrameQueries {

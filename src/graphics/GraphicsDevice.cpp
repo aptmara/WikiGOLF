@@ -244,6 +244,10 @@ void GraphicsDevice::RunFullscreenPass(Shader &shader, ID3D11ShaderResourceView 
         // DLSSは自前で復元するため追加のシャープは掛けない
         sharpen = 0.0f;
       }
+      if (m_quality.lightPostProcess) {
+        // 画質 LOW: 出力解像度の全画素で4点を読む分を省く（610M で約 0.7ms）
+        sharpen = 0.0f;
+      }
       data[2] = sharpen;
       data[3] = 0.0f;
       m_context->Unmap(m_upscaleConstantBuffer.Get(), 0);
@@ -294,6 +298,10 @@ void GraphicsDevice::RunPostProcessPass(ID3D11ShaderResourceView *colorSRV,
   if (SUCCEEDED(m_context->Map(m_postProcessConstantBuffer.Get(), 0,
                                D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
     PostProcessParams params = m_postProcessParams;
+    if (m_quality.lightPostProcess) {
+      // 画質 LOW: 9点を読むブルームを省く（610M で約 0.6ms）
+      params.timeParams.y = 0.0f;
+    }
     // 深度が読めない（MSAA有効）場合は霧を強制的に無効化する
     params.depthParams.z = 0.0f;
     if (IsDepthReadable()) {
@@ -343,18 +351,24 @@ void GraphicsDevice::ResolveSceneToBackbuffer() {
   }
 
   // 霧/色調補正/ビネット/ブルームは常時適用する
+  BeginGpuScope("GPU.ResolveScene.PostProcess");
   RunPostProcessPass(sourceSRV, m_postProcessRTV.Get(), sourceWidth, sourceHeight);
+  EndGpuScope();
   sourceSRV = m_postProcessSRV.Get();
 
   if (!IsTemporalActive() && m_quality.fxaaEnabled && m_fxaaRTV && m_fxaaSRV) {
+    BeginGpuScope("GPU.ResolveScene.Fxaa");
     RunFullscreenPass(m_fxaaShader, sourceSRV, m_fxaaRTV.Get(), m_renderWidth,
                       m_renderHeight, FullscreenConstants::Fxaa);
+    EndGpuScope();
     sourceSRV = m_fxaaSRV.Get();
   }
 
   // 内部描画解像度 → 出力(バックバッファ)解像度へアップスケール（+自動シャープ化）
+  BeginGpuScope("GPU.ResolveScene.Upscale");
   RunFullscreenPass(m_upscaleShader, sourceSRV, m_renderTargetView.Get(),
                     m_width, m_height, FullscreenConstants::Upscale);
+  EndGpuScope();
 
   // 以降のUI(D2D)/ScreenFadeはバックバッファへ直接描画されるため、
   // 状態を出力解像度基準に戻しておく（深度テストは既定の有効状態へ復帰）。
@@ -474,6 +488,18 @@ void GraphicsDevice::BeginGpuScope(std::string_view name) {
 
   auto &queries = m_currentGpuQueryFrame->scopes[scopeIndex];
   queries.name = std::string(name);
+  queries.pipelineIssued = false;
+  if (m_currentGpuQueryFrame->pipelineIssued) {
+    if (!queries.pipeline) {
+      D3D11_QUERY_DESC pipelineDesc{};
+      pipelineDesc.Query = D3D11_QUERY_PIPELINE_STATISTICS;
+      m_device->CreateQuery(&pipelineDesc, &queries.pipeline);
+    }
+    if (queries.pipeline) {
+      m_context->Begin(queries.pipeline.Get());
+      queries.pipelineIssued = true;
+    }
+  }
   m_context->End(queries.start.Get());
   m_gpuScopeStack.back() = scopeIndex;
 #else
@@ -493,7 +519,11 @@ void GraphicsDevice::EndGpuScope() {
       scopeIndex >= m_currentGpuQueryFrame->scopes.size()) {
     return;
   }
-  m_context->End(m_currentGpuQueryFrame->scopes[scopeIndex].end.Get());
+  auto &queries = m_currentGpuQueryFrame->scopes[scopeIndex];
+  m_context->End(queries.end.Get());
+  if (queries.pipelineIssued) {
+    m_context->End(queries.pipeline.Get());
+  }
 #endif
 }
 
@@ -540,6 +570,7 @@ void GraphicsDevice::ApplyQualitySettings(const QualitySettings &settings) {
   m_quality.fxaaEnabled = settings.fxaaEnabled;
   m_quality.taaEnabled = settings.taaEnabled;
   m_quality.dlssEnabled = settings.dlssEnabled;
+  m_quality.lightPostProcess = settings.lightPostProcess;
 
   if (!CreateSceneRenderTargets()) {
     LOG_ERROR("GraphicsDevice",
@@ -551,11 +582,11 @@ void GraphicsDevice::ApplyQualitySettings(const QualitySettings &settings) {
 
   LOG_INFO("GraphicsDevice",
            "Quality settings applied: renderScale={:.2f} ({}x{} -> {}x{}) MSAA={}x "
-           "FXAA={} TAA={} DLSS={} (activeTAA={} activeDLSS={})",
+           "FXAA={} TAA={} DLSS={} (activeTAA={} activeDLSS={}) lightPost={}",
            m_quality.renderScale, m_renderWidth, m_renderHeight, m_width,
            m_height, m_quality.msaaSamples, m_quality.fxaaEnabled,
            m_quality.taaEnabled, m_quality.dlssEnabled, IsTaaActive(),
-           IsDlssActive());
+           IsDlssActive(), m_quality.lightPostProcess);
 }
 
 bool GraphicsDevice::SetFullscreenExclusive(bool enable, uint32_t width,

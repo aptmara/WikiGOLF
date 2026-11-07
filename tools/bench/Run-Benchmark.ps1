@@ -95,14 +95,49 @@ $avg = { param($xs) ($xs | Measure-Object -Average).Average }
   (& $avg ($rows | ForEach-Object { [double]$_.cpu_frame_ms })),
   (& $avg ($rows | ForEach-Object { [double]$_.fps }))
 
-Import-Csv (Join-Path $session.FullName 'performance_scopes.csv') |
-  Where-Object { $_.domain -eq 'GPU' -and $rowSet.ContainsKey($_.frame) } |
-  Group-Object name | ForEach-Object {
-    [pscustomobject]@{
-      Scope = $_.Name
-      AvgMs = [math]::Round((($_.Group | ForEach-Object { [double]$_.inclusive_ms }) | Measure-Object -Sum).Sum / $rows.Count, 2)
-    }
-  } | Sort-Object AvgMs -Descending | Format-Table -AutoSize | Out-String
+$gpuScopeRows = @(Import-Csv (Join-Path $session.FullName 'performance_scopes.csv') |
+  Where-Object { $_.domain -eq 'GPU' -and $rowSet.ContainsKey($_.frame) })
+# 名前を「.」で区切った階層で出す。親を直接計っていればその行を、
+# 計っていなければ（GPU.Meshes.Terrain など）内訳の合計を親の値にする
+$measured = @{}
+foreach ($r in $gpuScopeRows) { $measured[$r.name] = $true }
+$keys = @{}
+foreach ($name in $measured.Keys) {
+  $parts = $name.Split('.')
+  for ($n = 2; $n -le $parts.Count; ++$n) { $keys[($parts[0..($n - 1)] -join '.')] = $true }
+}
+$rowsOf = {
+  param($key)
+  if ($measured.ContainsKey($key)) { return @($gpuScopeRows | Where-Object { $_.name -eq $key }) }
+  @($gpuScopeRows | Where-Object {
+      if (-not $_.name.StartsWith("$key.")) { return $false }
+      # key より下で、直接計った親を持たない行だけ（入れ子の二重計上を避ける）
+      $parts = $_.name.Split('.'); $depth = $key.Split('.').Count
+      for ($n = $depth + 1; $n -lt $parts.Count; ++$n) {
+        if ($measured.ContainsKey(($parts[0..($n - 1)] -join '.'))) { return $false }
+      }
+      $true
+    })
+}
+$statMean = {
+  param($group, $column)
+  $withStats = @($group | Where-Object { $_.$column })
+  if (-not $withStats) { return '' }
+  $frameCount = @($withStats | Select-Object -ExpandProperty frame -Unique).Count
+  $sum = ($withStats | ForEach-Object { [double]$_.$column } | Measure-Object -Sum).Sum
+  '{0:N0}' -f ($sum / $frameCount / 1000)
+}
+$keys.Keys | Sort-Object | ForEach-Object {
+  $group = & $rowsOf $_
+  $indent = '  ' * ($_.Split('.').Count - 2)
+  [pscustomobject]@{
+    Scope = $indent + $_
+    AvgMs = [math]::Round((($group | ForEach-Object { [double]$_.inclusive_ms }) | Measure-Object -Sum).Sum / $rows.Count, 2)
+    'Tri(k)' = & $statMean $group 'rasterized_primitives'
+    'VS(k)' = & $statMean $group 'vs_invocations'
+    'PS(k)' = & $statMean $group 'ps_invocations'
+  }
+} | Format-Table -AutoSize | Out-String -Width 200
 
 Import-Csv (Join-Path $session.FullName 'performance_counters.csv') |
   Where-Object { $rowSet.ContainsKey($_.frame) -and $_.name -match 'GrassBudget|DrawCalls$|Text\.' } |

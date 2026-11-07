@@ -18,16 +18,19 @@
 
 namespace core {
 
-struct GpuScopeSample {
-  std::string name;
-  double milliseconds = 0.0;
-};
-
 struct GpuPipelineStats {
   uint64_t inputAssemblerVertices = 0;
   uint64_t inputAssemblerPrimitives = 0;
   uint64_t vertexShaderInvocations = 0;
   uint64_t pixelShaderInvocations = 0;
+  uint64_t rasterizedPrimitives = 0; // 切り取り後にラスタライズへ回った三角形
+};
+
+struct GpuScopeSample {
+  std::string name;
+  double milliseconds = 0.0;
+  bool statsValid = false; // パイプライン統計を取ったフレームだけ true
+  GpuPipelineStats stats;
 };
 
 struct GpuFrameSample {
@@ -277,14 +280,28 @@ private:
  * @details バケットごとに計測するカテゴリ別スコープを、1フレーム1行で集計するため。
 */
 inline void AccumulateGpuScope(std::vector<GpuScopeSample> &scopes,
-                               std::string_view name, double milliseconds) {
+                               std::string_view name, double milliseconds,
+                               const GpuPipelineStats *stats = nullptr) {
+  GpuScopeSample *target = nullptr;
   for (auto &scope : scopes) {
     if (scope.name == name) {
-      scope.milliseconds += milliseconds;
-      return;
+      target = &scope;
+      break;
     }
   }
-  scopes.push_back({std::string(name), milliseconds});
+  if (!target) {
+    scopes.push_back({std::string(name), 0.0});
+    target = &scopes.back();
+  }
+  target->milliseconds += milliseconds;
+  if (stats) {
+    target->statsValid = true;
+    target->stats.inputAssemblerVertices += stats->inputAssemblerVertices;
+    target->stats.inputAssemblerPrimitives += stats->inputAssemblerPrimitives;
+    target->stats.vertexShaderInvocations += stats->vertexShaderInvocations;
+    target->stats.pixelShaderInvocations += stats->pixelShaderInvocations;
+    target->stats.rasterizedPrimitives += stats->rasterizedPrimitives;
+  }
 }
 
 } // namespace core

@@ -220,7 +220,14 @@ void ShadowRenderSystem(core::GameContext &ctx) {
   state->depthShader.Bind(context);
   context->VSSetConstantBuffers(0, 1, state->constantBuffer.GetAddressOf());
 
-  size_t drawCalls = 0;
+  // 影を落とす物を地形とそれ以外に分けて描き、GPU 計測も分ける
+  struct ShadowDraw {
+    graphics::Mesh *mesh;
+    XMMATRIX world;
+  };
+  std::vector<ShadowDraw> terrainDraws;
+  std::vector<ShadowDraw> otherDraws;
+  const auto terrainShader = ctx.resource.FindShader("Terrain");
   world.Query<components::Transform, components::MeshRenderer>().Each(
       [&](ecs::Entity, components::Transform &transform,
           components::MeshRenderer &renderer) {
@@ -246,21 +253,35 @@ void ShadowRenderSystem(core::GameContext &ctx) {
           return;
         }
 
-        D3D11_MAPPED_SUBRESOURCE mapped = {};
-        if (FAILED(context->Map(state->constantBuffer.Get(), 0,
-                                D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
-          return;
-        }
-        auto *constants = static_cast<ShadowConstants *>(mapped.pData);
-        constants->world = XMMatrixTranspose(transform.GetWorldMatrix());
-        constants->lightViewProjection =
-            XMMatrixTranspose(state->lightViewProjection);
-        context->Unmap(state->constantBuffer.Get(), 0);
-
-        mesh->Bind(context);
-        mesh->Draw(context);
-        ++drawCalls;
+        auto &draws = renderer.shader == terrainShader ? terrainDraws : otherDraws;
+        draws.push_back({mesh, transform.GetWorldMatrix()});
       });
+
+  size_t drawCalls = 0;
+  const auto drawCasters = [&](const std::vector<ShadowDraw> &draws,
+                               const char *gpuScope) {
+    graphics::ScopedGpuTimer gpuTimer(ctx.graphics, gpuScope);
+    for (const auto &draw : draws) {
+      D3D11_MAPPED_SUBRESOURCE mapped = {};
+      if (FAILED(context->Map(state->constantBuffer.Get(), 0,
+                              D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
+        continue;
+      }
+      auto *constants = static_cast<ShadowConstants *>(mapped.pData);
+      constants->world = XMMatrixTranspose(draw.world);
+      constants->lightViewProjection =
+          XMMatrixTranspose(state->lightViewProjection);
+      context->Unmap(state->constantBuffer.Get(), 0);
+
+      draw.mesh->Bind(context);
+      draw.mesh->Draw(context);
+      ++drawCalls;
+    }
+  };
+  drawCasters(terrainDraws, "GPU.ShadowMap.Terrain");
+  drawCasters(otherDraws, "GPU.ShadowMap.Other");
+  core::Profiler::Instance().SetCounter(
+      "Shadow.TerrainDrawCalls", static_cast<double>(terrainDraws.size()));
 
   context->OMSetRenderTargets(1, oldRenderTarget.GetAddressOf(),
                               oldDepthView.Get());
