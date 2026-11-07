@@ -484,7 +484,6 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
   case BuildPhase::CreateDecorations: {
     PROFILE_SCOPE("StepBuildField.CreateDecorations");
     CreateDecorations(ctx, m_buildFieldWidth, m_buildFieldDepth, m_biome);
-    BeginSurfaceGrassBuild(ctx, m_buildFieldWidth, m_buildFieldDepth);
     m_buildPhase   = BuildPhase::CreateSurfaceGrass;
     m_buildProgress = 0.96f;
     return false;
@@ -492,9 +491,7 @@ bool WikiTerrainSystem::StepBuildField(core::GameContext &ctx)
 
   case BuildPhase::CreateSurfaceGrass: {
     PROFILE_SCOPE("StepBuildField.CreateSurfaceGrass");
-    if (!StepSurfaceGrassBuild(ctx)) {
-      return false;
-    }
+    CreateSurfaceGrass(ctx);
     m_buildPhase   = BuildPhase::Done;
     m_buildProgress = 1.0f;
     m_tileMeshCaches.clear(); // メモリ解放

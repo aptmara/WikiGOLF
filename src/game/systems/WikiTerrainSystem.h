@@ -99,53 +99,17 @@ public:
    */
   float GetSceneryHeight(float x, float z) const;
 
-  /** @brief ボール近傍の芝を倒し、離れた芝を元の姿勢へ戻す*/
-  void UpdateSurfaceResponse(core::GameContext &ctx, ecs::Entity ballEntity,
-                             float dt);
-
-  /** @brief 視点移動に合わせて表示範囲の芝を更新する。*/
-  void UpdateSurfaceGrass(core::GameContext &ctx, ecs::Entity cameraEntity);
+  /** @brief ボールの位置・速度・接地を、芝の踏み跡の入力（GrassTrampleInput）へ渡す*/
+  void UpdateSurfaceResponse(core::GameContext &ctx, ecs::Entity ballEntity);
 
   /** @brief 空に浮かぶ地球儀をゆっくり自転・上下させる。*/
   void UpdateSkyGlobes(core::GameContext &ctx, float dt);
 
 private:
-  struct GrassPatch {
-    ecs::Entity entity = 0xFFFFFFFF;
-    size_t instanceIndex = 0;
-    DirectX::XMFLOAT3 position = {0.0f, 0.0f, 0.0f};
-    DirectX::XMFLOAT2 interactionPoint = {100000.0f, 100000.0f};
-    float interactionYaw = 0.0f;
-    float response = 0.0f;
-    float halfExtent = 1.0f;
-  };
-
-  struct SurfaceGrassChunkBuildState {
-    bool active = false;
-    uint64_t chunkKey = 0;
-    size_t roughCellIndex = 0;
-    size_t turfCellIndex = 0;
-    std::unordered_map<uint32_t, ecs::Entity> batches;
-  };
-
   std::vector<ecs::Entity> m_entities;
-  std::vector<ecs::Entity> m_surfaceGrassEntities;
-  std::unordered_map<uint64_t, std::vector<ecs::Entity>>
-      m_surfaceGrassEntitiesByChunk;
-  std::deque<uint64_t> m_pendingSurfaceGrassChunks;
-  SurfaceGrassChunkBuildState m_surfaceGrassChunkBuild;
-  std::vector<GrassPatch> m_grassPatches;
   ecs::Entity m_floorEntity = 0xFFFFFFFF;
   std::shared_ptr<TerrainData> m_terrainData;
   bool m_tutorialMode = false;
-  float m_grassFieldWidth = 0.0f;
-  float m_grassFieldDepth = 0.0f;
-  int m_grassViewChunkX = (std::numeric_limits<int>::max)();
-  int m_grassViewChunkZ = (std::numeric_limits<int>::max)();
-
-  // ボールが通った軌跡（一定距離ぶんだけ保持し、草の倒れ込みに反映する）。
-  // 先頭が最も古いサンプル、末尾が最新のボール位置。
-  std::deque<DirectX::XMFLOAT3> m_ballTrail;
 
   /** @brief 床作成（同期版 / BuildFieldから呼ぶ）*/
   void CreateFloor(core::GameContext &ctx,
@@ -229,24 +193,8 @@ private:
   void CreateDecorations(core::GameContext &ctx, float fieldWidth,
                          float fieldDepth, int biome);
 
-  /**
-   * @brief 草面装飾エンティティを配置します。
-   * @param ctx ゲームコンテキスト
-   * @param fieldWidth フィールド幅
-   * @param fieldDepth フィールド奥行き
-   */
-  void CreateSurfaceGrass(core::GameContext &ctx, float fieldWidth,
-                          float fieldDepth);
-  void BeginSurfaceGrassBuild(core::GameContext &ctx, float fieldWidth,
-                              float fieldDepth);
-  bool StepSurfaceGrassBuild(core::GameContext &ctx);
-  void UpdateSurfaceGrassChunks(core::GameContext &ctx, float centerX,
-                                float centerZ, size_t generationBudget);
-  bool GenerateSurfaceGrassChunk(core::GameContext &ctx, int chunkX,
-                                 int chunkZ, size_t instanceBudget,
-                                 size_t &generatedInstances);
-  void RemoveSurfaceGrassChunks(core::GameContext &ctx,
-                                const std::vector<uint64_t> &chunkKeys);
+  /** @brief 地形から芝の元データ（GrassFieldSource）を作る */
+  void CreateSurfaceGrass(core::GameContext &ctx);
   void ClearSurfaceGrass(core::GameContext &ctx);
 
   int m_biome = 0; /**< 現在のバイオーム*/
@@ -269,7 +217,7 @@ private:
     CreateWalls,       /**< 壁生成*/
     CreateBackdrop,    /**< 山並みの非同期生成を待ち、メッシュと空の地球儀を作成*/
     CreateDecorations, /**< 装飾生成*/
-    CreateSurfaceGrass,/**< 草チャンク生成（複数フレーム）*/
+    CreateSurfaceGrass,/**< 芝の元データ生成*/
     Done
   };
 

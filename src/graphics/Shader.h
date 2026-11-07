@@ -17,6 +17,14 @@ namespace graphics {
 
 using Microsoft::WRL::ComPtr;
 
+/**
+ * @brief HLSL ファイルのエントリ main のバイトコードを得る（事前コンパイル済みがあればそれを使う）
+ * @param profile "vs_5_0" / "ps_5_0" / "cs_5_0"
+ * @return 失敗時は false（エラーはログへ出す）
+ */
+bool LoadShaderBytecode(const std::wstring &path, const char *profile,
+                        ComPtr<ID3DBlob> &blob);
+
 /** @brief シェーダープログラム */
 class Shader {
 public:

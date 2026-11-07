@@ -4,7 +4,7 @@
 */
 
 #include "RenderSystem.h"
-#include "GrassRenderRules.h"
+#include "GrassFieldRenderer.h"
 #include "ShadowRenderSystem.h"
 #include "../../core/Logger.h"
 #include "../../core/Profiler.h"
@@ -12,7 +12,6 @@
 #include "../../graphics/GraphicsDevice.h"
 #include "../../resources/ResourceManager.h"
 #include "../components/Camera.h"
-#include "../components/GrassRenderBatch.h"
 #include "../components/MeshRenderer.h"
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
@@ -73,11 +72,6 @@ struct RenderState {
   ComPtr<ID3D11Buffer> instancedBuffer;
   ComPtr<ID3D11ShaderResourceView> instancedSRV;
   size_t instancedBufferSize = 0;
-  // 芝の描画上限による距離倍率。急に芝が消えたり現れたりしないよう、
-  // 目標値へフレームごとに近づける。
-  float grassLodScale = 1.0f;
-  float grassDrawScale = 1.0f;
-  GrassGpuLoadController grassGpuLoad;
   // TAA/DLSS用: 速度バッファの定数、前フレームのワールド行列・時刻、テクスチャLODバイアス
   ComPtr<ID3D11Buffer> temporalBuffer;
   std::unordered_map<ecs::Entity, XMFLOAT4X4> previousWorlds;
@@ -116,16 +110,6 @@ void CreateTextureSamplers(ID3D11Device *device, RenderState &state,
   state.samplerMipBias = mipBias;
 }
 
-/** @brief 芝の距離倍率を目標値へ近づけます。負荷を下げる方向は速く、戻す方向はゆっくり動かす。 */
-float ApproachGrassScale(float current, float target) {
-  constexpr float kDecreasePerFrame = 0.12f;
-  constexpr float kIncreasePerFrame = 0.015f;
-  if (target < current) {
-    return std::max(target, current - kDecreasePerFrame);
-  }
-  return std::min(target, current + kIncreasePerFrame);
-}
-
 } // namespace
 
 /**
@@ -150,15 +134,6 @@ struct RenderFrameStats {
   size_t drawCalls = 0;
   size_t instancedDrawCalls = 0;
   size_t nonInstancedDrawCalls = 0;
-  size_t grassBatchCandidates = 0;
-  size_t grassInstancesConsidered = 0;
-  size_t grassInstancesDistanceSkipped = 0;
-  size_t grassInstancesOverheadSkipped = 0;
-  size_t grassInstancesFrustumSkipped = 0;
-  size_t grassNearLodInstances = 0;
-  size_t grassMidLodInstances = 0;
-  size_t grassInstancesBudgetSkipped = 0;
-  uint64_t grassTriangles = 0;
 };
 
 void RenderSystem(core::GameContext &ctx) {
@@ -295,8 +270,10 @@ void RenderSystem(core::GameContext &ctx) {
 
   // TAA/DLSS: 再投影用にジッター無しの行列を登録してから、描画用の投影行列だけを
   // サブピクセルずらす（カリングは上で未ジッター行列を使用済み）。
-  ctx.graphics.SetTemporalCameraViewProjection(view * proj);
+  const XMMATRIX cullViewProjection = view * proj;
+  ctx.graphics.SetTemporalCameraViewProjection(cullViewProjection);
   ctx.graphics.ApplyProjectionJitter(proj);
+  const XMMATRIX jitteredViewProjection = view * proj;
 
   // 描画解像度を下げて復元する場合は、テクスチャを出力解像度相当の細かさで読む
   const float mipBias = ctx.graphics.GetTextureMipBias();
@@ -408,7 +385,6 @@ void RenderSystem(core::GameContext &ctx) {
   auto basicHandle = ctx.resource.FindShader("Basic");
   auto particleHandle = ctx.resource.FindShader("Particle");
   auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
-  auto grassHandle = ctx.resource.FindShader("Grass");
   auto terrainHandle = ctx.resource.FindShader("Terrain");
   // GolfBall は BasicVS.hlsl をそのまま使うピクセルシェーダーのみの派生なので、
   // Basic と同じくインスタンス化対応として扱う必要がある（含めないと
@@ -423,7 +399,7 @@ void RenderSystem(core::GameContext &ctx) {
                     : XMMatrixIdentity();
 
   // インスタンス構造体の定義
-  // BasicVS/GrassVS/FlagVS/ParticleVS/TrailVS の InstanceData と同じレイアウト
+  // BasicVS/FlagVS/ParticleVS/TrailVS の InstanceData と同じレイアウト
   struct InstanceData {
     XMFLOAT4X4 world;
     XMFLOAT4 color;
@@ -479,9 +455,6 @@ void RenderSystem(core::GameContext &ctx) {
 
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> opaqueBuckets;
   std::unordered_map<RenderKey, std::vector<RenderInstance>, RenderKeyHash> transparentBuckets;
-  // GrassVS.hlslのMaterialColor.xyへ渡す描画距離倍率とラフのフェード倍率
-  float grassDrawScale = 1.0f;
-  float grassRoughFadeScale = 1.0f;
 
   auto reserveAdditionalInstances = [](auto &instances,
                                        size_t additionalCount) {
@@ -626,8 +599,6 @@ void RenderSystem(core::GameContext &ctx) {
               speedFactor,
               windYaw + flag->yawOffset
           );
-        } else if (r.shader == grassHandle) {
-          inst.flags = r.customFlags;
         } else {
           inst.flags = XMFLOAT4(
               diffFlag,
@@ -649,259 +620,6 @@ void RenderSystem(core::GameContext &ctx) {
           opaqueBuckets[key].push_back(inst);
         }
       });
-
-    // 芝はまず候補を集め、画面内ポリゴン上限に収まる距離倍率を決めてから
-    // バケットへ振り分ける。
-    struct GrassBatchDraw {
-      ecs::Entity entity;
-      const components::GrassRenderBatch *batch;
-      std::vector<RenderInstance> *nearInstances;
-      std::vector<RenderInstance> *midInstances;
-      uint32_t nearTriangles;
-      uint32_t lodTriangles;
-    };
-    struct GrassDrawCandidate {
-      uint32_t batchIndex;
-      const components::GrassRenderInstance *instance;
-      float distance;
-    };
-    std::vector<GrassBatchDraw> grassBatches;
-    std::vector<GrassDrawCandidate> grassCandidates;
-    std::vector<GrassBudgetSample> grassBudgetSamples;
-
-    auto collectGrassBatch =
-        [&](ecs::Entity e, components::GrassRenderBatch &batch) {
-          ++stats.candidates;
-          ++stats.grassBatchCandidates;
-          if (batch.instances.empty()) {
-            ++stats.invisibleSkipped;
-            return;
-          }
-          ++stats.visibleCandidates;
-
-          auto *candidateMesh = ctx.resource.GetMesh(batch.mesh);
-          if (!candidateMesh || !candidateMesh->IsValid()) {
-            ++stats.missingResourceSkipped;
-            return;
-          }
-          graphics::Mesh *lodCandidateMesh = nullptr;
-          if (batch.lodMesh.IsValid()) {
-            lodCandidateMesh = ctx.resource.GetMesh(batch.lodMesh);
-            if (!lodCandidateMesh || !lodCandidateMesh->IsValid()) {
-              ++stats.missingResourceSkipped;
-              return;
-            }
-          }
-
-          const XMFLOAT3 boundsCenter = {
-              (batch.boundsMin.x + batch.boundsMax.x) * 0.5f,
-              (batch.boundsMin.y + batch.boundsMax.y) * 0.5f,
-              (batch.boundsMin.z + batch.boundsMax.z) * 0.5f};
-          const XMFLOAT3 boundsExtents = {
-              (batch.boundsMax.x - batch.boundsMin.x) * 0.5f,
-              (batch.boundsMax.y - batch.boundsMin.y) * 0.5f,
-              (batch.boundsMax.z - batch.boundsMin.z) * 0.5f};
-
-          if (batch.maxDrawDistance > 0.0f) {
-            const float distanceX =
-                std::max(std::abs(camPos.x - boundsCenter.x) -
-                             boundsExtents.x,
-                         0.0f);
-            const float distanceY =
-                std::max(std::abs(camPos.y - boundsCenter.y) -
-                             boundsExtents.y,
-                         0.0f);
-            const float distanceZ =
-                std::max(std::abs(camPos.z - boundsCenter.z) -
-                             boundsExtents.z,
-                         0.0f);
-            const float batchDistanceSq =
-                distanceX * distanceX + distanceY * distanceY +
-                distanceZ * distanceZ;
-            if (batchDistanceSq >
-                batch.maxDrawDistance * batch.maxDrawDistance) {
-              ++stats.lodDistanceSkipped;
-              stats.grassInstancesDistanceSkipped += batch.instances.size();
-              return;
-            }
-          }
-
-          const BoundingBox worldBounds(boundsCenter, boundsExtents);
-          if (worldFrustum.Contains(worldBounds) == DISJOINT) {
-            ++stats.frustumSkipped;
-            return;
-          }
-
-          RenderKey nearKey;
-          nearKey.mesh = batch.mesh;
-          nearKey.shader = batch.shader;
-          nearKey.blendMode = components::BlendMode::Opaque;
-          nearKey.isTransparent = false;
-          nearKey.twoSided = batch.twoSided;
-
-          auto &nearInstances = opaqueBuckets[nearKey];
-          reserveAdditionalInstances(nearInstances, batch.instances.size());
-
-          std::vector<RenderInstance> *midInstances = nullptr;
-          if (batch.lodMesh.IsValid() && batch.lodSwitchDistance > 0.0f) {
-            RenderKey midKey = nearKey;
-            midKey.mesh = batch.lodMesh;
-            midInstances = &opaqueBuckets[midKey];
-            reserveAdditionalInstances(*midInstances,
-                                       batch.instances.size());
-          }
-
-          const uint32_t batchIndex =
-              static_cast<uint32_t>(grassBatches.size());
-          const uint32_t nearTriangles = candidateMesh->GetIndexCount() / 3;
-          const uint32_t lodTriangles =
-              midInstances ? lodCandidateMesh->GetIndexCount() / 3
-                           : nearTriangles;
-          grassBatches.push_back({e, &batch, &nearInstances, midInstances,
-                                  nearTriangles, lodTriangles});
-
-          for (const auto &grassInstance : batch.instances) {
-            ++stats.grassInstancesConsidered;
-            const float dx = grassInstance.position.x - camPos.x;
-            const float dy = grassInstance.position.y - camPos.y;
-            const float dz = grassInstance.position.z - camPos.z;
-            const float distanceSq = dx * dx + dy * dy + dz * dz;
-            if (batch.maxDrawDistance > 0.0f &&
-                distanceSq >
-                    batch.maxDrawDistance * batch.maxDrawDistance) {
-              ++stats.grassInstancesDistanceSkipped;
-              continue;
-            }
-            if (batch.maxThreeDOverheadRatio <= 1.0f) {
-              const float overheadThreshold =
-                  batch.maxThreeDOverheadRatio * batch.maxThreeDOverheadRatio;
-              if (dy * dy >= overheadThreshold *
-                                 std::max(distanceSq, 0.0001f)) {
-                ++stats.grassInstancesOverheadSkipped;
-                continue;
-              }
-            }
-            // LODメッシュは近距離メッシュの部分集合なので、近距離側の
-            // 境界球で判定すればどちらのメッシュでも取りこぼさない。
-            BoundingSphere instanceBounds;
-            candidateMesh->GetBounds().Transform(
-                instanceBounds, XMLoadFloat4x4(&grassInstance.world));
-            if (worldFrustum.Contains(instanceBounds) == DISJOINT) {
-              ++stats.grassInstancesFrustumSkipped;
-              continue;
-            }
-
-            const float distance = std::sqrt(distanceSq);
-            grassCandidates.push_back({batchIndex, &grassInstance, distance});
-            GrassBudgetSample sample;
-            sample.distance = distance;
-            sample.lodSwitchDistance =
-                midInstances ? batch.lodSwitchDistance : 0.0f;
-            sample.maxDrawDistance = batch.maxDrawDistance;
-            sample.nearTriangles = nearTriangles;
-            sample.lodTriangles = lodTriangles;
-            grassBudgetSamples.push_back(sample);
-          }
-        };
-
-    auto *grassSpatialIndex =
-        world.GetGlobal<components::GrassRenderSpatialIndex>();
-    if (grassSpatialIndex && grassSpatialIndex->chunkSize > 0.0f) {
-      const float queryDistance = grassSpatialIndex->maxDrawDistance +
-                                  grassSpatialIndex->maxHorizontalExtent;
-      const int minChunkX = static_cast<int>(
-          std::floor((camPos.x - queryDistance) / grassSpatialIndex->chunkSize));
-      const int maxChunkX = static_cast<int>(
-          std::floor((camPos.x + queryDistance) / grassSpatialIndex->chunkSize));
-      const int minChunkZ = static_cast<int>(
-          std::floor((camPos.z - queryDistance) / grassSpatialIndex->chunkSize));
-      const int maxChunkZ = static_cast<int>(
-          std::floor((camPos.z + queryDistance) / grassSpatialIndex->chunkSize));
-
-      for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; ++chunkZ) {
-        for (int chunkX = minChunkX; chunkX <= maxChunkX; ++chunkX) {
-          const auto chunkIt = grassSpatialIndex->batchesByChunk.find(
-              components::GrassRenderSpatialIndex::MakeKey(chunkX, chunkZ));
-          if (chunkIt == grassSpatialIndex->batchesByChunk.end()) {
-            continue;
-          }
-          for (ecs::Entity entity : chunkIt->second) {
-            auto *batch = world.Get<components::GrassRenderBatch>(entity);
-            if (batch) {
-              collectGrassBatch(entity, *batch);
-            }
-          }
-        }
-      }
-    } else {
-      world.Query<components::GrassRenderBatch>().Each(collectGrassBatch);
-    }
-
-    // 画面内の芝ポリゴン数を上限に収める。超える場合は中距離の密度を
-    // 落とし、次に遠くの芝から消す。消える距離はシェーダーのディザー
-    // フェードにも同じ倍率で渡すため、パッチ形状のまま途切れない。
-    // プリセットの上限に、GPU時間から決めた倍率を掛ける。
-    UpdateGrassGpuLoad(state->grassGpuLoad,
-                       ctx.graphics.GetLatestGpuFrameMs());
-    const uint64_t grassTriangleBudget =
-        grassSpatialIndex && grassSpatialIndex->triangleBudget > 0
-            ? std::max<uint64_t>(
-                  1, static_cast<uint64_t>(
-                         static_cast<double>(grassSpatialIndex->triangleBudget) *
-                         state->grassGpuLoad.budgetScale))
-            : 0;
-    const GrassBudgetScales grassTarget =
-        SolveGrassDrawBudget(grassBudgetSamples, grassTriangleBudget);
-    state->grassLodScale =
-        ApproachGrassScale(state->grassLodScale, grassTarget.lodScale);
-    state->grassDrawScale =
-        ApproachGrassScale(state->grassDrawScale, grassTarget.drawScale);
-    grassDrawScale = state->grassDrawScale;
-    if (grassSpatialIndex) {
-      grassRoughFadeScale = grassSpatialIndex->roughFadeScale;
-    }
-    const float grassExtentMargin =
-        grassSpatialIndex ? grassSpatialIndex->maxHorizontalExtent : 0.0f;
-
-    for (const auto &candidate : grassCandidates) {
-      const auto &draw = grassBatches[candidate.batchIndex];
-      const auto &batch = *draw.batch;
-      if (batch.maxDrawDistance > 0.0f) {
-        // 倍率を掛けたフェード終了距離より、パッチの半径分だけ遠くまで
-        // 残して、端の葉がフェードしきる前に切らないようにする。
-        const float cutoff =
-            batch.maxDrawDistance * grassDrawScale +
-            (1.0f - grassDrawScale) * grassExtentMargin;
-        if (candidate.distance > cutoff) {
-          ++stats.grassInstancesBudgetSkipped;
-          continue;
-        }
-      }
-
-      RenderInstance instance;
-      instance.entity = draw.entity;
-      instance.worldMatrix = XMLoadFloat4x4(&candidate.instance->world);
-      // 芝の株は移動しない（揺れはシェーダーが前フレーム時刻で再計算する）
-      instance.prevWorldMatrix = instance.worldMatrix;
-      instance.color = candidate.instance->color;
-      instance.flags = candidate.instance->flags;
-
-      const bool usesMidLod =
-          draw.midInstances &&
-          candidate.distance >
-              batch.lodSwitchDistance * state->grassLodScale;
-      if (usesMidLod) {
-        draw.midInstances->push_back(instance);
-        ++stats.grassMidLodInstances;
-        stats.grassTriangles += draw.lodTriangles;
-      } else {
-        draw.nearInstances->push_back(instance);
-        if (draw.midInstances || batch.twoSided) {
-          ++stats.grassNearLodInstances;
-        }
-        stats.grassTriangles += draw.nearTriangles;
-      }
-    }
   }
 
   // バケットごとの描画関数
@@ -966,7 +684,7 @@ void RenderSystem(core::GameContext &ctx) {
 
     const bool supportsInstancing =
         (key.shader == basicHandle || key.shader == particleHandle ||
-         key.shader == flagClothHandle || key.shader == grassHandle ||
+         key.shader == flagClothHandle ||
          key.shader == golfBallHandle);
 
     if (supportsInstancing) {
@@ -998,17 +716,7 @@ void RenderSystem(core::GameContext &ctx) {
             XMFLOAT4(shadowEnabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
         constants->world = XMMatrixIdentity();
         constants->materialColor = XMFLOAT4(1, 1, 1, 1);
-        if (key.shader == grassHandle) {
-          constants->materialColor =
-              XMFLOAT4(grassDrawScale, grassRoughFadeScale, 0.0f, 0.0f);
-        }
-        if (key.shader == grassHandle && golfState) {
-          constants->materialFlags =
-              XMFLOAT4(golfState->windDirection.x,
-                       golfState->windDirection.y, golfState->windSpeed, 0.0f);
-        } else {
-          constants->materialFlags = XMFLOAT4(0, 0, 0, 0);
-        }
+        constants->materialFlags = XMFLOAT4(0, 0, 0, 0);
         context->Unmap(state->cBuffer.Get(), 0);
       }
       context->VSSetConstantBuffers(0, 1, state->cBuffer.GetAddressOf());
@@ -1078,11 +786,25 @@ void RenderSystem(core::GameContext &ctx) {
     // TAA/DLSS有効時は、メッシュ描画の間だけ速度バッファへも書き込む
     ctx.graphics.BindSceneVelocityTarget();
 
+    // 芝は手前に密に立つので先に描き、背後の地形などを深度で早く捨てる
+    GrassFieldFrameInput grassInput;
+    grassInput.viewProjection = jitteredViewProjection;
+    grassInput.cullViewProjection = cullViewProjection;
+    grassInput.cameraPosition = camPos;
+    grassInput.shadowViewProjection =
+        shadowEnabled ? shadowState->lightViewProjection : XMMatrixIdentity();
+    grassInput.shadowEnabled = shadowEnabled;
+    if (shadowEnabled) {
+      grassInput.shadowMap = shadowState->shaderResourceView.Get();
+      grassInput.shadowSampler = shadowState->comparisonSampler.Get();
+    }
+    grassInput.golfCupBuffer = state->golfCupBuffer.Get();
+    RenderGrassField(ctx, grassInput);
+
     // GPU.Meshesの内訳。同名スコープはフレーム内で合算される
     const auto gpuCategoryOf = [&](const RenderKey &key) -> const char * {
       if (key.usesHtmlTerrainSampler) return "GPU.Meshes.HtmlOverlay";
       if (key.shader == terrainHandle) return "GPU.Meshes.Terrain";
-      if (key.shader == grassHandle) return "GPU.Meshes.Grass";
       if (key.shader == flagClothHandle) return "GPU.Meshes.Flag";
       if (key.isTransparent) return "GPU.Meshes.Transparent";
       if (key.shader == basicHandle) return "GPU.Meshes.Basic";
@@ -1124,35 +846,6 @@ void RenderSystem(core::GameContext &ctx) {
                       static_cast<double>(stats.instancedDrawCalls));
   profiler.SetCounter("Render.NonInstancedDrawCalls",
                       static_cast<double>(stats.nonInstancedDrawCalls));
-  profiler.SetCounter("Render.GrassBatchCandidates",
-                      static_cast<double>(stats.grassBatchCandidates));
-  profiler.SetCounter("Render.GrassInstancesConsidered",
-                      static_cast<double>(stats.grassInstancesConsidered));
-  profiler.SetCounter(
-      "Render.GrassInstancesDistanceSkipped",
-      static_cast<double>(stats.grassInstancesDistanceSkipped));
-  profiler.SetCounter(
-      "Render.GrassInstancesOverheadSkipped",
-      static_cast<double>(stats.grassInstancesOverheadSkipped));
-  profiler.SetCounter(
-      "Render.GrassInstancesFrustumSkipped",
-      static_cast<double>(stats.grassInstancesFrustumSkipped));
-  profiler.SetCounter("Render.GrassNearLodInstances",
-                      static_cast<double>(stats.grassNearLodInstances));
-  profiler.SetCounter("Render.GrassMidLodInstances",
-                      static_cast<double>(stats.grassMidLodInstances));
-  profiler.SetCounter("Render.GrassInstancesBudgetSkipped",
-                      static_cast<double>(stats.grassInstancesBudgetSkipped));
-  profiler.SetCounter("Render.GrassTriangles",
-                      static_cast<double>(stats.grassTriangles));
-  profiler.SetCounter("Render.GrassLodScale",
-                      static_cast<double>(state->grassLodScale));
-  profiler.SetCounter("Render.GrassDrawScale",
-                      static_cast<double>(state->grassDrawScale));
-  profiler.SetCounter("Render.GrassBudgetScale",
-                      static_cast<double>(state->grassGpuLoad.budgetScale));
-  profiler.SetCounter("Render.GrassSmoothedGpuMs",
-                      static_cast<double>(state->grassGpuLoad.smoothedGpuMs));
   profiler.SetCounter("Render.OpaqueBuckets",
                       static_cast<double>(opaqueBuckets.size()));
   profiler.SetCounter("Render.TransparentBuckets",
@@ -1181,20 +874,12 @@ void RenderSystem(core::GameContext &ctx) {
   if (isSlowFrame || isPeriodicLog) {
     LOG_INFO("RenderSystem",
              "Render stats frame={} elapsed={:.3f}ms candidates={} visible={} "
-             "grassBatches={} grassInstancesConsidered={} "
-             "grassInstancesDistanceSkipped={} grassInstancesOverheadSkipped={} "
-             "grassInstancesFrustumSkipped={} grassNearLod={} grassMidLod={} "
              "drawn={} opaque={} transparent={} textured={} normalMapped={} "
              "terrain={} holeFlags={} skippedInvisible={} skippedAlpha={} "
              "skippedTransparentDistance={} skippedLodDistance={} "
              "skippedFrustum={} skippedMissingResource={}",
              s_frameIndex, static_cast<double>(elapsedUs) / 1000.0,
              stats.candidates, stats.visibleCandidates,
-             stats.grassBatchCandidates, stats.grassInstancesConsidered,
-             stats.grassInstancesDistanceSkipped,
-             stats.grassInstancesOverheadSkipped,
-             stats.grassInstancesFrustumSkipped,
-             stats.grassNearLodInstances, stats.grassMidLodInstances,
              stats.drawn,
              stats.opaqueDrawn, stats.transparentDrawn, stats.texturedDrawn,
              stats.normalMappedDrawn, stats.terrainDrawn, stats.holeFlagDrawn,

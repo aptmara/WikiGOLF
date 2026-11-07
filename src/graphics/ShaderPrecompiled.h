@@ -4,7 +4,7 @@
  * @brief ビルド時にコンパイルしておいたシェーダー（.cso）の扱い
  * @details 起動やロードのたびに HLSL をコンパイルすると合計 2 秒ほどかかる。
  *          ビルド時に ShaderPrecompile が、ゲームと同じ D3DCompileFromFile と同じフラグで
- *          各 *VS.hlsl / *PS.hlsl のエントリ main をコンパイルし、同じフォルダへ
+ *          各 *VS.hlsl / *PS.hlsl / *CS.hlsl のエントリ main をコンパイルし、同じフォルダへ
  *          <名前>.cso を書く。最後に、そのときのソース（.hlsl / .hlsli）全体のハッシュを
  *          kShaderSourceHashFile に書く。
  *          ゲームはフォルダ内のソースのハッシュがこれと一致するときだけ .cso を使い、
@@ -28,13 +28,14 @@ namespace graphics::shader_precompiled {
 /** @brief ソースのハッシュを書くファイル名（シェーダーと同じフォルダ） */
 inline constexpr const wchar_t *kShaderSourceHashFile = L"precompiled_shaders.hash";
 
-/** @brief ファイル名から決まるプロファイル（*VS.hlsl / *PS.hlsl 以外は空） */
+/** @brief ファイル名から決まるプロファイル（*VS.hlsl / *PS.hlsl / *CS.hlsl 以外は空） */
 inline const char *ProfileFor(const std::filesystem::path &source) {
   const std::wstring stem = source.stem().wstring();
   if (source.extension() != L".hlsl" || stem.size() < 2) return nullptr;
   const std::wstring suffix = stem.substr(stem.size() - 2);
   if (suffix == L"VS") return "vs_5_0";
   if (suffix == L"PS") return "ps_5_0";
+  if (suffix == L"CS") return "cs_5_0";
   return nullptr;
 }
 

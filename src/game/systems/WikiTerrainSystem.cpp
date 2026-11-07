@@ -13,7 +13,6 @@
 #include "../../core/StringUtils.h"
 #include "../../ecs/World.h"
 #include "../../resources/ResourceManager.h"
-#include "../components/GrassRenderBatch.h"
 #include "../components/MeshRenderer.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Camera.h"
@@ -57,10 +56,6 @@ void WikiTerrainSystem::Clear(core::GameContext &ctx) {
   m_buildTiles.clear();
   m_buildLinks.clear();
   ClearSurfaceGrass(ctx);
-  m_grassFieldWidth = 0.0f;
-  m_grassFieldDepth = 0.0f;
-  m_grassViewChunkX = (std::numeric_limits<int>::max)();
-  m_grassViewChunkZ = (std::numeric_limits<int>::max)();
 
   for (auto e : m_entities) {
     if (ctx.world.IsAlive(e)) {
@@ -91,7 +86,7 @@ void WikiTerrainSystem::BuildField(core::GameContext &ctx,
   CreateBackdrop(ctx, pageTitle);
   CreateSkyGlobes(ctx, pageTitle);
   CreateDecorations(ctx, fieldWidth, fieldDepth, m_biome);
-  CreateSurfaceGrass(ctx, fieldWidth, fieldDepth);
+  CreateSurfaceGrass(ctx);
 }
 
 /**

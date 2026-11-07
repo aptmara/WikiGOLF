@@ -156,7 +156,7 @@ WikiGOLF/
 - **`game::systems::WikiTerrainSystem` & `TerrainGenerator`**:
   記事の文字数、段落構成、画像位置に応じてハイトマップとマテリアルマップ（Fairway, Rough, Bunker, Green, Ice, Water, Lava, Stone）を動的生成。
   - **インクリメンタルビルド**: 画面フリーズを防ぐため、`std::async` で地形データを事前計算し、メインスレッド上でフレームごとに1タイルずつメッシュ化 (`StepBuildField`)。
-  - **動的プロシージャル芝**: ラフおよびフェアウェイ上に千鳥配置で高密度の草パッチメッシュをインスタンシング配置。ボール通過時のなぎ倒し物理インタラクション (`UpdateSurfaceResponse`) をHLSL (`GrassVS.hlsl`) 経由で実行。
+  - **GPU 駆動の手続き的な芝**: コース構築時に `GrassFieldBuilder` が地形から芝の種類・密度のテクスチャとタイル情報（`GrassFieldSource`）を作る。描画は `GrassFieldRenderer` が計算シェーダーでカメラ周りのタイルを判定し（`GrassCullCS.hlsl`）、頂点バッファなしで葉を組み立てて間接描画する（`GrassFieldVS.hlsl`）。風（`GrassWindCS.hlsl`）とボールの踏み跡（`GrassTrampleCS.hlsl`、入力は `UpdateSurfaceResponse` が渡す `GrassTrampleInput`）も GPU で計算する。密度・LOD・距離の規則は `GrassFieldRules.h`。詳しくは `docs/grass-gpu-driven-design.md`。
 - **`game::systems::WikiShortestPath`**:
   リンクグラフ (`Assets/data/jawiki.linkgraph`) をプロセス内で1度だけ読み込み、ゴールごとに逆向き幅優先探索（全コアで並列）で全記事の手数表を作る。現在地や各リンクからゴールまでの最短ホップ数は表を引くだけで求まる。
   - 記事内の全リンクについてゴールまでの残りホップ数を一括計算し、ホールの旗（ゴール直通、1ホップ、2ホップ等）の配色・大型化に反映。

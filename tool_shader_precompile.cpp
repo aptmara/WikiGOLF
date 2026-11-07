@@ -3,7 +3,7 @@
  * @brief ビルド時にシェーダーをコンパイルして .cso を書く（ビルド後に自動で実行される）
  * @details 使い方: tool_shader_precompile <シェーダーのフォルダ>
  *          ゲーム（Shader.cpp）と同じ D3DCompileFromFile・同じフラグ（Release の 0）で
- *          *VS.hlsl / *PS.hlsl のエントリ main をコンパイルする。詳しくは ShaderPrecompiled.h。
+ *          *VS.hlsl / *PS.hlsl / *CS.hlsl のエントリ main をコンパイルする。詳しくは ShaderPrecompiled.h。
  *          ソースが前回と同じなら何もしない。
  */
 

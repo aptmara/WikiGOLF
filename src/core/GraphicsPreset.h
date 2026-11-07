@@ -56,6 +56,11 @@ constexpr GraphicsPreset InferGraphicsPresetFromVideoMemory(
   if (dedicatedVideoMemoryBytes <= 4ull * kGiB) {
     return GraphicsPreset::High;
   }
+  // 16GB と表記される GPU は、予約領域の分だけ 16GiB をわずかに下回って報告される。
+  constexpr uint64_t kUltraThresholdMiB = 15ull * 1024ull + 512ull;
+  if (dedicatedVideoMemoryBytes >= kUltraThresholdMiB * 1024ull * 1024ull) {
+    return GraphicsPreset::Ultra;
+  }
   return GraphicsPreset::ExHigh;
 }
 

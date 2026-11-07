@@ -38,51 +38,6 @@ public:
   static Mesh CreateRock(ID3D11Device *device, int rings = 12,
                          int sectors = 18);
 
-  /** @brief 複数の細い葉を交差させた芝クランプを生成 */
-  static Mesh CreateGrassClump(ID3D11Device *device);
-
-  /**
-   * @brief 地表を連続して覆うため、葉を面状に分散した芝パッチを生成
-   *        葉1枚は3頂点1三角形で、裏面は両面ラスタライザで描画する前提。
-   * @param variantSeed 個体差を出すためのバリアントID（0以上、値ごとに異なる配置になる）
-   * @param keepRatio 残す葉の割合。同じ引数で1.0のパッチの部分集合になる（LOD用）
-   * @param widthScale 間引いた分の被覆を補う葉幅の倍率
-   */
-  static Mesh CreateGrassPatch(ID3D11Device *device, uint32_t variantSeed = 0,
-                               int gridSize = 9, int bladesPerCell = 2,
-                               float keepRatio = 1.0f,
-                               float widthScale = 1.0f);
-
-  /**
-   * @brief フェアウェイ/グリーン用の刈り込み芝パッチを生成。
-   *        ラフ用と異なり株の向きのばらつきを小さく抑え、配置側で
-   *        パッチ全体をまとめて回転させることで刈り跡のように揃って見せる。
-   * @param variantSeed 個体差を出すためのバリアントID（0以上、値ごとに異なる配置になる）
-   */
-  static Mesh CreateTurfPatch(ID3D11Device *device, uint32_t variantSeed = 0);
-
-  /**
-   * @brief フェアウェイ/グリーンの近距離LOD用高密度芝パッチを生成
-   * @param variantSeed 個体差を出すためのバリアントID（0以上、値ごとに異なる配置になる）
-   */
-  static Mesh CreateDenseTurfPatch(ID3D11Device *device,
-                                   uint32_t variantSeed = 0);
-
-  /** @brief グリーンの接近時LOD用に葉を追加した超高密度芝パッチを生成 */
-  static Mesh CreateUltraDenseTurfPatch(ID3D11Device *device,
-                                        uint32_t variantSeed = 0);
-
-  /**
-   * @brief フェアウェイの低角度・近距離LOD用高密度芝パッチを生成
-   * @param variantSeed 個体差を出すためのバリアントID（0以上、値ごとに異なる配置になる）
-   */
-  static Mesh CreateDenseFairwayTurfPatch(ID3D11Device *device,
-                                          uint32_t variantSeed = 0);
-
-  /** @brief フェアウェイの接近時LOD用に葉を追加した超高密度芝パッチを生成 */
-  static Mesh CreateUltraDenseFairwayTurfPatch(ID3D11Device *device,
-                                               uint32_t variantSeed = 0);
-
   /** @brief 中央の窪みと盛り上がった縁を持つ砂の衝突跡を生成 */
   static Mesh CreateSandCrater(ID3D11Device *device, int segments = 32);
 

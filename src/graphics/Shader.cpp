@@ -33,6 +33,28 @@ HRESULT CompileOrLoad(const std::wstring &path, const std::string &entry,
 
 } // namespace
 
+bool LoadShaderBytecode(const std::wstring &path, const char *profile,
+                        ComPtr<ID3DBlob> &blob) {
+  UINT compileFlags = 0;
+#ifdef _DEBUG
+  compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+  ComPtr<ID3DBlob> errorBlob;
+  const HRESULT hr =
+      CompileOrLoad(path, "main", profile, compileFlags, blob, errorBlob);
+  if (FAILED(hr)) {
+    if (errorBlob) {
+      LOG_ERROR("Shader", "{} Compile Error: {}", profile,
+                static_cast<const char *>(errorBlob->GetBufferPointer()));
+    } else {
+      LOG_ERROR("Shader", "{} Compile Error: hr=0x{:08X}", profile,
+                static_cast<unsigned>(hr));
+    }
+    return false;
+  }
+  return true;
+}
+
 bool Shader::LoadFromFile(
     ID3D11Device *device, const std::wstring &vsPath,
     const std::string &vsEntry, const std::wstring &psPath,

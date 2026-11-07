@@ -85,8 +85,6 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
 
         LOG_INFO("TitleScene", "Step 2: LoadShader Basic");
         ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
-        LOG_INFO("TitleScene", "Step 3: LoadShader Grass");
-        ctx.resource.LoadShader("Grass", L"Assets/shaders/GrassVS.hlsl", L"Assets/shaders/GrassPS.hlsl");
         LOG_INFO("TitleScene", "Step 4: LoadShader Skybox");
         ctx.resource.LoadShader("Skybox", L"Assets/shaders/SkyboxVS.hlsl", L"Assets/shaders/SkyboxPS.hlsl");
 
@@ -96,12 +94,6 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
         LOG_INFO("TitleScene", "Step 6: LoadMesh globe");
         ctx.resource.LoadMesh(game::systems::kGlobeLodModels[0]);
         ctx.resource.LoadModelTextures(game::systems::kGlobeLodModels[0]);
-
-        LOG_INFO("TitleScene", "Step 7: LoadMesh ultra grass variants");
-        for (int variant = 0; variant < 4; ++variant) {
-          ctx.resource.LoadMesh("builtin/grass_patch_ultra_" +
-                                std::to_string(variant));
-        }
 
         LOG_INFO("TitleScene", "Step 8: LoadTextureSRV");
         ctx.resource.LoadTextureSRV("Assets/textures/GRASS_BASE.png");

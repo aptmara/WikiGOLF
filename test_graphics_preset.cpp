@@ -16,6 +16,16 @@ int main() {
                 GraphicsPreset::High);
   static_assert(core::InferGraphicsPresetFromVideoMemory(8ull * gib) ==
                 GraphicsPreset::ExHigh);
+  static_assert(core::InferGraphicsPresetFromVideoMemory(12ull * gib) ==
+                GraphicsPreset::ExHigh);
+  // 16GB 表記の GPU が報告する、16GiB をわずかに下回る値
+  static_assert(core::InferGraphicsPresetFromVideoMemory(16376ull * 1024ull *
+                                                         1024ull) ==
+                GraphicsPreset::Ultra);
+  static_assert(core::InferGraphicsPresetFromVideoMemory(16ull * gib) ==
+                GraphicsPreset::Ultra);
+  static_assert(core::InferGraphicsPresetFromVideoMemory(24ull * gib) ==
+                GraphicsPreset::Ultra);
 
   const auto low = core::GetGraphicsPresetSettings(GraphicsPreset::Low);
   assert(low.renderScale == 0.60f);

@@ -25,6 +25,7 @@
 #include "../components/UIText.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../systems/GrassFieldRenderer.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/TerrainGenerator.h"
 #include "../systems/WikiClient.h"
@@ -79,6 +80,7 @@ void TitleScene::OnExit(core::GameContext &ctx) {
     m_videoPlayer.reset();
   }
   DestroyAllEntities(ctx);
+  game::systems::ClearGrassField(ctx);
   m_menuEntries.clear();
 }
 

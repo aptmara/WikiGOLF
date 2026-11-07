@@ -29,6 +29,7 @@
 #include "../utils/ProceduralFlag.h"
 #include "../utils/TrajectorySimulation.h"
 #include "PauseScene.h"
+#include "../systems/GrassFieldRenderer.h"
 #include <algorithm>
 
 namespace game::scenes {
@@ -564,6 +565,7 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
   }
 
   DestroyAllEntities(ctx);
+  game::systems::ClearGrassField(ctx);
 
   // グローバルデータから演出システムを削除（ダングリングポインタ防止）
   ctx.world.SetGlobal<game::systems::GameJuiceSystem *>(nullptr);

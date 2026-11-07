@@ -416,7 +416,6 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tools/WikiImagePreview.cpp")
         src/graphics/Shader.cpp
         src/graphics/Mesh.cpp
         src/graphics/MeshPrimitives.cpp
-        src/graphics/MeshPrimitivesGrass.cpp
         src/graphics/MeshPrimitivesTerrain.cpp
         src/graphics/TangentGenerator.cpp
         src/game/systems/WikiClient.cpp
@@ -678,15 +677,27 @@ if(MSVC)
 endif()
 add_test(NAME terrain_generation COMMAND test_terrain_generation)
 
-add_executable(test_grass_streaming_rules test_grass_streaming_rules.cpp)
-target_precompile_headers(test_grass_streaming_rules REUSE_FROM wikigolf_pch)
-target_include_directories(test_grass_streaming_rules PRIVATE src)
+add_executable(test_grass_field_rules test_grass_field_rules.cpp)
+target_precompile_headers(test_grass_field_rules REUSE_FROM wikigolf_pch)
+target_include_directories(test_grass_field_rules PRIVATE src)
 if(MSVC)
-    target_compile_definitions(test_grass_streaming_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
-                                                               -DWIN32_LEAN_AND_MEAN)
-    target_compile_options(test_grass_streaming_rules PRIVATE /utf-8 /Zc:__cplusplus)
+    target_compile_definitions(test_grass_field_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                           -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_grass_field_rules PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
-add_test(NAME grass_streaming_rules COMMAND test_grass_streaming_rules)
+add_test(NAME grass_field_rules COMMAND test_grass_field_rules)
+
+add_executable(test_grass_field_builder
+    test_grass_field_builder.cpp
+    src/game/systems/GrassFieldBuilder.cpp)
+target_precompile_headers(test_grass_field_builder REUSE_FROM wikigolf_pch)
+target_include_directories(test_grass_field_builder PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_grass_field_builder PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                             -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_grass_field_builder PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME grass_field_builder COMMAND test_grass_field_builder)
 
 add_executable(test_graphics_preset test_graphics_preset.cpp)
 target_precompile_headers(test_graphics_preset REUSE_FROM wikigolf_pch)
@@ -757,7 +768,6 @@ add_executable(test_resource_manager_rules
     src/graphics/ObjLoader.cpp
     src/graphics/Mesh.cpp
     src/graphics/MeshPrimitives.cpp
-    src/graphics/MeshPrimitivesGrass.cpp
     src/graphics/MeshPrimitivesTerrain.cpp
     src/graphics/TangentGenerator.cpp
     src/graphics/Shader.cpp)
@@ -776,7 +786,6 @@ add_executable(test_mesh_primitives_rules
     test_mesh_primitives_rules.cpp
     src/graphics/Mesh.cpp
     src/graphics/MeshPrimitives.cpp
-    src/graphics/MeshPrimitivesGrass.cpp
     src/graphics/MeshPrimitivesTerrain.cpp
     src/graphics/TangentGenerator.cpp)
 target_precompile_headers(test_mesh_primitives_rules REUSE_FROM wikigolf_pch)
