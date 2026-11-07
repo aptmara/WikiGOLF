@@ -100,6 +100,7 @@ void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
   auto sphereMesh = ctx.resource.LoadMesh("builtin/sphere_smooth");
   auto rockMesh = ctx.resource.LoadMesh("builtin/rock");
 
+  int createdClusters = 0;
   auto createPiece = [&](resources::MeshHandle mesh, const XMFLOAT4 &color,
                          const XMFLOAT3 &position, const XMFLOAT3 &scale,
                          float pitch, float yaw, float roll) {
@@ -116,12 +117,16 @@ void WikiTerrainSystem::CreateDecorations(core::GameContext &ctx,
     mr.mesh = mesh;
     mr.shader = basicShader;
     mr.color = color;
+    // カメラとボールの間に入ったら、ロボットと同じドット状フェードで薄くする
+    mr.usesDitherFade = true;
     m_entities.push_back(e);
     ctx.world.Add<TerrainObject>(e);
+    auto &fade = ctx.world.Add<CameraOcclusionFade>(e);
+    fade.group = static_cast<uint32_t>(createdClusters);
+    fade.baseAlpha = color.w;
   };
 
   std::vector<XMFLOAT2> clusterPositions;
-  int createdClusters = 0;
   const int maxAttempts = targetClusters * 30;
   for (int attempt = 0;
        attempt < maxAttempts && createdClusters < targetClusters; ++attempt) {

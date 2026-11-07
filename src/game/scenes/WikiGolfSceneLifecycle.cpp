@@ -25,6 +25,7 @@
 #include "../utils/CarryDistanceTable.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/FlagFadeRules.h"
+#include "../utils/OcclusionFadeRules.h"
 #include "../utils/PageHistoryUtils.h"
 #include "../utils/ProceduralFlag.h"
 #include "../utils/TrajectorySimulation.h"
@@ -69,6 +70,52 @@ void WikiGolfScene::UpdateProceduralFlagEffects(core::GameContext &ctx,
         std::clamp(targetAlpha - flag.fadeAlpha, -fadeStep, fadeStep);
     renderer->color.w = flag.baseAlpha * flag.fadeAlpha;
   });
+}
+
+/**
+ * @brief カメラとボールの間に入った木や岩をドット状フェードで薄くします。
+ * @details ロボットのテレポートと同じ usesDitherFade と color.w の仕組みを使います。
+ * 同じ組の部品(木の幹と葉など)は、いちばん遮っている部品に合わせてまとめて薄くします。
+*/
+void WikiGolfScene::UpdateCameraOcclusionFade(core::GameContext &ctx,
+                                              float dt) {
+  const auto *cameraTransform = ctx.world.Get<Transform>(m_cameraEntity);
+  const auto *ballTransform = ctx.world.Get<Transform>(m_ballEntity);
+  if (!cameraTransform || !ballTransform) {
+    return;
+  }
+  const DirectX::XMFLOAT3 cameraPosition = cameraTransform->position;
+  const DirectX::XMFLOAT3 ballPosition = ballTransform->position;
+
+  // 1. 組ごとの目標描画率(部品のうち最も小さい値)を求める
+  m_occlusionGroupAlpha.clear();
+  ctx.world.Query<CameraOcclusionFade, Transform>().Each(
+      [&](ecs::Entity, CameraOcclusionFade &fade, Transform &transform) {
+        const float alpha = game::utils::CalculateOcclusionFadeAlpha(
+            cameraPosition, ballPosition, transform.position,
+            transform.rotation, transform.scale);
+        if (fade.group >= m_occlusionGroupAlpha.size()) {
+          m_occlusionGroupAlpha.resize(fade.group + 1, 1.0f);
+        }
+        float &groupAlpha = m_occlusionGroupAlpha[fade.group];
+        groupAlpha = (std::min)(groupAlpha, alpha);
+      });
+  if (m_occlusionGroupAlpha.empty()) {
+    return;
+  }
+
+  // 2. 目標へ一定速度で近づけ、描画へ反映する
+  constexpr float kFadeSpeed = 5.0f;
+  const float fadeStep = kFadeSpeed * dt;
+  ctx.world.Query<CameraOcclusionFade, MeshRenderer>().Each(
+      [&](ecs::Entity, CameraOcclusionFade &fade, MeshRenderer &renderer) {
+        const float target = fade.group < m_occlusionGroupAlpha.size()
+                                 ? m_occlusionGroupAlpha[fade.group]
+                                 : 1.0f;
+        fade.fadeAlpha +=
+            std::clamp(target - fade.fadeAlpha, -fadeStep, fadeStep);
+        renderer.color.w = fade.baseAlpha * fade.fadeAlpha;
+      });
 }
 
 /**

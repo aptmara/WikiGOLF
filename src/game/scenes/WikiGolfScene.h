@@ -117,6 +117,9 @@ private:
   /** @brief プロシージャル旗のなびきと旗粒子を更新します。*/
   void UpdateProceduralFlagEffects(core::GameContext &ctx, float dt);
 
+  /** @brief カメラとボールの間に入った木や岩をドット状フェードで薄くします。*/
+  void UpdateCameraOcclusionFade(core::GameContext &ctx, float dt);
+
   /**
    * @brief トップビューの着弾点プレビュー(現在クラブのフルスイング着弾予測)を
    * 計算し、MinimapControllerへ反映します。
@@ -244,6 +247,7 @@ private:
   float m_hudUpdateTimer = 0.0f;     /**< HUD静的表示の更新間引きタイマーです。*/
   float m_minimapUpdateTimer = 0.0f; /**< ミニマップ描画の更新間引きタイマーです。*/
   float m_flagEffectTimer = 0.0f;    /**< 旗なびき・粒子演出の時間です。*/
+  std::vector<float> m_occlusionGroupAlpha; /**< 遮蔽フェードの組ごとの目標描画率(毎フレーム使い回し)*/
   float m_cupInBloomTimer = 0.0f;    /**< カップイン発光演出の残り時間です。*/
   float m_cupInBloomDuration = 0.0f; /**< カップイン発光演出の全体時間です。*/
   float m_shotBloomTimer = 0.0f;     /**< ショット発光演出の残り時間です。*/

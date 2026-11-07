@@ -387,6 +387,7 @@ void WikiGolfScene::UpdateCupInCelebration(core::GameContext &ctx) {
     m_gameJuice->Update(ctx, m_cameraEntity, m_ballEntity);
   }
   UpdateProceduralFlagEffects(ctx, dt);
+  UpdateCameraOcclusionFade(ctx, dt);
   UpdateCelebrationIris(ctx);
 
   // 喜びモーションとアイリスが終わったら遷移（念のため一定時間で打ち切る）

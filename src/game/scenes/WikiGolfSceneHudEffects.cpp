@@ -186,6 +186,10 @@ void WikiGolfScene::UpdateHudAndEffects(
       PROFILE_SCOPE("WikiGolf.ProceduralFlags");
       UpdateProceduralFlagEffects(ctx, dt);
     }
+    {
+      PROFILE_SCOPE("WikiGolf.CameraOcclusionFade");
+      UpdateCameraOcclusionFade(ctx, dt);
+    }
 }
 
 } // namespace game::scenes
