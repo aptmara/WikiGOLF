@@ -11,9 +11,15 @@
   - -AutoShot 秒 を付けると、構えられる状態でその秒数待ってから自動で打つ（パワー 7 割、インパクトはパーフェクト付近）。
   - 起動から -Seconds 秒で自動終了し、最後の -Frames フレームを集計する。
   - -Preset LOW などを付けると、計測の間だけ settings.ini の画質プリセットと内部解像度を書き換え、終わったら戻す。
+  - -Record を付けると、ゲームの描画範囲だけを ffmpeg で録画する（720p・30fps）。保存先は -RecordPath、
+    省略時は <BuildDir>\recordings\bench_<プリセット>_<日時>.mp4。録画の負荷が乗るので、数字は録画なしで取ること。
+    離席中でも録れるように、画面を起こしてゲームを最前面に出す（仕組みは BenchRecording.ps1）。
 
 .EXAMPLE
   pwsh -File tools/bench/Run-Benchmark.ps1 -Course 日本 -Seconds 90 -AutoShot 8
+
+.EXAMPLE
+  pwsh -File tools/bench/Run-Benchmark.ps1 -Course 日本 -AutoShot 8 -Preset LOW -Record
 #>
 param(
   [string]$Course = '',
@@ -25,7 +31,10 @@ param(
   [switch]$GrassFull,
   [ValidateSet('', 'LOW', 'MEDIUM', 'HIGH', 'EXHIGH', 'ULTRA')]
   [string]$Preset = '',
-  [string]$BuildDir = ''
+  [string]$BuildDir = '',
+  [switch]$Record,
+  [string]$RecordPath = '',
+  [int]$RecordOutputIndex = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +42,13 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 if (-not $BuildDir) { $BuildDir = Join-Path $repoRoot 'build-perf\Release' }
 $exe = Join-Path $BuildDir 'WikiGolf.exe'
 if (-not (Test-Path $exe)) { throw "WikiGolf.exe が見つかりません: $exe" }
+if ($Record) {
+  . (Join-Path $PSScriptRoot 'BenchRecording.ps1')
+  if (-not $RecordPath) {
+    $presetName = if ($Preset) { $Preset } else { 'current' }
+    $RecordPath = Join-Path $BuildDir ("recordings\bench_{0}_{1:yyyyMMdd_HHmmss}.mp4" -f $presetName, (Get-Date))
+  }
+}
 
 $envNames = 'WIKIGOLF_DEBUG_START', 'WIKIGOLF_DEBUG_EXIT_AFTER', 'WIKIGOLF_DEBUG_COURSE_START',
             'WIKIGOLF_DEBUG_COURSE_GOAL', 'WIKIGOLF_DEBUG_AUTO_SHOT', 'WIKIGOLF_DEBUG_GRASS_FULL'
@@ -70,10 +86,15 @@ if ($Preset -and (Test-Path $settingsPath)) {
 
 try {
   $p = Start-Process -FilePath $exe -WorkingDirectory $BuildDir -PassThru
+  $recording = $null
+  if ($Record) {
+    $recording = Start-BenchRecording -Game $p -Seconds $Seconds -Path $RecordPath -OutputIndex $RecordOutputIndex
+  }
   if (-not $p.WaitForExit(($Seconds + 60) * 1000)) {
     Stop-Process -Id $p.Id
     Write-Warning '時間内に終了しなかったので止めました。'
   }
+  if ($recording) { $recordingResult = Stop-BenchRecording $recording }
 } finally {
   foreach ($n in $envNames) { Remove-Item "Env:$n" -ErrorAction SilentlyContinue }
   if ($null -ne $originalSettings) { Set-Content $settingsPath $originalSettings -NoNewline }
@@ -151,3 +172,4 @@ if (Test-Path $log) {
   if ($AutoShot -gt 0) { "自動ショット: ログ上 $shots 回" }
 }
 "計測データ: $($session.FullName)"
+if ($recordingResult) { $recordingResult }
