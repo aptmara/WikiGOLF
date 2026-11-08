@@ -172,6 +172,8 @@ option(WIKIGOLF_HTML_TESTS_ONLY "Build portable HTML tests without DirectX" OFF)
 option(WIKIGOLF_DEBUG_TOOLS "Build the dedicated Dear ImGui debug tools" OFF)
 option(WIKIGOLF_PROFILING "Enable CPU/GPU profiling and report output" OFF)
 option(WIKIGOLF_DISABLE_LOGGING "Disable all runtime log output" OFF)
+# 製品版・体験版向け: 警告とエラーだけを <名前>_warnings.log に残す（最初の警告が出るまでファイルを作らない）
+option(WIKIGOLF_LOG_WARNINGS_ONLY "Write only warnings and errors to the log" OFF)
 # 体験版: タイトルからはチュートリアルのみ開始でき、チュートリアル後の1プレイで終了する。
 option(WIKIGOLF_TRIAL_BUILD "Build the trial edition (tutorial + one round only)" OFF)
 include(cmake/WikiDebugTools.cmake)
@@ -212,6 +214,42 @@ endif()
 if(WIKIGOLF_DISABLE_LOGGING)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_DISABLE_LOGGING=1)
 endif()
+if(WIKIGOLF_LOG_WARNINGS_ONLY)
+    target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_LOG_WARNINGS_ONLY=1)
+endif()
+
+# 不具合報告の診断情報に載せる、ビルドしたコミット。
+# 再コンパイルを最小にするため SystemDiagnostics.cpp だけに渡し、
+# コミットが進んだら CMake を再実行して値を更新する。
+set(WIKIGOLF_BUILD_COMMIT "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short=10 HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE _wikigolf_commit OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _wikigolf_commit_result ERROR_QUIET)
+    if(_wikigolf_commit_result EQUAL 0 AND _wikigolf_commit)
+        set(WIKIGOLF_BUILD_COMMIT "${_wikigolf_commit}")
+    endif()
+    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --path-format=absolute --git-path HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE _wikigolf_head_file OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" symbolic-ref -q HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE _wikigolf_head_ref OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(_wikigolf_head_ref)
+        execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --path-format=absolute --git-path "${_wikigolf_head_ref}"
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            OUTPUT_VARIABLE _wikigolf_ref_file OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    endif()
+    foreach(_wikigolf_git_file IN ITEMS "${_wikigolf_head_file}" "${_wikigolf_ref_file}")
+        if(_wikigolf_git_file AND EXISTS "${_wikigolf_git_file}")
+            set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_wikigolf_git_file}")
+        endif()
+    endforeach()
+endif()
+set_source_files_properties(src/core/SystemDiagnostics.cpp PROPERTIES
+    COMPILE_DEFINITIONS "WIKIGOLF_BUILD_COMMIT=\"${WIKIGOLF_BUILD_COMMIT}\"")
 if(WIKIGOLF_TRIAL_BUILD)
     target_compile_definitions(DX_GAME PRIVATE WIKIGOLF_TRIAL_BUILD=1)
 endif()
@@ -729,6 +767,29 @@ if(MSVC)
     target_compile_options(test_logger_warning_output PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
 add_test(NAME logger_warning_output COMMAND test_logger_warning_output)
+
+# 警告・エラーだけを出すモード（製品版・体験版）の Logger.cpp を専用にコンパイルして確かめる
+add_executable(test_logger_warnings_only test_logger_warnings_only.cpp src/core/Logger.cpp
+                                         src/core/LogPrivacy.cpp)
+target_precompile_headers(test_logger_warnings_only REUSE_FROM wikigolf_pch)
+target_include_directories(test_logger_warnings_only PRIVATE src)
+target_compile_definitions(test_logger_warnings_only PRIVATE WIKIGOLF_LOG_WARNINGS_ONLY=1)
+if(MSVC)
+    target_compile_definitions(test_logger_warnings_only PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                 -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_logger_warnings_only PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME logger_warnings_only COMMAND test_logger_warnings_only)
+
+# 配布ビルドのログから個人情報を伏せる処理
+add_executable(test_log_privacy test_log_privacy.cpp src/core/LogPrivacy.cpp)
+target_include_directories(test_log_privacy PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_log_privacy PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                        -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_log_privacy PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME log_privacy COMMAND test_log_privacy)
 
 # --- Additional Refactored Unit Tests ---
 

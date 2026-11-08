@@ -29,6 +29,15 @@ void Logger::Initialize(const std::string& filename) {
 #ifdef WIKIGOLF_DISABLE_LOGGING
     (void)filename;
     return;
+#elif defined(WIKIGOLF_LOG_WARNINGS_ONLY)
+    // 警告・エラー用のファイル名だけ決めておく。通常ログと Perf ログは作らない
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_initialized) return;
+    std::filesystem::path warningPath(filename);
+    warningPath.replace_filename(warningPath.stem().string() + "_warnings" +
+                                 warningPath.extension().string());
+    m_warningFilePath = warningPath.string();
+    m_initialized = true;
 #else
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_initialized) return;
@@ -74,6 +83,19 @@ void Logger::Shutdown() {
     if (m_warningFileStream.is_open()) m_warningFileStream.close();
     if (m_perfFileStream.is_open()) m_perfFileStream.close();
     m_initialized = false;
+#ifdef WIKIGOLF_LOG_WARNINGS_ONLY
+    m_diagnosticsWritten = false;
+#endif
+}
+
+void Logger::SetDiagnosticsProvider(DiagnosticsProvider provider) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_diagnosticsProvider = provider;
+}
+
+void Logger::SetPrivacyReplacements(std::vector<PrivacyReplacement> replacements) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_privacyReplacements = std::move(replacements);
 }
 
 #ifdef WIKIGOLF_DEBUG_TOOLS
@@ -97,6 +119,31 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
     (void)message;
     return;
 #else
+#ifdef WIKIGOLF_LOG_WARNINGS_ONLY
+    if (level != LogLevel::Warning && level != LogLevel::Error) return;
+
+    // 最初の警告・エラーの前に診断情報を書く。GPU の列挙などに時間がかかるので、
+    // ロックの外で集める（同時に集めても、書くのは 1 回だけ）
+    std::string diagnostics;
+    if (!m_diagnosticsWritten.load()) {
+        DiagnosticsProvider provider = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            provider = m_diagnosticsProvider;
+        }
+        // 診断情報の収集中にログが出ても、収集をやり直さない
+        static thread_local bool collecting = false;
+        if (provider && !collecting) {
+            collecting = true;
+            try {
+                diagnostics = provider();
+            } catch (...) {
+                diagnostics = "(failed to collect diagnostics)\n";
+            }
+            collecting = false;
+        }
+    }
+#endif
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
     struct tm tm_buf;
@@ -140,6 +187,24 @@ void Logger::Log(LogLevel level, const char* category, const char* file, int lin
     m_recentEntries.push_back({level, category, fullMessage});
     if (m_recentEntries.size() > kRecentEntryLimit) {
         m_recentEntries.pop_front();
+    }
+#endif
+
+#ifdef WIKIGOLF_LOG_WARNINGS_ONLY
+    // 一般配布するビルドなので、ユーザー名やフォルダのパスなどを伏せてから書く
+    fullMessage = RedactPrivateText(std::move(fullMessage), m_privacyReplacements);
+
+    // 最初の警告・エラーで初めてファイルを作る（何も起きなければ残さない）
+    if (m_initialized && !m_warningFileStream.is_open() && !m_warningFilePath.empty()) {
+        m_warningFileStream.open(m_warningFilePath, std::ios::out | std::ios::trunc);
+    }
+    if (m_initialized && m_warningFileStream.is_open() && !m_diagnosticsWritten.load()) {
+        if (!diagnostics.empty()) {
+            m_warningFileStream << "=== Diagnostics ===\n"
+                                << RedactPrivateText(std::move(diagnostics), m_privacyReplacements)
+                                << "=== Warnings and errors ===\n";
+        }
+        m_diagnosticsWritten = true;
     }
 #endif
 
