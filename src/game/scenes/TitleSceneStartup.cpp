@@ -505,16 +505,30 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     {
       auto e3 = CreateEntity(ctx.world);
       auto &t3 = ctx.world.Add<components::UIButton>(e3);
-      t3.label = L"フィードバック";
+      t3.label = L"感想・不具合を送る";
       t3.action = "feedback";
       t3.x = 20.0f; t3.y = 685.0f;
       t3.width = 180.0f; t3.height = 30.0f;
       t3.textStyle.fontSize = 16.0f;
-      t3.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
+      // 他の下部ボタンより目に留まるよう、右メニューと同じ金色で塗る。
+      // ホバー時は逆に暗い地に金文字にする (文字色は TitleSceneUpdate で切り替え)
+      t3.textStyle.color = {0.05f, 0.05f, 0.05f, 1.0f};
       t3.textStyle.align = graphics::TextAlign::Center;
-      t3.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
-      t3.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
-      t3.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+      t3.normalColor = {1.0f, 0.85f, 0.3f, 0.9f};
+      t3.hoverColor = {0.8f, 0.7f, 0.3f, 0.18f};
+      t3.pressedColor = {0.8f, 0.6f, 0.1f, 1.0f};
+
+      // 金の枠 (UIButton は枠を持たないので、同じ矩形に枠だけの UIText を重ねる)
+      auto ef = CreateEntity(ctx.world);
+      auto &tf = ctx.world.Add<components::UIText>(ef);
+      tf.text = L"";
+      tf.x = t3.x; tf.y = t3.y;
+      tf.width = t3.width; tf.height = t3.height;
+      // 背景の a が 0 だと枠も描かれないので、見えないほどの値を入れる
+      tf.style.bgColor = {0.0f, 0.0f, 0.0f, 0.001f};
+      tf.style.borderWidth = 1.5f;
+      tf.style.borderColor = {0.8f, 0.7f, 0.3f, 1.0f};
+      tf.layer = 52;
     }
 
     // コピーライト

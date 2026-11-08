@@ -193,6 +193,13 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       } else {
         btn.textStyle.color = DirectX::XMFLOAT4{0.4f, 0.6f, 0.9f, 1.0f}; // 通常時: 青
       }
+    } else if (btn.action == "feedback") {
+      // 他のボタンと逆: 通常時は金地に黒文字、ホバー時は暗い地に金文字
+      if (isHovered && btn.state != components::ButtonState::Pressed) {
+        btn.textStyle.color = DirectX::XMFLOAT4{1.0f, 0.88f, 0.45f, 1.0f}; // 金
+      } else {
+        btn.textStyle.color = DirectX::XMFLOAT4{0.05f, 0.05f, 0.05f, 1.0f}; // 黒
+      }
     } else {
       // ホバー時は黒文字、通常時は白文字
       if (isHovered) {
