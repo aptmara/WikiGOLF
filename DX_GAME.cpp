@@ -6,7 +6,9 @@
 #include "src/core/GameContext.h"
 #include "src/core/Input.h"
 #include "src/core/Logger.h"
+#include "src/core/LogPrivacy.h"
 #include "src/core/SceneManager.h"
+#include "src/core/SystemDiagnostics.h"
 #include "src/core/StringUtils.h"
 #include "src/ecs/World.h"
 #include "src/game/scenes/TitleScene.h"
@@ -195,6 +197,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   // ログシステム初期化。以降の初期化失敗を記録できるよう、最初に行う。
   core::Logger::Instance().Initialize("game_startup.log");
+  // 製品版・体験版では、最初の警告・エラーの前に診断情報を書き、個人情報を伏せる
+  core::Logger::Instance().SetPrivacyReplacements(
+      core::BuildPrivacyReplacementsFromEnvironment(
+          core::ToString(executableDirectory.wstring())));
+  core::Logger::Instance().SetDiagnosticsProvider(&core::CollectSystemDiagnostics);
   if (workingDirectoryError) {
     LOG_WARN("Main", "Failed to set executable working directory: {}",
              workingDirectoryError.message());
@@ -219,6 +226,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   // ウィンドウ作成前なので、この時点ではファイルの値のみを保持しウィンドウには反映しない。
   core::DisplaySettings displaySettings;
   displaySettings.LoadFromFile();
+  {
+    // 不具合報告の診断情報に、起動時の画質設定を載せる
+    const core::DisplaySettingsData &data = displaySettings.GetData();
+    static constexpr const char *kModeNames[] = {"windowed", "borderless", "fullscreen"};
+    static constexpr const char *kPresetNames[] = {"auto",   "low",   "medium", "high",
+                                                   "exhigh", "ultra", "custom"};
+    const auto modeIndex = static_cast<std::size_t>(data.mode);
+    const auto presetIndex = static_cast<std::size_t>(data.graphicsPreset);
+    const char *antiAliasing = data.dlssEnabled  ? "DLSS"
+                               : data.taaEnabled ? "TAA"
+                               : data.fxaaEnabled ? "FXAA"
+                               : data.msaaSamples > 1 ? "MSAA"
+                                                      : "off";
+    core::SetDiagnosticsSection(
+        "Settings (at startup)",
+        std::format("{} {}x{} / preset {} / render scale {:.2f} / AA {}{} / vsync {} / "
+                    "fps limit {} / GPU '{}' / safe mode {}",
+                    modeIndex < std::size(kModeNames) ? kModeNames[modeIndex] : "?",
+                    data.windowedWidth, data.windowedHeight,
+                    presetIndex < std::size(kPresetNames) ? kPresetNames[presetIndex] : "?",
+                    data.renderScale, antiAliasing,
+                    data.msaaSamples > 1 && !data.dlssEnabled && !data.taaEnabled &&
+                            !data.fxaaEnabled
+                        ? std::format(" x{}", data.msaaSamples)
+                        : std::string(),
+                    data.vsync ? "on" : "off", data.fpsLimit,
+                    data.gpuAdapterName.empty() ? "auto" : data.gpuAdapterName,
+                    data.safeMode ? "on" : "off"));
+  }
 
   auto &contentFilter = game::systems::ContentFilter::Instance();
   if (!contentFilter.LoadFromFile()) {
