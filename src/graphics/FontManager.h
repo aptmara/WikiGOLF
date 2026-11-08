@@ -162,10 +162,22 @@ public:
                         stretch = ov->second.stretch;
                     }
                 }
+                // Times New Roman など Windows 標準のフォントは意図して使っているので、
+                // 同梱フォントにも Windows のフォントにも無いときだけ警告する
+                // （DirectWrite が別のフォントで代用し、見た目が変わるため）
                 if (!collectionToUse && m_missingBundledFamilyWarnings.insert(fontName).second) {
-                    LOG_WARN("FontManager",
-                            "'{}' not found in bundled font collection. Using system collection.",
-                            fontName);
+                    ComPtr<IDWriteFontCollection> systemFonts;
+                    BOOL existsInSystem = FALSE;
+                    UINT32 systemIndex = 0;
+                    if (FAILED(m_factory->GetSystemFontCollection(&systemFonts, FALSE)) ||
+                        FAILED(systemFonts->FindFamilyName(wFontName.c_str(), &systemIndex,
+                                                           &existsInSystem)) ||
+                        !existsInSystem) {
+                        LOG_WARN("FontManager",
+                                "'{}' not found in bundled or system fonts. "
+                                "A substitute font will be used.",
+                                fontName);
+                    }
                 }
             }
         }
