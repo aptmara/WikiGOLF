@@ -501,6 +501,22 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
       t2.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
     }
 
+    // フィードバック (体験版・製品版共通。押すとフィードバックフォームを開く)
+    {
+      auto e3 = CreateEntity(ctx.world);
+      auto &t3 = ctx.world.Add<components::UIButton>(e3);
+      t3.label = L"フィードバック";
+      t3.action = "feedback";
+      t3.x = 20.0f; t3.y = 685.0f;
+      t3.width = 180.0f; t3.height = 30.0f;
+      t3.textStyle.fontSize = 16.0f;
+      t3.textStyle.color = {0.9f, 0.9f, 0.9f, 1.0f};
+      t3.textStyle.align = graphics::TextAlign::Center;
+      t3.normalColor = {1.0f, 1.0f, 1.0f, 0.1f};
+      t3.hoverColor = {1.0f, 1.0f, 1.0f, 0.3f};
+      t3.pressedColor = {0.8f, 0.8f, 0.8f, 0.4f};
+    }
+
     // コピーライト
     auto ec = CreateEntity(ctx.world);
     auto &tc = ctx.world.Add<components::UIText>(ec);

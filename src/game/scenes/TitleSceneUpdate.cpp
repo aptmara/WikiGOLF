@@ -265,6 +265,11 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.3f);
         ShellExecuteA(nullptr, "open", "https://ja.wikipedia.org/wiki/%E3%82%B4%E3%83%AB%E3%83%95",
                       nullptr, nullptr, SW_SHOW);
+      } else if (btn.action == "feedback") {
+        if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
+        ShellExecuteA(nullptr, "open",
+                      "https://docs.google.com/forms/d/e/1FAIpQLSfWLEiK-PTaRcCkLC96uWThzZsgaZfn1CZ2SCJgcKT41T3CIA/viewform",
+                      nullptr, nullptr, SW_SHOW);
       }
     }
   });
