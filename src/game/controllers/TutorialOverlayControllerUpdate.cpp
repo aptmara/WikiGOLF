@@ -10,7 +10,6 @@
 #include "../components/Camera.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
-#include "../components/UIImage.h"
 #include "../components/WikiComponents.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../../audio/AudioSystem.h"
@@ -49,7 +48,12 @@ void ResetPracticeShot(core::GameContext& ctx) {
 
 TutorialInputPolicy TutorialOverlayController::GetInputPolicy() const {
     TutorialInputPolicy policy;
-    if (m_step == TutorialStep::Intro || m_step == TutorialStep::Done) {
+    // 地形・旗の説明中は、イベントカメラが説明する場所を映す。ここで操作を
+    // 許すと、通常のカメラがボールの後ろへ書き戻してしまい、クリックで
+    // ショットも始まってしまう。
+    if (m_step == TutorialStep::Intro || m_step == TutorialStep::Done ||
+        m_step == TutorialStep::TerrainInfo ||
+        m_step == TutorialStep::FlagInfo) {
         return policy;
     }
     const int step = static_cast<int>(m_step);
@@ -68,7 +72,7 @@ TutorialOverlayController::GetPresentationPolicy() const {
         return policy;
     }
     const int step = static_cast<int>(m_step);
-    policy.club = step >= static_cast<int>(TutorialStep::Aim);
+    policy.club = step >= static_cast<int>(TutorialStep::Club);
     policy.minimap = step >= static_cast<int>(TutorialStep::Aim);
     policy.courseInfo = step >= static_cast<int>(TutorialStep::LinkCup);
     return policy;
@@ -97,11 +101,16 @@ TutorialOverlayController::GetMapInputPermissions() const {
     p.panWithLeftDrag = step >= static_cast<int>(TutorialStep::MapPan);
     p.panWithRightDrag = p.panWithLeftDrag;
     p.zoomWithWheel = step >= static_cast<int>(TutorialStep::MapZoom);
-    p.toggleHelp = step >= static_cast<int>(TutorialStep::MapHelpOpen);
+    p.toggleHelp = step >= static_cast<int>(TutorialStep::MapHelp);
     p.recenter = p.toggleHelp;
     p.fitCourse = p.recenter;
     p.resetZoom = p.recenter;
     p.closeWithEscape = step >= static_cast<int>(TutorialStep::MapClose);
+    // 案内パネルの上で押したボタンでは、マップを動かさない。
+    if (m_panel.IsCapturingPointer()) {
+        p.panWithLeftDrag = false;
+        p.panWithRightDrag = false;
+    }
     return p;
 }
 
@@ -115,6 +124,16 @@ bool TutorialOverlayController::CanAcceptCupIn(
 
 void TutorialOverlayController::NotifyLinkCupIn(core::GameContext& ctx) {
     if (m_step == TutorialStep::LinkCup) TriggerStepClear(ctx);
+}
+
+void TutorialOverlayController::NotifyWrongCupIn(core::GameContext& ctx,
+                                                 const std::wstring& name) {
+    if (m_step != TutorialStep::LinkCup && m_step != TutorialStep::GoalCup) {
+        return;
+    }
+    m_wrongCupName = name;
+    UpdateUI(ctx);
+    if (ctx.audio) ctx.audio->PlaySE(ctx, "se_cancel.mp3", 0.6f);
 }
 
 void TutorialOverlayController::UpdateEventCamera(core::GameContext& ctx) {
@@ -157,22 +176,18 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
                                        ShotController* shotCtrl,
                                        MinimapController* minimapCtrl,
                                        ecs::Entity skyboxEntity) {
+    m_panel.Update(ctx);
     if (m_step == TutorialStep::Done) return;
 
     if (m_stepClearPending) {
-        m_checkMarkTimer += ctx.dt;
-        UpdateStepClearAnim(ctx);
-        if (m_checkMarkTimer >= 0.65f) {
-            if (ctx.world.IsAlive(m_checkMarkEntity)) {
-                ctx.world.DestroyEntity(m_checkMarkEntity);
-                m_checkMarkEntity = UINT32_MAX;
-            }
+        m_stepClearTimer += ctx.dt;
+        if (m_stepClearTimer >= hud::TutorialGuidePanel::kStepClearSeconds) {
             m_stepClearPending = false;
-            m_checkMarkShown = false;
             NextStep(ctx);
         }
         return;
     }
+    UpdateSpotlight(ctx, minimapCtrl);
 
     const bool info = m_step == TutorialStep::TerrainInfo ||
                       m_step == TutorialStep::FlagInfo;
@@ -195,7 +210,7 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
             const auto& targets = GetActiveEventCameraTargets();
             ++m_terrainCardIndex;
             if (m_terrainCardIndex >= targets.size()) {
-                TriggerStepClear(ctx);
+                TriggerStepClear(ctx, false);
             } else {
                 if (m_cameraEntity != UINT32_MAX) {
                     if (auto* tr = ctx.world.Get<components::Transform>(m_cameraEntity)) {
@@ -211,11 +226,14 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
             ResetPracticeShot(ctx);
             m_step = TutorialStep::TerrainInfo;
             m_terrainEventStarted = false;
+            m_practiceShotLaunched = false;
             UpdateUI(ctx);
             return;
         }
         if (m_step == TutorialStep::GoalCup) {
-            TriggerStepClear(ctx);
+            // 最後の画面は Enter で終えない（直前の画面を飛ばすつもりの
+            // 2回押しで、ゴールに入れないまま終わってしまうため）。
+            // やめるときは Esc のポーズから。
             return;
         }
         if (m_step >= TutorialStep::MapOpen && m_step <= TutorialStep::MapClose) {
@@ -223,10 +241,11 @@ void TutorialOverlayController::Update(core::GameContext& ctx,
                 minimapCtrl->ToggleMapView(ctx, skyboxEntity);
             }
             m_step = TutorialStep::LinkCup;
+            m_wrongCupName.clear();
             UpdateUI(ctx);
             return;
         }
-        TriggerStepClear(ctx);
+        TriggerStepClear(ctx, false);
         return;
     }
 
@@ -245,9 +264,9 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
             m_initialCameraYaw = cameraCtrl->GetYaw();
             m_initialCameraDistance = cameraCtrl->GetDistance();
         }
+        // 回せば次へ進む（寄る・引くは試せることを伝えるだけにする）。
         if (cameraCtrl &&
-            std::abs(cameraCtrl->GetYaw() - m_initialCameraYaw) > 0.25f &&
-            std::abs(cameraCtrl->GetDistance() - m_initialCameraDistance) > 0.5f) {
+            std::abs(cameraCtrl->GetYaw() - m_initialCameraYaw) > 0.25f) {
             TriggerStepClear(ctx);
         }
         break;
@@ -267,16 +286,24 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
         if (shot && shot->phase == components::ShotState::Phase::ImpactTiming)
             TriggerStepClear(ctx);
         break;
-    case TutorialStep::Impact:
-        if (shot && shot->phase == components::ShotState::Phase::Idle) {
+    case TutorialStep::Impact: {
+        if (!shot) break;
+        using Phase = components::ShotState::Phase;
+        if (shot->phase == Phase::Executing || shot->phase == Phase::ShowResult) {
+            m_practiceShotLaunched = true;
+        }
+        // 初めての1打は、球が止まって判定が出るまで見せてから次へ進む。
+        const bool resultShown = shot->phase == Phase::RestoringCamera ||
+                                 shot->phase == Phase::Idle;
+        if (m_practiceShotLaunched && resultShown) {
+            TriggerStepClear(ctx);
+        } else if (!m_practiceShotLaunched && shot->phase == Phase::Idle) {
+            // 右クリックで強さからやり直した
             m_step = TutorialStep::Power;
             UpdateUI(ctx);
-        } else if (shot &&
-                   (shot->phase == components::ShotState::Phase::Executing ||
-                    shot->phase == components::ShotState::Phase::ShowResult)) {
-            TriggerStepClear(ctx);
         }
         break;
+    }
     case TutorialStep::MapOpen:
         if (minimapCtrl && minimapCtrl->GetInputActivity().opened > m_mapActivityAtStep.opened) {
             m_mapActivityAtStep = minimapCtrl->GetInputActivity();
@@ -300,9 +327,10 @@ void TutorialOverlayController::CheckCompletion(core::GameContext& ctx,
         if (pin && pin->active) TriggerStepClear(ctx);
         break;
     }
-    case TutorialStep::MapHelpOpen:
-    case TutorialStep::MapHelpClose:
-        if (minimapCtrl && minimapCtrl->GetInputActivity().helpToggled > m_mapActivityAtStep.helpToggled) {
+    case TutorialStep::MapHelp:
+        // 開いて、閉じたら次へ（2回切り替えたら）。
+        if (minimapCtrl && minimapCtrl->GetInputActivity().helpToggled >=
+                               m_mapActivityAtStep.helpToggled + 2) {
             m_mapActivityAtStep = minimapCtrl->GetInputActivity();
             TriggerStepClear(ctx);
         }
@@ -338,7 +366,35 @@ void TutorialOverlayController::NextStep(core::GameContext& ctx) {
     m_initialCameraDistance = 0.0f;
     m_initialClubIndex = -1;
     m_cupInWaitTimer = 0.0f;
+    m_practiceShotLaunched = false;
+    m_wrongCupName.clear();
     UpdateUI(ctx);
+}
+
+} // namespace game::controllers
+
+namespace game::controllers {
+
+void TutorialOverlayController::UpdateSpotlight(core::GameContext& ctx,
+                                                MinimapController* minimapCtrl) {
+    using game::utils::TutorialSpotlight;
+    TutorialSpotlight target = m_spotlight;
+    const bool mapView = minimapCtrl && minimapCtrl->IsMapView();
+    // 全体マップ中は、ミニマップやクラブ表示の位置に部品が無い。
+    if (mapView) {
+        target = TutorialSpotlight::None;
+    }
+    // 定規はスイングを始めるまで出ていないので、出てから示す。
+    if (target == TutorialSpotlight::ShotRuler) {
+        const auto* shot = ctx.world.GetGlobal<components::ShotState>();
+        const bool swinging =
+            shot && (shot->phase == components::ShotState::Phase::PowerCharging ||
+                     shot->phase == components::ShotState::Phase::ImpactTiming);
+        if (!swinging) {
+            target = TutorialSpotlight::None;
+        }
+    }
+    m_panel.SetSpotlight(ctx, target);
 }
 
 } // namespace game::controllers

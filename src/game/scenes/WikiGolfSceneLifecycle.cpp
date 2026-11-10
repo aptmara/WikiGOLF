@@ -518,7 +518,7 @@ void WikiGolfScene::OpenPauseScene(core::GameContext &ctx) {
   }
 
   ctx.sceneManager->PushScene(std::make_unique<PauseScene>(
-      CanReturnToPreviousPage(ctx),
+      !m_isTutorial && CanReturnToPreviousPage(ctx),
       [this](core::GameContext& innerCtx) { this->ReturnToPreviousPage(innerCtx); }));
 }
 

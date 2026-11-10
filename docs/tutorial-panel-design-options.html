@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>案内パネルの別案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&family=Klee+One:wght@400;600&family=Noto+Serif+JP:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f3ef; --fg:#1d1d1f; --sub:#5b5f63; --line:#d9d8d2; --card:#ffffff; --chip:#ecebe6; --chip-on:#1d1d1f; --chip-on-fg:#fff;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#17181a; --fg:#ecebe6; --sub:#a3a6aa; --line:#33353a; --card:#202226; --chip:#2a2c31; --chip-on:#ecebe6; --chip-on-fg:#17181a; }
+}
+:root[data-theme="dark"]{ --bg:#17181a; --fg:#ecebe6; --sub:#a3a6aa; --line:#33353a; --card:#202226; --chip:#2a2c31; --chip-on:#ecebe6; --chip-on-fg:#17181a; }
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Meiryo","Hiragino Sans",system-ui,sans-serif;line-height:1.7}
+main{max-width:1180px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:26px;margin:0 0 8px;font-weight:600}
+h2{font-size:19px;margin:0;font-weight:600}
+p{margin:0 0 10px}
+.lead{color:var(--sub);max-width:760px}
+.why{margin:20px 0 28px;padding:16px 18px;border:1px solid var(--line);background:var(--card);border-radius:4px;max-width:860px}
+.why ul{margin:6px 0 0;padding-left:1.2em}
+.why li{margin:2px 0}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--line)}
+.bar span{color:var(--sub);font-size:14px;margin-right:4px}
+.bar button{font:inherit;font-size:14px;border:0;background:var(--chip);color:var(--fg);padding:5px 14px;border-radius:999px;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-fg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:28px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:16px}
+.opt header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.opt .tag{font-size:12px;color:var(--sub);white-space:nowrap}
+.opt .concept{color:var(--sub);font-size:14px;margin-bottom:12px}
+.opt dl{margin:12px 0 0;font-size:14px}
+.opt dt{font-weight:600;margin-top:8px}
+.opt dd{margin:0;color:var(--sub)}
+.base{border-style:dashed}
+table{border-collapse:collapse;width:100%;font-size:14px;margin-top:12px}
+th,td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+th{font-weight:600}
+.tablewrap{overflow-x:auto}
+section.sum{margin-top:40px}
+
+/* ---- ゲーム画面の模型（1280×720 を縮めて描く） ---- */
+.screen{position:relative;aspect-ratio:16/9;container-type:inline-size;overflow:hidden;border-radius:3px;
+  background:linear-gradient(#a9cfe9 0,#d6e8f2 34%,#86b465 34.2%,#6c9d4c 70%,#5a8a3f 100%);
+  --u:calc(100cqw / 1280);font-family:"Meiryo",sans-serif;color:#202122}
+.screen *{position:absolute}
+.fair{left:calc(380*var(--u));top:calc(250*var(--u));width:calc(520*var(--u));height:calc(470*var(--u));background:#97c46f;clip-path:polygon(40% 0,60% 0,100% 100%,0 100%)}
+.flag{left:calc(636*var(--u));top:calc(196*var(--u));width:calc(3*var(--u));height:calc(70*var(--u));background:#fff}
+.flag::after{content:"";position:absolute;left:calc(3*var(--u));top:0;width:calc(34*var(--u));height:calc(22*var(--u));background:#dd3333}
+.hud{background:rgba(248,249,250,.93);border:1px solid #a2a9b1;border-radius:calc(4*var(--u));color:#54595d;font-size:calc(14*var(--u));display:flex;align-items:center;justify-content:center}
+.hud, .hud *{position:absolute}
+.hud{position:absolute}
+.hud .lbl{position:static}
+.layer{inset:0}
+.layer *{position:absolute}
+.layer .flow, .layer .flow *{position:static}
+
+/* 今の案 */
+.cur-card{background:rgba(248,249,250,.96);border:1px solid #a2a9b1;border-radius:calc(8*var(--u));overflow:hidden;padding:calc(14*var(--u)) calc(16*var(--u)) calc(12*var(--u)) calc(22*var(--u))}
+.cur-stripe{left:0;top:0;bottom:0;width:calc(5*var(--u));background:#3366cc}
+.cur-card.ok .cur-stripe{background:#14866d}
+.cur-card.ok{border-color:#14866d}
+.cur-ch{font-family:"Kiwi Maru";font-size:calc(13*var(--u));color:#54595d;display:flex;justify-content:space-between}
+.cur-seg{display:flex;gap:calc(4*var(--u));margin:calc(6*var(--u)) 0 calc(10*var(--u))}
+.cur-seg i{flex:1;height:calc(5*var(--u));background:#dfe3e8;border-radius:calc(3*var(--u))}
+.cur-seg i.f{background:#3366cc}.cur-seg i.h{background:linear-gradient(90deg,#3366cc 50%,#dfe3e8 50%)}
+.cur-head{font-family:"Kiwi Maru";font-size:calc(23*var(--u));line-height:1.3}
+.cur-keys{display:flex;flex-wrap:wrap;gap:calc(6*var(--u));align-items:center;margin:calc(10*var(--u)) 0;font-size:calc(14*var(--u))}
+.cur-key{display:inline-block;background:#fff;border:calc(2*var(--u)) solid #3366cc;border-radius:calc(6*var(--u));padding:calc(2*var(--u)) calc(10*var(--u));box-shadow:0 calc(3*var(--u)) 0 #a2a9b1;font-weight:600}
+.cur-det{font-size:calc(15*var(--u));color:#54595d;line-height:1.5}
+.cur-hint{font-size:calc(12*var(--u));color:#54595d;text-align:right;margin-top:calc(6*var(--u))}
+.cur-check{right:calc(10*var(--u));top:calc(10*var(--u));width:calc(34*var(--u));height:calc(34*var(--u));border-radius:50%;background:#14866d;color:#fff;font-size:calc(20*var(--u));display:flex;align-items:center;justify-content:center}
+.cur-spot{border:calc(3*var(--u)) solid #3366cc;border-radius:calc(6*var(--u));box-shadow:0 0 calc(14*var(--u)) rgba(51,102,204,.8);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* A 百科事典の注記 */
+.a-box{background:#f8f9fa;border:1px solid #a2a9b1;padding:calc(10*var(--u)) calc(14*var(--u)) calc(10*var(--u))}
+.a-title{font-family:"Noto Serif JP",serif;font-size:calc(15*var(--u));color:#54595d;border-bottom:1px solid #a2a9b1;padding-bottom:calc(3*var(--u));margin-bottom:calc(8*var(--u))}
+.a-head{font-family:"Noto Serif JP",serif;font-size:calc(24*var(--u));line-height:1.3;margin-bottom:calc(6*var(--u))}
+.a-body{font-size:calc(16*var(--u));line-height:1.6}
+.a-body a{color:#3366cc;text-decoration:none}
+.a-box.ok .a-body a{color:#795cb2}
+.a-ref{color:#3366cc;font-size:.7em;vertical-align:super;line-height:0}
+.a-crumb{font-size:calc(12*var(--u));color:#54595d;margin-top:calc(8*var(--u));border-top:1px solid #eaecf0;padding-top:calc(5*var(--u))}
+.a-crumb b{color:#202122}
+.a-crumb s{color:#72777d}
+.a-ok{font-size:calc(14*var(--u));color:#14866d;margin-top:calc(4*var(--u))}
+.a-mark{border:1px dashed #3366cc}
+.a-mark .a-num{left:calc(-1*var(--u));top:calc(-24*var(--u));background:#fff;color:#3366cc;font-size:calc(14*var(--u));padding:0 calc(5*var(--u));border:1px solid #a2a9b1}
+
+/* B キャディのひと言 */
+.b-bub{background:#fff;border:calc(2*var(--u)) solid #202122;border-radius:calc(16*var(--u));padding:calc(14*var(--u)) calc(18*var(--u));font-family:"Kiwi Maru";font-size:calc(21*var(--u));line-height:1.45}
+.b-bub b{font-weight:500;border-bottom:calc(3*var(--u)) solid #3366cc}
+.b-name{left:calc(16*var(--u));top:calc(-14*var(--u));background:#202122;color:#fff;font-size:calc(13*var(--u));padding:0 calc(10*var(--u));border-radius:999px;line-height:calc(24*var(--u))}
+.b-tail-d::after,.b-tail-r::after{content:"";position:absolute;width:calc(18*var(--u));height:calc(18*var(--u));background:#fff;border-right:calc(2*var(--u)) solid #202122;border-bottom:calc(2*var(--u)) solid #202122}
+.b-tail-d::after{left:50%;bottom:calc(-11*var(--u));transform:translateX(-50%) rotate(45deg)}
+.b-tail-r::after{right:calc(-11*var(--u));top:calc(34*var(--u));transform:rotate(-45deg)}
+.b-bub.ok{transform:rotate(-2deg);font-size:calc(26*var(--u))}
+
+/* C スコアカード */
+.c-card{background:#fbf8ee;border:calc(1.5*var(--u)) solid #2f6b3a;padding:calc(10*var(--u)) calc(12*var(--u)) calc(12*var(--u));box-shadow:0 calc(2*var(--u)) calc(6*var(--u)) rgba(0,0,0,.18)}
+.c-top{font-size:calc(12*var(--u));color:#2f6b3a;letter-spacing:.1em;margin-bottom:calc(5*var(--u))}
+.c-grid{display:grid;grid-template-columns:repeat(7,1fr);border-left:1px solid #2f6b3a;border-top:1px solid #2f6b3a}
+.c-grid div{border-right:1px solid #2f6b3a;border-bottom:1px solid #2f6b3a;text-align:center;font-size:calc(11*var(--u));color:#2f6b3a;height:calc(22*var(--u));line-height:calc(22*var(--u));position:relative}
+.c-grid .now{background:#fff3b0}
+.c-grid .res{height:calc(28*var(--u));font-family:"Klee One";font-size:calc(18*var(--u));color:#c0392b;line-height:calc(28*var(--u))}
+.c-head{font-family:"Klee One";font-weight:600;font-size:calc(23*var(--u));margin-top:calc(10*var(--u));line-height:1.3}
+.c-body{font-family:"Klee One";font-size:calc(17*var(--u));line-height:1.5;margin-top:calc(4*var(--u))}
+.c-body b{font-weight:600;background:linear-gradient(transparent 60%,#fff3b0 60%)}
+.c-stamp{right:calc(14*var(--u));bottom:calc(14*var(--u));width:calc(70*var(--u));height:calc(70*var(--u));border:calc(3*var(--u)) solid #c0392b;border-radius:50%;color:#c0392b;font-family:"Klee One";font-weight:600;font-size:calc(24*var(--u));display:flex;align-items:center;justify-content:center;transform:rotate(-14deg);opacity:.85}
+.c-ring{border:calc(2.5*var(--u)) solid rgba(192,57,43,.85);border-radius:50%;transform:rotate(-4deg)}
+
+/* D 画面に直接書く */
+.d-line{color:#fff;font-family:"Kiwi Maru";font-size:calc(28*var(--u));text-shadow:0 calc(2*var(--u)) 0 rgba(0,0,0,.55),0 0 calc(10*var(--u)) rgba(0,0,0,.45);line-height:1.4}
+.d-sub{font-size:calc(19*var(--u));margin-top:calc(4*var(--u))}
+.d-k{display:inline-block;background:#fff;color:#202122;text-shadow:none;border-radius:calc(5*var(--u));padding:0 calc(8*var(--u));font-size:.82em;line-height:1.35;margin:0 calc(3*var(--u));box-shadow:0 calc(2*var(--u)) 0 rgba(0,0,0,.35)}
+.d-ok{color:#f2c531}
+.d-arrow{color:#fff;font-size:calc(30*var(--u));text-shadow:0 0 calc(6*var(--u)) rgba(0,0,0,.6)}
+
+/* E ヤーデージブック */
+.e-note{background:#fffdf6;background-image:repeating-linear-gradient(transparent 0 calc(27*var(--u)),#c9d8ea calc(27*var(--u)) calc(28*var(--u)));padding:calc(10*var(--u)) calc(14*var(--u)) calc(14*var(--u)) calc(30*var(--u));transform:rotate(-1.5deg);box-shadow:calc(2*var(--u)) calc(3*var(--u)) calc(8*var(--u)) rgba(0,0,0,.25);font-family:"Klee One";line-height:calc(28*var(--u))}
+.e-note::before{content:"";position:absolute;left:calc(20*var(--u));top:0;bottom:0;width:1px;background:#e7a3a3}
+.e-head{font-weight:600;font-size:calc(22*var(--u))}
+.e-body{font-size:calc(17*var(--u))}
+.e-body b{font-weight:600;text-decoration:underline wavy #3366cc;text-underline-offset:calc(4*var(--u))}
+.e-check{color:#c0392b;font-family:"Klee One";font-weight:600}
+svg.e-svg{left:0;top:0;width:100%;height:100%;overflow:visible}
+</style>
+</head>
+<body>
+<main>
+  <h1>チュートリアル案内パネルの別案</h1>
+  <p class="lead">今のパネルと、作りを変えた5案を同じ画面の上で比べます。上のボタンで場面を切り替えると、案ごとに「操作が2つの場面」「HUDの一部を指す場面」「できた直後」がどう見えるか確かめられます。画面は 1280×720 を縮めた模型で、HUDの位置は大まかです。</p>
+
+  <div class="why">
+    <strong>今のパネルが「AIっぽく」見える理由</strong>
+    <ul>
+      <li>左の色帯つき角丸カード、区切った進行バー、「章名 n / m」、キーの形のチップ、明滅する青い枠、緑のチェック。どれもアプリの初回案内でよく見る部品で、それを全部載せています。</li>
+      <li>ほかのHUDは、Wikipediaの紙面に寄せた落ち着いた作りです(#f8f9fa の面、細いグレー線、リンクの青)。案内だけが別の流儀なので、後から貼った感じがします。</li>
+      <li>情報が多すぎます。章・ページ・見出し・キー・補足・スキップ案内の6段を毎回読ませています。</li>
+      <li>余白・角丸・文字サイズがどこも同じ調子で、どこを読めばいいか目が止まりません。</li>
+    </ul>
+  </div>
+
+  <div class="bar" role="group" aria-label="場面">
+    <span>場面</span>
+    <button data-step="camera" aria-pressed="true">カメラ(キー2つ)</button>
+    <button data-step="aim" aria-pressed="false">ピン(ミニマップを指す)</button>
+    <button data-step="power" aria-pressed="false">強さ(定規を指す)</button>
+    <button data-step="done" aria-pressed="false">できた直後</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="sum">
+    <h2>比べると</h2>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>案</th><th>やめるもの</th><th>代わりに使うもの</th><th>今のエンジンでの手間</th><th>弱点</th></tr></thead>
+      <tbody>
+        <tr><td>A 百科事典の注記</td><td>色帯・角丸・キー形チップ・進行バー・明滅枠</td><td>Wikipediaの注記の体裁、リンク色、脚注番号 [1]</td><td>小。UIText の背景・細線・色だけで組める。文中のリンク色は文字を分けて並べる</td><td>おとなしく、初見で目に入りにくい</td></tr>
+        <tr><td>B キャディのひと言</td><td>カード、進行バー、スポットライト枠</td><td>指したいHUDのそばに出る吹き出し1つ。しっぽで場所を示す</td><td>中。吹き出しのしっぽに画像が1枚要る。場面ごとに置き場所を決める</td><td>話し手がいないと浮く。キャラを立てるなら絵が要る</td></tr>
+        <tr><td>C スコアカード</td><td>青の進行バー、緑チェック</td><td>7ホール分のスコアカードと赤い○、はんこ</td><td>中。はんこと○は画像。紙の色と緑線は UIText で足りる</td><td>ゴルフらしさは強いが、Wikipediaらしさとは別の方向</td></tr>
+        <tr><td>D 画面に直接書く</td><td>パネルそのもの</td><td>影つきの白文字1〜2行、キーだけ小さな白札</td><td>小。UIText の影が要る(無ければ2枚重ねで代用)</td><td>背景が明るい場所で読みにくい。説明を長く書けない</td></tr>
+        <tr><td>E ヤーデージブック</td><td>整ったカード、明滅枠</td><td>手書きのメモと、HUDへ伸びる手描きの矢印</td><td>大。矢印を場面ごとに描いた画像が要る。手書き書体の追加も要る</td><td>作るのが重い。HUDの位置を変えると矢印も描き直し</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p style="margin-top:16px"><strong>おすすめは A を土台に、HUDを指す場面だけ B の吹き出しを足す形です。</strong>ほかのHUDと同じ紙面の流儀にそろうので「後から貼った感じ」が消え、手間もいちばん小さく済みます。指したい部品がある場面だけ吹き出しで近くに出せば、明滅する枠も要りません。ゴルフらしさを前に出したいなら C、とにかく画面をすっきりさせたいなら D です。</p>
+  </section>
+</main>
+
+<script>
+const CH = ['はじめに','カメラ','ねらう','打つ','コースを知る','マップ','実戦'];
+const T = { // 1280×720 での位置
+  wind:{x:20,y:20,w:150,h:150,l:'風'},
+  mini:{x:1060,y:20,w:200,h:200,l:'ミニマップ'},
+  club:{x:20,y:560,w:220,h:140,l:'クラブ'},
+  ruler:{x:340,y:630,w:600,h:64,l:'定規ゲージ'}
+};
+const S = {
+  camera:{ch:1,head:'まわりを見回そう',keys:[['左ドラッグ','回す'],['ホイール','寄る・引く']],join:'＋',target:null,
+    text:'{左ドラッグ}で向きを回し、{ホイール}で寄ったり引いたりできます。',short:'{左ドラッグ}で回す　{ホイール}で寄る'},
+  aim:{ch:2,head:'ねらう場所にピンを置こう',keys:[['中クリック','ピンを置く']],target:'mini',
+    text:'ミニマップ[1]の上で{中クリック}すると、そこへピンが立ちます。',short:'ミニマップで{中クリック}'},
+  power:{ch:3,head:'強さを決めよう',keys:[['左クリック','動かす'],['左クリック','止める']],join:'→',target:'ruler',
+    text:'{左クリック}で針が動き出します。もう一度{左クリック}で止めた所が強さです。',short:'{左クリック}で動かし、もう一度で止める'},
+};
+S.done = Object.assign({}, S.power, {done:true});
+
+const u = n => `calc(${n}*var(--u))`;
+const box = (x,y,w,h) => `left:${u(x)};top:${u(y)};${w!=null?`width:${u(w)};`:''}${h!=null?`height:${u(h)};`:''}`;
+const fill = (s, fn) => s.replace(/\{(.+?)\}/g, (_,k)=>fn(k));
+const plain = s => s.replace(/\[1\]/g,'');
+
+function scene(overlay){
+  let h = `<div class="fair"></div><div class="flag"></div>`;
+  for (const k in T){ const t=T[k]; h += `<div class="hud" style="${box(t.x,t.y,t.w,t.h)}"><span class="lbl">${t.l}</span></div>`; }
+  return h + `<div class="layer">${overlay}</div>`;
+}
+
+const OPTS = [
+{ id:'cur', name:'今の案(比較用)', tag:'いま実装済み', base:true,
+  concept:'左のカード。章と進行バー、大きな見出し、キーの形のチップ、補足、スキップ案内。HUDは青い枠で明滅。',
+  dl:[['気になる点','部品が多く、どれもアプリの初回案内でよく見る形。ほかのHUDと流儀が違う。']],
+  render(s){
+    const segs = CH.map((_,i)=>`<i class="${i<s.ch?'f':i===s.ch?'h':''}"></i>`).join('');
+    const keys = s.keys.map((k,i)=>`${i&&s.join?`<span>${s.join}</span>`:''}<span class="cur-key">${k[0]}</span><span>${k[1]}</span>`).join('');
+    let h = `<div class="cur-card ${s.done?'ok':''}" style="${box(20,188,372)}"><div class="cur-stripe"></div>
+      <div class="flow"><div class="cur-ch"><span>${CH[s.ch]}</span><span>1 / 1</span></div><div class="cur-seg">${segs}</div>
+      <div class="cur-head">${s.head}</div><div class="cur-keys">${keys}</div>
+      <div class="cur-det">${plain(fill(s.text,k=>k))}</div><div class="cur-hint">Enter：この練習をとばす</div></div>
+      ${s.done?'<div class="cur-check">✓</div>':''}</div>`;
+    if (s.target && !s.done){ const t=T[s.target]; h += `<div class="cur-spot" style="${box(t.x-6,t.y-6,t.w+12,t.h+12)}"></div>`; }
+    return h;
+  }},
+{ id:'a', name:'A 百科事典の注記', tag:'手間：小',
+  concept:'Wikipediaの記事の囲み注記として書く。キーはリンク色の文字、指したいHUDには脚注番号 [1] を付ける。',
+  dl:[['消えるもの','色帯、角丸、キー形チップ、区切りの進行バー、明滅。'],
+      ['残す・足すもの','細いグレー線の四角い囲み、明朝の見出し、リンクの青。できた操作は訪問済みの紫に変わる(Great 判定と同じ色の意味)。進み具合はパンくず「カメラ › ねらう › 打つ」。'],
+      ['作り方','UIText の背景色と1px線だけ。文中のリンク色は、文字列を分けて横に並べる。脚注番号はHUDの角に小さな四角を1つ置くだけ。']],
+  render(s){
+    const body = fill(s.text,k=>`<a>${k}</a>`).replace('[1]','<span class="a-ref">[1]</span>');
+    const crumb = CH.slice(Math.max(0,s.ch-1), s.ch+2).map((c,i,arr)=>{
+      const idx = Math.max(0,s.ch-1)+i; return idx<s.ch?`<s>${c}</s>`:idx===s.ch?`<b>${c}</b>`:c; }).join(' › ');
+    let h = `<div class="a-box ${s.done?'ok':''}" style="${box(20,188,380)}"><div class="flow">
+      <div class="a-title">チュートリアル</div><div class="a-head">${s.head}</div>
+      <div class="a-body">${body}</div>
+      ${s.done?'<div class="a-ok">できました。次へ進みます。</div>':''}
+      <div class="a-crumb">… ${crumb} …　<span style="float:right">Enter でとばす</span></div></div></div>`;
+    if (s.target && !s.done){ const t=T[s.target]; h += `<div class="a-mark" style="${box(t.x-4,t.y-4,t.w+8,t.h+8)}"><span class="a-num">[1]</span></div>`; }
+    return h;
+  }},
+{ id:'b', name:'B キャディのひと言', tag:'手間：中',
+  concept:'カードをやめ、吹き出しを1つだけ出す。指したいHUDがあるときはその横に出て、しっぽで場所を示す。',
+  dl:[['消えるもの','カード、進行バー、章とページ、明滅する枠。'],
+      ['残す・足すもの','話し言葉の1〜2文。キーは太字に青の下線。できたら「いいね！」と傾いた吹き出しで返す。進み具合はポーズ画面に回す。'],
+      ['作り方','吹き出し本体は角丸の UIText。しっぽは小さな画像1枚を向きを変えて使う。場面ごとに置き場所(HUDの横か、定規の上か)を決める。']],
+  render(s){
+    const txt = fill(plain(s.text),k=>`<b>${k}</b>`);
+    if (s.done) return `<div class="b-bub ok b-tail-d" style="${box(470,470,340)}"><span class="b-name">キャディ</span><div class="flow">いい強さ！<br>その感じで打ってみよう</div></div>`;
+    if (s.target==='mini') return `<div class="b-bub b-tail-r" style="${box(660,40,370)}"><span class="b-name">キャディ</span><div class="flow">${txt}</div></div>`;
+    if (s.target==='ruler') return `<div class="b-bub b-tail-d" style="${box(430,470,420)}"><span class="b-name">キャディ</span><div class="flow">${txt}</div></div>`;
+    return `<div class="b-bub" style="${box(420,430,440)}"><span class="b-name">キャディ</span><div class="flow">${txt}</div></div>`;
+  }},
+{ id:'c', name:'C スコアカード', tag:'手間：中',
+  concept:'7つの章を7ホールに見立てたスコアカード。終えたホールに赤ペンの○、できたらはんこ。',
+  dl:[['消えるもの','青い進行バー、緑のチェック、角丸。'],
+      ['残す・足すもの','ゴルフの紙の小道具。生成りの紙と深緑の罫線、手書き風の書体。指したいHUDは赤ペンでぐるっと囲む。'],
+      ['作り方','紙と罫線は UIText の背景と線で組める。○・はんこ・赤ペンの囲みは画像。手書き風の書体を1つ足す。']],
+  render(s){
+    const short = ['はじめ','カメラ','ねらう','打つ','コース','マップ','実戦'];
+    const heads = short.map((c,i)=>`<div class="${i===s.ch?'now':''}">${i+1}</div>`).join('');
+    const names = short.map((c,i)=>`<div class="${i===s.ch?'now':''}">${c}</div>`).join('');
+    const res = short.map((c,i)=>`<div class="res ${i===s.ch?'now':''}">${i<s.ch||(i===s.ch&&s.done)?'○':''}</div>`).join('');
+    let h = `<div class="c-card" style="${box(20,188,372)}"><div class="flow">
+      <div class="c-top">練習ラウンド</div><div class="c-grid">${heads}${names}${res}</div>
+      <div class="c-head">${s.head}</div><div class="c-body">${fill(plain(s.text),k=>`<b>${k}</b>`)}</div></div>
+      ${s.done?'<div class="c-stamp">よし</div>':''}</div>`;
+    if (s.target && !s.done){ const t=T[s.target]; h += `<div class="c-ring" style="${box(t.x-18,t.y-14,t.w+36,t.h+28)}"></div>`; }
+    return h;
+  }},
+{ id:'d', name:'D 画面に直接書く', tag:'手間：小',
+  concept:'パネルを作らない。影つきの白い文字を1〜2行、指したいHUDのすぐ横に置く。キーだけ小さな白い札にする。',
+  dl:[['消えるもの','パネル、進行バー、章とページ、補足の長文、明滅。'],
+      ['残す・足すもの','「何をするか」の1行と、キーを含んだ短い1行。指す先は ▶ 1つ。できたら金色の「よし！」がふっと出て消える。'],
+      ['作り方','UIText に影を付けるか、黒い文字を少しずらして重ねる。キー札は白い角丸の UIText。長い説明は書けないので、文を短くそろえる必要がある。']],
+  render(s){
+    const sub = fill(s.short,k=>`<span class="d-k">${k}</span>`);
+    if (s.done) return `<div class="d-line d-ok" style="${box(340,520,600)};text-align:center"><div class="flow">よし！</div></div>`;
+    if (s.target==='mini') return `<div class="d-line" style="${box(560,70,440)};text-align:right"><div class="flow">${s.head}<div class="d-sub">${sub}</div></div></div><div class="d-arrow" style="${box(1016,92)}">▶</div>`;
+    const arrow = s.target==='ruler'?`<div class="d-arrow" style="${box(624,580)}">▼</div>`:'';
+    return `<div class="d-line" style="${box(240,470,800)};text-align:center"><div class="flow">${s.head}<div class="d-sub">${sub}</div></div></div>${arrow}`;
+  }},
+{ id:'e', name:'E ヤーデージブック', tag:'手間：大',
+  concept:'キャディのメモ帳の切れ端。手書きの文と、HUDへ伸びる手描きの矢印で教える。',
+  dl:[['消えるもの','整ったカード、キー形チップ、明滅する枠、進行バー。'],
+      ['残す・足すもの','罫線の紙、少し傾いた置き方、手書きの書体。キーは波線の下線。できたら赤ペンのチェック。'],
+      ['作り方','紙は画像1枚。矢印は場面ごとに描いた画像が要る(HUDの位置を動かしたら描き直し)。手書き風の書体も足す。']],
+  render(s){
+    let h = `<div class="e-note" style="${box(24,190,340)}"><div class="flow">
+      <div class="e-head">${s.done?'<span class="e-check">✓ </span>':''}${s.head}</div>
+      <div class="e-body">${fill(plain(s.text),k=>`<b>${k}</b>`)}</div>
+      ${s.done?'<div class="e-body e-check">OK！ 次は打つ。</div>':''}</div></div>`;
+    if (s.target && !s.done){
+      const d = s.target==='mini'
+        ? 'M 372 230 C 600 150, 820 90, 1040 110'
+        : 'M 300 410 C 340 520, 420 600, 520 622';
+      const tip = s.target==='mini' ? [1040,110,-12,-10,-14,10] : [520,622,-16,-4,-6,-16];
+      h += `<svg class="e-svg" viewBox="0 0 1280 720" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+        <path d="M ${tip[0]+tip[2]} ${tip[1]+tip[3]} L ${tip[0]} ${tip[1]} L ${tip[0]+tip[4]} ${tip[1]+tip[5]}" fill="none" stroke="#333" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+    return h;
+  }},
+];
+
+const grid = document.getElementById('grid');
+grid.innerHTML = OPTS.map(o=>`<article class="opt ${o.base?'base':''}">
+  <header><h2>${o.name}</h2><span class="tag">${o.tag}</span></header>
+  <p class="concept">${o.concept}</p>
+  <div class="screen" id="scr-${o.id}"></div>
+  <dl>${o.dl.map(d=>`<dt>${d[0]}</dt><dd>${d[1]}</dd>`).join('')}</dl></article>`).join('');
+
+function show(step){
+  for (const o of OPTS) document.getElementById('scr-'+o.id).innerHTML = scene(o.render(S[step]));
+  document.querySelectorAll('.bar button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.step===step)));
+}
+document.querySelectorAll('.bar button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.step)));
+show('camera');
+</script>
+</body>
+</html>

@@ -136,6 +136,9 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         if (m_cameraController) {
           m_cameraController->ResetForTransition(scene_detail::kFieldScale);
         }
+        // 黙って戻すと理由が分からないので、案内に出す。
+        m_tutorialOverlay->NotifyWrongCupIn(
+            ctx, core::ToWString(hole->linkTarget));
         return true;
       }
 

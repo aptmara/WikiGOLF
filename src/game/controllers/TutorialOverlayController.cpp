@@ -13,14 +13,10 @@
 #include "ClubController.h"
 #include "ShotController.h"
 #include "MinimapController.h"
-#include "hud/HudStyles.h"
 #include "../components/Transform.h"
-#include "../components/UIText.h"
-#include "../components/UIImage.h"
 #include "../components/WikiComponents.h"
 #include "../components/PhysicsComponents.h"
 #include "../components/Camera.h"
-#include "../utils/UIConstants.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
 #include "../../audio/AudioSystem.h"
@@ -43,7 +39,6 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
     m_step                = TutorialStep::Intro;
     m_terrainEventStarted = false;
     m_terrainCardIndex    = 0;
-    m_terrainCardTimer    = 0.0f;
     m_initialCameraYaw    = 0.0f;
     m_initialCameraDistance = 0.0f;
     m_initialClubIndex    = 0;
@@ -52,10 +47,9 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
     m_eventCamLerpTimer   = 0.0f;
     m_eventCamDisplayTimer = 0.0f;
     m_cupInWaitTimer      = 0.0f;
-    m_checkMarkEntity     = UINT32_MAX;
-    m_checkMarkShown      = false;
-    m_checkMarkTimer      = 0.0f;
+    m_stepClearTimer      = 0.0f;
     m_stepClearPending    = false;
+    m_spotlight           = game::utils::TutorialSpotlight::None;
 
     // チュートリアル中はゲージ速度を下げて操作しやすくする
     auto* shotState = ctx.world.GetGlobal<components::ShotState>();
@@ -64,72 +58,14 @@ void TutorialOverlayController::Initialize(core::GameContext& ctx) {
         shotState->impactGaugeSpeed = 0.9f;
     }
 
-    // オーバーレイ背景
-    m_overlayBgEntity = m_entityOwner.Create(ctx.world);
-    auto& bg = ctx.world.Add<components::UIText>(m_overlayBgEntity);
-    bg.text = L"";
-    bg.x = 310.0f; bg.y = 22.0f;
-    bg.width = 660.0f; bg.height = 172.0f;
-    hud::ApplySurfaceStyle(bg.style);
-    bg.layer   = game::ui::kLayerOverlay;
-    bg.visible = true;
-
-    // オーバーレイテキスト
-    m_overlayTextEntity = m_entityOwner.Create(ctx.world);
-    auto& txt = ctx.world.Add<components::UIText>(m_overlayTextEntity);
-    txt.text  = L"WIKIGOLF ガイド";
-    txt.x = 338.0f; txt.y = 42.0f;
-    txt.width = 604.0f;
-    txt.style.fontSize = 20.0f;
-    txt.style.color    = game::ui::kColorTextPrimary;
-    txt.style.align    = graphics::TextAlign::Left;
-    txt.layer   = game::ui::kLayerOverlay + 1;
-    txt.visible = true;
-
-    // 現在行う操作。スキップとは別の青い操作チップとして表示する。
-    m_actionTextEntity = m_entityOwner.Create(ctx.world);
-    auto& action = ctx.world.Add<components::UIText>(m_actionTextEntity);
-    action.text = L"[ ENTER ] はじめる";
-    action.x = 338.0f; action.y = 108.0f;
-    action.width = 410.0f; action.height = 34.0f;
-    action.style.fontSize = 15.0f;
-    action.style.color = game::ui::kColorAccent;
-    action.style.align = graphics::TextAlign::Center;
-    hud::ApplyActiveRowStyle(action.style);
-    action.layer = game::ui::kLayerOverlay + 1;
-    action.visible = true;
-
-    // 任意のスキップヒント
-    m_skipTextEntity = m_entityOwner.Create(ctx.world);
-    auto& skip = ctx.world.Add<components::UIText>(m_skipTextEntity);
-    skip.text  = L"ENTER  次へ / スキップ";
-    skip.x = 338.0f; skip.y = 150.0f;
-    skip.width = 604.0f;
-    skip.style.fontSize = 13.0f;
-    skip.style.color    = game::ui::kColorAccent;
-    skip.style.align    = graphics::TextAlign::Right;
-    skip.layer   = game::ui::kLayerOverlay + 1;
-    skip.visible = true;
-
-    // 旧動作フォールバック用地形カード（m_eventCamTargets 未設定時に使う）
-    m_terrainCards = {
-        { L"Fairway (フェアウェイ)", L"芝が短く刈り揃えられた基本コースです。真っ直ぐよく転がります。" },
-        { L"Rough (ラフ)",           L"草が深いエリアです。飛距離が落ち、ボールが転がりにくくなります。" },
-        { L"Bunker (バンカー)",       L"砂地のハザードです。脱出に強い力が必要で、ほとんど転がりません。" },
-        { L"Green (グリーン)",        L"カップ周辺の滑らかな芝エリアです。非常によく転がるため力加減に注意しましょう。" },
-        { L"OB / Water",             L"コース外や水などの危険エリアです。入ると1打罰となり、直前の場所から打ち直しになります。" }
-    };
-
+    m_panel.Initialize(ctx);
     UpdateUI(ctx);
 }
 
 void TutorialOverlayController::SetVisible(core::GameContext& ctx,
                                            bool visible) {
     m_visible = visible;
-    UpdateUI(ctx);
-    if (auto* check = ctx.world.Get<components::UIImage>(m_checkMarkEntity)) {
-        check->visible = visible;
-    }
+    m_panel.SetVisible(ctx, visible);
 }
 
 // -------------------------------------------------------
@@ -146,12 +82,7 @@ void TutorialOverlayController::Shutdown(core::GameContext& ctx) {
         shotState->impactGaugeSpeed = 1.0f;
     }
 
-    m_entityOwner.DestroyAll(ctx.world);
-    m_overlayBgEntity = UINT32_MAX;
-    m_overlayTextEntity = UINT32_MAX;
-    m_actionTextEntity = UINT32_MAX;
-    m_skipTextEntity = UINT32_MAX;
-    m_checkMarkEntity = UINT32_MAX;
+    m_panel.Shutdown(ctx);
 }
 
 // -------------------------------------------------------

@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>百科事典風パネルの案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f3ef;--fg:#1d1d1f;--sub:#5b5f63;--line:#d9d8d2;--card:#fff;--chip:#ecebe6;--chip-on:#1d1d1f;--chip-on-fg:#fff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#17181a;--fg:#ecebe6;--sub:#a3a6aa;--line:#33353a;--card:#202226;--chip:#2a2c31;--chip-on:#ecebe6;--chip-on-fg:#17181a}}
+:root[data-theme="dark"]{--bg:#17181a;--fg:#ecebe6;--sub:#a3a6aa;--line:#33353a;--card:#202226;--chip:#2a2c31;--chip-on:#ecebe6;--chip-on-fg:#17181a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Meiryo","Hiragino Sans",system-ui,sans-serif;line-height:1.7}
+main{max-width:1180px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:26px;margin:0 0 8px;font-weight:600}
+h2{font-size:19px;margin:0;font-weight:600}
+p{margin:0 0 10px}
+.lead{color:var(--sub);max-width:780px}
+.rules{margin:20px 0 28px;padding:16px 18px;border:1px solid var(--line);background:var(--card);border-radius:4px;max-width:880px}
+.rules ul{margin:6px 0 0;padding-left:1.2em}
+.sw{display:inline-block;width:12px;height:12px;border:1px solid var(--line);vertical-align:-1px;margin-right:3px}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--line)}
+.bar span{color:var(--sub);font-size:14px;margin-right:4px}
+.bar button{font:inherit;font-size:14px;border:0;background:var(--chip);color:var(--fg);padding:5px 14px;border-radius:999px;cursor:pointer}
+.bar button[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-fg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:28px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:16px}
+.opt header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.opt .tag{font-size:12px;color:var(--sub);white-space:nowrap}
+.opt .concept{color:var(--sub);font-size:14px;margin-bottom:12px}
+.opt dl{margin:12px 0 0;font-size:14px}
+.opt dt{font-weight:600;margin-top:8px}
+.opt dd{margin:0;color:var(--sub)}
+table.cmp{border-collapse:collapse;width:100%;font-size:14px;margin-top:12px}
+.cmp th,.cmp td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;vertical-align:top}
+.tablewrap{overflow-x:auto}
+section.sum{margin-top:40px}
+
+/* ---- ゲーム画面の模型（1280×720） ---- */
+.screen{position:relative;aspect-ratio:16/9;container-type:inline-size;overflow:hidden;border-radius:3px;
+  background:linear-gradient(#a9cfe9 0,#d6e8f2 34%,#86b465 34.2%,#6c9d4c 70%,#5a8a3f 100%);
+  --u:calc(100cqw / 1280);font-family:"Meiryo",sans-serif;color:#202122;line-height:1.5}
+.screen .abs{position:absolute}
+.fair{left:calc(380*var(--u));top:calc(250*var(--u));width:calc(520*var(--u));height:calc(470*var(--u));background:#97c46f;clip-path:polygon(40% 0,60% 0,100% 100%,0 100%)}
+.flag{left:calc(636*var(--u));top:calc(196*var(--u));width:calc(3*var(--u));height:calc(70*var(--u));background:#fff}
+.flag::after{content:"";position:absolute;left:calc(3*var(--u));top:0;width:calc(34*var(--u));height:calc(22*var(--u));background:#dd3333}
+.hud{background:rgba(248,249,250,.93);border:1px solid #a2a9b1;border-radius:calc(4*var(--u));color:#54595d;font-size:calc(14*var(--u));display:flex;align-items:center;justify-content:center}
+
+/* 共通の紙面 */
+.serif{font-family:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP",serif}
+.sheet{background:#f8f9fa;border:1px solid #a2a9b1;font-size:calc(16*var(--u))}
+.screen a{color:#3366cc;text-decoration:none}
+.ok a{color:#795cb2}
+.ref{color:#3366cc;font-size:.72em;vertical-align:super;line-height:0;margin:0 .05em}
+.mark{border:1px dashed #3366cc}
+.mark .num{position:absolute;left:calc(-1*var(--u));top:calc(-25*var(--u));background:#fff;color:#3366cc;font-size:calc(14*var(--u));padding:0 calc(5*var(--u));border:1px solid #a2a9b1;line-height:1.5}
+.skip{font-size:calc(12*var(--u));color:#54595d}
+.done{color:#14866d;font-size:calc(14*var(--u))}
+.small{font-size:calc(13*var(--u));color:#54595d}
+
+/* A1 囲み注記 */
+.a1{padding:calc(10*var(--u)) calc(14*var(--u))}
+.a1 .t{font-size:calc(14*var(--u));color:#54595d;border-bottom:1px solid #a2a9b1;padding-bottom:calc(3*var(--u));margin-bottom:calc(8*var(--u))}
+.a1 .h{font-size:calc(24*var(--u));line-height:1.3;margin-bottom:calc(6*var(--u))}
+.a1 .crumb{font-size:calc(12*var(--u));color:#54595d;margin-top:calc(8*var(--u));border-top:1px solid #eaecf0;padding-top:calc(5*var(--u));display:flex;justify-content:space-between}
+.a1 .crumb s{color:#72777d}
+
+/* A2 インフォボックス */
+.a2{padding:calc(4*var(--u))}
+.a2 .cap{font-size:calc(22*var(--u));text-align:center;padding:calc(6*var(--u)) calc(8*var(--u)) calc(8*var(--u));line-height:1.3}
+.a2 table{border-collapse:separate;border-spacing:0 calc(3*var(--u));width:100%;font-size:calc(15*var(--u))}
+.a2 .sec{background:#eaecf0;text-align:center;font-weight:bold;font-size:calc(13*var(--u));padding:calc(2*var(--u))}
+.a2 th{text-align:left;font-weight:bold;padding:calc(2*var(--u)) calc(8*var(--u));width:42%;vertical-align:top}
+.a2 td{padding:calc(2*var(--u)) calc(8*var(--u))}
+.a2 .okrow{background:#d5fdf4;color:#14866d;text-align:center;font-size:calc(14*var(--u))}
+
+/* A3 記事の冒頭 */
+.a3{background:rgba(255,255,255,.96);border:1px solid #a2a9b1;padding:calc(12*var(--u)) calc(16*var(--u)) calc(10*var(--u))}
+.a3 .h{font-size:calc(27*var(--u));line-height:1.3;border-bottom:1px solid #a2a9b1;padding-bottom:calc(4*var(--u))}
+.a3 .from{font-size:calc(12*var(--u));color:#54595d;margin:calc(4*var(--u)) 0 calc(8*var(--u))}
+.a3 p{margin:0;font-size:calc(16*var(--u));line-height:1.65}
+.a3 .notice{margin-top:calc(8*var(--u));border:1px solid #a2a9b1;background:#f8f9fa;padding:calc(4*var(--u)) calc(8*var(--u));font-size:calc(13*var(--u))}
+
+/* A4 目次 */
+.a4{padding:calc(8*var(--u)) calc(14*var(--u)) calc(10*var(--u))}
+.a4 .t{text-align:center;font-weight:bold;font-size:calc(15*var(--u));margin-bottom:calc(4*var(--u))}
+.a4 .t span{font-weight:normal;font-size:calc(13*var(--u))}
+.a4 ol{list-style:none;margin:0;padding:0;font-size:calc(15*var(--u));line-height:1.65}
+.a4 li .n{color:#202122;margin-right:calc(6*var(--u))}
+.a4 li.past a{color:#795cb2}
+.a4 li.now>.lbl{font-weight:bold}
+.a4 .open{margin:calc(3*var(--u)) 0 calc(6*var(--u)) calc(18*var(--u));padding-left:calc(10*var(--u));border-left:1px solid #c8ccd1}
+.a4 .open .h{font-size:calc(22*var(--u));line-height:1.35}
+.a4 .open p{margin:calc(2*var(--u)) 0 0;font-size:calc(15*var(--u));line-height:1.55}
+
+/* A5 脚注 */
+.a5{padding:calc(10*var(--u)) calc(14*var(--u))}
+.a5 .h{font-size:calc(24*var(--u));line-height:1.3;margin-bottom:calc(6*var(--u))}
+.a5 p{margin:0;font-size:calc(16*var(--u));line-height:1.7}
+.a5 .fn{margin-top:calc(8*var(--u));border-top:1px solid #a2a9b1;padding-top:calc(4*var(--u))}
+.a5 .fn .t{font-size:calc(13*var(--u));font-weight:bold;margin-bottom:calc(2*var(--u))}
+.a5 .fn ol{margin:0;padding:0;list-style:none;font-size:calc(13*var(--u));color:#202122;line-height:1.55}
+.a5 .fn b{color:#3366cc;font-weight:normal}
+</style>
+</head>
+<body>
+<main>
+  <h1>百科事典風パネルの案</h1>
+  <p class="lead">A「百科事典の注記」の方向で、Wikipedia の紙面にある部品をそれぞれ土台にした5案です。上のボタンで場面を切り替えると、案ごとに「キーが2つ」「HUDを指す」「できた直後」がどう見えるか確かめられます。画面は 1280×720 を縮めた模型で、HUD の位置は大まかです。</p>
+
+  <div class="rules">
+    <strong>5案とも同じにすること</strong>
+    <ul>
+      <li>色は今の HUD にあるものだけを使います。<span class="sw" style="background:#f8f9fa"></span>面 #f8f9fa、<span class="sw" style="background:#a2a9b1"></span>線 #a2a9b1、<span class="sw" style="background:#3366cc"></span>操作 #3366cc、<span class="sw" style="background:#795cb2"></span>できた操作 #795cb2(訪問済みリンクの紫)、<span class="sw" style="background:#14866d"></span>完了の一言 #14866d。</li>
+      <li>見出しは明朝、本文はメイリオです。明朝は Windows 標準の游明朝を使うので、フォントファイルは増えません。</li>
+      <li>角丸、影、色帯、明滅、キーの形の部品は使いません。動きは、内容が替わるときの短いフェードだけです。</li>
+      <li>HUD を指すときは、その部品を細い点線で囲み、角に脚注番号 [1] を付けます。本文中の「ミニマップ[1]」と番号で対応させます。</li>
+    </ul>
+  </div>
+
+  <div class="bar" role="group" aria-label="場面">
+    <span>場面</span>
+    <button data-step="camera" aria-pressed="true">カメラ(キー2つ)</button>
+    <button data-step="aim" aria-pressed="false">ピン(ミニマップを指す)</button>
+    <button data-step="power" aria-pressed="false">強さ(定規を指す)</button>
+    <button data-step="done" aria-pressed="false">できた直後</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="sum">
+    <h2>比べると</h2>
+    <div class="tablewrap">
+    <table class="cmp">
+      <thead><tr><th>案</th><th>土台にする部品</th><th>進み具合の見せ方</th><th>良いところ</th><th>弱点</th></tr></thead>
+      <tbody>
+        <tr><td>A1 囲み注記</td><td>記事上部の注記ボックス</td><td>下端のパンくず「カメラ › <b>ねらう</b> › 打つ」</td><td>いちばん素直で小さい。前回の案そのまま</td><td>おとなしく、特徴が弱い</td></tr>
+        <tr><td>A2 インフォボックス</td><td>記事右の基本情報の表</td><td>表の最後の行「進み具合 3 / 7 章」</td><td>キーと動作が表の行になるので、一目で拾える</td><td>文章が無いので、なぜそうするかは書きにくい</td></tr>
+        <tr><td>A3 記事の冒頭</td><td>記事の題と書き出しの一文</td><td>題の下の小さな一行「チュートリアル 3 / 7」</td><td>「<b>強さ決め</b>（つよさぎめ）は、…操作である。」と、いちばん Wikipedia らしく、読んで楽しい</td><td>文が長めで、読む量が増える</td></tr>
+        <tr><td>A4 目次</td><td>記事の目次ボックス</td><td>目次そのもの。済んだ章は紫、いまの章だけ開いて中身を出す</td><td>進行バーの代わりに、全体のどこにいるかが言葉で分かる</td><td>縦に長い(章名7行ぶん)。いまの章以外は閉じた表示も用意したい</td></tr>
+        <tr><td>A5 脚注</td><td>本文の注と、下の脚注一覧</td><td>なし(A1 のパンくずを足せる)</td><td>「中クリック＝ホイールを押しこむ」など、操作に慣れない人向けの説明を本文の邪魔をせずに足せる</td><td>脚注まで読まない人もいる。部品がやや多い</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p style="margin-top:16px"><strong>おすすめは A4「目次」です。</strong>前回の「AIっぽさ」の中心だった区切りの進行バーを、Wikipedia の目次に置き換えられます。章の名前、済んだ所、いまの所が一つの部品にまとまり、ほかの HUD とも見た目がそろいます。縦の長さが気になる場合は、いまの章の前後1つだけを見せる形に縮められます。次点は A3 です。題と書き出しの一文に味があって、読んで楽しいのが良いところです。</p>
+  </section>
+</main>
+
+<script>
+const CH = ['はじめに','カメラ','ねらう','打つ','コースを知る','マップ','実戦'];
+const T = {
+  wind:{x:20,y:20,w:150,h:150,l:'風'},
+  mini:{x:1060,y:20,w:200,h:200,l:'ミニマップ'},
+  club:{x:20,y:560,w:220,h:140,l:'クラブ'},
+  ruler:{x:340,y:630,w:600,h:64,l:'定規ゲージ'}
+};
+const KEYNOTE = {
+  '左ドラッグ':'左ボタンを押したままマウスを動かす',
+  'ホイール':'マウスの真ん中の、回る部分',
+  '中クリック':'ホイールをカチッと押しこむ',
+  '左クリック':'左ボタンを1回押す'
+};
+const S = {
+  camera:{ch:1,head:'まわりを見回そう',keys:[['左ドラッグ','向きを回す'],['ホイール','寄る・引く']],target:null,
+    text:'{左ドラッグ}で向きを回し、{ホイール}で寄ったり引いたりできます。',
+    term:'見回し',yomi:'みまわし',lead:'{左ドラッグ}でカメラを回し、{ホイール}で寄ったり引いたりする操作である。',
+    next:'ねらう'},
+  aim:{ch:2,head:'ねらう場所にピンを置こう',keys:[['中クリック','ピンを置く']],target:'mini',
+    text:'ミニマップ[1]の上で{中クリック}すると、そこへピンが立ちます。',
+    term:'ピン置き',yomi:'ピンおき',lead:'ミニマップ[1]の上で{中クリック}し、ねらう場所に目印を立てる操作である。',
+    next:'打つ'},
+  power:{ch:3,head:'強さを決めよう',keys:[['左クリック','針を動かす'],['左クリック','止めて決める']],target:'ruler',
+    text:'{左クリック}で定規[1]の針が動き出します。もう一度{左クリック}で止めた所が強さです。',
+    term:'強さ決め',yomi:'つよさぎめ',lead:'{左クリック}で定規[1]の針を動かし、もう一度{左クリック}で止めて、打つ強さを決める操作である。',
+    next:'タイミング'},
+};
+S.done = Object.assign({}, S.power, {done:true});
+
+const u = n => `calc(${n}*var(--u))`;
+const box = (x,y,w,h) => `left:${u(x)};top:${u(y)};${w!=null?`width:${u(w)};`:''}${h!=null?`height:${u(h)};`:''}`;
+const links = (s, after) => s.replace(/\{(.+?)\}/g,(_,k)=>`<a>${k}</a>${after?after(k):''}`).replace(/\[1\]/g,'<span class="ref">[1]</span>');
+const mark = s => (s.target && !s.done) ? (()=>{const t=T[s.target];return `<div class="abs mark" style="${box(t.x-4,t.y-4,t.w+8,t.h+8)}"><span class="num">[1]</span></div>`})() : '';
+
+function scene(overlay){
+  let h = `<div class="abs fair"></div><div class="abs flag"></div>`;
+  for (const k in T){ const t=T[k]; h += `<div class="abs hud" style="${box(t.x,t.y,t.w,t.h)}">${t.l}</div>`; }
+  return h + overlay;
+}
+
+const OPTS = [
+{ id:'a1', name:'A1 囲み注記', tag:'前回のA',
+  concept:'記事の上に出る注記ボックスの形。小さな題、明朝の見出し、リンク入りの本文、下端にパンくず。',
+  dl:[['できたとき','本文のリンクが紫に変わり、緑の一言「できました。次へ進みます。」が出る。'],
+      ['作り方','UIText の面と1px線、横線2本。リンク色の部分は文字列を分けて並べる。']],
+  render(s){
+    const lo=Math.max(0,s.ch-1), crumb=CH.slice(lo,s.ch+2).map((c,i)=>lo+i<s.ch?`<s>${c}</s>`:lo+i===s.ch?`<b>${c}</b>`:c).join(' › ');
+    return `<div class="abs sheet a1 ${s.done?'ok':''}" style="${box(20,188,380)}">
+      <div class="t serif">チュートリアル</div><div class="h serif">${s.head}</div>
+      <div>${links(s.text)}</div>${s.done?'<div class="done">できました。次へ進みます。</div>':''}
+      <div class="crumb"><span>… ${crumb} …</span><span>Enter でとばす</span></div></div>${mark(s)}`;
+  }},
+{ id:'a2', name:'A2 インフォボックス', tag:'表で見せる',
+  concept:'記事の右にある基本情報の表の形。見出しを表題にして、キーと動作を1行ずつ並べる。',
+  dl:[['できたとき','表の下に緑の行「✓ できました」を足し、キーの文字を紫にする。'],
+      ['作り方','行ごとに UIText を2つ(左右)。見出し行だけ #eaecf0 の面。高さは行数で決まるので、今の計測処理より単純になる。']],
+  render(s){
+    const rows = s.keys.map(k=>`<tr><th><a>${k[0]}</a></th><td>${k[1]}</td></tr>`).join('');
+    const look = s.target?`<tr><th>見る場所</th><td>${T[s.target].l}<span class="ref">[1]</span></td></tr>`:'';
+    return `<div class="abs sheet a2 ${s.done?'ok':''}" style="${box(20,188,340)}">
+      <div class="cap serif">${s.head}</div>
+      <table><tr><td colspan="2" class="sec">操作</td></tr>${rows}${look}
+      <tr><td colspan="2" class="sec">チュートリアル</td></tr>
+      <tr><th>いまの章</th><td>${CH[s.ch]}</td></tr><tr><th>進み具合</th><td>${s.ch+1} / ${CH.length} 章</td></tr>
+      ${s.done?'<tr><td colspan="2" class="okrow">✓ できました</td></tr>':''}</table>
+      <div class="skip" style="text-align:right;padding:0 ${u(8)} ${u(4)}">Enter でとばす</div></div>${mark(s)}`;
+  }},
+{ id:'a3', name:'A3 記事の冒頭', tag:'書き出しの一文',
+  concept:'記事の題と書き出しの一文の形。題が「いますること」、本文は「○○（よみ）は、…操作である。」の定義文。',
+  dl:[['できたとき','題の下に灰色の注記枠「この操作は習得済みです。」が出て、リンクが紫になる。'],
+      ['作り方','A1 とほぼ同じ部品。背景は少し白く、題の下に1px線。定義文は場面ごとに書き足す必要がある。']],
+  render(s){
+    return `<div class="abs a3 ${s.done?'ok':''}" style="${box(20,188,390)}">
+      <div class="h serif">${s.head}</div>
+      <div class="from">チュートリアル「${CH[s.ch]}」より　${s.ch+1} / ${CH.length}</div>
+      <p><b>${s.term}</b>（${s.yomi}）は、${links(s.lead)}</p>
+      ${s.done?'<div class="notice">この操作は習得済みです。次は「'+s.next+'」に進みます。</div>':''}
+      <div class="skip" style="text-align:right;margin-top:${u(6)}">Enter でとばす</div></div>${mark(s)}`;
+  }},
+{ id:'a4', name:'A4 目次', tag:'おすすめ',
+  concept:'記事の目次ボックスの形。7章を番号つきで並べ、済んだ章は紫、いまの章だけ開いて中身を出す。',
+  dl:[['できたとき','いまの項目の頭に緑の「✓」が付き、少し待って次の項目が開く。章が終わると、その章名が紫に変わる。'],
+      ['作り方','章名7行と、開いた項目の見出し・本文。行は UIText を縦に並べるだけ。開閉は高さを変えて並べ直す。']],
+  render(s){
+    const items = CH.map((c,i)=>{
+      const cls = i<s.ch?'past':i===s.ch?'now':'';
+      const lbl = i===s.ch?`<span class="lbl">${c}</span>`:`<a>${c}</a>`;
+      let open='';
+      if (i===s.ch) open = `<div class="open"><div class="h serif">${s.done?'<span style="color:#14866d">✓ </span>':''}<span class="n" style="font-size:.7em;color:#54595d">${i+1}.1</span>${s.head}</div><p>${links(s.text)}</p></div>`;
+      return `<li class="${cls}"><span class="n">${i+1}</span>${lbl}${open}</li>`;
+    }).join('');
+    return `<div class="abs sheet a4 ${s.done?'':''}" style="${box(20,188,360)}">
+      <div class="t">目次 <span>[<a>Enter でとばす</a>]</span></div><ol>${items}</ol></div>${mark(s)}`;
+  }},
+{ id:'a5', name:'A5 脚注', tag:'初心者向けの補足',
+  concept:'本文のキーに注の番号を付け、下の「注釈」に操作のやり方を書く。マウス操作に慣れない人への補足を、本文を長くせずに足せる。',
+  dl:[['できたとき','注釈の欄が閉じて、緑の一言「できました。」に替わる。'],
+      ['作り方','A1 に注釈の欄(横線1本と小さな文の行)を足す。注釈の文はキーごとに1つ書けば、場面をまたいで使い回せる。']],
+  render(s){
+    const notes=[]; const body = links(s.text, k=>{ let n=notes.indexOf(k); if(n<0){notes.push(k);n=notes.length-1;} return `<span class="ref">[注${n+1}]</span>`; });
+    const fn = s.done?'<div class="done" style="margin-top:'+u(6)+'">できました。次へ進みます。</div>':
+      `<div class="fn"><div class="t">注釈</div><ol>${notes.map((k,i)=>`<li><b>注${i+1}</b>　${k}：${KEYNOTE[k]}</li>`).join('')}</ol></div>`;
+    return `<div class="abs sheet a5 ${s.done?'ok':''}" style="${box(20,188,390)}">
+      <div class="h serif">${s.head}</div><p>${body}</p>${fn}
+      <div class="skip" style="text-align:right;margin-top:${u(6)}">${CH[s.ch]} ${s.ch+1} / ${CH.length}　Enter でとばす</div></div>${mark(s)}`;
+  }},
+];
+
+document.getElementById('grid').innerHTML = OPTS.map(o=>`<article class="opt">
+  <header><h2>${o.name}</h2><span class="tag">${o.tag}</span></header>
+  <p class="concept">${o.concept}</p><div class="screen" id="scr-${o.id}"></div>
+  <dl>${o.dl.map(d=>`<dt>${d[0]}</dt><dd>${d[1]}</dd>`).join('')}</dl></article>`).join('');
+
+function show(step){
+  for (const o of OPTS) document.getElementById('scr-'+o.id).innerHTML = scene(o.render(S[step]));
+  document.querySelectorAll('.bar button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.step===step)));
+}
+document.querySelectorAll('.bar button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.step)));
+show('camera');
+</script>
+</body>
+</html>
