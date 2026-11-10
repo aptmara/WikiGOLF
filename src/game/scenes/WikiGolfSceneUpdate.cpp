@@ -125,16 +125,16 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
               CreateTutorialFlagSamples(ctx);
 
               std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> targets = {
-                  { {0.0f, 15.0f, -25.0f}, {0.0f, 0.0f, -10.0f}, L"Fairway (フェアウェイ)", L"芝が短く刈り揃えられた基本コースです。真っ直ぐよく転がります。" },
-                  { {-15.0f, 15.0f, -15.0f}, {-15.0f, 0.0f, 0.0f}, L"Rough (ラフ)", L"草が深いエリアです。飛距離が落ち、ボールが転がりにくくなります。" },
-                  { {24.0f, 15.0f, -18.0f}, {24.0f, 0.0f, -3.0f}, L"Bunker (バンカー)", L"砂地のハザードです。脱出に強い力が必要で、ほとんど転がりません。" },
-                  { {0.0f, 15.0f, 37.0f}, {0.0f, 0.0f, 52.0f}, L"Green (グリーン)", L"カップ周辺の滑らかな芝エリアです。非常によく転がるため力加減に注意しましょう。" },
-                  { {-24.0f, 15.0f, 5.0f}, {-24.0f, 0.0f, 20.0f}, L"OB / ハザード (水・溶岩など)", L"コース外や水・溶岩などの危険地帯です。入ると1打罰で打ち直しになります。" }
+                  { {0.0f, 15.0f, -25.0f}, {0.0f, 0.0f, -10.0f}, L"フェアウェイ", L"短く刈った芝です。まっすぐ、よく転がります。" },
+                  { {-15.0f, 15.0f, -15.0f}, {-15.0f, 0.0f, 0.0f}, L"ラフ", L"深い草です。飛ぶ距離が落ち、あまり転がりません。" },
+                  { {24.0f, 15.0f, -18.0f}, {24.0f, 0.0f, -3.0f}, L"バンカー", L"砂地です。ほとんど転がらず、出すには強く打つ必要があります。" },
+                  { {0.0f, 15.0f, 37.0f}, {0.0f, 0.0f, 52.0f}, L"グリーン", L"カップのまわりの、なめらかな芝です。とてもよく転がるので、弱めに打ちます。" },
+                  { {-24.0f, 15.0f, 5.0f}, {-24.0f, 0.0f, 20.0f}, L"池・溶岩・コースの外", L"入ると1打足されて、打つ前の場所からやり直しです。" }
               };
               std::vector<game::controllers::TutorialOverlayController::EventCameraTarget> flagTargets = {
-                  { {-37.5f, 10.0f, 18.0f}, {-37.5f, 1.4f, 30.0f}, L"赤い旗（目的地・ゴール）", L"目標となるゴール記事へのカップです。ここに入れるとコースクリアとなります。" },
-                  { {-15.0f, 11.0f, 16.0f}, {-15.0f, 1.4f, 30.0f}, L"黄・橙の旗（近いリンク）", L"黄はゴールまであと1手、橙はあと2手で繋がるカップです。少ない打数で進める近道になります。" },
-                  { {15.0f, 11.0f, 16.0f}, {15.0f, 1.4f, 30.0f}, L"白・灰・青の旗（遠いリンク）", L"白は3〜5手、灰は6手以上、青は未解析のカップです。赤に近い色ほどゴールに早く近づけます。" }
+                  { {-37.5f, 10.0f, 18.0f}, {-37.5f, 1.4f, 30.0f}, L"赤い旗", L"ゴールの記事へのリンクです。ここに入れるとクリアです。" },
+                  { {-15.0f, 11.0f, 16.0f}, {-15.0f, 1.4f, 30.0f}, L"黄色・オレンジの旗", L"黄色はあと1記事、オレンジはあと2記事でゴールに着く近道です。" },
+                  { {15.0f, 11.0f, 16.0f}, {15.0f, 1.4f, 30.0f}, L"白・灰色・青の旗", L"白と灰色は遠回りのリンクです。青は、近さをまだ調べている途中です。" }
               };
               m_tutorialOverlay->SetEventCameraTargets(m_cameraEntity,
                                                        std::move(targets),
@@ -304,7 +304,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // マップビュー更新
   bool isMapView = false;
-  bool pointerOverFlagFilters = false;
+  bool pointerOverHudControls = false;
   bool wasMapView = m_minimapController && m_minimapController->IsMapView();
   float fieldW = 80.0f;
   float fieldD = 120.0f;
@@ -349,13 +349,23 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           }
       }
       isMapView = m_minimapController->IsMapView();
-      pointerOverFlagFilters =
+      pointerOverHudControls =
           m_minimapController->IsPointerOverFlagFilters(mouseX, mouseY);
+  }
+  // チュートリアルの目次の上で押したボタンは、ピン置き・視点・ショットへ渡さない。
+  if (m_isTutorial && m_tutorialOverlay &&
+      m_tutorialOverlay->IsPointerOnGuide()) {
+      pointerOverHudControls = true;
   }
 
   const bool escapeHandledByMapView =
       wasMapView && ctx.input.GetKeyDown(VK_ESCAPE);
-  if (!m_isTutorial && !tutorialInputLocked && !escapeHandledByMapView &&
+  // チュートリアル中も、終わって接続を確かめている間を除けば Esc でポーズを
+  // 開ける（ポーズの「タイトルへ戻る」で、途中でやめられるようにする）。
+  const bool pauseAllowed =
+      m_isTutorial ? (m_tutorialOverlay && !m_tutorialOverlay->IsDone())
+                   : !tutorialInputLocked;
+  if (pauseAllowed && !escapeHandledByMapView &&
       ctx.input.GetKeyDown(VK_ESCAPE)) {
     OpenPauseScene(ctx);
     return;
@@ -377,7 +387,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   // (RefreshAimPinSolution)に最も近いクラブへ自動的に切り替える。
   if (m_aimPinController && m_clubController &&
       (!m_isTutorial || tutorialPolicy.aimPin) &&
-      !pointerOverFlagFilters &&
+      !pointerOverHudControls &&
       shot->phase == game::components::ShotState::Phase::Idle) {
       PROFILE_SCOPE("WikiGolf.AimPin");
       game::controllers::AimPinController::UpdateParams pinParams;
@@ -451,14 +461,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
 
   // カメラ更新
   if (m_cameraController && (!m_isTutorial || tutorialPolicy.camera) &&
-      !isMapView && !pointerOverFlagFilters) {
+      !isMapView && !pointerOverHudControls) {
       PROFILE_SCOPE("WikiGolf.Camera");
       m_cameraController->ProcessInput(ctx, mouseX, mouseY);
   }
 
   // ショット処理
   if (m_shotController && (!m_isTutorial || tutorialPolicy.shot) &&
-      !isMapView && !pointerOverFlagFilters) {
+      !isMapView && !pointerOverHudControls) {
       PROFILE_SCOPE("WikiGolf.Shot");
       auto event = m_shotController->ProcessShot(ctx, state->canShoot, m_hud.get(), m_clubController.get());
       if (event.shotFired) {

@@ -6,8 +6,9 @@
 
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
-#include "../../ecs/EntityOwner.h"
 #include "MinimapController.h"
+#include "TutorialStep.h"
+#include "hud/TutorialGuidePanel.h"
 #include <DirectXMath.h>
 #include <string>
 #include <vector>
@@ -17,27 +18,6 @@ namespace game::controllers {
 class CameraController;
 class ClubController;
 class ShotController;
-
-enum class TutorialStep {
-    Intro,
-    Camera,
-    Aim,
-    Club,
-    Power,
-    Impact,
-    TerrainInfo,
-    FlagInfo,
-    MapOpen,
-    MapPan,
-    MapZoom,
-    MapAim,
-    MapHelpOpen,
-    MapHelpClose,
-    MapClose,
-    LinkCup,
-    GoalCup,
-    Done
-};
 
 struct TutorialInputPolicy {
     bool camera = false;
@@ -51,14 +31,6 @@ struct TutorialPresentationPolicy {
     bool courseInfo = false;
     bool club = false;
     bool minimap = false;
-};
-
-struct TerrainCard {
-    std::wstring name;
-    std::wstring desc;
-    float timer = 0.0f;
-    uint32_t bgEntity = UINT32_MAX;
-    uint32_t textEntity = UINT32_MAX;
 };
 
 class TutorialOverlayController {
@@ -88,11 +60,15 @@ public:
     bool IsDone() const { return m_step == TutorialStep::Done; }
     void SetVisible(core::GameContext& ctx, bool visible);
     TutorialStep GetStep() const { return m_step; }
+    /** @brief 案内パネルの上で押したマウス操作を、このフレームはパネルが使ったか*/
+    bool IsPointerOnGuide() const { return m_panel.IsCapturingPointer(); }
     TutorialInputPolicy GetInputPolicy() const;
     TutorialPresentationPolicy GetPresentationPolicy() const;
     game::controllers::MinimapController::InputPermissions GetMapInputPermissions() const;
     bool CanAcceptCupIn(const std::string& linkTarget, bool isTarget) const;
     void NotifyLinkCupIn(core::GameContext& ctx);
+    /** @brief 違う旗に入って最初の場所へ戻したことを、理由とともに案内へ出す。*/
+    void NotifyWrongCupIn(core::GameContext& ctx, const std::wstring& name);
 
     // -------------------------------------------------------
     // イベントカメラ設定
@@ -121,18 +97,20 @@ private:
                          MinimapController* minimapCtrl);
     /** @brief 現在のイベントカメラ説明で使うターゲット一覧を返します。*/
     const std::vector<EventCameraTarget>& GetActiveEventCameraTargets() const;
-    /** @brief ステップ完了演出を開始する（チェックマーク表示→NextStep）*/
-    void TriggerStepClear(core::GameContext& ctx);
-    /** @brief チェックマークアニメーションを毎フレーム更新する*/
-    void UpdateStepClearAnim(core::GameContext& ctx);
+    /**
+     * @brief 少し待ってから次の段階へ進める
+     * @param achieved 操作をやり遂げたか。Enterで送ったときはfalseにし、合図を出さない
+    */
+    void TriggerStepClear(core::GameContext& ctx, bool achieved = true);
+    /** @brief 枠で示すHUD部品を、いまの操作状況に合わせて切り替える*/
+    void UpdateSpotlight(core::GameContext& ctx,
+                         MinimapController* minimapCtrl);
 
     TutorialStep m_step = TutorialStep::Intro;
 
-    // UI Entities
-    ecs::Entity m_overlayBgEntity   = UINT32_MAX;
-    ecs::Entity m_overlayTextEntity = UINT32_MAX;
-    ecs::Entity m_actionTextEntity  = UINT32_MAX;
-    ecs::Entity m_skipTextEntity    = UINT32_MAX;
+    hud::TutorialGuidePanel m_panel;
+    game::utils::TutorialSpotlight m_spotlight =
+        game::utils::TutorialSpotlight::None;
 
     // State Tracking
     float m_initialCameraYaw  = 0.0f;
@@ -140,8 +118,6 @@ private:
     int   m_initialClubIndex  = 0;
     bool  m_terrainEventStarted = false;
     size_t m_terrainCardIndex = 0;
-    float  m_terrainCardTimer = 0.0f;
-    std::vector<TerrainCard> m_terrainCards;
 
     // --- イベントカメラ ---
     std::vector<EventCameraTarget> m_eventCamTargets;     ///< 地形説明用イベントカメラターゲット
@@ -151,16 +127,15 @@ private:
     float m_eventCamLerpTimer        = 0.0f;         ///< 0→1 でラープ完了
     float m_eventCamDisplayTimer     = 0.0f;         ///< 表示残り秒数
     float m_cupInWaitTimer           = 0.0f;         ///< カップイン後の待機時間
+    bool  m_practiceShotLaunched     = false;        ///< 初めての1打が飛び出したか
+    std::wstring m_wrongCupName;                     ///< 直前に入った違う旗の名前
     bool  m_inputLocked              = false;        ///< STEP 5 中のみ true
     bool  m_visible                  = true;
     MinimapController::InputActivity m_mapActivityAtStep{};
 
     // --- ステップクリア演出 ---
-    ecs::Entity m_checkMarkEntity  = UINT32_MAX; ///< mark_check.png 表示用エンティティ
-    ecs::EntityOwner m_entityOwner;
-    bool        m_checkMarkShown   = false;      ///< チェックマーク生成済みフラグ
-    float       m_checkMarkTimer   = 0.0f;       ///< 生成後の経過時間
-    bool        m_stepClearPending = false;      ///< NextStep 直前のアニメーション待機
+    float       m_stepClearTimer   = 0.0f;       ///< 合図を出してからの経過時間
+    bool        m_stepClearPending = false;      ///< NextStep 直前の合図の待機中
 };
 
 } // namespace game::controllers

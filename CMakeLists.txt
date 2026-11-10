@@ -685,6 +685,16 @@ if(MSVC)
 endif()
 add_test(NAME par_rules COMMAND test_par_rules)
 
+add_executable(test_tutorial_guide_rules test_tutorial_guide_rules.cpp)
+target_precompile_headers(test_tutorial_guide_rules REUSE_FROM wikigolf_pch)
+target_include_directories(test_tutorial_guide_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_tutorial_guide_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                   -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_tutorial_guide_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME tutorial_guide_rules COMMAND test_tutorial_guide_rules)
+
 add_executable(test_page_history_utils test_page_history_utils.cpp
                                        src/game/utils/PageHistoryUtils.cpp)
 target_precompile_headers(test_page_history_utils REUSE_FROM wikigolf_pch)
