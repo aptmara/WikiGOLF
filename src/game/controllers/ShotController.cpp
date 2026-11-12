@@ -115,10 +115,9 @@ ShotController::ShotEvent ShotController::ProcessShot(core::GameContext& ctx, bo
             shot->impactGaugePos = 0.0f;
             shot->impactGaugeDir = 1.0f;
             // インパクトの「パーフェクト」位置を確定パワーの位置に合わせる。
-            // 端に寄りすぎると判定帯が画面外にはみ出して事実上パーフェクトが
-            // 出せなくなるため、わずかに余白を残してクランプする。
+            // 100%で止めたら中心も100%(狙った距離と判定中心をずらさない)。
             shot->impactPerfectCenter =
-                std::clamp(shot->confirmedPower, 0.05f, 0.95f);
+                game::utils::ResolveImpactPerfectCenter(shot->confirmedPower);
 
             if (hud) {
                 hud->SetImpactZonesVisible(ctx, true);
@@ -295,9 +294,11 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     float vy = power * std::sin(angleRad);
     float vxz = power * std::cos(angleRad);
 
+    // インパクト確定後は針が止まるので、impactGaugeDir は確定した瞬間の向きのまま。
+    const bool impactLate = game::utils::IsImpactLate(
+        shot->confirmedImpact, shot->impactPerfectCenter, shot->impactGaugeDir);
     const DirectX::XMFLOAT3 finalDir = game::utils::ApplyImpactSideError(
-        shotDir, shot->judgement, shot->confirmedImpact,
-        shot->impactPerfectCenter);
+        shotDir, shot->judgement, impactLate);
 
     auto* rb = ctx.world.Get<game::components::RigidBody>(ballEntity);
     if (rb) {

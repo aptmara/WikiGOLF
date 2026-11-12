@@ -70,6 +70,22 @@ int WikiPageLoader::FindMinResolvedHopsToTarget() const
     return minResolvedHops;
 }
 
+game::utils::RouteToTargetStatus WikiPageLoader::GetRouteToTargetStatus() const
+{
+    // 途中結果は m_buildHoleCandidates 側にだけ反映されるので、両方を見る。
+    int minResolvedHops = FindMinResolvedHopsToTarget();
+    for (const auto& candidate : m_buildHoleCandidates) {
+        if (candidate.isTarget || candidate.hopsToTarget >= 0) {
+            minResolvedHops = 0;
+            break;
+        }
+    }
+    const bool evaluationFinished =
+        m_pathEvaluator.HasStarted() && !m_pathEvaluator.HasActiveTask();
+    return game::utils::ResolveRouteToTargetStatus(minResolvedHops,
+                                                   evaluationFinished);
+}
+
 void WikiPageLoader::RefreshParFromPathEvaluation(core::GameContext& ctx,
                                                   bool allowFallback)
 {

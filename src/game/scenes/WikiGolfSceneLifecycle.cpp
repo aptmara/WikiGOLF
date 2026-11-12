@@ -500,17 +500,29 @@ bool WikiGolfScene::ReturnToPreviousPage(core::GameContext &ctx) {
     return false;
   }
 
+  // 罰打は遷移前(いまの記事の経路評価が残っているうち)に決める。
+  const int penalty = GetReturnToPreviousPagePenalty();
+
   const auto previousPage =
       game::utils::ConsumePreviousPage(state->pathHistory);
   if (!previousPage.has_value()) {
     return false;
   }
 
-  LOG_INFO("WikiGolf", "Returning to previous page: {}",
-           previousPage.value());
+  state->totalShotCount += penalty;
+  LOG_INFO("WikiGolf", "Returning to previous page: {} penalty={} total={}",
+           previousPage.value(), penalty, state->totalShotCount);
   state->returningToPreviousPage = true;
   TransitionToPage(ctx, previousPage.value());
   return true;
+}
+
+int WikiGolfScene::GetReturnToPreviousPagePenalty() const {
+  if (!m_pageLoader) {
+    return 0;
+  }
+  return game::utils::GetReturnToPreviousPagePenalty(
+      m_pageLoader->GetRouteToTargetStatus());
 }
 
 void WikiGolfScene::OpenPauseScene(core::GameContext &ctx) {
@@ -520,6 +532,7 @@ void WikiGolfScene::OpenPauseScene(core::GameContext &ctx) {
 
   ctx.sceneManager->PushScene(std::make_unique<PauseScene>(
       !m_isTutorial && CanReturnToPreviousPage(ctx),
+      GetReturnToPreviousPagePenalty(),
       [this](core::GameContext& innerCtx) { this->ReturnToPreviousPage(innerCtx); }));
 }
 

@@ -17,7 +17,10 @@ class PauseScene : public core::Scene {
 public:
   using ActionCallback = std::function<void(core::GameContext&)>;
 
-  PauseScene(bool canReturnToPreviousPage,
+  /**
+   * @param returnPenalty 前のページへ戻ったときの罰打(0なら無償)。ボタンに表示する。
+  */
+  PauseScene(bool canReturnToPreviousPage, int returnPenalty,
              ActionCallback returnToPreviousPage);
 
   const char* GetName() const override { return "PauseScene"; }
@@ -33,6 +36,7 @@ private:
                     bool enabled);
 
   bool m_canReturnToPreviousPage = false;
+  int m_returnPenalty = 0;
   ActionCallback m_returnToPreviousPage;
 };
 

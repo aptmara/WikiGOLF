@@ -20,9 +20,10 @@ constexpr float kButtonWidth = 300.0f;
 constexpr float kButtonHeight = 56.0f;
 } // namespace
 
-PauseScene::PauseScene(bool canReturnToPreviousPage,
+PauseScene::PauseScene(bool canReturnToPreviousPage, int returnPenalty,
                        ActionCallback returnToPreviousPage)
     : m_canReturnToPreviousPage(canReturnToPreviousPage),
+      m_returnPenalty(returnPenalty),
       m_returnToPreviousPage(std::move(returnToPreviousPage)) {}
 
 void PauseScene::OnEnter(core::GameContext& ctx) {
@@ -68,8 +69,16 @@ void PauseScene::OnEnter(core::GameContext& ctx) {
 
   auto helpEntity = CreateEntity(ctx.world);
   auto& help = ctx.world.Add<components::UIText>(helpEntity);
-  help.text =
-      L"ESC: 再開\nBackspace: 前のページへ戻る\nM: マップ中は先にマップを閉じます";
+  // 戻るときの罰打を先に見せる(ゴールへ届かない行き止まりの記事からは無償)。
+  // 1行に収まるよう、罰打の有無を付けるときは「戻る」を省く。
+  std::wstring backLine = L"Backspace: 前のページへ戻る";
+  if (m_canReturnToPreviousPage) {
+    backLine = L"Backspace: 前のページへ";
+    backLine += m_returnPenalty > 0
+                    ? L"（" + std::to_wstring(m_returnPenalty) + L"打罰）"
+                    : std::wstring(L"（罰打なし）");
+  }
+  help.text = L"ESC: 再開\n" + backLine + L"\nM: マップ中は先にマップを閉じます";
   help.x = 440.0f;
   help.y = 220.0f;
   help.width = 400.0f;

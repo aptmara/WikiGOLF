@@ -28,11 +28,15 @@ inline void ResetStandardStartData(core::GameContext &ctx,
   LOG_INFO("TitleScene", "Reset WikiGlobalData for standard random start");
 }
 
-inline void ResetDailyChallengeStartData(core::GameContext &ctx,
-                                         bool isOniMode = false) {
+/**
+ * @brief デイリーチャレンジ用にWiki開始情報を初期化します。
+ * @details デイリーは全員が同じ条件で競うため、鬼モードの設定に関係なく
+ *          通常モード(旗の色で手数を出す)で始める。
+*/
+inline void ResetDailyChallengeStartData(core::GameContext &ctx) {
   game::components::WikiGlobalData data;
   data.isDailyChallenge = true;
-  data.isOniMode = isOniMode;
+  data.isOniMode = false;
   ctx.world.SetGlobal(std::move(data));
   LOG_INFO("TitleScene", "Reset WikiGlobalData for daily challenge");
 }

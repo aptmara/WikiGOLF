@@ -20,7 +20,7 @@ enum class AchievementId {
   TutorialComplete,   ///< チュートリアル修了
   FreePlayClear,      ///< 道なき道
   Birdie,             ///< バーディー級
-  ParFirstTry,        ///< ワンパット感覚
+  ParFirstTry,        ///< パーで回る(旧名「ワンパット感覚」。保存IDのため名前は据え置き)
   TripleSpecial,      ///< 職人技
   NoMiss,             ///< ノーミス進行
   ShortestPath,       ///< 最短経路
@@ -35,6 +35,8 @@ enum class AchievementId {
   NewRecord,          ///< 記録更新
   Explorer100Pages,   ///< 知の探求者
   Wanderer10Hops,     ///< 寄り道の達人
+  // 保存データは数値IDで持つため、新しい実績は必ずこの位置(Countの直前)に足す。
+  Eagle,              ///< イーグル級
 
   Count, ///< 実績数（配列サイズ用。実際のIDとしては使わない）
 };
@@ -79,10 +81,10 @@ inline constexpr std::array<AchievementDef,
          L"自由入力でスタート/ゴール記事を指定してクリアする",
          AchievementCategory::Progress, 0},
         {AchievementId::Birdie, L"バーディー級",
-         L"パーより2打以上少ない打数でクリアする", AchievementCategory::Skill,
-         0},
-        {AchievementId::ParFirstTry, L"ワンパット感覚",
-         L"パー通りの打数でクリアする（初回）", AchievementCategory::Skill,
+         L"ラウンドパーより1打以上少ない打数でクリアする",
+         AchievementCategory::Skill, 0},
+        {AchievementId::ParFirstTry, L"パーで回る",
+         L"ラウンドパーちょうどの打数でクリアする", AchievementCategory::Skill,
          0},
         {AchievementId::TripleSpecial, L"職人技",
          L"1ラウンド中に3回以上Special判定を出してクリアする",
@@ -123,6 +125,9 @@ inline constexpr std::array<AchievementDef,
         {AchievementId::Wanderer10Hops, L"寄り道の達人",
          L"1ラウンドで10回以上リンクをたどってからクリアする",
          AchievementCategory::Exploration, 0},
+        {AchievementId::Eagle, L"イーグル級",
+         L"ラウンドパーより2打以上少ない打数でクリアする",
+         AchievementCategory::Skill, 0},
     }};
 
 /** @brief IDから定義を検索します。見つからない場合はnullptr。*/

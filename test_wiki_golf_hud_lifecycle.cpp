@@ -328,7 +328,8 @@ int main() {
   CHECK_TRUE(gauge->resultActive && hud.IsShotGaugeAnimating() &&
                  gauge->judgement == game::components::ShotJudgement::Special,
              "インパクト確定の瞬間に判定付きの結果演出を始める");
-  CHECK_TRUE(gauge->chipYards == 66 && !gauge->showAimPinMarker,
+  // Special は狙いどおりの距離(倍率1.0)なので、確定した60ヤードのまま。
+  CHECK_TRUE(gauge->chipYards == 60 && !gauge->showAimPinMarker,
              "距離札を判定込みの最終距離へ更新し、ピンを消す");
 
   // 発射後にShotStateが初期値へ戻っても、確定時の結果を表示し続ける。
@@ -336,7 +337,7 @@ int main() {
              game::components::ShotState::Phase::Executing, false, 0.0f, 0.0f,
              0.5f, 0.5f, 3.0f, {1.0f, 0.0f}, 0.0f, clubsWithIcon, 2, 0.0f,
              0.0f, nullptr);
-  CHECK_TRUE(gauge->isVisible && gauge->chipYards == 66 && gauge->value == 0.5f &&
+  CHECK_TRUE(gauge->isVisible && gauge->chipYards == 60 && gauge->value == 0.5f &&
                  gauge->markerValue == 0.5f,
              "発射後も確定時の距離と針の位置を保持する");
   hud.Update(context, game::ui::kGaugeHoldDuration + 0.1f, state,

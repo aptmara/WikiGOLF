@@ -15,6 +15,7 @@
 #include "WikiPageDataFetcher.h"
 #include "PageLinkSelector.h"
 #include "../utils/CourseIntroductionRules.h"
+#include "../utils/ReturnPenaltyRules.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
 #include "../systems/WikiTerrainSystem.h"
@@ -188,6 +189,13 @@ public:
      * @return 経路評価結果を反映した場合は true
 */
     bool UpdateAsyncPathEvaluation(core::GameContext& ctx);
+
+    /**
+     * @brief いまの記事からゴールへたどり着けるかを返します。
+     * @details 評価済みのリンクに1つでもゴールへ届くものがあれば Exists。
+     *          経路評価が終わって1つも無ければ None(行き止まり)。
+*/
+    game::utils::RouteToTargetStatus GetRouteToTargetStatus() const;
 
     /** @brief 構築の進捗 (0.0 - 1.0)*/
     float GetBuildProgress() const { return m_buildProgress; }

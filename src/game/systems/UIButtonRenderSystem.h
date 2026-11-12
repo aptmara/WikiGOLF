@@ -62,7 +62,7 @@ public:
                             rect.right - 48, rect.bottom), labelStyle);
             if (btn.state == components::ButtonState::Hovered ||
                 btn.state == components::ButtonState::Pressed) {
-              const auto helpRect = D2D1::RectF(850, 24, 1240, 128);
+              const auto helpRect = D2D1::RectF(850, 24, 1240, 150);
               m_renderer.FillRoundedRect(helpRect, 6.0f,
                   DirectX::XMFLOAT4{0.03f, 0.07f, 0.12f, 0.96f});
               m_renderer.DrawRoundedRect(helpRect, 6.0f,
@@ -73,8 +73,9 @@ public:
               helpStyle.color = {0.95f, 0.92f, 0.85f, 1.0f};
               m_renderer.RenderText(
                   L"距離のヒントなしで挑戦。\n"
-                  L"最短記事数のみ表示します。",
-                  D2D1::RectF(864, 38, 1226, 116), helpStyle);
+                  L"最短記事数のみ表示します。\n"
+                  L"デイリーは常にヒントありで遊びます。",
+                  D2D1::RectF(864, 38, 1226, 140), helpStyle);
             }
             return;
           }

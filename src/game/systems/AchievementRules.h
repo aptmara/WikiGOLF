@@ -30,12 +30,17 @@ inline bool ReachedCountThreshold(int valueAfterUpdate, int threshold) {
 // スコア・技術系
 // ---------------------------------------------------------------------
 
-/** @brief パーより2打以上少ない打数でクリアしたか。*/
+/** @brief ラウンドパーより1打以上少ない打数でクリアしたか(バーディー以上)。*/
 inline bool ShouldUnlockBirdie(int shotCount, int par) {
+  return par > 0 && shotCount > 0 && shotCount <= par - 1;
+}
+
+/** @brief ラウンドパーより2打以上少ない打数でクリアしたか(イーグル以上)。*/
+inline bool ShouldUnlockEagle(int shotCount, int par) {
   return par > 0 && shotCount > 0 && shotCount <= par - 2;
 }
 
-/** @brief パー通りの打数でクリアしたか。*/
+/** @brief ラウンドパーちょうどの打数でクリアしたか。*/
 inline bool ShouldUnlockParFirstTry(int shotCount, int par) {
   return par > 0 && shotCount == par;
 }

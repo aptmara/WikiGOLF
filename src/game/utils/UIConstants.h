@@ -190,7 +190,9 @@ constexpr float kJudgeDisplayTime   = 1.1f;
 constexpr float kJudgeImageCenterY  = 150.0f; // 画面中央ではなく上部に表示する
 
 // インパクト精度しきい値 (0.5が中心)
-constexpr float kThresholdSpecial   = 0.015f;
+// ゲージは毎秒1.0進むので、Special ±0.02 は窓40ms(60fpsで約2.4フレーム)。
+// 入力遅延のある環境でも狙って出せる幅にしている。
+constexpr float kThresholdSpecial   = 0.020f;
 constexpr float kThresholdGreat     = 0.040f;
 constexpr float kThresholdNice      = 0.120f;
 

@@ -53,28 +53,55 @@ inline float GetImpactZoneVisualWidth(float threshold) {
 }
 
 /**
+ * @brief 判定ごとの横ずれ量(狙った方向1に対する横方向の割合)を返します。
+ * @details Specialだけが完全にまっすぐ飛び、Greatもごくわずかにずれる。
+ *          Great 0.015 ≒ 0.9°、Nice 0.05 ≒ 2.9°、Miss 0.3 ≒ 16.7°。
+*/
+inline float GetJudgementSideOffset(game::components::ShotJudgement judgement) {
+  switch (judgement) {
+  case game::components::ShotJudgement::Great:
+    return 0.015f;
+  case game::components::ShotJudgement::Nice:
+    return 0.05f;
+  case game::components::ShotJudgement::Miss:
+    return 0.3f;
+  default:
+    return 0.0f;
+  }
+}
+
+/**
+ * @brief インパクトが中心より遅れたか(奥側で止めたか)を返します。
+ * @details 基本は針が中心より奥なら遅れ、手前なら早い(見たとおりの左右)。
+ *          フルショット(中心=1.0)だけは中心より奥が無いので、針が端で折り返して
+ *          戻ってくる途中(gaugeDir<0)を遅れとみなし、左右両方に曲がり分ける。
+ * @param gaugeDir インパクトを確定した瞬間の針の進む向き(+1で奥へ、-1で手前へ)。
+*/
+inline bool IsImpactLate(float impactValue, float center, float gaugeDir) {
+  const float clampedCenter = ClampGaugeValue(center);
+  if (clampedCenter >= 1.0f) {
+    return gaugeDir < 0.0f;
+  }
+  return ClampGaugeValue(impactValue) > clampedCenter;
+}
+
+/**
  * @brief インパクトのずれを反映した打球方向を返します。
- * @details Nice/Missは、狙った方向からずれた側へ打ち出します。定規の中心より手前で
- *          止めれば左、奥で止めれば右へ曲がり、Great以上はまっすぐ飛びます。
+ * @details Special以外は、狙った方向からずれた側へ打ち出します。早く止めれば左、
+ *          遅れて止めれば右へ曲がります。
  *          ずれは狙った方向に対する横方向で与え、水平成分の長さを保つので、
  *          打つ向きによって曲がる方向や飛距離が変わりません。
  * @param shotDir 狙った方向（左手系、水平成分は単位長さを想定）。
- * @param center パーフェクトとみなす中心位置 (0.0〜1.0)。
+ * @param late 遅れて止めたか(IsImpactLate参照)。
 */
 inline DirectX::XMFLOAT3 ApplyImpactSideError(
     const DirectX::XMFLOAT3 &shotDir,
-    game::components::ShotJudgement judgement, float impactValue,
-    float center) {
-  float sideOffset = 0.0f;
-  if (judgement == game::components::ShotJudgement::Nice) {
-    sideOffset = 0.1f;
-  } else if (judgement == game::components::ShotJudgement::Miss) {
-    sideOffset = 0.3f;
-  }
+    game::components::ShotJudgement judgement, bool late) {
+  float sideOffset = GetJudgementSideOffset(judgement);
   if (sideOffset == 0.0f) {
     return shotDir;
   }
-  if (ClampGaugeValue(impactValue) < ClampGaugeValue(center)) {
+  if (!late) {
     sideOffset = -sideOffset;
   }
   const float x = shotDir.x + shotDir.z * sideOffset;
@@ -86,6 +113,15 @@ inline DirectX::XMFLOAT3 ApplyImpactSideError(
   }
   const float scale = aimLength / length;
   return {x * scale, shotDir.y, z * scale};
+}
+
+/** @brief 中心との前後関係だけで遅れを決める版(針の向きを考えない)。*/
+inline DirectX::XMFLOAT3 ApplyImpactSideError(
+    const DirectX::XMFLOAT3 &shotDir,
+    game::components::ShotJudgement judgement, float impactValue,
+    float center) {
+  return ApplyImpactSideError(shotDir, judgement,
+                              IsImpactLate(impactValue, center, 1.0f));
 }
 
 /**
@@ -138,21 +174,36 @@ inline RulerTicks GetRulerTicks(float maxYards) {
  *
  * ExecuteShot(実際のショット)とHUD表示のどちらからも参照し、
  * 「基本飛距離からの変位」を判定と一貫させます。
+ * Specialは狙いどおりの距離(1.0)。最高の判定でピンを越えてしまわないよう、
+ * Greatとの差は距離ではなく「完全にまっすぐ飛ぶ」でつける(GetJudgementSideOffset)。
+ * 風は予測線(TrajectoryPredictor)と同じ式で効くので、判定で変えない。
 */
 inline float GetJudgementDistanceMultiplier(
     game::components::ShotJudgement judgement) {
   switch (judgement) {
   case game::components::ShotJudgement::Special:
-    return 1.1f;
+    return 1.0f;
   case game::components::ShotJudgement::Great:
     return 1.0f;
   case game::components::ShotJudgement::Nice:
-    return 0.9f;
+    return 0.95f;
   case game::components::ShotJudgement::Miss:
     return 0.8f;
   default:
     return 1.0f;
   }
+}
+
+/** @brief パーフェクト中心の下限。針は0から動き出すので、0付近は判定帯を置かない。*/
+inline constexpr float kImpactCenterMin = 0.05f;
+
+/**
+ * @brief 確定したパワーからインパクトのパーフェクト中心を決めます。
+ * @details 上端はクランプしない。100%で止めたら中心も100%で、判定帯は片側だけに
+ *          なるが、針は端で折り返して戻るので、判定帯を通る時間は中央と変わらない。
+*/
+inline float ResolveImpactPerfectCenter(float confirmedPower) {
+  return std::clamp(confirmedPower, kImpactCenterMin, 1.0f);
 }
 
 } // namespace game::utils

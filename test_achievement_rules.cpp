@@ -13,9 +13,16 @@ int main() {
   assert(!ReachedCountThreshold(9, 10));
 
   // スコア・技術系
+  // バーディー級はパー-1以下、イーグル級はパー-2以下
+  assert(ShouldUnlockBirdie(4, 5));
   assert(ShouldUnlockBirdie(3, 5));
-  assert(!ShouldUnlockBirdie(4, 5));
+  assert(!ShouldUnlockBirdie(5, 5));
   assert(!ShouldUnlockBirdie(0, 5));
+  assert(!ShouldUnlockBirdie(1, 0)); // パー不明
+
+  assert(ShouldUnlockEagle(3, 5));
+  assert(!ShouldUnlockEagle(4, 5));
+  assert(!ShouldUnlockEagle(0, 5));
 
   assert(ShouldUnlockParFirstTry(5, 5));
   assert(!ShouldUnlockParFirstTry(4, 5));
