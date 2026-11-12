@@ -215,10 +215,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   std::error_code assetsCheckError;
   if (!std::filesystem::is_directory("Assets/shaders", assetsCheckError)) {
     LOG_ERROR("Main", "Assets/shaders not found next to the executable.");
-    ShowStartupError(nullptr,
-                     L"ゲームのデータ（Assets フォルダ）が見つかりません。\n\n"
-                     L"ZIP ファイルをすべて展開してから、展開先の WikiGolf.exe を"
-                     L"起動してください。");
+    // 配布物の exe 名にはバージョンが付くので、実際のファイル名を案内する
+    std::wstring executableName = L"WikiGolf.exe";
+    if (modulePathLength > 0 &&
+        modulePathLength < static_cast<DWORD>(std::size(modulePathBuffer))) {
+      executableName = std::filesystem::path(modulePathBuffer).filename().wstring();
+    }
+    const std::wstring message =
+        L"ゲームのデータ（Assets フォルダ）が見つかりません。\n\n"
+        L"ZIP ファイルをすべて展開してから、展開先の " + executableName +
+        L" を起動してください。";
+    ShowStartupError(nullptr, message.c_str());
     return -1;
   }
 
