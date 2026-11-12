@@ -377,6 +377,8 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
     core::GameContext& ctx,
     const std::vector<HolePlacementCandidate>& evaluatedCandidates)
 {
+    const auto* state = ctx.world.GetGlobal<GolfGameState>();
+    const bool isOniMode = state && state->isOniMode;
     std::unordered_map<std::string, int> hopsByTarget;
     hopsByTarget.reserve(evaluatedCandidates.size());
     for (const auto& candidate : evaluatedCandidates) {
@@ -401,9 +403,8 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
                 ctx.world.IsAlive(static_cast<ecs::Entity>(hole.labelEntity))) {
                 if (auto* label = ctx.world.Get<UIText>(
                         static_cast<ecs::Entity>(hole.labelEntity))) {
-                    label->style.color =
-                        HoleVisualRules::GetColor(hole.isTarget,
-                                                 hole.hopsToTarget);
+                    label->style.color = HoleVisualRules::GetColor(
+                        hole.isTarget, hole.hopsToTarget, isOniMode);
                 }
             }
             updatedHoles[static_cast<uint32_t>(e)] = hole.hopsToTarget;
@@ -422,8 +423,8 @@ void WikiPageLoader::ApplyPathEvaluationToWorld(
         if (auto* hole = ctx.world.Get<GolfHole>(
                 static_cast<ecs::Entity>(flag.holeEntity))) {
             if (auto* mr = ctx.world.Get<MeshRenderer>(e)) {
-                mr->color = HoleVisualRules::GetColor(hole->isTarget,
-                                                      it->second);
+                mr->color = HoleVisualRules::GetColor(
+                    hole->isTarget, it->second, isOniMode);
                 mr->color.w = flag.baseAlpha * flag.fadeAlpha;
             }
         }

@@ -38,6 +38,46 @@ public:
 
           // 背景描画（状態に応じた色）
           m_renderer.FillRect(rect, bgColor);
+          if (btn.noHintToggle) {
+            if (btn.toggleOn) m_renderer.RenderButtonFire(rect, ctx.time);
+            const DirectX::XMFLOAT4 accent = btn.toggleOn
+                ? DirectX::XMFLOAT4{0.9f, 0.67f, 0.47f, 1.0f}
+                : DirectX::XMFLOAT4{0.45f, 0.5f, 0.55f, 1.0f};
+            m_renderer.DrawRoundedRect(rect, 3.0f, accent, 1.0f);
+            auto track = D2D1::RectF(rect.right - 48, rect.top + 15,
+                                    rect.right - 14, rect.top + 33);
+            m_renderer.DrawRoundedRect(track, 9.0f, accent, 1.0f);
+            float knobX = track.left + 4.0f;
+            if (btn.toggleOn) knobX += 16.0f;
+            m_renderer.FillRoundedRect(D2D1::RectF(knobX, track.top + 4,
+                knobX + 10, track.top + 14), 5.0f, accent);
+            auto labelStyle = btn.textStyle;
+            labelStyle.align = graphics::TextAlign::Left;
+            m_renderer.RenderText(btn.label, D2D1::RectF(rect.left + 14,
+                rect.top + 9, rect.right - 96, rect.bottom), labelStyle);
+            labelStyle.fontSize = 13;
+            labelStyle.color = accent;
+            m_renderer.RenderText(btn.toggleOn ? L"ON" : L"OFF",
+                D2D1::RectF(rect.right - 84, rect.top + 16,
+                            rect.right - 48, rect.bottom), labelStyle);
+            if (btn.state == components::ButtonState::Hovered ||
+                btn.state == components::ButtonState::Pressed) {
+              const auto helpRect = D2D1::RectF(850, 24, 1240, 128);
+              m_renderer.FillRoundedRect(helpRect, 6.0f,
+                  DirectX::XMFLOAT4{0.03f, 0.07f, 0.12f, 0.96f});
+              m_renderer.DrawRoundedRect(helpRect, 6.0f,
+                  DirectX::XMFLOAT4{0.65f, 0.48f, 0.3f, 1.0f}, 1.0f);
+              auto helpStyle = btn.textStyle;
+              helpStyle.align = graphics::TextAlign::Left;
+              helpStyle.fontSize = 17.0f;
+              helpStyle.color = {0.95f, 0.92f, 0.85f, 1.0f};
+              m_renderer.RenderText(
+                  L"距離のヒントなしで挑戦。\n"
+                  L"最短記事数のみ表示します。",
+                  D2D1::RectF(864, 38, 1226, 116), helpStyle);
+            }
+            return;
+          }
 
           // ラベル描画（中央揃え）
           graphics::TextStyle style = btn.textStyle;

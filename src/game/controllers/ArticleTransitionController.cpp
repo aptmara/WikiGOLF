@@ -668,7 +668,7 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     overview.duration = 3.0f;
     m_introductionShots.push_back(std::move(overview));
 
-    if (featured.goals.size() <= 3) {
+    if (!data.isOniMode && featured.goals.size() <= 3) {
         for (std::size_t index = 0; index < featured.goals.size(); ++index) {
             const auto& hole = featured.goals[index];
             IntroductionShot goal;
@@ -685,7 +685,7 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
             goal.duration = 2.4f;
             m_introductionShots.push_back(std::move(goal));
         }
-    } else {
+    } else if (!data.isOniMode) {
         float centerX = 0.0f;
         float centerY = 0.0f;
         float centerZ = 0.0f;
@@ -718,7 +718,7 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
         m_introductionShots.push_back(std::move(goals));
     }
 
-    if (featured.goals.empty()) {
+    if (!data.isOniMode && featured.goals.empty()) {
         for (std::size_t index = 0; index < featured.oneHop.size(); ++index) {
             const auto& hole = featured.oneHop[index];
             IntroductionShot oneHop;
@@ -726,7 +726,7 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
             oneHop.cameraPosition = {hole.x + 11.0f, hole.y + 14.0f,
                                      hole.z - 17.0f};
             oneHop.focusPosition = {hole.x, hole.y + 1.5f, hole.z};
-            oneHop.label = L"あと1回の移動でゴール";
+            oneHop.label = L"あと1記事でゴール";
             oneHop.title = core::ToWString(hole.linkTarget);
             oneHop.detail = std::to_wstring(index + 1) + L" / " +
                             std::to_wstring(featured.oneHop.size());
@@ -841,11 +841,10 @@ void ArticleTransitionController::BeginArticleArrival(
     const DirectX::XMFLOAT3& focusPosition) {
     // ロード画面の文字は、紙が明るくなるのに合わせて消す（UpdateArrivalFadeIn）
 
-    // ラウンド開始時だけゴールを案内して巡回する。2記事目以降は紙が倒れるだけ
+    // 旗の演出は毎記事で表示し、コース紹介の巡回だけ初回に限定する
     m_arrivalIsRoundStart = m_goalNoticeRequested;
     m_goalNoticeRequested = false;
-    m_arrivalTiming = m_arrivalIsRoundStart ? game::utils::kRoundStartArrival
-                                            : game::utils::kShortArrival;
+    m_arrivalTiming = game::utils::kRoundStartArrival;
     // 紙は背景色から明るくなる。明るくなり切った時刻が 0
     m_arrivalElapsed = m_arrivalTiming.Begin();
 
@@ -887,17 +886,23 @@ void ArticleTransitionController::BeginArticleArrival(
         state && !state->targetPage.empty()) {
         content.goalTitle = core::ToWString(state->targetPage);
     }
-    if (m_arrivalIsRoundStart) {
-
-        // スタートからゴールまでの道のりと、たどる順の旗を紙に描く
+    {
+        // 現在の記事からゴールまでの道のりと、たどる順の旗を紙に描く
         GoalRouteEffect::Content route;
         route.startTitle = core::ToWString(data.pageName);
         route.goalTitle = content.goalTitle;
         route.par = data.par;
         std::vector<int> holeHops;
-        holeHops.reserve(data.holes.size());
-        for (const auto& hole : data.holes) {
-            holeHops.push_back(hole.hopsToTarget);
+        if (data.isOniMode) {
+            ctx.world.Query<components::GolfHole>().Each(
+                [&](ecs::Entity, const components::GolfHole& hole) {
+                    holeHops.push_back(hole.isTarget ? 0 : hole.hopsToTarget);
+                });
+        } else {
+            holeHops.reserve(data.holes.size());
+            for (const auto& hole : data.holes) {
+                holeHops.push_back(hole.hopsToTarget);
+            }
         }
         route.hops = game::utils::CalculateStartToGoalHops(holeHops);
         m_goalRoute.Spawn(ctx, route, m_articlePaper);
@@ -916,17 +921,14 @@ void ArticleTransitionController::BeginArticleArrival(
 
 void ArticleTransitionController::UpdateArticleArrival(
     core::GameContext& ctx, float dt) {
-    if (m_arrivalIsRoundStart) {
-        if (UpdateIntroductionSkipButton(ctx)) {
-            FinishCourseIntroduction(ctx);
-            return;
-        }
+    if (UpdateIntroductionSkipButton(ctx)) {
+        FinishCourseIntroduction(ctx);
+        return;
     }
 
     m_arrivalElapsed += dt;
-    if (m_arrivalIsRoundStart &&
-        (ctx.input.GetMouseButtonDown(0) || ctx.input.GetKeyDown(VK_RETURN) ||
-         ctx.input.GetKeyDown(VK_SPACE))) {
+    if (ctx.input.GetMouseButtonDown(0) || ctx.input.GetKeyDown(VK_RETURN) ||
+        ctx.input.GetKeyDown(VK_SPACE)) {
         m_arrivalElapsed = game::utils::ResolveGoalNoticeAdvance(
             m_arrivalElapsed, m_arrivalTiming);
     }

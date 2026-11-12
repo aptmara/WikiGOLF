@@ -14,6 +14,7 @@ void WikiPageLoader::CaptureCourseIntroductionData(
   data.fieldDepth = state.fieldDepth;
   data.windSpeed = state.windSpeed;
   data.par = state.par;
+  data.isOniMode = state.isOniMode;
   data.holes.reserve(m_buildHoleCandidates.size());
 
   for (const HolePlacementCandidate& candidate : m_buildHoleCandidates) {

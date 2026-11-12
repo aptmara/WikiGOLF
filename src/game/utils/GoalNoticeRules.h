@@ -106,9 +106,17 @@ inline std::wstring FormatGoalNoticeDetail(int par, int hops) {
     if (!detail.empty()) {
       detail += L" · ";
     }
-    detail += L"最短" + std::to_wstring(hops) + L"手";
+    detail += L"最短" + std::to_wstring(hops) + L"記事";
   }
   return detail;
+}
+
+/** @brief 鬼モードで表示する最短記事数を作ります。*/
+inline std::wstring FormatShortestArticleCount(int hops) {
+  if (hops <= 0) {
+    return {};
+  }
+  return L"最短" + std::to_wstring(hops) + L"記事";
 }
 
 // ---- ラウンド開始時の道のり ----
@@ -226,15 +234,15 @@ inline float CalculateRouteOpacity(float elapsed,
   return fadeIn * (1.0f - fadeOut);
 }
 
-/** @brief 旗の下に出す残り手数です。*/
+/** @brief 旗の下に出す残り記事数です。*/
 inline std::wstring FormatRouteRemainingLabel(int remaining) {
   return remaining <= 0 ? std::wstring(L"ゴールへ")
-                        : L"あと" + std::to_wstring(remaining) + L"手";
+                        : L"あと" + std::to_wstring(remaining) + L"記事";
 }
 
-/** @brief 旗の下に出す何手目かです。最短手数が不明なら出しません。*/
+/** @brief 旗の下に出す何記事目かです。最短手数が不明なら出しません。*/
 inline std::wstring FormatRouteStepLabel(int step) {
-  return step <= 0 ? std::wstring() : std::to_wstring(step) + L"手目";
+  return step <= 0 ? std::wstring() : std::to_wstring(step) + L"記事目";
 }
 
 /** @brief ゴールの記事名の文字サイズを文字数から選びます。*/

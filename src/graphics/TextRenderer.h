@@ -156,6 +156,7 @@ public:
 
   /** @brief 有効かどうか */
   bool IsValid() const { return m_d2dContext != nullptr; }
+  void RenderButtonFire(const D2D1_RECT_F &rect, float time);
 
 private:
   /** @brief バックバッファを D2D ターゲットとして設定 */
@@ -194,6 +195,8 @@ private:
   // D2D 1.1 オブジェクト
   ComPtr<ID2D1Factory1> m_d2dFactory;
   ComPtr<ID2D1DeviceContext> m_d2dContext;
+  ComPtr<ID2D1Bitmap1> m_buttonFireBitmap;
+  float m_buttonFireTime = -1.0f;
   ComPtr<ID2D1Effect> m_imageColorMatrixEffect;
   ComPtr<IDWriteFactory> m_dwriteFactory;
   ComPtr<IWICImagingFactory> m_wicFactory; // WIC

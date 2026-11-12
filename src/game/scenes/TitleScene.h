@@ -96,6 +96,7 @@ private:
   std::shared_ptr<StartConnectionState> m_startConnectionState;
   bool m_startConnectionChecking = false; /**< 通常スタート前の接続確認中かどうか*/
   float m_startConnectionElapsed = 0.0f;  /**< 通常スタート接続確認の経過秒数*/
+  bool m_oniMode = false;
 
   /**
    * @brief スタートアップロード完了時の処理を行います。

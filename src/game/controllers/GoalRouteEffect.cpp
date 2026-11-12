@@ -71,13 +71,7 @@ DirectX::XMFLOAT4 RemainingLabelColor(int remaining) {
   if (remaining == 0) {
     return kGoalInkColor;
   }
-  if (remaining == 1) {
-    return {0.54f, 0.42f, 0.0f, 1.0f};
-  }
-  if (remaining == 2) {
-    return {0.64f, 0.35f, 0.06f, 1.0f};
-  }
-  return {0.30f, 0.35f, 0.32f, 1.0f};
+  return {0.12f, 0.35f, 0.56f, 1.0f};
 }
 
 /** @brief 指定幅に1行で収まるかを測ります。測れないときは収まるものとします。*/
@@ -187,13 +181,13 @@ void GoalRouteEffect::CreateFlag(core::GameContext &ctx,
   flag.route = route;
   const bool isTarget = route.remaining == 0;
 
-  // コースのホールと同じ規則で、色・大きさ・なびきの強さを決める
+  // 距離による色分けはせず、ゴールの旗だけを強調する
   utils::ProceduralFlagOptions options;
-  options.large = isTarget || route.remaining == 1;
+  options.large = isTarget;
   options.createParticles = false;
   options.animationWeight = isTarget ? 1.0f : 0.72f;
   const DirectX::XMFLOAT4 color =
-      scenes::HoleVisualRules::GetColor(isTarget, route.remaining);
+      scenes::HoleVisualRules::GetColor(isTarget, -1);
 
   const float paperMetersPerPixel =
       paper.ResolveScreenPoint(route.x, utils::kRouteCupY, 0.0f).metersPerPixel;
@@ -296,10 +290,13 @@ void GoalRouteEffect::CreateLabels(core::GameContext &ctx,
     text->style = startStyle;
   }
   m_startLabel = AddText(ctx, utils::kRouteStartX - kLabelWidth * 0.5f,
-                         utils::kRouteCupY + 22.0f, kLabelWidth, kLabelHeight,
+                         utils::kRouteCupY + 22.0f, kLabelWidth, kLabelHeight * 2,
                          kLayerText);
   if (auto *text = ctx.world.Get<components::UIText>(m_startLabel)) {
     text->text = L"スタート";
+    if (content.hops > 0) {
+      text->text += L"\n" + utils::FormatRouteRemainingLabel(content.hops);
+    }
     text->style =
         MakeRouteTextStyle(17.0f, kSubInkColor, graphics::TextAlign::Center);
   }

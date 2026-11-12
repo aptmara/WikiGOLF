@@ -27,6 +27,15 @@ DirectX::XMFLOAT4 HoleVisualRules::GetColor(bool isTargetHole,
     return {0.25f, 0.65f, 1.0f, 1.0f};
 }
 
+DirectX::XMFLOAT4 HoleVisualRules::GetColor(bool isTargetHole,
+                                            int hopsToTarget,
+                                            bool isOniMode) {
+    if (isOniMode && !isTargetHole) {
+        return GetColor(false, -1);
+    }
+    return GetColor(isTargetHole, hopsToTarget);
+}
+
 DirectX::XMFLOAT4 HoleVisualRules::GetBodyColor(bool isTargetHole,
                                                 int hopsToTarget) {
     DirectX::XMFLOAT4 color = GetColor(isTargetHole, hopsToTarget);

@@ -48,7 +48,11 @@ void MinimapController::ProcessInput(core::GameContext &ctx, int mouseX, int mou
                                      float fieldWidth, float fieldDepth,
                                      ecs::Entity skyboxEntity,
                                      const InputPermissions& permissions) {
-  if (!m_isMapView && m_isVisible && ctx.input.GetMouseButtonDown(0)) {
+  const auto *state =
+      ctx.world.GetGlobal<game::components::GolfGameState>();
+  const bool isOniMode = state && state->isOniMode;
+  if (!isOniMode && !m_isMapView && m_isVisible &&
+      ctx.input.GetMouseButtonDown(0)) {
     const minimap_detail::MarkerBounds dropdownBounds{
         m_flagFilterDropdownX, m_flagFilterDropdownY,
         m_flagFilterDropdownWidth, m_flagFilterDropdownHeight};

@@ -101,8 +101,10 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   int overrideTargetId = -1;
   bool overrideIsUserOverride = false;
   bool overrideIsDailyChallenge = false;
+  bool overrideIsOniMode = false;
   std::uint32_t overrideDailyChallengeSeed = 0;
   if (auto* globalData = ctx.world.GetGlobal<game::components::WikiGlobalData>()) {
+    overrideIsOniMode = globalData->isOniMode;
     if (HasExplicitStartData(*globalData)) {
       overrideStartPage = globalData->startPage;
       overrideTargetPage = globalData->targetPage;
@@ -119,7 +121,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
   // 非同期ロード開始
   m_isLoading = true;
   auto progressPtr = m_loadProgress;
-  m_loadTask = std::async(std::launch::async, [progressPtr, overrideStartPage, overrideTargetPage, overrideTargetId, overrideIsUserOverride, overrideIsDailyChallenge, overrideDailyChallengeSeed]() {
+  m_loadTask = std::async(std::launch::async, [progressPtr, overrideStartPage, overrideTargetPage, overrideTargetId, overrideIsUserOverride, overrideIsDailyChallenge, overrideIsOniMode, overrideDailyChallengeSeed]() {
     const auto loadStartedAt = std::chrono::steady_clock::now();
     const auto setProgress = [progressPtr](float value) {
       if (progressPtr) {
@@ -141,6 +143,7 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     data->targetPageId = overrideTargetId;
     data->isUserOverride = overrideIsUserOverride;
     data->isDailyChallenge = overrideIsDailyChallenge;
+    data->isOniMode = overrideIsOniMode;
     data->dailyChallengeSeed = overrideDailyChallengeSeed;
 
     // WikiShortestPathの初期化（重い処理）

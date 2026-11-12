@@ -55,6 +55,7 @@ void TitleScene::OnEnter(core::GameContext &ctx) {
 
   m_time = 0.0f;
   m_menuEntries.clear();
+  m_oniMode = false;
 
   // マウスカーソル表示
   ctx.input.SetMouseCursorVisible(true);

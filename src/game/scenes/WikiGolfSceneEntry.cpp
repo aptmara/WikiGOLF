@@ -268,11 +268,15 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   int targetId = -1;
   bool isUserOverride = false;
   bool isDailyChallenge = false;
+  bool isOniMode = false;
   constexpr int kTargetMinIncomingLinks = 10000;
   constexpr int kFallbackTargetMinIncomingLinks = 5000;
 
   game::components::WikiGlobalData *preloadedData =
       ctx.world.GetGlobal<game::components::WikiGlobalData>();
+  if (preloadedData) {
+    isOniMode = preloadedData->isOniMode;
+  }
   std::string startPage;
 
   const bool hasPreloadedStartupData =
@@ -458,6 +462,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   state.elapsedTimeSeconds = 0.0f;
   state.isDailyChallenge = isDailyChallenge;
   state.isFreePlay = isUserOverride;
+  state.isOniMode = isOniMode;
   state.gameCleared = false;
   state.canShoot = true;
   state.ballEntity = m_ballEntity;

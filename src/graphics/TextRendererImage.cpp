@@ -7,6 +7,7 @@
 #include "TextRendererInternals.h"
 #include <algorithm>
 #include <cmath>
+#include <array>
 #include <d2d1_1.h>
 #include <d2d1effects.h>
 #include <wincodec.h>
@@ -16,6 +17,81 @@
 #pragma comment(lib, "windowscodecs.lib")
 
 namespace graphics {
+
+namespace {
+float FireHash(int x, int y) {
+  uint32_t value = static_cast<uint32_t>(x) * 374761393u
+                 + static_cast<uint32_t>(y) * 668265263u;
+  value = (value ^ (value >> 13)) * 1274126177u;
+  return static_cast<float>((value ^ (value >> 16)) & 65535u) / 65535.0f;
+}
+
+float FireNoise(float x, float y) {
+  const int ix = static_cast<int>(std::floor(x));
+  const int iy = static_cast<int>(std::floor(y));
+  float fx = x - ix, fy = y - iy;
+  fx = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
+  fy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+  const float lower = FireHash(ix, iy) * (1 - fx) + FireHash(ix + 1, iy) * fx;
+  const float upper = FireHash(ix, iy + 1) * (1 - fx) + FireHash(ix + 1, iy + 1) * fx;
+  return lower * (1 - fy) + upper * fy;
+}
+}
+
+void TextRenderer::RenderButtonFire(const D2D1_RECT_F &rect, float time) {
+  if (!m_d2dContext) return;
+  constexpr UINT width = 200, height = 75;
+  if (!m_buttonFireBitmap) {
+    const auto properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    if (FAILED(m_d2dContext->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0,
+                                        &properties, &m_buttonFireBitmap))) return;
+    m_buttonFireTime = -1.0f;
+  }
+  if (m_buttonFireTime != time) {
+    std::array<uint8_t, width * height * 4> pixels{};
+    for (UINT py = 0; py < height; ++py) {
+      for (UINT px = 0; px < width; ++px) {
+        const float x = px * 2.0f, y = py * 2.0f;
+        const float outsideX = std::max({0.0f, 30 - x, x - 370}) / 25;
+        const float outsideY = std::max(0.0f, 77 - y) / 76
+                            + std::max(0.0f, y - 123) / 22;
+        const float rise = std::hypot(outsideX, outsideY);
+        const float interior = std::clamp(std::min({x - 30, 370 - x, y - 77, 123 - y}) / 12, 0.0f, 1.0f);
+        const float mask = 1 - .86f * interior * interior * (3 - 2 * interior);
+        if (rise > 1.2f) continue;
+        float edge = std::clamp(std::min({x / 12, (398 - x) / 12,
+                                         y / 12, (148 - y) / 12}), 0.0f, 1.0f);
+        edge = edge * edge * (3 - 2 * edge);
+        const float flowY = y / 64 + time * .9f;
+        const float drift = FireNoise(x / 67, flowY * .5f) - .5f;
+        const float warped = x / 27 + drift * (rise + .25f) * 2.0f;
+        const float large = FireNoise(warped, flowY);
+        const float fine = FireNoise(warped * 2.0f, flowY * 1.8f);
+        const float heat = .72f - rise * 1.05f + (large - .5f) * 1.1f + (fine - .5f) * .1f - .3f;
+        if (heat <= 0) continue;
+        const float core = std::min(1.0f, heat * 2.1f);
+        float density = std::clamp(heat * 3.5f, 0.0f, 1.0f);
+        density = density * density * (3 - 2 * density);
+        const float cooling = 1 - std::clamp(rise, 0.0f, 1.0f);
+        const float alpha = density * (235.0f / 255) * mask * edge * cooling;
+        const size_t i = (py * width + px) * 4;
+        pixels[i] = static_cast<uint8_t>((12 + 95 * core * core) * alpha);
+        pixels[i + 1] = static_cast<uint8_t>((55 + 174 * core) * alpha);
+        pixels[i + 2] = static_cast<uint8_t>((238 + 17 * core) * alpha);
+        pixels[i + 3] = static_cast<uint8_t>(255 * alpha);
+      }
+    }
+    if (FAILED(m_buttonFireBitmap->CopyFromMemory(nullptr, pixels.data(), width * 4))) return;
+    m_buttonFireTime = time;
+  }
+  const float sx = (rect.right - rect.left) / 340;
+  const float sy = (rect.bottom - rect.top) / 48;
+  const auto destination = D2D1::RectF(rect.left - 30 * sx, rect.top - 76 * sy,
+                                     rect.right + 30 * sx, rect.bottom + 26 * sy);
+  m_d2dContext->DrawBitmap(m_buttonFireBitmap.Get(), destination, 1.0f,
+                           D2D1_INTERPOLATION_MODE_LINEAR);
+}
 
 bool TextRenderer::LoadBitmapFromFile(const std::string &filePath) {
   if (m_bitmapCache.find(filePath) != m_bitmapCache.end()) {

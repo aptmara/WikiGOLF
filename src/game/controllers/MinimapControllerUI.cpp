@@ -159,8 +159,8 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   holeHover.visible = false;
 
   static constexpr const wchar_t *kFilterLabels[kFlagFilterCount] = {
-      L"赤 目的地", L"黄 1 hop", L"橙 2 hops",
-      L"白 3-5", L"灰 6+", L"青 未解析"};
+      L"赤 目的地", L"黄 1記事", L"橙 2記事",
+      L"白 3〜5記事", L"灰 6記事以上", L"青 未解析"};
   constexpr float toggleWidth = 142.0f;
   constexpr float toggleHeight = 22.0f;
   constexpr float rowGap = 4.0f;
@@ -387,6 +387,8 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
 }
 
 void MinimapController::UpdateFlagFilterToggles(core::GameContext &ctx) {
+  const auto *state = ctx.world.GetGlobal<GolfGameState>();
+  const bool isOniMode = state && state->isOniMode;
   m_flagFilterAvailable.fill(false);
   for (const auto &icon : m_mapHoleIcons) {
     const size_t index = static_cast<size_t>(minimap_detail::ClassifyFlag(
@@ -396,7 +398,10 @@ void MinimapController::UpdateFlagFilterToggles(core::GameContext &ctx) {
     }
   }
 
-  const bool menuVisible = m_isVisible && !m_isMapView;
+  const bool menuVisible = m_isVisible && !m_isMapView && !isOniMode;
+  if (isOniMode) {
+    m_flagFilterDropdownOpen = false;
+  }
   if (auto *dropdown = ctx.world.Get<UIText>(m_flagFilterDropdownEntity)) {
     dropdown->text = m_flagFilterDropdownOpen ? L"旗表示 ▲" : L"旗表示 ▼";
     dropdown->visible = menuVisible;
@@ -499,7 +504,11 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
 
   ui = UIImage::Create("golf_hole_icon_transparent.png", 0.0f, 0.0f);
   ui.grayscaleTint = true;
-  if (isTargetHole) {
+  const auto *state = ctx.world.GetGlobal<GolfGameState>();
+  const bool isOniMode = state && state->isOniMode;
+  if (isOniMode) {
+    ui.width = 20.0f;
+  } else if (isTargetHole) {
     ui.width = 34.0f;
   } else if (isPlayableHole) {
     ui.width = 20.0f;
@@ -507,7 +516,10 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
     ui.width = 12.0f;
   }
   ui.height = ui.width;
-  if (isTargetHole) {
+  if (isOniMode) {
+    ui.alpha = 0.72f;
+    ui.layer = game::ui::kLayerMarker + 1;
+  } else if (isTargetHole) {
     ui.alpha = 1.0f;
     ui.layer = game::ui::kLayerMarker + 3;
   } else if (isPlayableHole) {

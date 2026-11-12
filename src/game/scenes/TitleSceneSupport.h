@@ -20,15 +20,19 @@ inline constexpr const wchar_t *kConnectionFailedMessage =
  * @brief 標準スタート用にWiki開始情報を初期化します。
  * @details 前回のカスタムコースやロード済みデータを破棄し、通常開始の抽選へ戻します。
 */
-inline void ResetStandardStartData(core::GameContext &ctx) {
+inline void ResetStandardStartData(core::GameContext &ctx,
+                                   bool isOniMode = false) {
   game::components::WikiGlobalData data;
+  data.isOniMode = isOniMode;
   ctx.world.SetGlobal(std::move(data));
   LOG_INFO("TitleScene", "Reset WikiGlobalData for standard random start");
 }
 
-inline void ResetDailyChallengeStartData(core::GameContext &ctx) {
+inline void ResetDailyChallengeStartData(core::GameContext &ctx,
+                                         bool isOniMode = false) {
   game::components::WikiGlobalData data;
   data.isDailyChallenge = true;
+  data.isOniMode = isOniMode;
   ctx.world.SetGlobal(std::move(data));
   LOG_INFO("TitleScene", "Reset WikiGlobalData for daily challenge");
 }

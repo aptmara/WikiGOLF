@@ -71,6 +71,7 @@ struct CourseIntroductionData {
     float fieldDepth = 120.0f;
     float windSpeed = 0.0f;
     int par = 5;
+    bool isOniMode = false;
     std::vector<game::utils::CourseIntroductionHole> holes;
 };
 

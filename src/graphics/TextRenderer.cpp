@@ -199,6 +199,8 @@ bool TextRenderer::RecreateTargetAfterResize() {
 }
 
 void TextRenderer::Shutdown() {
+  m_buttonFireBitmap.Reset();
+  m_buttonFireTime = -1.0f;
   m_brushCache.Clear();
   m_bitmapCache.clear();
   m_srvBitmapCache.clear();

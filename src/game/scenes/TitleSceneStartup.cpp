@@ -349,8 +349,10 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
     auto ep = CreateEntity(ctx.world);
     auto &tp = ctx.world.Add<components::UIText>(ep);
     tp.text = L"";
-    tp.x = 880.0f; tp.y = 260.0f;
-    tp.width = 360.0f; tp.height = 410.0f;
+    tp.x = 880.0f;
+    tp.y = core::kTrialBuild ? 260.0f : 200.0f;
+    tp.width = 360.0f;
+    tp.height = core::kTrialBuild ? 410.0f : 470.0f;
     tp.style.bgColor = {0.04f, 0.10f, 0.18f, 0.85f};
     tp.style.cornerRadius = 16.0f;
     tp.style.borderWidth = 2.0f;
@@ -384,6 +386,25 @@ void TitleScene::FinalizeStartupLoad(core::GameContext &ctx) {
       };
     }
     const int menuCount = static_cast<int>(menuItems.size());
+
+    if constexpr (!core::kTrialBuild) {
+      auto oniEntity = CreateEntity(ctx.world);
+      auto &oniButton = ctx.world.Add<components::UIButton>(oniEntity);
+      oniButton.label = L"ノーヒント";
+      oniButton.noHintToggle = true;
+      oniButton.action = "oni_mode";
+      oniButton.x = 890.0f;
+      oniButton.y = 212.0f;
+      oniButton.width = 340.0f;
+      oniButton.height = 48.0f;
+      oniButton.visible = true;
+      oniButton.normalColor = {0.04f, 0.07f, 0.10f, 1.0f};
+      oniButton.hoverColor = {0.12f, 0.14f, 0.16f, 1.0f};
+      oniButton.pressedColor = {0.07f, 0.08f, 0.10f, 1.0f};
+      oniButton.textStyle.fontSize = 22.0f;
+      oniButton.textStyle.color = {0.95f, 0.95f, 0.95f, 1.0f};
+      oniButton.textStyle.align = graphics::TextAlign::Center;
+    }
 
     for (int i = 0; i < menuCount; ++i) {
       auto eb = CreateEntity(ctx.world);

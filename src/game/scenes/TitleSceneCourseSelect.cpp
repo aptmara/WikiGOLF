@@ -436,6 +436,7 @@ void TitleScene::UpdateCourseSelect(core::GameContext& ctx) {
     data.targetPage = title_scene_detail::ExtractWikiTitle(core::ToString(m_goalString));
     data.targetPageId = -1;
     data.isUserOverride = true;
+    data.isOniMode = m_oniMode;
     ctx.world.SetGlobal(std::move(data));
 
     LOG_INFO("TitleScene", "Starting game with Start: '{}', Goal: '{}'", title_scene_detail::ExtractWikiTitle(core::ToString(m_startString)), title_scene_detail::ExtractWikiTitle(core::ToString(m_goalString)));

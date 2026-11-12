@@ -44,6 +44,8 @@ struct UIButton {
 
     // 可視性
     bool visible = true;
+    bool noHintToggle = false;
+    bool toggleOn = false;
 
     /** @brief 現在の状態に応じた背景色を取得*/
     DirectX::XMFLOAT4 GetCurrentColor() const {

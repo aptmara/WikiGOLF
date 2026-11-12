@@ -193,6 +193,8 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
       } else {
         btn.textStyle.color = DirectX::XMFLOAT4{0.4f, 0.6f, 0.9f, 1.0f}; // 通常時: 青
       }
+    } else if (btn.noHintToggle) {
+      btn.textStyle.color = DirectX::XMFLOAT4{0.95f, 0.95f, 0.95f, 1.0f};
     } else if (btn.action == "feedback") {
       // 他のボタンと逆: 通常時は金地に黒文字、ホバー時は暗い地に金文字
       if (isHovered && btn.state != components::ButtonState::Pressed) {
@@ -241,6 +243,11 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
           }
           m_popupTimer = std::max(m_popupTimer, 0.8f);
         }
+      } else if (btn.action == "oni_mode") {
+        m_oniMode = !m_oniMode;
+        btn.toggleOn = m_oniMode;
+        if (ctx.audio)
+          ctx.audio->PlaySE(ctx, "se_shot_soft.mp3", 0.5f);
       } else if (btn.action == "daily") {
         if (ctx.audio) ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.5f);
         startDailyChallenge = true;
@@ -284,13 +291,13 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
 
   if (newGame) {
     StopIntroAudio(ctx);
-    title_scene_detail::ResetStandardStartData(ctx);
+    title_scene_detail::ResetStandardStartData(ctx, m_oniMode);
     auto loadingScene = std::make_unique<LoadingScene>([]() { return std::make_unique<WikiGolfScene>(false); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));
   }
   if (startDailyChallenge) {
     StopIntroAudio(ctx);
-    title_scene_detail::ResetDailyChallengeStartData(ctx);
+    title_scene_detail::ResetDailyChallengeStartData(ctx, m_oniMode);
     auto loadingScene = std::make_unique<LoadingScene>(
         []() { return std::make_unique<WikiGolfScene>(false); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));

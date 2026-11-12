@@ -103,12 +103,15 @@ ecs::Entity WikiPageLoader::CreateHoleSignboardEntity(
     bool isTargetHole, int hopsToTarget, ID3D11ShaderResourceView* srv,
     float aspect)
 {
+    const auto* state = ctx.world.GetGlobal<GolfGameState>();
+    const bool isOniMode = state && state->isOniMode;
     constexpr float kSignboardWidth = 3.5f;
     constexpr float kSignboardClearance = 0.4f; // 旗ポール先端からの浮かせ量
     const float signboardHeight = kSignboardWidth / std::max(0.1f, aspect);
 
     // 旗生成と同じ寸法を使い、大型の金・赤フラッグでも旗布より上へ置く。
-    const bool usesLargeFlag = isTargetHole || hopsToTarget == 1;
+    const bool usesLargeFlag = isTargetHole ||
+                               (!isOniMode && hopsToTarget == 1);
     const float poleTopY = game::physics::ToVisualSurfaceHeight(terrainH) +
                            game::utils::GetProceduralFlagPoleHeight(
                                usesLargeFlag);
@@ -120,10 +123,12 @@ ecs::Entity WikiPageLoader::CreateHoleSignboardEntity(
 
     // 額縁の色は旗・光柱と同じホップ数カラー（GetHoleColor）に揃える。
     // エフェクトの強さも目的地に近いほど強くする（0=無演出の静止色 〜 1=最大）。
-    const XMFLOAT4 frameColor =
-        HoleVisualRules::GetColor(isTargetHole, hopsToTarget);
+    const XMFLOAT4 frameColor = HoleVisualRules::GetColor(
+        isTargetHole, hopsToTarget, isOniMode);
     float effectIntensity = 0.0f;
-    if (isTargetHole) {
+    if (isOniMode) {
+        effectIntensity = 0.0f;
+    } else if (isTargetHole) {
         effectIntensity = 1.0f;
     } else if (hopsToTarget == 1) {
         effectIntensity = 0.75f;

@@ -106,15 +106,17 @@ int main() {
                                timing) == 0.0f);
 
   assert(FormatRouteRemainingLabel(0) == L"ゴールへ");
-  assert(FormatRouteRemainingLabel(2) == L"あと2手");
-  assert(FormatRouteStepLabel(1) == L"1手目");
+  assert(FormatRouteRemainingLabel(2) == L"あと2記事");
+  assert(FormatRouteStepLabel(1) == L"1記事目");
   assert(FormatRouteStepLabel(0).empty());
 
   // 未解析の値は出さない
-  assert(FormatGoalNoticeDetail(4, 3) == L"パー4 · 最短3手");
+  assert(FormatGoalNoticeDetail(4, 3) == L"パー4 · 最短3記事");
   assert(FormatGoalNoticeDetail(4, 0) == L"パー4");
-  assert(FormatGoalNoticeDetail(0, 3) == L"最短3手");
+  assert(FormatGoalNoticeDetail(0, 3) == L"最短3記事");
   assert(FormatGoalNoticeDetail(0, 0).empty());
+  assert(FormatShortestArticleCount(3) == L"最短3記事");
+  assert(FormatShortestArticleCount(0).empty());
 
   // 記事は上のタイルから順に並べ、紙の高さで打ち切る
   const std::vector<ArticlePaperTileSize> tiles = {

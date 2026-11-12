@@ -21,6 +21,10 @@ public:
 */
     static DirectX::XMFLOAT4 GetColor(bool isTargetHole, int hopsToTarget);
 
+    /** @brief 鬼モードを考慮したホール色を返します。*/
+    static DirectX::XMFLOAT4 GetColor(bool isTargetHole, int hopsToTarget,
+                                     bool isOniMode);
+
     /**
      * @brief ホール本体用に暗くした表示色を返します。
      * @param isTargetHole 目的地ホールかどうかです。

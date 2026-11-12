@@ -313,6 +313,8 @@ void MinimapController::UpdateMinimap(
   float hoveredIconY = 0.0f;
   const auto mousePosition = ctx.input.GetMousePosition();
   UpdateFlagFilterToggles(ctx);
+  const auto *state = ctx.world.GetGlobal<GolfGameState>();
+  const bool isOniMode = state && state->isOniMode;
   const auto visibleFlagKinds = minimap_detail::ResolveFlagVisibility(
       m_flagFilterEnabled, m_flagFilterAvailable);
 
@@ -322,11 +324,11 @@ void MinimapController::UpdateMinimap(
       const size_t filterIndex = static_cast<size_t>(
           minimap_detail::ClassifyFlag(icon.isTarget, icon.hopsToTarget));
       const bool filterEnabled =
-          filterIndex < visibleFlagKinds.size() &&
-          visibleFlagKinds[filterIndex];
+          isOniMode || (filterIndex < visibleFlagKinds.size() &&
+                        visibleFlagKinds[filterIndex]);
       iconUI->grayscaleTint = true;
       iconUI->tintColor = game::scenes::HoleVisualRules::GetColor(
-          icon.isTarget, icon.hopsToTarget);
+          icon.isTarget, icon.hopsToTarget, isOniMode);
       if (markerSurfaceVisible) {
         float u = 0.0f;
         float v = 0.0f;

@@ -75,14 +75,17 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     {
         game::utils::ProceduralFlagOptions options;
         options.holeEntity = static_cast<uint32_t>(e);
-        options.large = isTargetHole || hopsToTarget == 1;
-        options.createParticles = (isTargetHole || hopsToTarget == 1);
+        options.large = isTargetHole ||
+                        (!state->isOniMode && hopsToTarget == 1);
+        options.createParticles = !state->isOniMode &&
+                                  (isTargetHole || hopsToTarget == 1);
         options.animationWeight = 0.72f;
         if (isTargetHole) {
             options.animationWeight = 1.0f;
         }
 
-        auto flagColor = HoleVisualRules::GetColor(isTargetHole, hopsToTarget);
+        auto flagColor = HoleVisualRules::GetColor(
+            isTargetHole, hopsToTarget, state->isOniMode);
         // 旗竿はカップの底まで差し込む（穴を覗くと竿が底に立って見える）
         options.poleSinkDepth = cupDepth;
         auto flagResult = game::utils::CreateProceduralFlag(
@@ -102,7 +105,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
 
     // 目的記事の代表サムネイルをビルボード看板として表示する
     // （近隣ホールの看板はUpdateNearbyHoleSignboardsが遅延ロードで反映する）
-    if (isTargetHole && m_hasTargetThumbnail) {
+    if (!state->isOniMode && isTargetHole && m_hasTargetThumbnail) {
         h.signboardEntity = static_cast<uint32_t>(CreateHoleSignboardEntity(
             ctx, x, z, terrainH, isTargetHole, hopsToTarget,
             m_targetThumbnailSRV.Get(), m_targetThumbnailAspect));
@@ -117,7 +120,8 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     }
     labelUI.style = graphics::TextStyle::Guide();
     labelUI.style.fontSize = 24.0f;
-    labelUI.style.color = HoleVisualRules::GetColor(isTargetHole, hopsToTarget);
+    labelUI.style.color = HoleVisualRules::GetColor(
+        isTargetHole, hopsToTarget, state->isOniMode);
     labelUI.visible = false;
     labelUI.layer   = 60;
 
@@ -129,7 +133,7 @@ void WikiPageLoader::CreateHole(core::GameContext& ctx, float x, float z,
     h.labelEntity     = labelE;
 
     // ターゲットまたは1ホップの場合は光柱を生成
-    if (isTargetHole || hopsToTarget == 1) {
+    if (!state->isOniMode && (isTargetHole || hopsToTarget == 1)) {
         auto pillarE  = m_pageEntityOwner.Create(ctx.world);
         auto& pillarT = ctx.world.Add<Transform>(pillarE);
         float pillarH = 8.0f;

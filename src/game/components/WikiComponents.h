@@ -103,6 +103,7 @@ struct WikiGlobalData {
   int initialPar = -1;
   bool isUserOverride = false;
   bool isDailyChallenge = false;
+  bool isOniMode = false;
   std::uint32_t dailyChallengeSeed = 0;
 
   // 初回ロード済みデータ (LoadingSceneで取得済みの場合に使用)
@@ -209,6 +210,7 @@ struct GolfGameState {
   float elapsedTimeSeconds = 0.0f; ///< デイリーチャレンジの経過時間
   bool isDailyChallenge = false; ///< デイリーチャレンジ中か
   bool isFreePlay = false;  ///< 自由入力（スタート/ゴール記事を手動指定）で開始したか
+  bool isOniMode = false;   ///< リンク距離の視覚的な手掛かりを隠すか
   bool gameCleared = false; ///< クリアフラグ
   bool canShoot = true;     ///< ショット可能か
 
