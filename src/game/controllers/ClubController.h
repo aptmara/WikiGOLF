@@ -38,7 +38,7 @@ public:
     float launchAngle;
     std::string iconTexture;
     float rollingFrictionScale = 1.0f;
-    std::string shortName;   // e.g. "1W"
+    std::string shortName;   // e.g. "DR"
     std::string categoryEN;  // e.g. "Driver"
 
     /**
@@ -190,7 +190,7 @@ private:
   std::vector<Club> m_availableClubs;
   Club m_currentClub = {"ドライバー", 119.0f, 10.5f,
                         "Assets/textures/Clubs/1W_driver.png", 1.0f,
-                        "1W", "Driver"};
+                        "DR", "Driver"};
   int m_currentClubIndex = 0;
 
   ecs::Entity m_clubModelEntity = UINT32_MAX;

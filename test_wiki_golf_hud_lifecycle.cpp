@@ -187,9 +187,9 @@ int main() {
              "OB地形では風表示の座布団画像を切り替える");
 
   const std::vector<game::controllers::ClubUIData> clubsWithIcon = {
-      {"Club 0", "Assets/textures/Clubs/1W_driver.png", "1W", "Driver", 1.0f, 100.0f},
-      {"Club 1", "Assets/textures/Clubs/3W_fairway_wood.png", "3W", "Wood", 1.0f, 110.0f},
-      {"Club 2", "Assets/textures/Clubs/7I_iron.png", "7I", "Iron", 1.0f, 120.0f},
+      {"Club 0", "Assets/textures/Clubs/1W_driver.png", "DR", "Driver", 1.0f, 100.0f},
+      {"Club 1", "Assets/textures/Clubs/3W_fairway_wood.png", "FW", "Wood", 1.0f, 110.0f},
+      {"Club 2", "Assets/textures/Clubs/7I_iron.png", "IR", "Iron", 1.0f, 120.0f},
       {"Club 3", "Assets/textures/Clubs/SW_sand_wedge.png", "SW", "Wedge", 1.0f, 130.0f},
       {"Club 4", "Assets/textures/Clubs/PT_putter.png", "PT", "Putter", 1.0f, 140.0f}};
   hud.Update(context, 0.016f, state,

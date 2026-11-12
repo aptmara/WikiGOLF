@@ -103,8 +103,8 @@ int main() {
   // 参考: 実際のクラブ設定での基準飛距離を出力(ClubController.cppの値と同じ)
   struct ClubSpec { const char* name; float maxPower; float angle; float frictionScale; };
   ClubSpec clubs[] = {
-      {"Driver", 119.0f, 10.5f, 1.0f}, {"5W", 79.0f, 18.0f, 1.0f},
-      {"7I", 55.0f, 31.0f, 1.0f},      {"PW", 28.0f, 45.0f, 1.0f},
+      {"Driver", 119.0f, 10.5f, 1.0f}, {"Wood", 79.0f, 18.0f, 1.0f},
+      {"Iron", 55.0f, 31.0f, 1.0f},      {"PW", 28.0f, 45.0f, 1.0f},
       {"SW", 21.0f, 56.0f, 1.0f},      {"Putter", 10.0f, 0.0f, 1.0f},
   };
   std::cout << "\n[Reference] baseCarryDistance per club:\n";
