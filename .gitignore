@@ -27,6 +27,7 @@
 !*.cpp
 !*.h
 !*.rc
+!version.rc.in
 !*.ico
 !build.bat
 !build-debugtools.bat
