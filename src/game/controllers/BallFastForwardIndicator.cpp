@@ -21,7 +21,7 @@ namespace {
 
 /**
  * @brief 倍速段階に対応するテクスチャファイル名（Assets/textures/配下）を返します。
- * @details ui_speedup_1_5x.png / ui_speedup_2_0x.png（Assets/textures/）を使用する。
+ * @details ui_speedup_1_5x.png〜ui_speedup_8_0x.png（Assets/textures/）を使用する。
  *          画像素材が未配置でもクラッシュしないよう、実ファイルの存在を
  *          確認したうえで見つからなければ空文字（=非表示）を返す。
 */
@@ -33,6 +33,12 @@ std::string ResolveIndicatorTexturePath(FastForwardTier tier) {
     break;
   case FastForwardTier::Speed2_0x:
     preferred = "ui_speedup_2_0x.png";
+    break;
+  case FastForwardTier::Speed4_0x:
+    preferred = "ui_speedup_4_0x.png";
+    break;
+  case FastForwardTier::Speed8_0x:
+    preferred = "ui_speedup_8_0x.png";
     break;
   case FastForwardTier::Normal:
   default:

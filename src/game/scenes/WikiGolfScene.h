@@ -237,8 +237,7 @@ private:
       game::components::ShotJudgement::None;
 
   // === 着地後の待機時間短縮（倍速）演出 ===
-  // 着地からkFastForwardStage1Seconds秒で1.5倍速、
-  // kFastForwardStage2Seconds秒で2.0倍速に切り替わる。
+  // 着地10秒後に1.5倍速、その後2.5秒ごとに2.0倍速、4.0倍速、8.0倍速へ切り替わる。
   // タイマー（速度倍率の判定）とインジケーターUI（見た目）は責務を分離し、
   // それぞれ BallFastForwardTimer / BallFastForwardIndicator に実装する。
   ecs::Entity m_fastForwardIndicatorEntity = UINT32_MAX;

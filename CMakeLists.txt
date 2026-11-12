@@ -492,6 +492,17 @@ if(MSVC)
 endif()
 add_test(NAME cupin_utils COMMAND test_cupin_utils)
 
+# 着地後の倍速段階判定テスト
+add_executable(test_ball_fast_forward_state test_ball_fast_forward_state.cpp)
+target_precompile_headers(test_ball_fast_forward_state REUSE_FROM wikigolf_pch)
+target_include_directories(test_ball_fast_forward_state PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_ball_fast_forward_state PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                                    -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_ball_fast_forward_state PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME ball_fast_forward_state COMMAND test_ball_fast_forward_state)
+
 # ローディングシーンのフェード計算テスト
 add_executable(test_loading_scene_fade test_loading_scene_fade.cpp)
 target_precompile_headers(test_loading_scene_fade REUSE_FROM wikigolf_pch)

@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file BallFastForwardIndicator.h
- * @brief 倍速演出中（1.5x/2.0x）に表示するインジケーターUIの表示制御
+ * @brief 倍速演出中（1.5x/2.0x/4.0x/8.0x）に表示するインジケーターUIの表示制御
  *
  * 入力: BallFastForwardTimerが決定した現在の倍速段階
  * 出力: 表示先エンティティのUIImageコンポーネント（テクスチャ/透明度/位置）
@@ -14,7 +14,7 @@
 namespace game::controllers {
 
 /**
- * @brief 「1.5倍速」「2.0倍速」を示すインジケーター画像の
+ * @brief 「1.5倍速」〜「8.0倍速」を示すインジケーター画像の
  *        表示・フェード・テクスチャ切り替えを担当します。
  * @details 表示先のEntity自体はシーン側（WikiGolfScene）が生成・破棄の責任を
  *          持ち、このクラスは渡されたEntityが持つUIImageコンポーネントの

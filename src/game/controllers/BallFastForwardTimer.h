@@ -14,7 +14,7 @@
 namespace game::controllers {
 
 /**
- * @brief 着地後の経過時間を計測し、倍速段階（Normal/1.5x/2.0x）を管理するタイマー。
+ * @brief 着地後の経過時間を計測し、倍速段階（Normal/1.5x/2.0x/4.0x/8.0x）を管理するタイマー。
  * @details ショットが実行中（ShotState::Phase::Executing）でなくなった時点で
  *          自動的にリセットされ、次のショットの着地を新たに待ち受けます。
 */
@@ -27,7 +27,7 @@ public:
    * @brief 1フレーム分の状態を更新し、物理dtに掛け合わせる速度倍率を返します。
    * @param ctx ゲームコンテキスト（GolfGameState/ShotStateの参照に使用）
    * @param dt 実時間のデルタタイム（速度倍率適用前の秒数）
-   * @return 物理シミュレーションdtに掛け合わせる速度倍率（1.0 / 1.5 / 2.0）
+   * @return 物理シミュレーションdtに掛け合わせる速度倍率（1.0 / 1.5 / 2.0 / 4.0 / 8.0）
   */
   float Update(core::GameContext &ctx, float dt);
 
