@@ -571,18 +571,10 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
 
   m_availableClubs = {
       {"ドライバー", 119.0f, 10.5f, "Assets/textures/Clubs/1W_driver.png", 1.0f, "1W", "Driver"},
-      {"3番ウッド", 92.0f, 15.0f, "Assets/textures/Clubs/3W_fairway_wood.png", 1.0f, "3W", "Wood"},
       {"5番ウッド", 79.0f, 18.0f, "Assets/textures/Clubs/5W_fairway_wood.png", 1.0f, "5W", "Wood"},
-      {"4番ユーティリティ", 68.0f, 22.0f, "Assets/textures/Clubs/4U_utility.png", 1.0f, "4U", "Utility"},
-      {"5番アイアン", 66.0f, 25.0f, "Assets/textures/Clubs/5I_iron.png", 1.0f, "5I", "Iron"},
-      {"6番アイアン", 61.0f, 28.0f, "Assets/textures/Clubs/6I_iron.png", 1.0f, "6I", "Iron"},
       {"7番アイアン", 55.0f, 31.0f, "Assets/textures/Clubs/7I_iron.png", 1.0f, "7I", "Iron"},
-      {"8番アイアン", 49.0f, 35.0f, "Assets/textures/Clubs/8I_iron.png", 1.0f, "8I", "Iron"},
-      {"9番アイアン", 46.0f, 40.0f, "Assets/textures/Clubs/9I_iron.png", 1.0f, "9I", "Iron"},
-      {"ピッチングウェッジ", 41.0f, 45.0f, "Assets/textures/Clubs/PW_pitching_wedge.png", 1.0f, "PW", "Wedge"},
-      {"アプローチウェッジ", 37.0f, 50.0f, "Assets/textures/Clubs/AW_approach_wedge.png", 1.0f, "AW", "Wedge"},
-      {"サンドウェッジ", 32.0f, 56.0f, "Assets/textures/Clubs/SW_sand_wedge.png", 1.0f, "SW", "Wedge"},
-      {"ロブウェッジ", 27.0f, 60.0f, "Assets/textures/Clubs/LW_lob_wedge.png", 1.0f, "LW", "Wedge"},
+      {"ピッチングウェッジ", 28.0f, 45.0f, "Assets/textures/Clubs/PW_pitching_wedge.png", 1.0f, "PW", "Wedge"},
+      {"サンドウェッジ", 21.0f, 56.0f, "Assets/textures/Clubs/SW_sand_wedge.png", 1.0f, "SW", "Wedge"},
       {"パター", 10.0f, 0.0f, "Assets/textures/Clubs/PT_putter.png", 1.0f, "PT", "Putter"},
   };
 

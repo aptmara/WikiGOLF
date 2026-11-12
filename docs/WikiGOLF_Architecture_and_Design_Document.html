@@ -708,7 +708,7 @@ stateDiagram-v2
 
       <h3>4.3 クラブ一覧と物理特性テーブル</h3>
       <p>
-        プレイヤーは状況に応じて全9種類のクラブを切り替えることができます。各クラブの基準キャリー飛距離は、初期化時に <code>TrajectorySimulation</code> を解いて平坦・無風基準で動的に逆算テーブル（<code>CarryDistanceTable</code>）が生成されます。
+        プレイヤーは状況に応じて全6種類のクラブを切り替えることができます。各クラブの基準キャリー飛距離は、初期化時に <code>TrajectorySimulation</code> を解いて平坦・無風基準で動的に逆算テーブル（<code>CarryDistanceTable</code>）が生成されます。
       </p>
       <table>
         <thead>
@@ -729,83 +729,53 @@ stateDiagram-v2
             <td>ドライバー</td>
             <td>1W</td>
             <td>Wood</td>
-            <td>130.0</td>
-            <td>12.0°</td>
-            <td>3.0x</td>
+            <td>119.0</td>
+            <td>10.5°</td>
+            <td>1.0x</td>
             <td>最長飛距離。長距離の移動や遠くの見出しへのアプローチ用。</td>
           </tr>
           <tr>
             <td>2</td>
-            <td>3番ウッド</td>
-            <td>3W</td>
-            <td>Wood</td>
-            <td>115.0</td>
-            <td>14.0°</td>
-            <td>2.5x</td>
-            <td>フェアウェイからのロングショット。</td>
-          </tr>
-          <tr>
-            <td>3</td>
             <td>5番ウッド</td>
             <td>5W</td>
             <td>Wood</td>
-            <td>100.0</td>
-            <td>16.0°</td>
-            <td>2.0x</td>
+            <td>79.0</td>
+            <td>18.0°</td>
+            <td>1.0x</td>
             <td>扱いやすい中長距離用ウッド。</td>
           </tr>
           <tr>
-            <td>4</td>
-            <td>5番アイアン</td>
-            <td>5I</td>
-            <td>Iron</td>
-            <td>85.0</td>
-            <td>20.0°</td>
-            <td>1.5x</td>
-            <td>中距離アプローチ。</td>
-          </tr>
-          <tr>
-            <td>5</td>
+            <td>3</td>
             <td>7番アイアン</td>
             <td>7I</td>
             <td>Iron</td>
-            <td>70.0</td>
-            <td>24.0°</td>
-            <td>1.2x</td>
+            <td>55.0</td>
+            <td>31.0°</td>
+            <td>1.0x</td>
             <td>スタンダードなアイアン。適度な高さとコントロール性。</td>
           </tr>
           <tr>
-            <td>6</td>
-            <td>9番アイアン</td>
-            <td>9I</td>
-            <td>Iron</td>
-            <td>55.0</td>
-            <td>28.0°</td>
-            <td>1.0x</td>
-            <td>高弾道で障害物を越えやすい。</td>
-          </tr>
-          <tr>
-            <td>7</td>
+            <td>4</td>
             <td>ピッチングウェッジ</td>
             <td>PW</td>
             <td>Wedge</td>
-            <td>40.0</td>
-            <td>32.0°</td>
-            <td>1.5x</td>
-            <td>近距離のグリーン乗せやバンカー脱出の準候補。</td>
+            <td>28.0</td>
+            <td>45.0°</td>
+            <td>1.0x</td>
+            <td>近距離のグリーン乗せに使う通常のアプローチ用。</td>
           </tr>
           <tr>
-            <td>8</td>
+            <td>5</td>
             <td>サンドウェッジ</td>
             <td>SW</td>
             <td>Wedge</td>
-            <td>25.0</td>
-            <td>38.0°</td>
-            <td>2.5x</td>
+            <td>21.0</td>
+            <td>56.0°</td>
+            <td>1.0x</td>
             <td>極めて高いロフト角。深いバンカーや障害物近傍からの脱出に必須。</td>
           </tr>
           <tr>
-            <td>9</td>
+            <td>6</td>
             <td>パター</td>
             <td>PT</td>
             <td>Putter</td>
