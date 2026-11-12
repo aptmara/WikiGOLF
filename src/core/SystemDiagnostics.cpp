@@ -23,6 +23,9 @@
 #ifndef WIKIGOLF_BUILD_COMMIT
 #define WIKIGOLF_BUILD_COMMIT "unknown"
 #endif
+#ifndef WIKIGOLF_VERSION
+#define WIKIGOLF_VERSION "0.0.0"
+#endif
 
 namespace core {
 namespace {
@@ -209,8 +212,9 @@ std::string CollectSystemDiagnostics() {
 #else
   const char *configuration = "Release";
 #endif
-  out << std::format("Game: WikiGOLF {} {} / build {} ({} {})\n", edition,
-                     configuration, WIKIGOLF_BUILD_COMMIT, __DATE__, __TIME__);
+  out << std::format("Game: WikiGOLF {} {} {} / build {} ({} {})\n",
+                     WIKIGOLF_VERSION, edition, configuration,
+                     WIKIGOLF_BUILD_COMMIT, __DATE__, __TIME__);
   out << "OS: " << DescribeOs() << '\n';
   out << "Language: " << DescribeLanguage() << '\n';
   out << "CPU: " << DescribeCpu() << '\n';
