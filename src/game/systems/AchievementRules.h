@@ -51,19 +51,12 @@ inline bool ShouldUnlockNoMiss(bool hadMissThisRound) {
 }
 
 /**
- * @brief パーから逆算した理論上の最短リンク数を返します。
- * @details GolfGameState::par のコメント通り「パー = リンク数÷2+2」で
- *          算出されているため、逆算すると リンク数 = (パー-2)*2 になる。
+ * @brief 実際に辿ったリンク数がスタート時点の最短リンク数と一致したか。
+ * @param hopCount 実際に辿ったリンク数
+ * @param shortestHops ラウンド開始時に求めた最短リンク数(-1=不明)
 */
-inline int ComputeMinimumHopsFromPar(int par) {
-  const int hops = (par - 2) * 2;
-  return hops > 0 ? hops : 0;
-}
-
-/** @brief 実際に辿ったリンク数が理論上の最短リンク数と一致したか。*/
-inline bool ShouldUnlockShortestPath(int hopCount, int par) {
-  const int minimumHops = ComputeMinimumHopsFromPar(par);
-  return minimumHops > 0 && hopCount == minimumHops;
+inline bool ShouldUnlockShortestPath(int hopCount, int shortestHops) {
+  return shortestHops > 0 && hopCount == shortestHops;
 }
 
 /** @brief 1ラウンドで10回以上リンクをたどってからクリアしたか。*/

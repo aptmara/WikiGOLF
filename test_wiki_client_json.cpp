@@ -26,5 +26,14 @@ int main() {
   CHECK_TRUE(plain.find("A&B") != std::string::npos,
              "HTMLタグと実体参照を平文へ変換する");
 
+  const std::string info =
+      "{\"query\":{\"pages\":[{\"pageid\":1,\"title\":\"DVD\","
+      "\"length\":103003},{\"ns\":0,\"title\":\"無い記事\",\"missing\":true},"
+      "{\"pageid\":2,\"title\":\"ドイツ\",\"length\": 221033}]}}";
+  const auto lengths = game::systems::wiki_json::ParsePageInfoLengths(info);
+  CHECK_TRUE(lengths.size() == 2 && lengths[0] == 103003 &&
+                 lengths[1] == 221033,
+             "prop=info応答から存在する記事の記事長だけを取り出す");
+
   return EXIT_SUCCESS;
 }

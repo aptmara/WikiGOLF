@@ -661,7 +661,10 @@ void ArticleTransitionController::BeginCourseIntroduction(core::GameContext& ctx
     overview.label = L"コース全体";
     overview.title = core::ToWString(data.pageName);
     std::wostringstream courseStats;
-    courseStats << L"パー" << data.par << L"   ホール" << data.holes.size()
+    if (data.par > 0) {
+        courseStats << L"ラウンドパー" << data.par << L"   ";
+    }
+    courseStats << L"ホール" << data.holes.size()
                 << L"   風 " << std::fixed << std::setprecision(1)
                 << data.windSpeed << L" m/s";
     overview.detail = courseStats.str();

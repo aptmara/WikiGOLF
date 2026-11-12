@@ -80,7 +80,9 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
   CreateLuxuryUI(ctx);
   // 体験版にはランキングがないので送信しない。
   if constexpr (!core::kTrialBuild) {
-    if (m_data.isDailyChallenge) {
+    if (m_data.isDailyChallenge &&
+        m_data.dailyPracticeReason ==
+            game::systems::DailyPracticeReason::None) {
       m_rankingUploadState = std::make_shared<RankingUploadState>();
       const auto uploadState = m_rankingUploadState;
       const int strokes = m_data.shotCount;

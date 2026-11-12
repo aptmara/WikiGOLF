@@ -13,7 +13,8 @@ void WikiPageLoader::CaptureCourseIntroductionData(
   data.fieldWidth = state.fieldWidth;
   data.fieldDepth = state.fieldDepth;
   data.windSpeed = state.windSpeed;
-  data.par = state.par;
+  // 演出で見せるパーはラウンド全体のパー(記事ごとには変えない)。
+  data.par = state.roundPar;
   data.isOniMode = state.isOniMode;
   data.holes.reserve(m_buildHoleCandidates.size());
 

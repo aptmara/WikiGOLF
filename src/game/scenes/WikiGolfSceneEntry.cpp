@@ -26,12 +26,15 @@
 #include "../controllers/MinimapController.h"
 #include "../systems/AchievementEvent.h"
 #include "../systems/AchievementEventBus.h"
+#include "../systems/ContentFilter.h"
+#include "../systems/DailyAttemptStore.h"
 #include "../systems/PhysicsSystem.h"
 #include "../systems/SkyboxRenderSystem.h"
 #include "../systems/WikiClient.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/ProceduralFlag.h"
 #include "../utils/PageHistoryUtils.h"
+#include "../utils/ParRules.h"
 #include "LoadingScene.h"
 #include "TitleScene.h"
 #include <DirectXMath.h>
@@ -278,6 +281,10 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     isOniMode = preloadedData->isOniMode;
   }
   std::string startPage;
+  float parCourseLength = -1.0f;
+  std::uint32_t dailySeed = 0;
+  int parArticleCount = 0;
+  int shortestHops = -1;
 
   const bool hasPreloadedStartupData =
       preloadedData &&
@@ -294,6 +301,10 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
     targetId = preloadedData->targetPageId;
     isUserOverride = preloadedData->isUserOverride;
     isDailyChallenge = preloadedData->isDailyChallenge;
+    dailySeed = preloadedData->dailyChallengeSeed;
+    parCourseLength = preloadedData->parCourseLength;
+    parArticleCount = preloadedData->parArticleCount;
+    shortestHops = preloadedData->shortestHops;
 
     if (preloadedData->hasCachedData) {
       LOG_INFO("WikiGolf",
@@ -459,8 +470,27 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
 
   state.moveCount = 0;
   state.shotCount = 0;
+  state.totalShotCount = 0;
+  state.roundPar = 0; // クラブ初期化後に決める
+  state.shortestHops = shortestHops;
   state.elapsedTimeSeconds = 0.0f;
   state.isDailyChallenge = isDailyChallenge;
+  if (isDailyChallenge && !m_isTutorial) {
+    // ランキングに載せるのはその日の1回目・通常の内容フィルタの記録だけ。
+    // 途中でやめても1回目は使ったことにする(コースを下見してから挑めないように)。
+    const std::uint32_t lastAttemptSeed =
+        game::systems::DailyAttemptStore::LoadLastAttemptSeed();
+    state.dailySeed = dailySeed;
+    state.dailyPracticeReason = game::systems::DecideDailyPracticeReason(
+        lastAttemptSeed, dailySeed,
+        game::systems::ContentFilter::Instance().IsSafeMode());
+    if (game::systems::IsFirstDailyAttempt(lastAttemptSeed, dailySeed)) {
+      game::systems::DailyAttemptStore::SaveLastAttemptSeed(dailySeed);
+    }
+    LOG_INFO("WikiGolf", "Daily attempt seed={} last={} practiceReason={}",
+             dailySeed, lastAttemptSeed,
+             static_cast<int>(state.dailyPracticeReason));
+  }
   state.isFreePlay = isUserOverride;
   state.isOniMode = isOniMode;
   state.gameCleared = false;
@@ -523,6 +553,26 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   if (auto *state = ctx.world.GetGlobal<GolfGameState>()) {
       state->rollingFrictionScale =
           m_clubController->GetCurrentClub().rollingFrictionScale;
+
+      // ラウンドパー = 最短経路のコース長 ÷ (ドライバー飛距離×0.8)
+      // (下限はプレイする記事数)
+      float driverCarry = 0.0f;
+      for (const auto &club : m_clubController->GetAllClubs()) {
+          if (club.categoryEN == "Driver") {
+              driverCarry = club.baseCarryDistance;
+              break;
+          }
+      }
+      if (!m_isTutorial) {
+          state->roundPar =
+              game::utils::CalculateRoundPar(parCourseLength, driverCarry,
+                                             parArticleCount);
+      }
+      LOG_INFO("WikiGolf",
+               "Round par={} courseLength={:.1f}m articles={} driverCarry={:.1f}m "
+               "shortestHops={}",
+               state->roundPar, parCourseLength, parArticleCount, driverCarry,
+               state->shortestHops);
   }
 
   PROFILE_SECTION(sections, "OnEnter.TrajectoryPredictor");

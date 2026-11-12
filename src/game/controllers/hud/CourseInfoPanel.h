@@ -1,7 +1,7 @@
 #pragma once
 /**
  * @file CourseInfoPanel.h
- * @brief 現在記事と目的記事を右上へ表示するHUDパネル
+ * @brief 現在記事・目的記事・打数を右上へ表示するHUDパネル
 */
 
 #include "../../../ecs/Entity.h"
@@ -69,6 +69,8 @@ private:
     ecs::Entity targetPage = UINT32_MAX;
     ecs::Entity targetRule = UINT32_MAX;
     ecs::Entity attribution = UINT32_MAX;
+    ecs::Entity scoreLabel = UINT32_MAX;
+    ecs::Entity scoreValue = UINT32_MAX;
   };
 
   Entities m_entities;

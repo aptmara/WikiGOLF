@@ -888,6 +888,13 @@ if(MSVC)
     target_compile_definitions(test_resource_manager_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_resource_manager_rules PRIVATE /utf-8 /Zc:__cplusplus)
 endif()
+if(NOT WIKIGOLF_STATIC_BUILD)
+    # DLL版の assimp を使うので、テストの実行ファイルの隣にも置く(無いと起動できない)。
+    add_custom_command(TARGET test_resource_manager_rules POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_SOURCE_DIR}/libs/assimp-6.0.2/assimp-vc143-mt.dll
+                $<TARGET_FILE_DIR:test_resource_manager_rules>/assimp-vc143-mt.dll)
+endif()
 add_test(NAME resource_manager_rules COMMAND test_resource_manager_rules
          WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 

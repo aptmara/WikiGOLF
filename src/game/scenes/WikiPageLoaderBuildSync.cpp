@@ -20,6 +20,7 @@
 #include "../systems/PostProcessSystem.h"
 #include "../systems/ParticleSystem.h"
 #include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/ArticleWind.h"
 #include "../utils/ParRules.h"
 #include <algorithm>
 #include <cmath>
@@ -261,15 +262,11 @@ PageLoadResult WikiPageLoader::BuildPageSync(
 
     // 風向および風速を決定します。
     {
-        float windSpeed = 0.0f;
-        if (articleText.length() > 2000)
-            windSpeed = 3.0f + (float)(rand() % 20) / 10.0f;
-        else if (articleText.length() > 500)
-            windSpeed = 1.0f + (float)(rand() % 20) / 10.0f;
-
-        float windAngle    = (float)(rand() % 360) * 3.14159f / 180.0f;
-        state->windSpeed   = windSpeed;
-        state->windDirection = {cosf(windAngle), sinf(windAngle)};
+        const auto wind = game::utils::ComputeArticleWind(
+            articleText.length(),
+            state->isDailyChallenge ? state->dailySeed : 0u, pageName);
+        state->windSpeed     = wind.speed;
+        state->windDirection = {wind.directionX, wind.directionY};
     }
 
     // 現在のページ履歴を保存します。

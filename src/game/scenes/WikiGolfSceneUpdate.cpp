@@ -61,7 +61,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
   auto *shot = ctx.world.GetGlobal<game::components::ShotState>();
   if (!state || !shot) return;
 
-  if (state->isDailyChallenge && !state->gameCleared) {
+  // デイリーの時間は打てる状態(Playing)の間だけ数える。記事の読み込みや
+  // 遷移・喜びの演出中は止め、回線や演出の長さで差がつかないようにする。
+  if (state->isDailyChallenge && !state->gameCleared &&
+      m_phase == ScenePhase::Playing) {
     state->elapsedTimeSeconds += dt;
   }
 
@@ -594,6 +597,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   terrainTex = GetTerrainTex("ui_terrain_ob.png", "ui_judge_miss.png");
                   LOG_INFO("WikiGolf", "OB! Returning to last shot position");
                   state->shotCount++;
+                  state->totalShotCount++;
                   auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
                   if (ballT) {
                       ballT->position = state->lastShotPosition;
@@ -637,6 +641,7 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   if (treatAsOB) {
                       LOG_INFO("WikiGolf", "Out-of-bounds terrain. Material: {}", (int)state->currentMaterial);
                       state->shotCount++;
+                      state->totalShotCount++;
                       auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
                       if (ballT) {
                           ballT->position = state->lastShotPosition;

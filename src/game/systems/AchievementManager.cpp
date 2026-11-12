@@ -118,7 +118,7 @@ void AchievementManager::OnHoleCleared(const AchievementEvent &event) {
   if (ShouldUnlockNoMiss(m_session.hadMissThisRound)) {
     TryUnlock(AchievementId::NoMiss);
   }
-  if (ShouldUnlockShortestPath(event.hopCount, event.par)) {
+  if (ShouldUnlockShortestPath(event.hopCount, event.shortestHops)) {
     TryUnlock(AchievementId::ShortestPath);
   }
   if (ShouldUnlockWanderer(event.hopCount)) {

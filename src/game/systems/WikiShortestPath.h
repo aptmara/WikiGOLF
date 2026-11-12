@@ -131,6 +131,20 @@ public:
   FetchPopularPageTitle(int minIncomingLinks, std::uint32_t seed);
 
   /**
+   * @brief デイリーのスタート記事をseedから決定的に選びます。
+   * @details 被リンク数がほどほどで、ゴールまで3〜5手(無ければ2〜5手)の記事を
+   *          seedで決まった順に引く。同じseed・同じリンクグラフ・同じ内容フィルタ
+   *          なら誰が引いても同じ記事になる。
+   * @param targetId ゴール記事のページID
+   * @param seed デイリーのseed
+   * @param hops 選んだ記事からゴールまでの手数を書き込む先(nullptr可)
+   * @return 記事タイトルとページID（失敗時は空文字列と-1）
+  */
+  std::pair<std::string, int> FetchDailyStartPage(int targetId,
+                                                  std::uint32_t seed,
+                                                  int *hops = nullptr);
+
+  /**
    * @brief 実行中の読み込み・探索に中断を要求します。
    *
    * ウィンドウが閉じられた際などに呼び出します。以後の Initialize() も
@@ -156,6 +170,9 @@ private:
   int FetchPageId(const std::string &title);
   /** @brief 記事番号から表示用タイトル（空白区切り）を取得*/
   std::string ArticleTitle(std::uint32_t article) const;
+
+  /** @brief お題(スタート・ゴール)に向かない記事か(年月日・メタページ・除外記事など)。*/
+  static bool IsUnsuitableChallengeTitle(const std::string &title, int pageId);
 
   std::pair<std::string, int> FetchPopularPageTitleWithIndexSelector(
       const std::function<std::size_t(std::size_t)> &selectIndex);

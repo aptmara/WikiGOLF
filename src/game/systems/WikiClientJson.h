@@ -60,4 +60,11 @@ void ParseRenderedPageLinks(const std::string& response,
                             std::vector<game::WikiLink>& links,
                             std::unordered_set<std::string>& seen);
 
+/**
+ * @brief prop=info 応答から、存在する記事ごとの記事長(バイト数)を抽出します。
+ * @details 存在しない記事には length が無いので、戻り値の件数は
+ *          問い合わせた記事数より少なくなることがある。
+*/
+std::vector<int> ParsePageInfoLengths(const std::string& response);
+
 } // namespace game::systems::wiki_json

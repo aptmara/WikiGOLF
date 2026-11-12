@@ -107,25 +107,31 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   std::wstring grade = L"EXPLORER";
   DirectX::XMFLOAT4 gradeColor = {0.9f, 0.9f, 0.95f, 1.0f};
   int diff = m_data.shotCount - m_data.par;
+  // パーとの差をゴルフの呼び名に合わせる(ラウンド通算の打数とラウンドパー)。
   if (m_data.par > 0) {
-    if (diff <= -2) {
+    if (m_data.shotCount == 1) {
+      grade = L"HOLE IN ONE";
+      gradeColor = {1.0f, 0.92f, 0.55f, 1.0f};
+    } else if (diff <= -3) {
       grade = L"ALBATROSS";
       gradeColor = {1.0f, 0.92f, 0.55f, 1.0f};
-    } else if (diff <= -1) {
+    } else if (diff == -2) {
       grade = L"EAGLE";
       gradeColor = {1.0f, 0.8f, 0.8f, 1.0f};
-    }
-    else if (diff <= 0) {
+    } else if (diff == -1) {
       grade = L"BIRDIE";
       gradeColor = {0.7f, 1.0f, 0.7f, 1.0f};
-    } else if (diff <= 2) {
-      grade = L"PAR SAVE";
+    } else if (diff == 0) {
+      grade = L"PAR";
       gradeColor = {0.6f, 0.85f, 1.0f, 1.0f};
-    } else if (diff <= 5) {
+    } else if (diff == 1) {
       grade = L"BOGEY";
       gradeColor = {1.0f, 0.85f, 0.6f, 1.0f};
+    } else if (diff == 2) {
+      grade = L"DOUBLE BOGEY";
+      gradeColor = {1.0f, 0.75f, 0.6f, 1.0f};
     } else {
-      grade = L"KEEP SWINGING";
+      grade = L"+" + std::to_wstring(diff);
       gradeColor = {1.0f, 0.65f, 0.65f, 1.0f};
     }
   }
@@ -173,8 +179,11 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
 
   // スコア統計値テキストを追加します。
   statStyle.align = graphics::TextAlign::Center;
-  std::wstring stats = L"Shots: " + std::to_wstring(m_data.shotCount) +
-                       L"  |  Hops: " + std::to_wstring(hops);
+  std::wstring stats = L"Shots: " + std::to_wstring(m_data.shotCount);
+  if (m_data.par > 0) {
+    stats += L" (Par " + std::to_wstring(m_data.par) + L")";
+  }
+  stats += L"  |  Hops: " + std::to_wstring(hops);
   if (m_data.isDailyChallenge) {
     stats += L"  |  Time: " +
              game::systems::FormatClearTime(m_data.clearTimeMs);
@@ -186,7 +195,23 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
       m_rankingStatusEntity = CreateEntity(ctx.world);
       auto &rankingStatus =
           ctx.world.Add<components::UIText>(m_rankingStatusEntity);
-      rankingStatus.text = L"オンラインランキングへ送信中...";
+      switch (m_data.dailyPracticeReason) {
+      case game::systems::DailyPracticeReason::None:
+        rankingStatus.text = L"オンラインランキングへ送信中...";
+        break;
+      case game::systems::DailyPracticeReason::AlreadyPlayedToday:
+        rankingStatus.text =
+            L"今日の2回目以降は練習です。ランキングには送信しません";
+        break;
+      case game::systems::DailyPracticeReason::SafeMode:
+        rankingStatus.text =
+            L"セーフモード中は条件が違うため、ランキングには送信しません";
+        break;
+      case game::systems::DailyPracticeReason::UnknownDate:
+        rankingStatus.text =
+            L"日付を確認できなかったため、ランキングには送信しません";
+        break;
+      }
       rankingStatus.x = 0.0f;
       rankingStatus.y = 445.0f;
       rankingStatus.width = 1280.0f;

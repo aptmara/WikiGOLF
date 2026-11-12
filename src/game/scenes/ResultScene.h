@@ -4,6 +4,7 @@
  * @brief ゲームクリア時のリザルトシーン
 */
 
+#include "../systems/DailyChallengeRules.h"
 #include "../../core/Scene.h"
 #include "../../graphics/WikiTextureGenerator.h"
 #include "../utils/ArticleRoute.h"
@@ -36,6 +37,9 @@ struct ResultData {
   std::shared_ptr<ResultRouteSearch> shortestRoute;
   bool isNewRecord = false;
   bool isDailyChallenge = false;
+  /** @brief デイリーをランキングに載せない理由(None ならランキングへ送る)。*/
+  game::systems::DailyPracticeReason dailyPracticeReason =
+      game::systems::DailyPracticeReason::None;
   bool isOniMode = false;
 };
 

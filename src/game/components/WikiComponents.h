@@ -1,4 +1,5 @@
 #pragma once
+#include "../systems/DailyChallengeRules.h"
 #include "../utils/ArticleRoute.h"
 /**
  * @file WikiComponents.h
@@ -101,7 +102,15 @@ struct WikiGlobalData {
   std::string startPage;
   std::string targetPage;
   int targetPageId = -1;
-  int initialPar = -1;
+  /**
+   * @brief ラウンドパーの元になる、最短経路でプレイする記事のコース奥行の合計(m)。
+   * @details ゴール記事はプレイしないので含めない。負なら不明。
+  */
+  float parCourseLength = -1.0f;
+  /** @brief 最短経路でプレイする記事数(ゴール記事を除く。0=不明)。*/
+  int parArticleCount = 0;
+  /** @brief スタートからゴールまでの最短リンク数(-1=不明)。*/
+  int shortestHops = -1;
   bool isUserOverride = false;
   bool isDailyChallenge = false;
   bool isOniMode = false;
@@ -207,11 +216,23 @@ struct GolfGameState {
   DirectX::XMFLOAT2 windDirection = {1.0f, 0.0f}; ///< 風向き（正規化）
   float windSpeed = 0.0f;                         ///< 風速（m/s）
 
-  int shotCount = 0;        ///< 打数
-  int par = 5;              ///< パー（リンク数÷2+2）
+  int shotCount = 0;        ///< この記事での打数(記事を移ると0に戻る)
+  int totalShotCount = 0;   ///< ラウンド通算の打数(OB罰打込み)
+  int par = 5;              ///< この記事からゴールまでのリンク数+1(経路案内用)
+  /**
+   * @brief ラウンドパー。ラウンド開始時に1回だけ決め、途中で変えない。
+   * @details 最短経路でプレイする記事のコース長 ÷ (ドライバー飛距離×0.8)。
+   *          0なら不明(経路やリンクグラフが無い)。
+  */
+  int roundPar = 0;
+  int shortestHops = -1;    ///< スタートからゴールまでの最短リンク数(-1=不明)
   int moveCount = 0;        ///< 遷移回数
   float elapsedTimeSeconds = 0.0f; ///< デイリーチャレンジの経過時間
   bool isDailyChallenge = false; ///< デイリーチャレンジ中か
+  std::uint32_t dailySeed = 0;   ///< デイリーの日付seed(0=デイリーでない/不明)
+  /** @brief デイリーをランキングに載せない理由(None ならランキングへ送る)。*/
+  game::systems::DailyPracticeReason dailyPracticeReason =
+      game::systems::DailyPracticeReason::None;
   bool isFreePlay = false;  ///< 自由入力（スタート/ゴール記事を手動指定）で開始したか
   bool isOniMode = false;   ///< リンク距離の視覚的な手掛かりを隠すか
   bool gameCleared = false; ///< クリアフラグ

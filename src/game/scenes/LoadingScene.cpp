@@ -16,6 +16,7 @@
 #include "../components/UIText.h"
 #include "../systems/WikiClient.h"
 #include "../systems/WikiShortestPath.h"
+#include "../utils/ParRules.h"
 #include "LoadingSceneUtils.h"
 #include <algorithm>
 #include <array>
@@ -184,16 +185,23 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     };
 
     // スタート選定
+    // デイリーは全員同じ条件にするため、スタートもゴールもサーバー日付から決める。
+    // スタートはゴールが決まってから、ゴールまでの手数を見て選ぶ(下の処理)。
     game::systems::WikiClient wikiClient;
-    if (data->startPage.empty()) {
+    const bool selectDailyStart =
+        data->isDailyChallenge && data->startPage.empty();
+    if (data->isDailyChallenge) {
+      data->dailyChallengeSeed = wikiClient.FetchServerDateSeed();
+      LOG_INFO("LoadingScene",
+               "AsyncLoad daily challenge server date seed={}",
+               data->dailyChallengeSeed);
+    }
+    if (selectDailyStart) {
+      LOG_INFO("LoadingScene",
+               "AsyncLoad daily start will be selected after the target");
+    } else if (data->startPage.empty()) {
       const auto randomStartedAt = std::chrono::steady_clock::now();
       data->startPage = wikiClient.FetchRandomPageTitle();
-      if (data->isDailyChallenge) {
-        data->dailyChallengeSeed = wikiClient.GetLastServerDateSeed();
-        LOG_INFO("LoadingScene",
-                 "AsyncLoad daily challenge server date seed={}",
-                 data->dailyChallengeSeed);
-      }
       LOG_INFO("LoadingScene",
                "AsyncLoad random start fetched: title='{}' elapsed={}ms",
                data->startPage, ElapsedMs(randomStartedAt));
@@ -248,6 +256,28 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       LOG_INFO("LoadingScene",
                "AsyncLoad fallback target fetched: title='{}' elapsed={}ms",
                data->targetPage, ElapsedMs(fallbackStartedAt));
+    }
+
+    // デイリーのスタート: ゴールまで3〜5手の記事を日付seedから決定的に選ぶ。
+    if (selectDailyStart) {
+      int dailyStartHops = -1;
+      if (dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
+          data->targetPageId != -1 && data->dailyChallengeSeed != 0) {
+        const auto dailyStartedAt = std::chrono::steady_clock::now();
+        const auto start = data->pathSystem->FetchDailyStartPage(
+            data->targetPageId, data->dailyChallengeSeed, &dailyStartHops);
+        data->startPage = start.first;
+        LOG_INFO("LoadingScene",
+                 "AsyncLoad daily start selected: title='{}' hops={} elapsed={}ms",
+                 data->startPage, dailyStartHops, ElapsedMs(dailyStartedAt));
+      }
+      if (data->startPage.empty()) {
+        // 選べなければ従来どおりランダム(この場合は全員同じにはならない)。
+        data->startPage = wikiClient.FetchRandomPageTitle();
+        LOG_WARN("LoadingScene",
+                 "AsyncLoad daily start fallback to random: title='{}'",
+                 data->startPage);
+      }
     }
 
     if (overrideTargetPage.empty() && data->startPage == data->targetPage &&
@@ -321,6 +351,47 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       }
       setProgress(0.9f);
       logStage("path-check-ready", 0.9f);
+    }
+
+    // ラウンドパーの元になる、最短経路でプレイする記事のコース長を見積もる。
+    // 記事を読み込む前なので、コース奥行は記事長(バイト数)から近似する。
+    if (dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
+        !data->startPage.empty() && !data->targetPage.empty()) {
+      constexpr int kParPathMaxDepth = 20;
+      const auto parStartedAt = std::chrono::steady_clock::now();
+      game::systems::ShortestPathResult parPath;
+      if (data->targetPageId != -1) {
+        parPath = data->pathSystem->FindShortestPath(
+            data->startPage, data->targetPageId, kParPathMaxDepth, false);
+      } else {
+        parPath = data->pathSystem->FindShortestPath(
+            data->startPage, data->targetPage, kParPathMaxDepth, false);
+      }
+      if (parPath.success && parPath.path.size() >= 2) {
+        // 最後はゴール記事。ゴールはカップインした時点で終わるのでプレイしない。
+        std::vector<std::string> playedArticles(parPath.path.begin(),
+                                                parPath.path.end() - 1);
+        std::vector<int> lengths;
+        if (wikiClient.FetchPageLengths(playedArticles, lengths)) {
+          float total = 0.0f;
+          for (const int length : lengths) {
+            total += game::utils::EstimateCourseDepthFromArticleBytes(length);
+          }
+          // 取得できなかった記事は最小のコースとして数える。
+          if (lengths.size() < playedArticles.size()) {
+            total += game::utils::kEstimatedCourseMinDepth *
+                     static_cast<float>(playedArticles.size() - lengths.size());
+          }
+          data->parCourseLength = total;
+          data->parArticleCount = static_cast<int>(playedArticles.size());
+        }
+        data->shortestHops = parPath.degrees;
+      }
+      LOG_INFO("LoadingScene",
+               "AsyncLoad par course length={:.1f}m articles={} shortestHops={} "
+               "elapsed={}ms",
+               data->parCourseLength, data->parArticleCount, data->shortestHops,
+               ElapsedMs(parStartedAt));
     }
 
     // 目的記事の代表サムネイルを取得（ゴール看板表示用）。

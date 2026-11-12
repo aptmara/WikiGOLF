@@ -1,3 +1,5 @@
+// Release ビルドでも assert で確かめるため、NDEBUG を外してから読み込む。
+#undef NDEBUG
 #include "game/systems/AchievementRules.h"
 
 #include <cassert>
@@ -25,11 +27,9 @@ int main() {
   assert(ShouldUnlockNoMiss(false));
   assert(!ShouldUnlockNoMiss(true));
 
-  assert(ComputeMinimumHopsFromPar(5) == 6);
-  assert(ComputeMinimumHopsFromPar(2) == 0);
-  assert(ShouldUnlockShortestPath(6, 5));
-  assert(!ShouldUnlockShortestPath(7, 5));
-  assert(!ShouldUnlockShortestPath(0, 2));
+  assert(ShouldUnlockShortestPath(3, 3));
+  assert(!ShouldUnlockShortestPath(4, 3));
+  assert(!ShouldUnlockShortestPath(0, -1));
 
   assert(ShouldUnlockWanderer(10));
   assert(ShouldUnlockWanderer(15));
