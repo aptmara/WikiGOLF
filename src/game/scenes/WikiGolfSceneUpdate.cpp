@@ -684,13 +684,13 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                           std::string seName = "";
                           switch (state->currentMaterial) {
                           case game::components::TerrainMaterial::Fairway:
-                              seName = "se_Fairway.wav";
+                              seName = "se_Fairway.mp3";
                               break;
                           case game::components::TerrainMaterial::Rough:
-                              seName = "se_Rough.wav";
+                              seName = "se_Rough.mp3";
                               break;
                           case game::components::TerrainMaterial::Bunker:
-                              seName = "se_Bunker_new.mp3";
+                              seName = "se_Bunker.mp3";
                               break;
                           case game::components::TerrainMaterial::Green:
                               seName = "se_Green.mp3";
