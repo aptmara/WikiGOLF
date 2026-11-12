@@ -398,9 +398,18 @@ void TextRenderer::DrawTextCore(const std::wstring &text,
               nullptr, 0, &m_outlineStrokeStyle);
         }
         if (outline) {
+          // 本体は DrawTextLayout の CLIP でレイアウト枠に切られる。輪郭も同じ枠
+          // （縁取りの太さぶん外側まで）に切らないと、枠からはみ出した折り返し行の
+          // 縁取りだけが黒く残る。
+          const D2D1_RECT_F clip = D2D1::RectF(
+              rect.left - style.outlineWidth, rect.top - style.outlineWidth,
+              rect.right + style.outlineWidth, rect.bottom + style.outlineWidth);
+          m_d2dContext->PushAxisAlignedClip(clip,
+                                            D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
           m_d2dContext->DrawGeometry(outline.Get(), outlineBrush,
                                      style.outlineWidth * 2.0f,
                                      m_outlineStrokeStyle.Get());
+          m_d2dContext->PopAxisAlignedClip();
         }
         outlineDrawn = true;
       }

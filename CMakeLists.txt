@@ -962,10 +962,15 @@ add_executable(test_wiki_golf_hud_lifecycle
     src/game/controllers/hud/ShotGaugePanel.cpp
     src/game/controllers/hud/ShotGaugePanelUpdate.cpp
     src/game/controllers/hud/ShotGaugePanelVisibility.cpp
-    src/game/controllers/hud/WindPanel.cpp)
+    src/game/controllers/hud/WindPanel.cpp
+    # ClubSelectionPanel がクラブ名の幅を測るため
+    src/graphics/TextRenderer.cpp
+    src/graphics/TextRendererImage.cpp
+    src/graphics/TextRendererText.cpp
+    src/graphics/TextRendererRaster.cpp)
 target_precompile_headers(test_wiki_golf_hud_lifecycle REUSE_FROM wikigolf_pch)
 target_include_directories(test_wiki_golf_hud_lifecycle PRIVATE src)
-target_link_libraries(test_wiki_golf_hud_lifecycle PRIVATE wikigolf_common)
+target_link_libraries(test_wiki_golf_hud_lifecycle PRIVATE d3d11 d2d1 dwrite dxguid windowscodecs ole32 wikigolf_common)
 if(MSVC)
     target_compile_definitions(test_wiki_golf_hud_lifecycle PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX -DWIN32_LEAN_AND_MEAN)
     target_compile_options(test_wiki_golf_hud_lifecycle PRIVATE /utf-8 /Zc:__cplusplus)

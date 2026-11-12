@@ -10,6 +10,8 @@
 #include "../../components/UIImage.h"
 #include "../../components/UIText.h"
 #include "../../utils/UIConstants.h"
+#include "../../../graphics/TextRenderer.h"
+#include <algorithm>
 
 namespace game::controllers::hud {
 namespace {
@@ -24,6 +26,27 @@ void SetImageVisible(ecs::World &world, ecs::Entity entity, bool visible) {
   if (auto *image = world.Get<game::components::UIImage>(entity)) {
     image->visible = visible;
   }
+}
+
+/**
+ * @brief 文字が指定幅で1行に収まる大きさまで、文字サイズを下げて返します。
+ * @details 収まらない名前（例: ピッチングウェッジ）は2行目へ折り返し、枠の外へ
+ *          押し出されて途中までしか見えなくなるため、表示前に小さくする。
+ *          測れない場合（テストなど描画器が無いとき）は元の大きさを返す。
+ */
+float FitSingleLineFontSize(core::GameContext &ctx, const std::wstring &text,
+                            graphics::TextStyle style, float width,
+                            float minFontSize) {
+  if (!ctx.textRenderer || text.empty()) return style.fontSize;
+  constexpr float kUnboundedWidth = 10000.0f;
+  for (; style.fontSize > minFontSize; style.fontSize -= 1.0f) {
+    const float wrapped = ctx.textRenderer->MeasureTextHeight(text, style, width);
+    const float single =
+        ctx.textRenderer->MeasureTextHeight(text, style, kUnboundedWidth);
+    if (wrapped < 0.0f || single < 0.0f) break;
+    if (wrapped <= single + 0.5f) break;
+  }
+  return (std::max)(style.fontSize, minFontSize);
 }
 
 } // namespace
@@ -115,6 +138,8 @@ void ClubSelectionPanel::RebuildSelectedClub(core::GameContext &ctx,
   name.style.fontFamily = "Kiwi Maru Medium";
   name.style.fontSize = 27.0f;
   name.style.align = graphics::TextAlign::Left;
+  name.style.fontSize =
+      FitSingleLineFontSize(ctx, name.text, name.style, name.width, 16.0f);
   name.layer = game::ui::kLayerClubSelect + 2;
 
   m_clubSubName = m_selectedEntityOwner.Create(ctx.world);
