@@ -564,9 +564,9 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   m_availableClubs.clear();
 
   m_availableClubs = {
-      {"ドライバー", 119.0f, 10.5f, "Assets/textures/Clubs/1W_driver.png", 1.0f, "1W", "Driver"},
-      {"5番ウッド", 79.0f, 18.0f, "Assets/textures/Clubs/5W_fairway_wood.png", 1.0f, "5W", "Wood"},
-      {"7番アイアン", 55.0f, 31.0f, "Assets/textures/Clubs/7I_iron.png", 1.0f, "7I", "Iron"},
+      {"ドライバー", 119.0f, 10.5f, "Assets/textures/Clubs/1W_driver.png", 1.0f, "DR", "Driver"},
+      {"ウッド", 79.0f, 18.0f, "Assets/textures/Clubs/5W_fairway_wood.png", 1.0f, "FW", "Wood"},
+      {"アイアン", 55.0f, 31.0f, "Assets/textures/Clubs/7I_iron.png", 1.0f, "IR", "Iron"},
       {"ピッチングウェッジ", 28.0f, 45.0f, "Assets/textures/Clubs/PW_pitching_wedge.png", 1.0f, "PW", "Wedge"},
       {"サンドウェッジ", 21.0f, 56.0f, "Assets/textures/Clubs/SW_sand_wedge.png", 1.0f, "SW", "Wedge"},
       {"パター", 10.0f, 0.0f, "Assets/textures/Clubs/PT_putter.png", 1.0f, "PT", "Putter"},
