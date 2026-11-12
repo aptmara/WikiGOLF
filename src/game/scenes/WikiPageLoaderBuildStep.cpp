@@ -517,6 +517,9 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
         state->currentPage = m_buildData.pageName;
         state->pathHistory.push_back(m_buildData.pageName);
+        state->visitedRoute.push_back(
+            {m_buildData.pageName, state->returningToPreviousPage});
+        state->returningToPreviousPage = false;
 
         /**
          * @brief 99%付近で描画スレッドを止めないため、Parは即時計算可能な値だけで決定します。

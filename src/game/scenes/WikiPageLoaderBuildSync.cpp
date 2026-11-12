@@ -275,6 +275,8 @@ PageLoadResult WikiPageLoader::BuildPageSync(
     // 現在のページ履歴を保存します。
     state->currentPage = pageName;
     state->pathHistory.push_back(pageName);
+    state->visitedRoute.push_back({pageName, state->returningToPreviousPage});
+    state->returningToPreviousPage = false;
 
     // 規定打数となるParを算出します。
     {

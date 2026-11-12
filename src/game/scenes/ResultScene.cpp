@@ -5,6 +5,7 @@
 
 #define NOMINMAX
 #include "ResultScene.h"
+#include "ResultRouteScene.h"
 #include "../../audio/AudioSystem.h"
 #include "../../core/BuildEdition.h"
 #include "../../core/GameContext.h"
@@ -223,6 +224,10 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
 
     // ボタンのクリック操作を処理します。
     if (btn && hover && ctx.input.GetMouseButtonDown(0)) {
+      if (btn->action == "route") {
+        ctx.sceneManager->PushScene(std::make_unique<ResultRouteScene>(m_data));
+        return;
+      }
       // プレイし直すボタンの処理を行います。
       if (!core::kTrialBuild && elem.text == L"Play Again (R)") {
         std::vector<ecs::Entity> toDestroy;
@@ -236,11 +241,13 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
         }
 
         if (m_data.isDailyChallenge) {
-          title_scene_detail::ResetDailyChallengeStartData(ctx);
+          title_scene_detail::ResetDailyChallengeStartData(ctx,
+                                                           m_data.isOniMode);
           auto loadingScene = std::make_unique<LoadingScene>(
               []() { return std::make_unique<WikiGolfScene>(false); });
           ctx.sceneManager->ChangeScene(std::move(loadingScene));
         } else {
+          title_scene_detail::ResetStandardStartData(ctx, m_data.isOniMode);
           ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
         }
         return;
@@ -256,11 +263,12 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
   // ショートカットキー入力を処理します。(体験版ではリトライ不可)
   if (!core::kTrialBuild && ctx.input.GetKeyDown('R')) {
     if (m_data.isDailyChallenge) {
-      title_scene_detail::ResetDailyChallengeStartData(ctx);
+      title_scene_detail::ResetDailyChallengeStartData(ctx, m_data.isOniMode);
       auto loadingScene = std::make_unique<LoadingScene>(
           []() { return std::make_unique<WikiGolfScene>(false); });
       ctx.sceneManager->ChangeScene(std::move(loadingScene));
     } else {
+      title_scene_detail::ResetStandardStartData(ctx, m_data.isOniMode);
       ctx.sceneManager->ChangeScene(std::make_unique<WikiGolfScene>());
     }
     return;

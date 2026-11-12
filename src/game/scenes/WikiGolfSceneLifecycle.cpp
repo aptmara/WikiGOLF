@@ -508,6 +508,7 @@ bool WikiGolfScene::ReturnToPreviousPage(core::GameContext &ctx) {
 
   LOG_INFO("WikiGolf", "Returning to previous page: {}",
            previousPage.value());
+  state->returningToPreviousPage = true;
   TransitionToPage(ctx, previousPage.value());
   return true;
 }

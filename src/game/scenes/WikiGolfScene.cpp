@@ -44,6 +44,8 @@
 #include "PauseScene.h"
 #include "CupInUtils.h"
 #include "ResultScene.h"
+#include <thread>
+#include <limits>
 #include "TitleScene.h"
 #include "LoadingScene.h"
 #include <DirectXMath.h>
@@ -261,14 +263,36 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         const int hopCount =
             std::max(0, static_cast<int>(state->pathHistory.size()) - 1);
 
+        // ゴール記事はロードせず終了するため、ここで到達を記録する。
+        if (state->pathHistory.empty() ||
+            state->pathHistory.back() != state->targetPage) {
+          state->pathHistory.push_back(state->targetPage);
+        }
+        game::utils::CompleteArticleRoute(state->visitedRoute, state->targetPage);
+
         // ResultSceneへ遷移
         ResultData data;
         data.targetPage = state->targetPage;
         data.shotCount = state->shotCount;
         data.clearTimeMs = clearTimeMs;
         data.isDailyChallenge = state->isDailyChallenge;
+        data.isOniMode = state->isOniMode;
         data.par = state->par;
         data.pathHistory = state->pathHistory;
+        data.visitedRoute = state->visitedRoute;
+        data.shortestRoute = std::make_shared<ResultRouteSearch>();
+        const auto routeSearch = data.shortestRoute;
+        const std::string source = data.pathHistory.front();
+        const std::string target = data.targetPage;
+        std::thread([routeSearch, source, target]() {
+          game::systems::WikiShortestPath paths;
+          if (paths.Initialize(game::systems::WikiShortestPath::kDefaultGraphPath,
+                               false)) {
+            routeSearch->result = paths.FindShortestPath(
+                source, target, std::numeric_limits<int>::max(), false);
+          }
+          routeSearch->completed.store(true, std::memory_order_release);
+        }).detach();
         data.isNewRecord = false;
         if (ctx.achievements) {
           const auto &progress = ctx.achievements->GetProgress();

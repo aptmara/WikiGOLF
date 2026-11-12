@@ -1,4 +1,5 @@
 #pragma once
+#include "../utils/ArticleRoute.h"
 /**
  * @file WikiComponents.h
  * @brief WikiPinball固有のコンポーネント定義
@@ -196,6 +197,8 @@ struct GolfGameState {
 
   // 経路履歴
   std::vector<std::string> pathHistory; ///< 訪問した記事の履歴
+  std::vector<game::utils::ArticleVisit> visitedRoute;
+  bool returningToPreviousPage = false;
 
   float fieldWidth = 80.0f;  ///< フィールド幅（最小80）
   float fieldDepth = 120.0f; ///< フィールド奥行（最小120）

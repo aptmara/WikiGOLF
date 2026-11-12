@@ -66,6 +66,11 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
         btnX = 640.0f - btnW / 2.0f;
 
       btn = UIButton::Create(text, btnId, btnX, y, btnW, 60.0f);
+      if (btnId == "route") {
+        btn.x = 480.0f;
+        btn.width = 320.0f;
+        btn.height = 48.0f;
+      }
       btn.textStyle = style;
       btn.textStyle.fontSize = 26.0f;
       btn.normalColor = {0.1f, 0.1f, 0.1f, 0.8f};
@@ -161,22 +166,9 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   subStyle.align = graphics::TextAlign::Center;
   addUI(L"Target: " + core::ToWString(m_data.targetPage), 290.0f, subStyle);
 
-  // 移動経路履歴を文字列に合成します。
-  std::wstring routeStr = L"Route: ";
   size_t hops = 0;
   if (!m_data.pathHistory.empty()) {
     hops = m_data.pathHistory.size() - 1;
-  }
-  size_t start = 0;
-  if (m_data.pathHistory.size() > 4) {
-    start = m_data.pathHistory.size() - 4;
-  }
-  if (m_data.pathHistory.size() > 4)
-    routeStr += L"... ";
-  for (size_t i = start; i < m_data.pathHistory.size(); ++i) {
-    if (i != start)
-      routeStr += L" > ";
-    routeStr += core::ToWString(m_data.pathHistory[i]);
   }
 
   // スコア統計値テキストを追加します。
@@ -212,7 +204,9 @@ void ResultScene::CreateLuxuryUI(core::GameContext &ctx) {
   routeStyle.fontFamily = "Kiwi Maru Medium";
   routeStyle.align = graphics::TextAlign::Center;
   routeStyle.fontSize = 22.0f;
-  addUI(routeStr, 390.0f, routeStyle);
+  routeStyle.fontSize = 24.0f;
+  routeStyle.color = {1.0f, 0.9f, 0.55f, 1.0f};
+  addUI(L"最短記事を見る", 388.0f, routeStyle, true, "route");
 
   auto attributionStyle = routeStyle;
   attributionStyle.fontSize = 15.0f;

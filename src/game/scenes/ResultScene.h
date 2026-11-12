@@ -6,6 +6,8 @@
 
 #include "../../core/Scene.h"
 #include "../../graphics/WikiTextureGenerator.h"
+#include "../utils/ArticleRoute.h"
+#include "../systems/WikiShortestPath.h"
 #include <DirectXMath.h>
 #include <atomic>
 #include <memory>
@@ -16,6 +18,11 @@
 namespace game::scenes {
 using namespace DirectX;
 
+struct ResultRouteSearch {
+  std::atomic_bool completed = false;
+  game::systems::ShortestPathResult result;
+};
+
 /**
  * @brief リザルト画面に渡すデータ
 */
@@ -25,8 +32,11 @@ struct ResultData {
   int clearTimeMs = 0;
   int par = 0;
   std::vector<std::string> pathHistory;
+  std::vector<game::utils::ArticleVisit> visitedRoute;
+  std::shared_ptr<ResultRouteSearch> shortestRoute;
   bool isNewRecord = false;
   bool isDailyChallenge = false;
+  bool isOniMode = false;
 };
 
 /**
