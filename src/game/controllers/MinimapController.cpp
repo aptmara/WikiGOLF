@@ -49,7 +49,7 @@ void MinimapController::Initialize(Config cfg, core::GameContext &ctx) {
 
 void MinimapController::Shutdown(core::GameContext &ctx) {
   m_entityOwner.DestroyAll(ctx.world);
-  m_minimapGuideDotEntities.clear();
+  m_guideOverlay.Shutdown(ctx);
   m_mapHelpLines.clear();
   m_mapHoleIcons.clear();
   m_minimapRenderer.reset();
@@ -119,9 +119,7 @@ void MinimapController::SetVisible(core::GameContext& ctx, bool visible) {
     setUIImg(m_minimapBallIconEntity,    false);
     setUITxt(m_minimapPulseMarkerEntity, false);
     setUITxt(m_aimPinMarkerEntity,       false);
-    for (auto dotEntity : m_minimapGuideDotEntities) {
-      setUITxt(dotEntity, false);
-    }
+    m_guideOverlay.Hide(ctx);
     setUITxt(m_holeHoverLabelEntity,     false);
     setUITxt(m_flagFilterDropdownEntity, false);
     for (const auto& toggle : m_flagFilterToggles) {

@@ -124,12 +124,9 @@ void WikiGolfScene::UpdateCameraOcclusionFade(core::GameContext &ctx,
 }
 
 /**
- * @brief トップビューの着弾点プレビューを、現在選択中クラブのフルスイングで
- * 計算し直し、MinimapControllerへ反映します。
- * @details 実際の地形・風を考慮した弾道シミュレーション(TrajectoryPredictorと
- * 同じ物理ロジック)を使うため、着弾点は実際のショット結果と整合する。
- * クラブ切り替えはマップビュー中は行えないため、マップビューに入った
- * 瞬間に1回計算すれば十分。
+ * @brief 現在選択中クラブのフルスイングで、ボールが止まる位置を計算します。
+ * @details 実際の地形・風を考慮した弾道シミュレーション(予測線と同じ物理)を
+ * 使うため、実際のショット結果と整合する。クラブ切替時のカメラ合わせに使う。
 */
 std::optional<DirectX::XMFLOAT3>
 WikiGolfScene::CalculateFullSwingLandingTarget(core::GameContext &ctx) const {
@@ -166,28 +163,11 @@ WikiGolfScene::CalculateFullSwingLandingTarget(core::GameContext &ctx) const {
   return result.landingPosition;
 }
 
-void WikiGolfScene::RefreshLandingPreview(core::GameContext &ctx) {
-  if (!m_minimapController) return;
-
-  const auto landingTarget = CalculateFullSwingLandingTarget(ctx);
-  if (!landingTarget || !m_clubController) {
-    m_minimapController->SetLandingPreview(ctx, {0, 0, 0}, 0.0f, false);
-    return;
-  }
-
-  // ばらつき範囲は基準飛距離の一定割合(ミート精度による左右・距離ブレの
-  // ざっくりした目安)とする。
-  const auto &club = m_clubController->GetCurrentClub();
-  const float dispersionRadius = club.baseCarryDistance * 0.06f;
-  m_minimapController->SetLandingPreview(ctx, *landingTarget,
-                                         dispersionRadius, true);
-}
-
 /**
  * @brief エイムピンまでの高低差・風を織り込んだ必要パワーを解き直します。
  * @details 平坦基準のクラブ飛距離だけで選ぶと、打ち上げでは大きく手前に、
  *          打ち下ろしでは大きく奥へ外れる。実際の地形上での弾道
- *          シミュレーション(TrajectoryPredictor・着弾点プレビューと同じ物理)
+ *          シミュレーション(予測線と同じ物理)
  *          からピンへ届く比率を逆算し、その実効飛距離でクラブを選ぶ。
 */
 void WikiGolfScene::RefreshAimPinSolution(core::GameContext &ctx,
@@ -460,10 +440,8 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
     if (m_hud) m_hud->SetVisible(ctx, false);
     if (m_minimapController) m_minimapController->SetVisible(ctx, false);
     if (m_tutorialOverlay) m_tutorialOverlay->SetVisible(ctx, false);
-    // 方向ガイドセグメントを非表示
-    for (auto segE : m_guideSegments) {
-      if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
-    }
+    // 遷移中は更新が呼ばれなくなるため、予測表示もここで消しておく
+    if (m_shotGuide) m_shotGuide->Hide(ctx);
     // 遷移中はUpdateTrajectoryAndGuideが呼ばれなくなるため、傾斜可視化オーバーレイも
     // ここで明示的に消しておく（消さないと遷移演出中も直前の表示状態のまま固定される）
     m_slopeVisualization.ForceHide(ctx);
@@ -589,8 +567,8 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
     m_aimPinController->Shutdown(ctx);
   }
 
-  if (m_trajectoryPredictor) {
-    m_trajectoryPredictor->Shutdown(ctx);
+  if (m_shotGuide) {
+    m_shotGuide->Shutdown(ctx);
   }
 
   if (m_clubController) {

@@ -3,7 +3,7 @@
  * @file TrajectorySimulation.h
  * @brief ボール弾道の共通物理シミュレーション
  *
- * TrajectoryPredictor(予測線描画)と ClubController のキャリー距離テーブル
+ * 予測線の道すじ計算(ShotGuidePath.h)と ClubController のキャリー距離テーブル
  * 算出で共用する1サブステップ分の物理更新処理をまとめる。両者が同じ関数を
  * 参照することで、予測線・着弾マーカーと実際の弾道結果を一致させる。
 */

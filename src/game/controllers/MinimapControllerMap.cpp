@@ -107,7 +107,8 @@ bool MinimapController::TryGetHudMapWorldPosition(
 */
 void MinimapController::UpdateMinimap(
     core::GameContext &ctx, float fieldWidth, float fieldDepth,
-    const std::vector<ecs::Entity> &trajectoryEntities) {
+    const game::guide::ShotGuidePath *guidePath,
+    const game::guide::ShotGuideZone *guideZone) {
   if (!m_minimapRenderer)
     return;
 
@@ -399,42 +400,24 @@ void MinimapController::UpdateMinimap(
     }
   }
 
-  // TrajectoryPredictorの実軌道点を、地形・ホールより前面へ投影する。
-  if (!m_isMapView && ui) {
-    for (size_t i = 0; i < m_minimapGuideDotEntities.size(); ++i) {
-      auto *dot = ctx.world.Get<UIText>(m_minimapGuideDotEntities[i]);
-      if (!dot) continue;
-      dot->visible = false;
-      if (i >= trajectoryEntities.size()) continue;
-      const auto *trajectoryTransform =
-          ctx.world.Get<Transform>(trajectoryEntities[i]);
-      const auto *trajectoryRenderer =
-          ctx.world.Get<MeshRenderer>(trajectoryEntities[i]);
-      if (!trajectoryTransform || !trajectoryRenderer ||
-          !trajectoryRenderer->isVisible) {
-        continue;
-      }
-      float u = 0.0f;
-      float v = 0.0f;
-      if (!minimap_detail::ProjectToMinimap(
-              trajectoryTransform->position.x, trajectoryTransform->position.z,
-              params, u, v)) {
-        continue;
-      }
-      const float size = std::max(4.0f, 8.0f - static_cast<float>(i) * 0.12f);
-      dot->width = size;
-      dot->height = size;
-      dot->style.fontSize = size;
-      dot->style.color.w =
-          std::max(0.28f, 0.95f - static_cast<float>(i) * 0.022f);
-      dot->x = mapBounds.x + u * mapBounds.width - size * 0.5f;
-      dot->y = mapBounds.y + v * mapBounds.height - size * 0.5f;
-      dot->visible = ui->visible;
-    }
+  // ショット予測を右下マップへ重ねる。全体マップは実カメラの俯瞰で、
+  // 3Dの予測表示がそのまま見えるので重ねない。
+  if (!m_isMapView && ui && ui->visible) {
+    m_guideOverlay.Update(
+        ctx, guidePath, guideZone,
+        [&](const DirectX::XMFLOAT3 &world, float &x, float &y) {
+          float u = 0.0f;
+          float v = 0.0f;
+          if (!minimap_detail::ProjectToMinimap(world.x, world.z, params, u,
+                                                v)) {
+            return false;
+          }
+          x = mapBounds.x + u * mapBounds.width;
+          y = mapBounds.y + v * mapBounds.height;
+          return true;
+        });
   } else {
-    for (auto dotEntity : m_minimapGuideDotEntities) {
-      if (auto *dot = ctx.world.Get<UIText>(dotEntity)) dot->visible = false;
-    }
+    m_guideOverlay.Hide(ctx);
   }
 
   // 着弾点プレビュー(トップビュー専用): 着弾中心マーカー + ばらつき範囲円

@@ -376,9 +376,7 @@ void WikiGolfScene::BeginCupInCelebration(core::GameContext &ctx,
   if (m_hud) m_hud->SetVisible(ctx, false);
   if (m_minimapController) m_minimapController->SetVisible(ctx, false);
   m_slopeVisualization.ForceHide(ctx);
-  for (auto segE : m_guideSegments) {
-    if (auto *mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
-  }
+  if (m_shotGuide) m_shotGuide->Hide(ctx);
 
   XMFLOAT3 cameraPos = holePos;
   if (auto *camT = ctx.world.Get<Transform>(m_cameraEntity)) {

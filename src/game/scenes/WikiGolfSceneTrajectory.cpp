@@ -1,17 +1,21 @@
 /**
  * @file WikiGolfSceneTrajectory.cpp
- * @brief 予測軌道と方向ガイドの更新処理を実装します。
+ * @brief ショット予測表示（予測線・着地点・向き）と傾斜可視化の更新処理を実装します。
 */
 
 #include "WikiGolfScene.h"
 #include "../../core/GameContext.h"
 #include "../../core/Profiler.h"
 #include "../../ecs/World.h"
-#include "../components/MeshRenderer.h"
+#include "../components/PhysicsComponents.h"
 #include "../components/Transform.h"
+#include "../components/WikiComponents.h"
 #include "../controllers/ClubController.h"
-#include "../controllers/TrajectoryPredictor.h"
+#include "../controllers/shotguide/ShotGuideController.h"
 #include "../systems/WikiTerrainSystem.h"
+#include "../utils/CarryDistanceTable.h"
+#include "../utils/GameplayPhysicsConstants.h"
+#include "../utils/ShotGaugeRules.h"
 #include <DirectXMath.h>
 #include <algorithm>
 #include <cmath>
@@ -21,129 +25,108 @@ namespace game::scenes {
 using namespace DirectX;
 using namespace game::components;
 
+namespace {
+
+/** @brief エイムピンが無い待機中に、予測線で見せるパワー（フルスイングの届く先）*/
+constexpr float kIdlePreviewPower = 1.0f;
+/**
+ * @brief 「止まりそうな範囲」に含めるインパクトの出来。
+ * @details Nice までのぶれ（左右と、短くなる距離）を範囲にする。Miss は
+ *          大きく外れる扱いなので範囲には入れない。
+*/
+constexpr auto kZoneJudgement = game::components::ShotJudgement::Nice;
+
+} // namespace
+
 void WikiGolfScene::UpdateTrajectoryAndGuide(
     core::GameContext &ctx, GolfGameState &state, ShotState &shot, float dt,
     bool tutorialInputLocked, bool isMapView) {
-    // 予測軌道アップデート (Idle 時も表示: クラブ切り替えやパワーレビューのため)
-    bool canShowTrajectory = m_trajectoryPredictor && state.canShoot &&
-                             !tutorialInputLocked && !isMapView;
-    if (canShowTrajectory &&
-        (shot.phase == game::components::ShotState::Phase::Idle ||
-         shot.phase == game::components::ShotState::Phase::PowerCharging ||
-         shot.phase == game::components::ShotState::Phase::ImpactTiming)) {
+    // ショット予測表示。シーンの役目は「どこから・どの向きへ・どの強さで」を
+    // 伝えるところまでで、道すじの計算と描画は ShotGuideController が受け持つ。
+    // 全体マップは実カメラの俯瞰なので、同じ表示がそのまま上から見える。
+    if (m_shotGuide) {
         PROFILE_SCOPE("WikiGolf.Trajectory");
-        game::controllers::TrajectoryPredictor::Params tParams;
-        tParams.ballEntity    = m_ballEntity;
-        tParams.arrowEntity   = m_arrowEntity;
-        tParams.shotDirection = DirectX::XMFLOAT3(0, 0, 1);
-        if (m_cameraController) {
-            tParams.shotDirection = m_cameraController->GetShotDirection();
+        using Phase = game::components::ShotState::Phase;
+        game::guide::ShotGuideInput input;
+
+        auto *ballT = ctx.world.Get<Transform>(m_ballEntity);
+        auto *ballRB = ctx.world.Get<RigidBody>(m_ballEntity);
+        bool ballAtRest = true;
+        if (ballRB) {
+            const float speedSq = ballRB->velocity.x * ballRB->velocity.x +
+                                  ballRB->velocity.y * ballRB->velocity.y +
+                                  ballRB->velocity.z * ballRB->velocity.z;
+            ballAtRest = speedSq <= 0.1f * 0.1f;
         }
-        if (m_clubController) {
-            const auto& currentClub = m_clubController->GetCurrentClub();
-            tParams.baseCarryDistance = currentClub.baseCarryDistance;
-            tParams.carryTable        = &currentClub.carryTable;
-            tParams.launchAngle       = currentClub.launchAngle;
-        } else {
-            tParams.launchAngle = 30.0f;
+        const bool aiming = shot.phase == Phase::Idle ||
+                            shot.phase == Phase::PowerCharging ||
+                            shot.phase == Phase::ImpactTiming;
+        input.visible = ballT && m_clubController && state.canShoot &&
+                        !tutorialInputLocked && aiming && ballAtRest;
+
+        if (input.visible) {
+            const auto &club = m_clubController->GetCurrentClub();
+
+            // 見せるパワー: ゲージ中はその値、待機中はエイムピンへ届く強さ、
+            // ピンが無ければフルスイング。
+            float powerRatio = kIdlePreviewPower;
+            if (shot.phase == Phase::PowerCharging) {
+                powerRatio = shot.powerGaugePos;
+            } else if (shot.phase == Phase::ImpactTiming) {
+                powerRatio = shot.confirmedPower;
+            } else if (const auto *pin = ctx.world.GetGlobal<AimPinState>();
+                       pin && pin->active && pin->reachable &&
+                       pin->requiredPowerRatio > 0.01f) {
+                powerRatio = pin->requiredPowerRatio;
+            }
+            powerRatio = std::clamp(powerRatio, 0.0f, 1.0f);
+
+            auto &request = input.request;
+            request.start = ballT->position;
+            request.direction = m_cameraController
+                                    ? m_cameraController->GetShotDirection()
+                                    : XMFLOAT3{0.0f, 0.0f, 1.0f};
+            request.launchAngleDeg = club.launchAngle;
+            const float targetDistance = club.baseCarryDistance * powerRatio;
+            request.speed = game::utils::LookupSpeedForDistance(club.carryTable,
+                                                                targetDistance);
+
+            if (ballRB) {
+                request.ball.drag = ballRB->drag;
+                request.ball.restitution = ballRB->restitution;
+                request.ball.mass = ballRB->mass;
+            }
+            if (const auto *collider = ctx.world.Get<Collider>(m_ballEntity)) {
+                request.ball.ballRadius = collider->radius;
+            }
+            request.ball.rollingFrictionScale = state.rollingFrictionScale;
+            if (!std::isfinite(request.ball.rollingFrictionScale) ||
+                request.ball.rollingFrictionScale < 0.05f) {
+                request.ball.rollingFrictionScale = 1.0f;
+            }
+            request.wind.windSpeed = state.windSpeed;
+            request.wind.windDirection = state.windDirection;
+
+            input.terrain = m_terrainSystem.get();
+            input.energy = powerRatio;
+            input.charging = shot.phase != Phase::Idle;
+            // ぶれの大きさは、実際のショットに使う判定の規則からそのまま取る
+            input.spread.side =
+                game::utils::GetJudgementSideOffset(kZoneJudgement);
+            input.spread.shortBy =
+                1.0f -
+                game::utils::GetJudgementDistanceMultiplier(kZoneJudgement);
+            // 壁や障害物は、狙い始めるたびに集め直す（ページごとに変わる）
+            if (!m_shotGuide->IsVisible()) {
+                m_shotGuideObstacles.Collect(ctx.world);
+            }
+            input.obstacles = &m_shotGuideObstacles;
+            input.obstacleRevision = m_shotGuideObstacles.Revision();
+            // クラブが替わったら、線を手前から描き直す
+            input.contextKey = static_cast<int>(club.launchAngle * 10.0f) * 4096 +
+                               static_cast<int>(club.maxPower * 10.0f);
         }
-        tParams.isMapView     = false;
-        tParams.terrainSystem = m_terrainSystem.get();
-
-        float powerRatio = 0.0f; // Idle 時は 0 (TrajectoryPredictor 内でデフォルト比率を使用)
-        if (shot.phase == game::components::ShotState::Phase::PowerCharging) {
-            powerRatio = shot.powerGaugePos;
-        } else if (shot.phase == game::components::ShotState::Phase::ImpactTiming) {
-            // パワー決定後は、確定したパワーを軌道プレビューへ反映する。
-            powerRatio = shot.confirmedPower;
-        } else if (shot.confirmedPower > 0.0f) {
-            powerRatio = shot.confirmedPower;
-        }
-
-        tParams.powerRatio = std::clamp(powerRatio, 0.0f, 1.0f);
-        m_trajectoryPredictor->Update(ctx, tParams);
-    } else if (m_trajectoryPredictor) {
-        m_trajectoryPredictor->Hide(ctx);
-    }
-
-    // 方向ガイド（流れる矢印アニメーション）
-    {
-      const bool showGuide = !m_guideSegments.empty() &&
-                             (shot.phase == game::components::ShotState::Phase::Idle) &&
-                             state.canShoot && !tutorialInputLocked && !isMapView;
-
-      auto* ballT2 = ctx.world.Get<game::components::Transform>(m_ballEntity);
-      if (showGuide && ballT2) {
-        m_guideAnimTimer += dt;
-
-        DirectX::XMFLOAT3 shotDir{0, 0, 1};
-        if (m_cameraController) {
-          shotDir = m_cameraController->GetShotDirection();
-        }
-        float yaw = std::atan2(shotDir.x, shotDir.z);
-        DirectX::XMVECTOR qRot = DirectX::XMQuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f);
-
-        // 各セグメントをボール前方に等間隔で並べ、色・サイズをグラデーション
-        const int nSeg = static_cast<int>(m_guideSegments.size());
-        const float kSpacing   = 1.05f; // セグメント間隔
-        const float kScrollSpd = 2.0f;  // スクロール速度
-        // アニメーションフェーズ: 0→1 で先頭に向かってスクロール
-        float phase = std::fmod(m_guideAnimTimer * kScrollSpd, 1.0f);
-
-        for (int si = 0; si < nSeg; ++si) {
-          auto* segMR = ctx.world.Get<game::components::MeshRenderer>(m_guideSegments[si]);
-          auto* segT  = ctx.world.Get<game::components::Transform>(m_guideSegments[si]);
-          if (!segMR || !segT) continue;
-
-          // 正規化比率：先端(si=0)＝0, 末尾＝1
-          float nt = 0.0f;
-          if (nSeg > 1) {
-            nt = static_cast<float>(si) / static_cast<float>(nSeg - 1);
-          }
-
-          // スクロールオフセット: 各セグメントが時間経過で前方に流れる
-          float scrolledNt = std::fmod(nt + phase, 1.0f);
-          float dist = 0.6f + scrolledNt * (kSpacing * (float)(nSeg - 1));
-
-          // 送り先位置: ボールせから前方 dist m
-          DirectX::XMVECTOR fwd = DirectX::XMVectorSet(shotDir.x, 0, shotDir.z, 0);
-          DirectX::XMVECTOR segPosV = DirectX::XMVectorAdd(
-              DirectX::XMLoadFloat3(&ballT2->position),
-              DirectX::XMVectorScale(fwd, dist));
-          DirectX::XMFLOAT3 segPos;
-          DirectX::XMStoreFloat3(&segPos, segPosV);
-          // 地面に少し浮かせる
-          if (m_terrainSystem) {
-            segPos.y = m_terrainSystem->GetHeight(segPos.x, segPos.z) + 0.12f;
-          } else {
-            segPos.y = ballT2->position.y + 0.12f;
-          }
-          segT->position = segPos;
-          DirectX::XMStoreFloat4(&segT->rotation, qRot);
-
-          // 先端大く(1.6x)→末尾小さく(0.5x)
-          float thick = 0.18f + (0.06f - 0.18f) * nt;
-          // 先端のセグメントをヒシ形に見せる（scaleXを幅広に）
-          float xScale = thick * (1.0f + (1.0f - nt) * 0.8f);
-          segT->scale = {xScale, thick, 0.50f};
-
-          // 色: 先端白/水色 → 末尾シアン/透明
-          // scrolledNtが0に近いほど「新生」部分なので明るく、大きく表示
-          float alpha = 0.85f - scrolledNt * 0.75f;
-          float r = 0.50f + (1.00f - 0.50f) * (1.0f - scrolledNt);
-          float g = 0.85f + (1.00f - 0.85f) * (1.0f - scrolledNt);
-          float b = 1.00f;
-          segMR->color = {r, g, b, alpha};
-          segMR->isVisible = (alpha > 0.02f);
-        }
-      } else {
-        // 非表示時は全セグメントを隠す
-        for (auto segE : m_guideSegments) {
-          if (auto* segMR = ctx.world.Get<game::components::MeshRenderer>(segE)) {
-            segMR->isVisible = false;
-          }
-        }
-      }
+        m_shotGuide->Update(ctx, input);
     }
 
     // 傾斜可視化（パター保持中、待機中〜ボールが止まるまでグリーンの高低差オーバーレイを表示）

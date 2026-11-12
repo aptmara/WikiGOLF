@@ -176,7 +176,7 @@ inline RulerTicks GetRulerTicks(float maxYards) {
  * 「基本飛距離からの変位」を判定と一貫させます。
  * Specialは狙いどおりの距離(1.0)。最高の判定でピンを越えてしまわないよう、
  * Greatとの差は距離ではなく「完全にまっすぐ飛ぶ」でつける(GetJudgementSideOffset)。
- * 風は予測線(TrajectoryPredictor)と同じ式で効くので、判定で変えない。
+ * 風は予測線(TrajectorySimulation.h)と同じ式で効くので、判定で変えない。
 */
 inline float GetJudgementDistanceMultiplier(
     game::components::ShotJudgement judgement) {

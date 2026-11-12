@@ -13,7 +13,8 @@
 #include "../systems/MapSys.h"
 #include "../systems/ParticleRenderSystem.h"
 #include "../controllers/AimPinController.h"
-#include "../controllers/TrajectoryPredictor.h"
+#include "../controllers/shotguide/ShotGuideController.h"
+#include "../controllers/shotguide/StaticBoxObstacles.h"
 #include "../controllers/BallFastForwardIndicator.h"
 #include "../controllers/BallFastForwardTimer.h"
 #include "../controllers/CameraController.h"
@@ -123,12 +124,6 @@ private:
   /** @brief カメラとボールの間に入った木や岩をドット状フェードで薄くします。*/
   void UpdateCameraOcclusionFade(core::GameContext &ctx, float dt);
 
-  /**
-   * @brief トップビューの着弾点プレビュー(現在クラブのフルスイング着弾予測)を
-   * 計算し、MinimapControllerへ反映します。
-*/
-  void RefreshLandingPreview(core::GameContext &ctx);
-
   /** @brief 現在クラブのフルスイング予測着地点を地面座標で返します。*/
   std::optional<DirectX::XMFLOAT3>
   CalculateFullSwingLandingTarget(core::GameContext &ctx) const;
@@ -158,16 +153,14 @@ private:
   ecs::Entity m_ballEntity = UINT32_MAX;
   ecs::Entity m_floorEntity = UINT32_MAX;
   ecs::Entity m_cameraEntity = UINT32_MAX;
-  ecs::Entity m_arrowEntity = UINT32_MAX;         /**< 矢印表示用（パワーチャージ時）*/
-  std::vector<ecs::Entity> m_guideSegments;       /**< 方向ガイドセグメント（アイドル時流れる矢印）*/
-  float m_guideAnimTimer = 0.0f;                  /**< 方向ガイドアニメーションタイマー*/
   ecs::Entity m_clubModelEntity = UINT32_MAX;
 
   std::unique_ptr<game::controllers::CameraController>    m_cameraController;
   std::unique_ptr<game::controllers::MinimapController>   m_minimapController;
   std::unique_ptr<game::controllers::WikiGolfHUD>          m_hud;
   std::unique_ptr<game::controllers::ClubController>       m_clubController;
-  std::unique_ptr<game::controllers::TrajectoryPredictor>  m_trajectoryPredictor;
+  std::unique_ptr<game::guide::ShotGuideController>        m_shotGuide; /**< 予測線・着地点・向きの表示*/
+  game::guide::StaticBoxObstacles m_shotGuideObstacles; /**< 予測がぶつかる壁・障害物*/
   std::unique_ptr<game::controllers::ShotController>       m_shotController;
   std::unique_ptr<WikiPageLoader>                          m_pageLoader;
   std::unique_ptr<game::controllers::ArticleTransitionController> m_transitionController;

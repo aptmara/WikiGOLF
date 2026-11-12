@@ -60,6 +60,8 @@ struct MeshRenderer {
   // 0以下なら距離LODを無効化する。フラスタムカリングは常に適用される。
   float maxDrawDistance = 0.0f;
   float boundsScale = 1.0f;
+  // 半透明は遠くで描画を打ち切るが、それを受けないか（遠くの着地点を示す予測表示など）。
+  bool keepsVisibleAtDistance = false;
 
   // ミニマップ描画対象への登録（デフォルトは除外）
   MinimapRenderMode minimapMode = MinimapRenderMode::None;

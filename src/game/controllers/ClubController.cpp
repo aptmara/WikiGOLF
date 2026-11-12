@@ -573,7 +573,7 @@ void ClubController::InitializeClubs(core::GameContext &ctx) {
   };
 
   // 各クラブの基準飛距離(平坦・無風フェアウェイ基準)を動的に算出する。
-  // ExecuteShotとTrajectoryPredictorはこの表を通じて「目標飛距離→初速」を
+  // ExecuteShotと予測線(ShotGuidePath)はこの表を通じて「目標飛距離→初速」を
   // 逆引きするため、maxPower/launchAngleを調整すればここも自動で追従する。
   for (auto &club : m_availableClubs) {
     game::physics::BallPhysicsParams ballParams;

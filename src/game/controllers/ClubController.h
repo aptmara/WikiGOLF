@@ -8,7 +8,7 @@
 #include "../../graphics/SkeletalModel.h"
 #include "../../resources/ResourceManager.h"
 #include "../utils/CarryDistanceTable.h"
-#include "TrajectoryPredictor.h"
+#include "../utils/CarryDistanceTable.h"
 #include <DirectXMath.h>
 #include <string>
 #include <vector>

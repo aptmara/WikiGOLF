@@ -4,6 +4,7 @@
  * @brief ミニマップの描画更新・全体マップビューのカメラ/UI制御を担当するコントローラー
 */
 
+#include "shotguide/MinimapGuideOverlay.h"
 #include "../../core/GameContext.h"
 #include "../../ecs/Entity.h"
 #include "../../ecs/EntityOwner.h"
@@ -75,7 +76,8 @@ public:
   /** @brief 右上ミニマップの更新（マーカー等のUI更新と描画リクエストの発行のみ行う）*/
   void UpdateMinimap(core::GameContext &ctx, float fieldWidth,
                      float fieldDepth,
-                     const std::vector<ecs::Entity> &trajectoryEntities);
+                     const game::guide::ShotGuidePath *guidePath,
+                     const game::guide::ShotGuideZone *guideZone);
 
   /** @brief 右下固定マップ内のスクリーン座標を地表ワールド座標へ変換します。*/
   bool TryGetHudMapWorldPosition(core::GameContext &ctx, int mouseX,
@@ -229,7 +231,7 @@ private:
   ecs::Entity m_minimapBallIconEntity = UINT32_MAX;    ///< 自ボール用画像アイコンです。
   ecs::Entity m_minimapPulseMarkerEntity = UINT32_MAX; ///< 自ボール用外側パルスサークル（○）
   ecs::Entity m_aimPinMarkerEntity = UINT32_MAX;       ///< エイムピン(中クリック設置)用マーカー
-  std::vector<ecs::Entity> m_minimapGuideDotEntities;  ///< ショット方向案内用のドット配列（·）
+  game::guide::MinimapGuideOverlay m_guideOverlay; ///< ショット予測（流れる破線・着地点・静止点）
   ecs::Entity m_minimapHelpEntity = UINT32_MAX;
   ecs::Entity m_minimapKeyHintEntity = UINT32_MAX;     ///< マップ切替用Mキー画像
   ecs::Entity m_mapViewportBoundsEntity = UINT32_MAX;  ///< マップビューの表示範囲枠

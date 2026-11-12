@@ -657,6 +657,17 @@ if(MSVC)
 endif()
 add_test(NAME trajectory_simulation COMMAND test_trajectory_simulation)
 
+# ショット予測表示の道すじ計算・動き・配色
+add_executable(test_shot_guide_path test_shot_guide_path.cpp)
+target_precompile_headers(test_shot_guide_path REUSE_FROM wikigolf_pch)
+target_include_directories(test_shot_guide_path PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_shot_guide_path PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                        -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_shot_guide_path PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME shot_guide_path COMMAND test_shot_guide_path)
+
 # エイムピンの必要パワー逆算（高低差の織り込み）
 add_executable(test_aim_pin_solver test_aim_pin_solver.cpp)
 target_precompile_headers(test_aim_pin_solver REUSE_FROM wikigolf_pch)

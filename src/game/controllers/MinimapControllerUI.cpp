@@ -124,23 +124,8 @@ void MinimapController::InitializeUI(core::GameContext &ctx) {
   aimPinMarker.layer = game::ui::kLayerMarker + 3;
   aimPinMarker.visible = false;
 
-  // 実軌道を右下マップへ投影する最前面ドット列。
-  m_minimapGuideDotEntities.clear();
-  for (int i = 0; i < 30; ++i) {
-    auto dotEntity = m_entityOwner.Create(ctx.world);
-    auto &dot = ctx.world.Add<UIText>(dotEntity);
-    dot.text = L"●";
-    dot.x = 0.0f;
-    dot.y = 0.0f;
-    dot.style = graphics::TextStyle::Guide();
-    dot.width = 8.0f;
-    dot.height = 8.0f;
-    dot.style.fontSize = 8.0f;
-    dot.style.color = {0.75f, 0.95f, 1.0f, 0.95f};
-    dot.layer = game::ui::kLayerMarker + 8;
-    dot.visible = false;
-    m_minimapGuideDotEntities.push_back(dotEntity);
-  }
+  // ショット予測を右下マップへ重ねる（地形・ホールより前、ボールのアイコンより後ろ）。
+  m_guideOverlay.Initialize(ctx, game::ui::kLayerMarker);
 
   m_holeHoverLabelEntity = m_entityOwner.Create(ctx.world);
   auto &holeHover = ctx.world.Add<UIText>(m_holeHoverLabelEntity);

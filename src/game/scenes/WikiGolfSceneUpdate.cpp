@@ -328,10 +328,11 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   ctx, mouseX, mouseY, fieldW, fieldD, m_skyboxEntity);
           }
       }
-      static const std::vector<ecs::Entity> noTrajectory;
-      const auto &trajectoryEntities = m_trajectoryPredictor
-                                           ? m_trajectoryPredictor->GetDots()
-                                           : noTrajectory;
+      // ミニマップへ重ねる道すじ（1つ前のフレームで表示したもの）
+      const game::guide::ShotGuidePath *guidePath =
+          m_shotGuide ? m_shotGuide->GetVisiblePath() : nullptr;
+      const game::guide::ShotGuideZone *guideZone =
+          m_shotGuide ? m_shotGuide->GetVisibleZone() : nullptr;
       const bool mapViewNow = m_minimapController->IsMapView();
       if (mapViewNow) {
           // 全体マップビューは実カメラの透視投影でマーカーを再計算するため、
@@ -340,14 +341,14 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           // 投影してしまい、動かすほどズレが目立つ。間引きも行わず毎フレーム
           // 追従させる。
           m_minimapController->UpdateMapCamera(ctx, fieldW, fieldD);
-          m_minimapController->UpdateMinimap(ctx, fieldW, fieldD,
-                                              trajectoryEntities);
+          m_minimapController->UpdateMinimap(ctx, fieldW, fieldD, guidePath,
+                                              guideZone);
       } else {
           constexpr float kMinimapInterval = 1.0f / 30.0f;
           m_minimapUpdateTimer += dt;
           if (m_minimapUpdateTimer >= kMinimapInterval) {
               m_minimapController->UpdateMinimap(ctx, fieldW, fieldD,
-                                                  trajectoryEntities);
+                                                  guidePath, guideZone);
               m_minimapUpdateTimer = 0.0f;
           }
       }

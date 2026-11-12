@@ -484,7 +484,7 @@ void SimulatePhysicsSubsteps(PhysicsUpdateContext &frame) {
         acc = XMVectorAdd(acc, dragAcc);
       }
 
-      // 風をボールにのみ適用する。TrajectoryPredictor::Predict の予測式と
+      // 風をボールにのみ適用する。予測線(TrajectorySimulation.h)の式と
       // 同じ計算式に揃え、狙い線と実際の飛球のズレを解消する。
       if (golfState && body.entity == ballEntity && golfState->windSpeed > 0.0f) {
         float windForce = golfState->windSpeed * 0.1f;

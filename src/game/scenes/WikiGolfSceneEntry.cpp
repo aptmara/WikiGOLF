@@ -165,37 +165,6 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
   camComp.nearZ = 0.1f;
   camComp.farZ = 750.0f;
 
-  m_arrowEntity = CreateEntity(ctx.world);
-  auto &at = ctx.world.Add<Transform>(m_arrowEntity);
-  at.scale = {0.0f, 0.0f, 0.0f};
-
-  // 方向ガイドセグメント（流れる矢印）の作成
-  // kGuideSegCount 個の cube を前方に並べ、アニメーションで流れるように見せる
-  static constexpr int kGuideSegCount = 7;
-  m_guideSegments.clear();
-  m_guideSegments.reserve(kGuideSegCount);
-  for (int gi = 0; gi < kGuideSegCount; ++gi) {
-    auto ge = CreateEntity(ctx.world);
-    auto &gt_ = ctx.world.Add<Transform>(ge);
-    gt_.scale = {0.12f, 0.12f, 0.45f};
-
-    auto &gmr = ctx.world.Add<game::components::MeshRenderer>(ge);
-    gmr.mesh   = ctx.resource.LoadMesh("builtin/cube");
-    gmr.shader = ctx.resource.LoadShader("Basic",
-                   L"Assets/shaders/BasicVS.hlsl",
-                   L"Assets/shaders/BasicPS.hlsl");
-    gmr.color = {0.55f, 0.90f, 1.00f, 0.60f}; // 初期色はアニメーションで上書きされる
-    gmr.isTransparent = true;
-    gmr.isVisible = false;
-    m_guideSegments.push_back(ge);
-  }
-
-  auto &amr = ctx.world.Add<MeshRenderer>(m_arrowEntity);
-  amr.mesh = ctx.resource.LoadMesh("builtin/cube");
-  amr.shader = ctx.resource.LoadShader("Basic", L"Assets/shaders/BasicVS.hlsl", L"Assets/shaders/BasicPS.hlsl");
-  amr.color = {1.0f, 0.4f, 0.2f, 1.0f};
-  amr.isVisible = false;
-
   PROFILE_SECTION(sections, "OnEnter.GameJuice");
   m_gameJuice = std::make_unique<game::systems::GameJuiceSystem>();
   m_gameJuice->Initialize(ctx);
@@ -575,9 +544,9 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
                state->shortestHops);
   }
 
-  PROFILE_SECTION(sections, "OnEnter.TrajectoryPredictor");
-  m_trajectoryPredictor = std::make_unique<game::controllers::TrajectoryPredictor>();
-  m_trajectoryPredictor->Initialize(ctx, 30);
+  PROFILE_SECTION(sections, "OnEnter.ShotGuide");
+  m_shotGuide = std::make_unique<game::guide::ShotGuideController>();
+  m_shotGuide->Initialize(ctx);
 
   PROFILE_SECTION(sections, "OnEnter.TransitionController");
   m_shotController = std::make_unique<game::controllers::ShotController>();
@@ -591,10 +560,7 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
       // ロード中は地球儀のみ表示するためHUD/ミニマップを非表示
       if (m_hud) m_hud->SetVisible(ctx, false);
       if (m_minimapController) m_minimapController->SetVisible(ctx, false);
-      // 方向ガイドセグメントを非表示
-      for (auto segE : m_guideSegments) {
-        if (auto* mr = ctx.world.Get<MeshRenderer>(segE)) mr->isVisible = false;
-      }
+      if (m_shotGuide) m_shotGuide->Hide(ctx);
       m_slopeVisualization.ForceHide(ctx);
       if (m_isTutorial) {
         m_transitionController->RequestDirectArrival();

@@ -414,6 +414,7 @@ void RenderSystem(core::GameContext &ctx) {
   auto basicHandle = ctx.resource.FindShader("Basic");
   auto particleHandle = ctx.resource.FindShader("Particle");
   auto trailHandle = ctx.resource.FindShader("Trail");
+  auto shotGuideHandle = ctx.resource.FindShader("ShotGuide"); // ショット予測表示
   auto particleQuad = ctx.resource.LoadMesh("builtin/quad");
   auto flagClothHandle = ctx.resource.FindShader("FlagCloth");
   auto terrainHandle = ctx.resource.FindShader("Terrain");
@@ -629,6 +630,7 @@ void RenderSystem(core::GameContext &ctx) {
               world.Has<components::TerrainObject>(e) &&
               r.blendMode == components::BlendMode::Multiply;
           if (!isBoundaryWall && distSq > 220.0f * 220.0f &&
+              !r.keepsVisibleAtDistance &&
               !world.Has<components::HoleFlag>(e) && !keepsReadableOverlay) {
             ++stats.transparentDistanceSkipped;
             return;
@@ -706,7 +708,7 @@ void RenderSystem(core::GameContext &ctx) {
           inst.flags.x = 1.0f; // テクスチャを使わない粒子ではビルボード指定。
           key.twoSided = true;
         }
-        if (r.shader == trailHandle) {
+        if (r.shader == trailHandle || r.shader == shotGuideHandle) {
           key.twoSided = true;
         }
 
@@ -807,6 +809,7 @@ void RenderSystem(core::GameContext &ctx) {
     const bool supportsInstancing =
         (key.shader == basicHandle || key.shader == particleHandle ||
          key.shader == trailHandle ||
+         key.shader == shotGuideHandle ||
          key.shader == flagClothHandle ||
          key.shader == golfBallHandle);
 
@@ -938,6 +941,7 @@ void RenderSystem(core::GameContext &ctx) {
       if (key.isTransparent) {
         if (key.shader == particleHandle) return "GPU.Meshes.Transparent.Particle";
         if (key.shader == trailHandle) return "GPU.Meshes.Transparent.Trail";
+        if (key.shader == shotGuideHandle) return "GPU.Meshes.Transparent.ShotGuide";
         if (key.shader == basicHandle) return "GPU.Meshes.Transparent.Basic";
         if (key.shader == golfBallHandle) return "GPU.Meshes.Transparent.GolfBall";
         if (key.shader == wallHandle) return "GPU.Meshes.Transparent.Wall";
