@@ -72,6 +72,14 @@ void MinimapController::ToggleMapView(core::GameContext &ctx, ecs::Entity skybox
     m_mapHelpVisible = false;
   } else {
     m_mapOpenHintTimer = 0.0f;
+    // 操作ヘルプ（?）も閉じる。HUD を隠した状態で閉じても残らないよう即座に非表示にする
+    m_mapHelpVisible = false;
+    m_mapHelpFadeAlpha = 0.0f;
+    if (auto* helpBg = ctx.world.Get<UIText>(m_mapHelpPanelBg)) helpBg->visible = false;
+    if (auto* helpTitle = ctx.world.Get<UIText>(m_mapHelpTitle)) helpTitle->visible = false;
+    for (auto lineE : m_mapHelpLines) {
+      if (auto* line = ctx.world.Get<UIText>(lineE)) line->visible = false;
+    }
     if (auto* openBg = ctx.world.Get<UIText>(m_mapOpenHintBg)) openBg->visible = false;
     if (auto* openTxt = ctx.world.Get<UIText>(m_mapOpenHintText)) openTxt->visible = false;
 

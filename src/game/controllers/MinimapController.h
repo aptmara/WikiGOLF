@@ -194,6 +194,7 @@ private:
   float m_mapBoundaryHitTime = 0.0f;
   float m_markerPulseTimer = 0.0f;
   bool m_mapHelpVisible = false;
+  float m_mapHelpFadeAlpha = 0.0f; ///< 操作ヘルプパネルのフェード中の不透明度
   InputActivity m_inputActivity;
   bool m_isVisible = true; ///< HUDの表示状態です。ロード中の更新再表示を防ぎます。
 
