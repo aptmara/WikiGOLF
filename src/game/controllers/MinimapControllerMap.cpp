@@ -589,13 +589,17 @@ void MinimapController::UpdateMinimap(
   }
 
   // 操作ヘルプパネルのフェード処理
-  static float helpFadeAlpha = 0.0f;
-  float targetHelpAlpha = 0.0f;
-  if (m_mapHelpVisible) {
-    targetHelpAlpha = 1.0f;
+  // マップビュー外では即座に消す（閉じた後にパネルが残らないように）
+  if (!m_isMapView) {
+    m_mapHelpVisible = false;
+    m_mapHelpFadeAlpha = 0.0f;
+  } else {
+    const float targetHelpAlpha = m_mapHelpVisible ? 1.0f : 0.0f;
+    const float fadeSpeed = game::ui::kFadeSpeed;
+    m_mapHelpFadeAlpha +=
+        (targetHelpAlpha - m_mapHelpFadeAlpha) * fadeSpeed * ctx.dt;
   }
-  float fadeSpeed = game::ui::kFadeSpeed;
-  helpFadeAlpha += (targetHelpAlpha - helpFadeAlpha) * fadeSpeed * ctx.dt;
+  const float helpFadeAlpha = m_mapHelpFadeAlpha;
 
   bool shouldShowHelp = helpFadeAlpha > 0.01f;
 
