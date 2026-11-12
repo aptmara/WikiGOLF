@@ -90,6 +90,9 @@ private:
   /** @brief 現在の状態で前ページへ戻れるか判定します。*/
   bool CanReturnToPreviousPage(core::GameContext &ctx) const;
 
+  /** @brief いま前ページへ戻ったときの罰打(行き止まりの記事なら0)を返します。*/
+  int GetReturnToPreviousPagePenalty() const;
+
   /** @brief ポーズメニューを開きます。*/
   void OpenPauseScene(core::GameContext &ctx);
 

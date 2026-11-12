@@ -243,8 +243,7 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
         }
 
         if (m_data.isDailyChallenge) {
-          title_scene_detail::ResetDailyChallengeStartData(ctx,
-                                                           m_data.isOniMode);
+          title_scene_detail::ResetDailyChallengeStartData(ctx);
           auto loadingScene = std::make_unique<LoadingScene>(
               []() { return std::make_unique<WikiGolfScene>(false); });
           ctx.sceneManager->ChangeScene(std::move(loadingScene));
@@ -265,7 +264,7 @@ void ResultScene::OnUpdate(core::GameContext &ctx) {
   // ショートカットキー入力を処理します。(体験版ではリトライ不可)
   if (!core::kTrialBuild && ctx.input.GetKeyDown('R')) {
     if (m_data.isDailyChallenge) {
-      title_scene_detail::ResetDailyChallengeStartData(ctx, m_data.isOniMode);
+      title_scene_detail::ResetDailyChallengeStartData(ctx);
       auto loadingScene = std::make_unique<LoadingScene>(
           []() { return std::make_unique<WikiGolfScene>(false); });
       ctx.sceneManager->ChangeScene(std::move(loadingScene));

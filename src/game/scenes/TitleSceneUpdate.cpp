@@ -297,7 +297,7 @@ void TitleScene::OnUpdate(core::GameContext &ctx) {
   }
   if (startDailyChallenge) {
     StopIntroAudio(ctx);
-    title_scene_detail::ResetDailyChallengeStartData(ctx, m_oniMode);
+    title_scene_detail::ResetDailyChallengeStartData(ctx);
     auto loadingScene = std::make_unique<LoadingScene>(
         []() { return std::make_unique<WikiGolfScene>(false); });
     ctx.sceneManager->ChangeScene(std::move(loadingScene));

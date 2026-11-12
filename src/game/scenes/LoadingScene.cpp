@@ -113,6 +113,10 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
       overrideIsUserOverride = globalData->isUserOverride;
       overrideIsDailyChallenge = globalData->isDailyChallenge;
       overrideDailyChallengeSeed = globalData->dailyChallengeSeed;
+      // デイリーは全員同じ条件にするため、常に通常モードで遊ぶ。
+      if (overrideIsDailyChallenge) {
+        overrideIsOniMode = false;
+      }
       LOG_INFO("LoadingScene", "Found overridden global data: Start={}, Target={}", overrideStartPage, overrideTargetPage);
     } else {
       LOG_INFO("LoadingScene", "No explicit start data. Standard random selection will run.");

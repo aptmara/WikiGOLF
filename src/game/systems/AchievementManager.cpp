@@ -109,6 +109,9 @@ void AchievementManager::OnHoleCleared(const AchievementEvent &event) {
   if (ShouldUnlockBirdie(event.shotCount, event.par)) {
     TryUnlock(AchievementId::Birdie);
   }
+  if (ShouldUnlockEagle(event.shotCount, event.par)) {
+    TryUnlock(AchievementId::Eagle);
+  }
   if (ShouldUnlockParFirstTry(event.shotCount, event.par)) {
     TryUnlock(AchievementId::ParFirstTry);
   }
