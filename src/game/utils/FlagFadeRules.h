@@ -77,4 +77,72 @@ inline float CalculateFlagFadeAlpha(
       CalculateFlagFadeAlpha(cameraPosition, flagPosition, ballPosition));
 }
 
+inline float CalculateBillboardFadeAlpha(
+    const DirectX::XMFLOAT3 &cameraPosition,
+    const DirectX::XMFLOAT3 &billboardPosition,
+    const DirectX::XMFLOAT4 &billboardRotation,
+    const DirectX::XMFLOAT3 &billboardScale,
+    const DirectX::XMFLOAT3 &targetPosition) {
+  using namespace DirectX;
+
+  const XMVECTOR camera = XMLoadFloat3(&cameraPosition);
+  const XMVECTOR position = XMLoadFloat3(&billboardPosition);
+  const float cameraDistance = XMVectorGetX(
+      XMVector3Length(XMVectorSubtract(position, camera)));
+  const float proximityAlpha = SmoothStep(
+      kFlagFadeHiddenDistance, kFlagFadeVisibleDistance, cameraDistance);
+
+  const XMVECTOR inverseRotation =
+      XMQuaternionInverse(XMLoadFloat4(&billboardRotation));
+  auto toLocal = [&](const XMFLOAT3 &worldPosition) {
+    const XMVECTOR offset =
+        XMVectorSubtract(XMLoadFloat3(&worldPosition), position);
+    return XMVector3Rotate(offset, inverseRotation);
+  };
+
+  const XMVECTOR localCamera = toLocal(cameraPosition);
+  const XMVECTOR localTarget = toLocal(targetPosition);
+  const XMVECTOR segment = XMVectorSubtract(localTarget, localCamera);
+  const float segmentZ = XMVectorGetZ(segment);
+  if (std::fabs(segmentZ) <= 1e-6f) {
+    return proximityAlpha;
+  }
+
+  const float intersectionT = -XMVectorGetZ(localCamera) / segmentZ;
+  if (intersectionT <= 0.0f || intersectionT >= 1.0f) {
+    return proximityAlpha;
+  }
+
+  const XMVECTOR intersection =
+      XMVectorAdd(localCamera, XMVectorScale(segment, intersectionT));
+  const float halfWidth = std::fabs(billboardScale.x) * 0.5f;
+  const float halfHeight = std::fabs(billboardScale.y) * 0.5f;
+  const float distanceX =
+      (std::max)(std::fabs(XMVectorGetX(intersection)) - halfWidth, 0.0f);
+  const float distanceY =
+      (std::max)(std::fabs(XMVectorGetY(intersection)) - halfHeight, 0.0f);
+  const float rectangleDistance =
+      std::sqrt(distanceX * distanceX + distanceY * distanceY);
+  const float occlusionAlpha = SmoothStep(
+      kFlagOcclusionHiddenRadius, kFlagOcclusionVisibleRadius,
+      rectangleDistance);
+  return (std::min)(proximityAlpha, occlusionAlpha);
+}
+
+inline float CalculateBillboardFadeAlpha(
+    const DirectX::XMFLOAT3 &cameraPosition,
+    const DirectX::XMFLOAT3 &billboardPosition,
+    const DirectX::XMFLOAT4 &billboardRotation,
+    const DirectX::XMFLOAT3 &billboardScale,
+    const DirectX::XMFLOAT3 &golferPosition,
+    const DirectX::XMFLOAT3 &ballPosition) {
+  return (std::min)(
+      CalculateBillboardFadeAlpha(
+          cameraPosition, billboardPosition, billboardRotation,
+          billboardScale, golferPosition),
+      CalculateBillboardFadeAlpha(
+          cameraPosition, billboardPosition, billboardRotation,
+          billboardScale, ballPosition));
+}
+
 } // namespace game::utils
