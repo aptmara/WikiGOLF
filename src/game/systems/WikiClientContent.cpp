@@ -51,6 +51,33 @@ std::string WikiClient::FetchPageThumbnail(const std::string &title,
   return images.empty() ? "" : thumbSrc;
 }
 
+bool WikiClient::FetchPageLengths(const std::vector<std::string> &titles,
+                                  std::vector<int> &lengths) {
+  lengths.clear();
+  constexpr size_t kMaxTitlesPerRequest = 50;
+  for (size_t begin = 0; begin < titles.size();
+       begin += kMaxTitlesPerRequest) {
+    const size_t end = std::min(titles.size(), begin + kMaxTitlesPerRequest);
+    std::string joined;
+    for (size_t i = begin; i < end; ++i) {
+      if (!joined.empty()) {
+        joined += "%7C";
+      }
+      joined += UrlEncode(titles[i]);
+    }
+    const std::wstring path = L"/w/api.php?action=query&prop=info&redirects=1"
+                              L"&format=json&formatversion=2&titles=" +
+                              core::ToWString(joined);
+    const std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
+    if (response.find("\"query\"") == std::string::npos) {
+      return false;
+    }
+    const auto chunk = wiki_json::ParsePageInfoLengths(response);
+    lengths.insert(lengths.end(), chunk.begin(), chunk.end());
+  }
+  return true;
+}
+
 std::string WikiClient::FetchPageExtract(const std::string &title,
                                          int lengthLimit) {
   std::string encodedTitle = UrlEncode(title);

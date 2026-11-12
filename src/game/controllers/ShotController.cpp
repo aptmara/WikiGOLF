@@ -275,6 +275,7 @@ void ShotController::ExecuteShot(core::GameContext& ctx,
     if (!state || !shot) return;
 
     state->shotCount++;
+    state->totalShotCount++;
 
     auto feedback = game::utils::BuildJudgeFeedback(shot->judgement);
 

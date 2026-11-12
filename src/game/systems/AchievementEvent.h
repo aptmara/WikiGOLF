@@ -37,6 +37,7 @@ struct AchievementEvent {
   int par = 0;
   int clearTimeMs = 0;
   int hopCount = 0; ///< pathHistory.size() - 1 相当（実際に辿ったリンク数）
+  int shortestHops = -1; ///< ラウンド開始時の最短リンク数(-1=不明)
 
   // ShotJudged で使用
   game::components::ShotJudgement judgement =

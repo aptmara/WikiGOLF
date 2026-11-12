@@ -17,6 +17,7 @@
 #include "../components/Transform.h"
 #include "../components/WikiComponents.h"
 #include "../controllers/MinimapController.h"
+#include "../utils/ArticleWind.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include <algorithm>
 #include <chrono>
@@ -505,15 +506,13 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::SetupWind:
     {
-        float windSpeed = 0.0f;
-        if (m_buildData.articleText.length() > 2000)
-            windSpeed = 3.0f + (float)(rand() % 20) / 10.0f;
-        else if (m_buildData.articleText.length() > 500)
-            windSpeed = 1.0f + (float)(rand() % 20) / 10.0f;
-
-        float windAngle    = (float)(rand() % 360) * 3.14159f / 180.0f;
-        state->windSpeed   = windSpeed;
-        state->windDirection = {cosf(windAngle), sinf(windAngle)};
+        // デイリーは「日付seed+記事名」で決め、同じ日の同じ記事なら誰でも同じ風にする。
+        const auto wind = game::utils::ComputeArticleWind(
+            m_buildData.articleText.length(),
+            state->isDailyChallenge ? state->dailySeed : 0u,
+            m_buildData.pageName);
+        state->windSpeed     = wind.speed;
+        state->windDirection = {wind.directionX, wind.directionY};
 
         state->currentPage = m_buildData.pageName;
         state->pathHistory.push_back(m_buildData.pageName);

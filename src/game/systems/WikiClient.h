@@ -63,6 +63,12 @@ public:
 */
   std::string FetchRandomPageTitle();
 
+  /**
+   * @brief Wikipediaのサーバー時刻からUTC日付seedを取得します(デイリー用)。
+   * @return 日付seed(取得できなければ0)
+  */
+  std::uint32_t FetchServerDateSeed();
+
   /** @brief 直前のランダム記事取得時にWikipediaが返したUTC日付seedです。 */
   std::uint32_t GetLastServerDateSeed() const { return m_lastServerDateSeed; }
 
@@ -103,6 +109,16 @@ public:
    * @return サムネイルURL（取得できなければ空文字列）
 */
   std::string FetchPageThumbnail(const std::string &title, int thumbSize = 256);
+
+  /**
+   * @brief 記事長(ウィキテキストのバイト数)をまとめて取得します(prop=info)。
+   * @param titles 記事タイトル(最大50件ずつ問い合わせる)
+   * @param lengths 存在した記事の記事長。転送やリダイレクトで同じ記事に
+   *                まとまった分と、存在しない記事の分は含まれない。
+   * @return 通信と応答の読み取りにすべて成功したらtrue
+  */
+  bool FetchPageLengths(const std::vector<std::string> &titles,
+                        std::vector<int> &lengths);
 
   /**
    * @brief 記事の全文（プレーンテキスト）を取得します

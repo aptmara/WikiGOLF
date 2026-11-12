@@ -411,5 +411,33 @@ std::string StripHtmlToPlainText(const std::string &html) {
   return DecodeHtmlEntities(out);
 }
 
+std::vector<int> ParsePageInfoLengths(const std::string& response) {
+  static const std::string kKey = "\"length\":";
+  std::vector<int> lengths;
+  size_t pos = response.find(kKey);
+  while (pos != std::string::npos) {
+    size_t i = pos + kKey.size();
+    while (i < response.size() &&
+           std::isspace(static_cast<unsigned char>(response[i]))) {
+      ++i;
+    }
+    long long value = 0;
+    size_t digits = 0;
+    while (i < response.size() &&
+           std::isdigit(static_cast<unsigned char>(response[i])) &&
+           digits < 10) {
+      value = value * 10 + (response[i] - '0');
+      ++i;
+      ++digits;
+    }
+    if (digits > 0) {
+      lengths.push_back(static_cast<int>(
+          std::min<long long>(value, std::numeric_limits<int>::max())));
+    }
+    pos = response.find(kKey, i);
+  }
+  return lengths;
+}
+
 } // namespace game::systems::wiki_json
 

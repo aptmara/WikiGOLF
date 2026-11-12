@@ -273,11 +273,12 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         // ResultSceneへ遷移
         ResultData data;
         data.targetPage = state->targetPage;
-        data.shotCount = state->shotCount;
+        data.shotCount = state->totalShotCount;
         data.clearTimeMs = clearTimeMs;
         data.isDailyChallenge = state->isDailyChallenge;
+        data.dailyPracticeReason = state->dailyPracticeReason;
         data.isOniMode = state->isOniMode;
-        data.par = state->par;
+        data.par = state->roundPar;
         data.pathHistory = state->pathHistory;
         data.visitedRoute = state->visitedRoute;
         data.shortestRoute = std::make_shared<ResultRouteSearch>();
@@ -297,7 +298,7 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         if (ctx.achievements) {
           const auto &progress = ctx.achievements->GetProgress();
           const bool betterStrokes = progress.bestStrokes <= 0 ||
-                                     state->shotCount < progress.bestStrokes;
+                                     state->totalShotCount < progress.bestStrokes;
           const bool betterTime = state->isDailyChallenge &&
                                   (progress.bestClearTimeMs <= 0 ||
                                    clearTimeMs < progress.bestClearTimeMs);
@@ -315,8 +316,9 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
           holeCleared.isDailyChallenge = state->isDailyChallenge;
           holeCleared.isFreePlay = state->isFreePlay;
           holeCleared.isTutorial = false;
-          holeCleared.shotCount = state->shotCount;
-          holeCleared.par = state->par;
+          holeCleared.shotCount = state->totalShotCount;
+          holeCleared.par = state->roundPar;
+          holeCleared.shortestHops = state->shortestHops;
           holeCleared.clearTimeMs = clearTimeMs;
           holeCleared.hopCount = hopCount;
           ctx.achievementEvents->Publish(holeCleared);

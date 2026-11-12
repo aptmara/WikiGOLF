@@ -238,6 +238,21 @@ std::string WikiClient::SendGetRequest(HINTERNET hConnect,
   return response;
 }
 
+std::uint32_t WikiClient::FetchServerDateSeed() {
+  m_lastServerDateSeed = 0;
+  const std::string response = PerformGetRequest(
+      L"ja.wikipedia.org",
+      L"/w/api.php?action=query&curtimestamp=1&format=json&formatversion=2");
+  constexpr std::string_view timestampField = "\"curtimestamp\":\"";
+  const size_t timestampPosition = response.find(timestampField);
+  if (timestampPosition != std::string::npos) {
+    m_lastServerDateSeed = ParseDailyChallengeSeed(
+        std::string_view(response).substr(timestampPosition +
+                                           timestampField.size()));
+  }
+  return m_lastServerDateSeed;
+}
+
 std::string WikiClient::FetchRandomPageTitle() {
   // 除外対象を引いたら引き直す。全記事の数%程度なので、連続で当たることはまず無い。
   constexpr int kMaxAttempts = 10;

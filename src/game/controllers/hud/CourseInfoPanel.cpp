@@ -35,6 +35,19 @@ void SetTextVisible(ecs::World &world, ecs::Entity entity, bool visible) {
   text->visible = visible;
 }
 
+/**
+ * @brief 打数の行を「通算 5打 / パー9 ・ この記事 2打」の形にします。
+ * @details パーが不明(0)のときはパーを出さない。
+*/
+std::wstring FormatScore(int totalShots, int roundPar, int pageShots) {
+  std::wstring text = L"通算 " + std::to_wstring(totalShots) + L"打";
+  if (roundPar > 0) {
+    text += L" / パー" + std::to_wstring(roundPar);
+  }
+  text += L" ・ この記事 " + std::to_wstring(pageShots) + L"打";
+  return text;
+}
+
 } // namespace
 
 void CourseInfoPanel::Initialize(core::GameContext &ctx) {
@@ -125,6 +138,31 @@ void CourseInfoPanel::Initialize(core::GameContext &ctx) {
   ApplyCourseInfoAttributionStyle(attribution.style);
   attribution.visible = true;
   attribution.layer = game::ui::kLayerBrowser + 1;
+
+  const float scoreY = y + kRowHeight * 2.0f + 32.0f;
+  m_entities.scoreLabel = m_entityOwner.Create(ctx.world);
+  auto &scoreLabel =
+      ctx.world.Add<game::components::UIText>(m_entities.scoreLabel);
+  scoreLabel.text = L"打数";
+  scoreLabel.x = x;
+  scoreLabel.y = scoreY + 4.0f;
+  scoreLabel.width = kLabelWidth;
+  scoreLabel.height = 26.0f;
+  ApplyCourseInfoLabelStyle(scoreLabel.style);
+  scoreLabel.visible = true;
+  scoreLabel.layer = game::ui::kLayerBrowser + 1;
+
+  m_entities.scoreValue = m_entityOwner.Create(ctx.world);
+  auto &scoreValue =
+      ctx.world.Add<game::components::UIText>(m_entities.scoreValue);
+  scoreValue.text = FormatScore(0, 0, 0);
+  scoreValue.x = x + kLabelWidth;
+  scoreValue.y = scoreY;
+  scoreValue.width = kPanelWidth - kLabelWidth;
+  scoreValue.height = 30.0f;
+  ApplyCourseInfoNameStyle(scoreValue.style);
+  scoreValue.visible = true;
+  scoreValue.layer = game::ui::kLayerBrowser + 1;
 }
 
 void CourseInfoPanel::Update(
@@ -132,6 +170,11 @@ void CourseInfoPanel::Update(
     const game::components::GolfGameState &state) {
   SetPages(ctx, core::ToWString(state.currentPage),
            core::ToWString(state.targetPage));
+  if (auto *text =
+          ctx.world.Get<game::components::UIText>(m_entities.scoreValue)) {
+    SetTextIfChanged(*text, FormatScore(state.totalShotCount, state.roundPar,
+                                        state.shotCount));
+  }
 }
 
 void CourseInfoPanel::SetPages(core::GameContext &ctx,
@@ -155,6 +198,8 @@ void CourseInfoPanel::SetVisible(core::GameContext &ctx, bool visible) {
   SetTextVisible(ctx.world, m_entities.targetPage, visible);
   SetTextVisible(ctx.world, m_entities.targetRule, visible);
   SetTextVisible(ctx.world, m_entities.attribution, visible);
+  SetTextVisible(ctx.world, m_entities.scoreLabel, visible);
+  SetTextVisible(ctx.world, m_entities.scoreValue, visible);
 }
 
 void CourseInfoPanel::SetOpacity(core::GameContext &ctx, float opacity) {
