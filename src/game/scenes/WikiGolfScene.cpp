@@ -206,11 +206,18 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
       if (ctx.audio) {
         ctx.audio->PlaySE(ctx, "se_cupin.mp3");
 
-        // ホールインワン判定（1打目でターゲット到達）
-        if (hole->isTarget && state->shotCount == 1) {
-            ctx.audio->PlaySE(ctx, "se_holeInOne.mp3", 1.0f);
-        } else if (hole->isTarget) {
+        // お祝いジングルはカップイン1回につき1曲だけ流す（重ねると二重に聞こえる）。
+        // ゴール記事に入ったときは打数に関係なくゴール用の曲にする。
+        const char *jinglePath = "Assets/sounds/se_goal.mp3";
+        if (hole->isTarget) {
+          jinglePath = "Assets/sounds/se_holeInOne.mp3";
+          if (state->shotCount != 1) {
             ctx.audio->PlaySE(ctx, "se_shot_hard.mp3", 0.8f); // ターゲット到達音
+          }
+        }
+        // チュートリアルのリンク穴は演出なしですぐ遷移するので流さない
+        if (hole->isTarget || !m_isTutorial) {
+          ctx.audio->PlayJingleWithBgmDuck(ctx, "GoalJingle", jinglePath);
         }
       }
 
@@ -238,11 +245,6 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
 
         // gameCleared をセット: TutorialStep::CupIn の完了判定が依存する
         state->gameCleared = true;
-
-        if (ctx.audio) {
-          ctx.audio->PlayJingleWithBgmDuck(
-              ctx, "GoalJingle", "Assets/sounds/se_goal.mp3");
-        }
 
         // チュートリアル中はゴール検知をオーバーレイに委ねてリザルトへは進まない
         // フラグ設定により後続のカップイン判定をスキップ
