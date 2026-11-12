@@ -4,7 +4,6 @@
 */
 
 #include "ClubController.h"
-#include "../../audio/AudioSystem.h"
 #include "../../core/GameContext.h"
 #include "../../core/Input.h"
 #include "../../core/Logger.h"
@@ -476,11 +475,6 @@ void ClubController::UpdateCelebration(core::GameContext &ctx, float dt,
     if (dist < 0.05f) {
       m_golferStandPos = m_celebrationSpot;
       m_celebrationStage = CelebrationStage::Celebrating;
-      // 喜びモーション開始に合わせてBGMを下げ、ゴールジングルを流す
-      if (ctx.audio) {
-        ctx.audio->PlayJingleWithBgmDuck(ctx, "GoalJingle",
-                                         "Assets/sounds/se_goal.mp3");
-      }
     } else {
       const float step = (std::min)(kGolferWalkSpeed * dt, dist);
       m_golferStandPos.x += dx / dist * step;

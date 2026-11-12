@@ -238,7 +238,8 @@ bool WikiGolfScene::CheckCupIn(core::GameContext &ctx) {
         state->gameCleared = true;
 
         if (ctx.audio) {
-          ctx.audio->PlaySE(ctx, "se_goal.mp3", 1.0f);
+          ctx.audio->PlayJingleWithBgmDuck(
+              ctx, "GoalJingle", "Assets/sounds/se_goal.mp3");
         }
 
         // チュートリアル中はゴール検知をオーバーレイに委ねてリザルトへは進まない

@@ -65,10 +65,9 @@ void ResultScene::OnEnter(core::GameContext &ctx) {
   ctx.input.SetMouseCursorVisible(true);
   ctx.input.SetMouseCursorLocked(false);
 
-  // BGMとファンファーレの再生を行います。
+  // BGMの再生を行います。
   if (ctx.audio) {
     ctx.audio->PlayBGM(ctx, "bgm_title.mp3", 0.4f);
-    ctx.audio->PlayOneShotFile(ctx, "ResultFanfare", "Assets/sounds/se_holeInOne.mp3");
   }
 
   // 3Dビジュアル環境を生成します。

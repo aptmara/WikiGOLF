@@ -38,7 +38,6 @@ using namespace DirectX;
 void ResultScene::OnExit(core::GameContext &ctx) {
   if (ctx.audio) {
     ctx.audio->StopBGM();
-    ctx.audio->StopOneShot("ResultFanfare");
   }
 
   // エンティティリストの一括破棄用ラムダ関数です。

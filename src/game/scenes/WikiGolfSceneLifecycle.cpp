@@ -536,9 +536,10 @@ void WikiGolfScene::OnExit(core::GameContext &ctx) {
   // 明示的に後始末しておく。
   game::systems::WikiShortestPath::ClearProcessCaches();
 
-  // シーン離脱時にゲーム中BGMを停止
+  // シーン離脱時にゲーム中BGMとゴールジングルを停止
   if (ctx.audio) {
     ctx.audio->StopBGM();
+    ctx.audio->StopOneShot("GoalJingle");
   }
 
   if (m_tutorialOverlay) {
