@@ -20,6 +20,8 @@
 !.Agents/**
 !licenses/
 !licenses/**
+!promo/
+!promo/**
 
 # --- Whitelist: Root Files ---
 !.gitignore
@@ -93,3 +95,6 @@ docs/doxygen-warnings.log
 !.github/
 !.github/workflows/
 !.github/workflows/wiki-html.yml
+# 紹介動画: 途中の版と作業フォルダーは管理しない
+promo/work/
+promo/wikigolf_trailer_v1.mp4
