@@ -18,6 +18,7 @@
 #include "../systems/WikiShortestPath.h"
 #include "../utils/ParRules.h"
 #include "LoadingSceneUtils.h"
+#include "WikiPageDataFetcher.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -302,6 +303,39 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
                data->targetPage, ElapsedMs(retryStartedAt));
     }
 
+    // 開始記事はここで確定する。記事の取得（HTML・画像）は時間がかかるので、
+    // 以降のゴール再抽選・パー計算・サムネイル取得と並行して進める。
+    //
+    // 記事の画像ライセンス確認は応答が1秒を超えやすく、超えると次のAPI呼び出しまで
+    // 5秒空けることになる。こちらの短い問い合わせ（パー計算・サムネイルの照会）が
+    // 巻き込まれないよう、それらが済むまでライセンス確認を始めさせない。
+    std::promise<void> quickLookupsDone;
+    const std::shared_future<void> quickLookupsFuture =
+        quickLookupsDone.get_future().share();
+    std::future<PageDataAsyncResult> startPageFetch;
+    // 途中で抜けても取得側が待ち続けないよう、スコープを出るときに必ず知らせる。
+    // startPageFetch より後に宣言して、先に破棄されるようにする。
+    struct LookupsDoneNotifier {
+      std::promise<void> &promise;
+      bool notified = false;
+      void Notify() {
+        if (!notified) {
+          notified = true;
+          promise.set_value();
+        }
+      }
+      ~LookupsDoneNotifier() { Notify(); }
+    } quickLookups{quickLookupsDone};
+    if (!data->startPage.empty()) {
+      LOG_INFO("LoadingScene", "AsyncLoad start page fetch launched: title='{}'",
+               data->startPage);
+      startPageFetch = std::async(
+          std::launch::async, [page = data->startPage, quickLookupsFuture]() {
+            return WikiPageDataFetcher::FetchLive(page, nullptr, {}, {},
+                                                  quickLookupsFuture);
+          });
+    }
+
     // 最短1記事（または同一）のターゲットは自動選定時のみ再抽選します。
     if (dbLoaded && data->pathSystem && data->pathSystem->IsAvailable() &&
         !data->startPage.empty() && !data->targetPage.empty()) {
@@ -403,6 +437,8 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
     if (!data->targetPage.empty()) {
       const auto thumbStartedAt = std::chrono::steady_clock::now();
       std::string thumbUrl = wikiClient.FetchPageThumbnail(data->targetPage, 256);
+      // ここから先はAPIを使わないので、開始記事のライセンス確認を始めさせる
+      quickLookups.Notify();
       if (!thumbUrl.empty()) {
         std::string thumbBytes = wikiClient.DownloadBinary(thumbUrl);
         if (!thumbBytes.empty()) {
@@ -416,31 +452,33 @@ void LoadingScene::OnEnter(core::GameContext &ctx) {
                !thumbUrl.empty(), data->targetThumbnailWidth,
                data->targetThumbnailHeight, ElapsedMs(thumbStartedAt));
     }
+    quickLookups.Notify();
 
-    // 初回ページのデータを先行ロード（通信ラグ解消）
-    if (!data->startPage.empty()) {
-      const auto linksStartedAt = std::chrono::steady_clock::now();
-      data->cachedLinks = wikiClient.FetchPageLinks(data->startPage, 0);
+    // 開始記事の取得を待つ。本編はこの内容をそのまま使うので、入った直後に通信を待たない。
+    if (startPageFetch.valid()) {
+      const auto waitStartedAt = std::chrono::steady_clock::now();
+      auto page = startPageFetch.get();
+      const bool usable = WikiPageDataFetcher::IsUsable(page);
       LOG_INFO("LoadingScene",
-               "AsyncLoad cached links fetched: count={} elapsed={}ms",
-               data->cachedLinks.size(), ElapsedMs(linksStartedAt));
-      const auto extractStartedAt = std::chrono::steady_clock::now();
-      data->cachedExtract = wikiClient.FetchPageExtract(data->startPage, 5000);
-      LOG_INFO("LoadingScene",
-               "AsyncLoad cached extract fetched: bytes={} elapsed={}ms",
-               data->cachedExtract.size(), ElapsedMs(extractStartedAt));
-      data->hasCachedData = true;
+               "AsyncLoad start page ready: usable={} links={} images={} "
+               "waited={}ms",
+               usable, page.allLinks.size(), page.pendingImages.size(),
+               ElapsedMs(waitStartedAt));
+      if (usable) {
+        data->preloadedStartPage =
+            std::make_shared<PageDataAsyncResult>(std::move(page));
+      }
       setProgress(0.97f);
-      logStage("initial-page-cache-ready", 0.97f);
+      logStage("initial-page-ready", 0.97f);
     }
 
     setProgress(1.0f);
     LOG_INFO("LoadingScene",
              "AsyncLoad complete elapsed={}ms start='{}' target='{}' "
-             "targetId={} cachedLinks={} cachedExtractBytes={}",
+             "targetId={} startPagePreloaded={}",
              ElapsedMs(loadStartedAt), data->startPage, data->targetPage,
-             data->targetPageId, data->cachedLinks.size(),
-             data->cachedExtract.size());
+             data->targetPageId,
+             static_cast<bool>(data->preloadedStartPage));
     return data;
   });
   LOG_INFO("LoadingScene", "Async load task launched at {} ms",

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -56,6 +57,13 @@ class WikiClient {
 public:
   WikiClient();
   ~WikiClient();
+
+  /**
+   * @brief このクライアントのリクエストを後回しにしてよいか設定します。
+   * @details 看板のサムネイルのように急がない取得に使います。記事の取得など
+   *          通常のリクエストが待っている間は、順番を譲ります。
+   */
+  void SetLowPriority(bool lowPriority) { m_lowPriority = lowPriority; }
 
   /**
    * @brief ランダムなWikipedia記事のタイトルを取得します
@@ -128,6 +136,15 @@ public:
 */
   std::string FetchPageExtract(const std::string &title, int lengthLimit = 0);
 
+  /**
+   * @brief 記事の冒頭だけを取得します（記事があるかの確認や、短い紹介文の表示用）。
+   * @details 本文全体ではなく先頭の maxChars 文字だけをサーバーに求めるので、
+   *          大きな記事でも応答が速く、通信量も小さく済みます。
+   * @param maxChars 取得する文字数（1〜1200。APIの上限に合わせて丸めます）
+   * @return FetchPageExtract と同じ形式（記事が無ければ "ERROR"）
+   */
+  std::string FetchPagePreview(const std::string &title, int maxChars);
+
   /** @brief 記事本文のHTMLを取得します。 */
   std::string FetchPageHtml(const std::string& title);
 
@@ -143,6 +160,12 @@ public:
    * @return 表・インフォボックスのテキスト（見つからなければ空文字列）
 */
   std::string FetchPageTableText(const std::string &title);
+
+  /**
+   * @brief 取得済みの記事HTMLから、表・インフォボックスのテキストを取り出します。
+   * @details FetchPageTableText の通信を除いた部分です。
+   */
+  static std::string ExtractTableText(const std::string &html);
 
   /**
    * @brief 記事に埋め込まれた画像一覧を取得します（UIアイコン等は除外済み）
@@ -193,12 +216,18 @@ private:
                              size_t maxBytes, bool useCompression, int &status,
                              std::wstring &retryAfter);
 
+  /** @brief 本文の取得。extraQuery にはAPIへ追加で渡す指定を書きます。*/
+  std::string FetchExtract(const std::string &title, int lengthLimit,
+                           const std::wstring &extraQuery);
+
   /** @brief 指定ホストへの接続を取得する（未接続なら新規に確立してキャッシュする）*/
   HINTERNET GetOrCreateConnection(const std::wstring &server);
 
   HINTERNET m_hSession = nullptr;
   HINTERNET m_hConnect = nullptr; /**< ja.wikipedia.org への既定接続*/
   std::unordered_map<std::wstring, HINTERNET> m_hostConnections; /**< 他ホスト用の接続キャッシュ*/
+  std::mutex m_connectionsMutex; /**< m_hostConnections の排他*/
+  bool m_lowPriority = false;    /**< 通常のリクエストに順番を譲るか*/
   std::uint32_t m_lastServerDateSeed = 0;
 };
 

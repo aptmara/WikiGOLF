@@ -17,6 +17,7 @@
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
 #include "hud/HudStyles.h"
+#include "../scenes/LoadingSceneUtils.h"
 #include "../systems/GlobeModel.h"
 #include "../utils/GoalNoticeRules.h"
 #include "../utils/UIConstants.h"
@@ -49,6 +50,10 @@ constexpr std::size_t kLongShotTitleCharacters = 18;
 
 // 読み込みが 100% になってから、その表示を見せておく時間（秒）
 constexpr float kBuildCompleteHold = 0.5f;
+
+// 構築がここまで進んだら、残りはすぐ終わるものとして 100% の表示を先に始める。
+// 記事の絵が出来上がり、地形の生成に入った時点に当たる。
+constexpr float kSpeculativeCompleteProgress = 0.68f;
 
 // ロード画面の背景色。記事の紙はこの色から明るくなるので、切り替わりが目立たない
 constexpr DirectX::XMFLOAT3 kTransitionBackgroundColor = {0.08f, 0.14f, 0.28f};
@@ -130,10 +135,13 @@ void ArticleTransitionController::PrefetchPage(const std::string& targetPage, sc
         return;
     }
     m_prefetchPage = targetPage;
+    m_prefetchProgress = std::make_shared<std::atomic<float>>(0.0f);
     LOG_INFO("Transition", "Background prefetch started page='{}'", targetPage);
-    m_prefetchTask = std::async(std::launch::async, [pageLoader, targetPage]() {
-        return pageLoader->FetchPageDataAsync(targetPage);
-    });
+    m_prefetchTask = std::async(
+        std::launch::async,
+        [pageLoader, targetPage, progress = m_prefetchProgress]() {
+            return pageLoader->FetchPageDataAsync(targetPage, progress);
+        });
 }
 
 void ArticleTransitionController::StartTransition(core::GameContext& ctx, const std::string& targetPage, scenes::WikiPageLoader* pageLoader, ecs::Entity ball, ecs::Entity cam, ecs::Entity sky, game::controllers::MinimapController* minimap) {
@@ -161,6 +169,8 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
     m_fetchStartedAt = std::chrono::steady_clock::time_point::min();
     m_buildStartedAt = std::chrono::steady_clock::time_point::min();
     m_displayProgress = 0.0f;
+    m_buildCompleteTimer = 0.0f;
+    m_completeHoldStarted = false;
 
     LOG_INFO("Transition", "StartTransition page='{}'", m_targetPage);
 
@@ -175,16 +185,21 @@ void ArticleTransitionController::StartTransition(core::GameContext& ctx, const 
             // カップイン演出中などに裏で開始済みの取得を引き継ぐ
             LOG_INFO("Transition", "Using prefetched page data page='{}'", targetPage);
             m_loadTask = std::move(m_prefetchTask);
+            m_loadProgress = m_prefetchProgress;
         } else {
             // 非同期ロード開始
             auto pageLoaderPtr = m_pageLoader;
             std::string page = targetPage;
+            m_loadProgress = std::make_shared<std::atomic<float>>(0.0f);
             LOG_INFO("Transition", "Async fetch started page='{}'", page);
-            m_loadTask = std::async(std::launch::async, [pageLoaderPtr, page]() {
-                return pageLoaderPtr->FetchPageDataAsync(page);
-            });
+            m_loadTask = std::async(
+                std::launch::async,
+                [pageLoaderPtr, page, progress = m_loadProgress]() {
+                    return pageLoaderPtr->FetchPageDataAsync(page, progress);
+                });
         }
         m_prefetchPage.clear();
+        m_prefetchProgress.reset();
     } else {
         LOG_ERROR("Transition", "WikiPageLoader is null!");
     }
@@ -378,9 +393,12 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                             auto pageLoaderPtr = m_pageLoader;
                             std::string page = m_targetPage;
                             m_fetchStartedAt = std::chrono::steady_clock::now();
-                            m_loadTask = std::async(std::launch::async, [pageLoaderPtr, page]() {
-                                return pageLoaderPtr->FetchPageDataAsync(page);
-                            });
+                            m_loadProgress = std::make_shared<std::atomic<float>>(0.0f);
+                            m_loadTask = std::async(
+                                std::launch::async,
+                                [pageLoaderPtr, page, progress = m_loadProgress]() {
+                                    return pageLoaderPtr->FetchPageDataAsync(page, progress);
+                                });
                             m_loadCompleted = false; // 再度ロード待ちにする
                         }
 
@@ -397,6 +415,8 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                         if (m_pageLoader) {
                             LOG_INFO("Transition", "Async fetch complete. Starting incremental build...");
                             m_buildStartedAt = std::chrono::steady_clock::now();
+                            m_buildCompleteTimer = 0.0f;
+                            m_completeHoldStarted = false;
                             m_pageLoader->BeginBuildPage(ctx, std::move(asyncData), m_targetBall, m_targetCam, m_targetSky, m_minimap);
                             m_phase = Phase::Building;
                         } else {
@@ -438,9 +458,19 @@ bool ArticleTransitionController::Update(core::GameContext& ctx) {
                              "total={}ms",
                              m_targetPage, ElapsedMs(m_buildStartedAt),
                              ElapsedMs(m_transitionStartedAt));
-                    // 表示は次のフレームで 100% になる。それを見せてから紹介へ移る
-                    m_buildCompleteTimer = 0.0f;
+                    // 100% を見せてから紹介へ移る。先に表示を始めていた分は待ち時間から引く
+                    m_completeHoldStarted = true;
                     m_phase = Phase::BuildComplete;
+                } else if (m_completeHoldStarted) {
+                    m_buildCompleteTimer += dt;
+                } else if (m_pageLoader->GetBuildProgress() >=
+                           kSpeculativeCompleteProgress) {
+                    // 残りは短いので、構築の終わりを待たずに 100% の表示を始める
+                    m_completeHoldStarted = true;
+                    LOG_INFO("Transition",
+                             "Complete display started early page='{}' "
+                             "buildElapsed={}ms",
+                             m_targetPage, ElapsedMs(m_buildStartedAt));
                 }
             } else {
                 m_phase = Phase::FadeOut;
@@ -509,22 +539,20 @@ void ArticleTransitionController::UpdateUI(core::GameContext& ctx, float dt) {
             text->style = style;
         }
     } else {
-        float progress = 0.0f;
-        if (m_phase == Phase::FadeIn) {
-            progress = 0.0f;
-        } else if (m_phase == Phase::Loading) {
-            // 通信待ちは最大 20% とする
-            progress = std::clamp(m_stateTimer / 5.0f, 0.0f, 0.2f);
-        } else if (m_phase == Phase::Building) {
-            // 構築進捗は 20% ~ 100%
-            float buildProgress = m_pageLoader ? m_pageLoader->GetBuildProgress() : 0.0f;
-            progress = 0.2f + 0.8f * buildProgress;
-        } else {
-            progress = 1.0f;
+        // 取得は実際に済んだ段階（HTML・ライセンス確認・画像の枚数）で進める。
+        // 待ち時間の大半は取得なので、表示の 0〜70% を取得に割り当てる。
+        const bool building = m_phase == Phase::Building;
+        const bool fetching = m_phase == Phase::FadeIn || m_phase == Phase::Loading;
+        float fetchProgress = 1.0f;
+        if (fetching) {
+            fetchProgress = m_loadProgress
+                ? m_loadProgress->load(std::memory_order_relaxed) : 0.0f;
         }
-
-        m_displayProgress = std::max(m_displayProgress,
-                                     std::clamp(progress, 0.0f, 1.0f));
+        const float buildProgress =
+            building && m_pageLoader ? m_pageLoader->GetBuildProgress() : 0.0f;
+        const bool complete = (!fetching && !building) || m_completeHoldStarted;
+        m_displayProgress = scenes::loading_detail::CombineTransitionProgress(
+            fetchProgress, buildProgress, complete, m_displayProgress);
         int percent = static_cast<int>(m_displayProgress * 100.0f);
 
         if (auto* text = ctx.world.Get<components::UIText>(m_progressTextEntity)) {

@@ -16,6 +16,10 @@
 #include <string>
 #include <vector>
 
+namespace game::scenes {
+struct PageDataAsyncResult;
+} // namespace game::scenes
+
 namespace game::components {
 
 // ... (existing structs)
@@ -116,10 +120,13 @@ struct WikiGlobalData {
   bool isOniMode = false;
   std::uint32_t dailyChallengeSeed = 0;
 
-  // 初回ロード済みデータ (LoadingSceneで取得済みの場合に使用)
+  // 固定の記事データ (チュートリアルのように通信せずに始める場合に使用)
   bool hasCachedData = false;
   std::vector<game::WikiLink> cachedLinks;
   std::string cachedExtract;
+
+  /** @brief LoadingSceneで取得まで済ませた開始記事（HTML・画像を含む。無ければ空）。*/
+  std::shared_ptr<game::scenes::PageDataAsyncResult> preloadedStartPage;
 
   // 目的記事の代表サムネイル（LoadingSceneでデコード済み、ゴール看板表示用）
   std::vector<uint8_t> targetThumbnailPixelsBGRA;

@@ -114,10 +114,20 @@ public:
   /** @brief ページ遷移時などにマップ上のアイコン（リンク穴など）をクリア*/
   void ClearHoleIcons(core::GameContext &ctx);
 
-  /** @brief マップ上のリンク穴アイコンを追加*/
+  /**
+   * @brief マップ上のリンク穴アイコンを追加
+   * @param refreshFilters false にすると旗表示トグルの更新を省きます。大量に続けて
+   *        追加するときは false で追加し、最後に RefreshFlagFilterToggles を呼びます。
+   */
   void AddHoleIcon(core::GameContext &ctx, float x, float z,
                    const std::string& linkTarget, bool isTargetHole,
-                   bool isPlayableHole = true, int hopsToTarget = -1);
+                   bool isPlayableHole = true, int hopsToTarget = -1,
+                   bool refreshFilters = true);
+
+  /** @brief 追加済みのアイコンに合わせて旗表示トグルを更新します。*/
+  void RefreshFlagFilterToggles(core::GameContext &ctx) {
+    UpdateFlagFilterToggles(ctx);
+  }
 
   /**
    * @brief 経路評価後のホールアイコン情報を更新します。

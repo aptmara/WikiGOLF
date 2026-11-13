@@ -225,6 +225,11 @@ void WikiPageLoader::SetPreloadedData(std::vector<game::WikiLink> links,
                                       skipSupplementalFetch);
 }
 
+void WikiPageLoader::SetPreloadedPage(PageDataAsyncResult page)
+{
+    m_pageDataFetcher.SetPreloadedPage(std::move(page));
+}
+
 const char* WikiPageLoader::BuildStepName(BuildStep step)
 {
     switch (step) {
@@ -463,8 +468,9 @@ PageLoadResult WikiPageLoader::LoadPage(
     return result;
 }
 
-PageDataAsyncResult WikiPageLoader::FetchPageDataAsync(const std::string& pageName) {
-    return m_pageDataFetcher.Fetch(pageName);
+PageDataAsyncResult WikiPageLoader::FetchPageDataAsync(
+    const std::string& pageName, PageFetchProgress progress) {
+    return m_pageDataFetcher.Fetch(pageName, std::move(progress));
 }
 
 } // namespace game::scenes

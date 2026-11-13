@@ -16,6 +16,12 @@ struct PreparedArticle {
     std::string html;
     std::vector<std::string> imageUrls;
     std::string error;
+    /** 表示する本文のプレーンテキスト（ブロック要素の区切りは改行） */
+    std::string text;
+    /** 表示する本文に現れる記事リンクの宛先（出現順・重複なし） */
+    std::vector<std::string> linkTargets;
+    /** 記事のカテゴリ（"Category:名前" 形式・出現順） */
+    std::vector<std::string> categories;
 };
 struct Rect { float x = 0, y = 0, width = 0, height = 0; };
 struct Link {
@@ -32,6 +38,12 @@ struct RasterSize {
 };
 /** @brief 記事名前空間の内部リンクを復号・正規化します。対象外は空文字を返します。 */
 std::string ArticleTarget(const std::string& href);
+/**
+ * @brief カテゴリを表す link 要素の href から "Category:名前" を取り出します。
+ * @details 名前空間の表記（Category / カテゴリ）は "Category" にそろえ、ソートキーは捨てます。
+ * @return カテゴリと判定できなければ空文字列
+ */
+std::string CategoryTitle(const std::string& href);
 /**
  * @brief 許可した記事構造のみ保持し、外部CSS・スクリプトを除外します。
  * @param allowedImageUrls 指定すると、ここに含まれる画像だけを残します。

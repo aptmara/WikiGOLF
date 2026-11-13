@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -72,6 +73,9 @@ HINTERNET WikiClient::GetOrCreateConnection(const std::wstring &server) {
     return m_hConnect;
   }
 
+  // 画像は複数スレッドから同時に取りに来るので、接続の表は排他する
+  std::lock_guard<std::mutex> lock(m_connectionsMutex);
+
   auto it = m_hostConnections.find(server);
   if (it != m_hostConnections.end()) {
     return it->second;
@@ -100,37 +104,108 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
 
   using Clock = std::chrono::steady_clock;
   const bool isWikiHost = server == L"ja.wikipedia.org";
+  const bool isActionApi = isWikiHost && wiki_request::IsActionApiPath(path);
 
   // WikiClientはスレッドごとに作られるため、同時接続の制限はプロセス全体で管理する。
-  // 記事の取得と画像の取得は別系統で、それぞれ1件ずつ順に送る。
+  // 記事の取得と画像の取得は別系統で、それぞれ決めた件数までを同時に送る。
   struct HostGate {
     std::mutex mutex;
+    std::condition_variable slotFreed;
+    int active = 0;
+    int normalWaiting = 0; /**< 空きを待っている通常のリクエスト数 */
     Clock::time_point nextAllowed{};
+    /** 遅い応答の後の待ち。Action APIだけに掛かり、RESTの記事取得は止めない */
+    Clock::time_point actionApiNextAllowed{};
   };
   static HostGate wikiGate;
   static HostGate mediaGate;
   HostGate &gate = isWikiHost ? wikiGate : mediaGate;
-  std::lock_guard<std::mutex> lock(gate.mutex);
+  const int maxConcurrent = isWikiHost
+                                ? wiki_request::kMaxWikiConcurrentRequests
+                                : wiki_request::kMaxMediaConcurrentRequests;
+
+  // 空きが出るまで待ち、抜けるときに必ず返す。
+  // 後回しでよいリクエストは、通常のリクエストが待っている間は空きを取らない。
+  struct Slot {
+    HostGate &gate;
+    Slot(HostGate &target, int limit, bool lowPriority) : gate(target) {
+      std::unique_lock<std::mutex> lock(gate.mutex);
+      if (lowPriority) {
+        gate.slotFreed.wait(lock, [&] {
+          return gate.active < limit && gate.normalWaiting == 0;
+        });
+      } else {
+        ++gate.normalWaiting;
+        gate.slotFreed.wait(lock, [&] { return gate.active < limit; });
+        --gate.normalWaiting;
+      }
+      ++gate.active;
+    }
+    ~Slot() {
+      {
+        std::lock_guard<std::mutex> lock(gate.mutex);
+        --gate.active;
+      }
+      gate.slotFreed.notify_all();
+    }
+  };
 
   const auto minInterval = std::chrono::milliseconds(
       isWikiHost ? wiki_request::kMinWikiIntervalMilliseconds : 0);
   const auto maxWait = std::chrono::seconds(wiki_request::kMaxRetryWaitSeconds);
 
   for (int attempt = 0; attempt < wiki_request::kMaxAttempts; ++attempt) {
-    const auto waitTime = gate.nextAllowed - Clock::now();
-    if (waitTime > maxWait) {
-      LOG_WARN("WikiClient", "Skipped request while rate limited");
-      return "";
+    Clock::time_point startAt;
+    {
+      std::lock_guard<std::mutex> lock(gate.mutex);
+      const auto now = Clock::now();
+      startAt = std::max(now, gate.nextAllowed);
+      if (isActionApi) {
+        startAt = std::max(startAt, gate.actionApiNextAllowed);
+      }
+      if (startAt - now > maxWait) {
+        LOG_WARN("WikiClient", "Skipped request while rate limited");
+        return "";
+      }
+      gate.nextAllowed = startAt + minInterval;
     }
-    if (waitTime > Clock::duration::zero()) {
-      std::this_thread::sleep_for(waitTime);
-    }
-    gate.nextAllowed = Clock::now() + minInterval;
+    // 間隔や再試行の待ちは空きを取らずに行い、他のリクエストを止めない
+    std::this_thread::sleep_until(startAt);
 
     int status = 0;
     std::wstring retryAfter;
-    std::string response =
-        SendGetRequest(hConnect, path, maxBytes, isWikiHost, status, retryAfter);
+    std::string response;
+    const auto queuedAt = Clock::now();
+    Clock::time_point sentAt;
+    {
+      Slot slot(gate, maxConcurrent, m_lowPriority);
+      sentAt = Clock::now();
+      response = SendGetRequest(hConnect, path, maxBytes, isWikiHost, status,
+                                retryAfter);
+    }
+    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               Clock::now() - sentAt)
+                               .count();
+    const auto queuedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              sentAt - queuedAt)
+                              .count();
+    if (queuedMs > 1000 || elapsedMs > 2000) {
+      LOG_INFO("WikiClient",
+               "Slow request: waitedForSlot={}ms response={}ms bytes={} "
+               "wikiHost={} actionApi={}",
+               queuedMs, elapsedMs, response.size(), isWikiHost, isActionApi);
+    }
+    if (const int cooldown =
+            wiki_request::SlowRequestCooldownSeconds(isActionApi, elapsedMs);
+        cooldown > 0) {
+      std::lock_guard<std::mutex> lock(gate.mutex);
+      gate.actionApiNextAllowed = std::max(
+          gate.actionApiNextAllowed,
+          Clock::now() + std::chrono::seconds(cooldown));
+      LOG_INFO("WikiClient",
+               "Action API response took {}ms; next Action API request waits {}s",
+               elapsedMs, cooldown);
+    }
     if (wiki_request::IsSuccessStatus(status)) {
       return response;
     }
@@ -142,7 +217,11 @@ std::string WikiClient::PerformGetRequest(const std::wstring &server,
     }
 
     const int delaySeconds = wiki_request::RetryDelaySeconds(retryAfter, attempt);
-    gate.nextAllowed = Clock::now() + std::chrono::seconds(delaySeconds);
+    {
+      std::lock_guard<std::mutex> lock(gate.mutex);
+      gate.nextAllowed = std::max(
+          gate.nextAllowed, Clock::now() + std::chrono::seconds(delaySeconds));
+    }
     LOG_WARN("WikiClient", "HTTP {} received, waiting {}s (attempt {})", status,
              delaySeconds, attempt + 1);
   }

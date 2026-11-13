@@ -282,6 +282,12 @@ void WikiGolfScene::OnEnter(core::GameContext &ctx) {
                                      preloadedData->cachedExtract,
                                      m_isTutorial);
     }
+    if (preloadedData->preloadedStartPage) {
+      // ロード画面で取得済みなので、最初の記事では通信を待たない
+      m_pageLoader->SetPreloadedPage(
+          std::move(*preloadedData->preloadedStartPage));
+      preloadedData->preloadedStartPage.reset();
+    }
 
     if (!preloadedData->targetThumbnailPixelsBGRA.empty()) {
       m_pageLoader->SetTargetThumbnail(ctx, preloadedData->targetThumbnailPixelsBGRA,

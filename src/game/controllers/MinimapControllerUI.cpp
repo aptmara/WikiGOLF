@@ -483,7 +483,7 @@ void MinimapController::SetTutorialHelpMode(core::GameContext& ctx,
 void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
                                     const std::string& linkTarget,
                                     bool isTargetHole, bool isPlayableHole,
-                                    int hopsToTarget) {
+                                    int hopsToTarget, bool refreshFilters) {
   auto iconEntity = m_entityOwner.Create(ctx.world);
   auto &ui = ctx.world.Add<UIImage>(iconEntity);
 
@@ -524,7 +524,9 @@ void MinimapController::AddHoleIcon(core::GameContext &ctx, float x, float z,
   mapIcon.isPlayable = isPlayableHole;
   mapIcon.hopsToTarget = hopsToTarget;
   m_mapHoleIcons.push_back(mapIcon);
-  UpdateFlagFilterToggles(ctx);
+  if (refreshFilters) {
+    UpdateFlagFilterToggles(ctx);
+  }
 }
 
 /**
