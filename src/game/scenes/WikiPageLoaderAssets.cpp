@@ -186,6 +186,8 @@ void WikiPageLoader::UpdateNearbyHoleSignboards(core::GameContext& ctx,
                 newState.future = std::async(std::launch::async, [title]() {
                     PendingHoleThumbnail result;
                     game::systems::WikiClient client;
+                    // 看板は急がないので、記事の取得が待っている間は順番を譲る
+                    client.SetLowPriority(true);
                     std::string url = client.FetchPageThumbnail(title, 200);
                     if (url.empty()) return result;
                     std::string bytes = client.DownloadBinary(url);

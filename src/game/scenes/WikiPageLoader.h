@@ -144,9 +144,11 @@ public:
     /**
      * @brief 記事データとリンクを非同期で取得する（通信・DB処理）
      * @param pageName ロードする記事名
+     * @param progress 指定すると、取得の進み具合（0〜1）を書き込みます
      * @return 取得したデータ
 */
-    PageDataAsyncResult FetchPageDataAsync(const std::string& pageName);
+    PageDataAsyncResult FetchPageDataAsync(const std::string& pageName,
+                                           PageFetchProgress progress = nullptr);
 
     /**
      * @brief 取得したデータをもとに、メインスレッドでGPUリソースとエンティティを生成する
@@ -208,6 +210,12 @@ public:
     void SetPreloadedData(std::vector<game::WikiLink> links,
                           std::string extract,
                           bool skipSupplementalFetch = false);
+
+    /**
+     * @brief 別の場所で取得済みの記事を渡します（ロード画面で先に取得した開始記事など）。
+     * @details 同じ記事名の取得は通信せずにこの内容を使います。
+     */
+    void SetPreloadedPage(PageDataAsyncResult page);
 
     /**
      * @brief 目的記事の代表サムネイルをGPUテクスチャ化して保持します。

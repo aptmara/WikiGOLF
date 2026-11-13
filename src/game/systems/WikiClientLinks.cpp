@@ -88,18 +88,9 @@ std::vector<game::WikiLink> WikiClient::FetchPageLinks(const std::string &title,
     }
   }
 
-  const size_t queryLinkCount = links.size();
-  if ((int)links.size() < effectiveLimit) {
-    std::wstring parsePath =
-        L"/w/api.php?action=parse&page=" + wtitle +
-        L"&prop=links&redirects=1&format=json&formatversion=2";
-    std::string response = PerformGetRequest(L"ja.wikipedia.org", parsePath);
-    wiki_json::ParseRenderedPageLinks(response, title, effectiveLimit, links,
-                                      seen);
-  }
-
-  LOG_INFO("WikiClient", "Found {} links (query={}, rendered={})",
-           links.size(), queryLinkCount, links.size() - queryLinkCount);
+  // prop=links が記事内のリンクをすべて返すので、action=parse での取り直しは行わない
+  // （実測で追加が1件も無く、記事ごとに1往復ぶん待つだけになっていた）。
+  LOG_INFO("WikiClient", "Found {} links", links.size());
   return links;
 }
 

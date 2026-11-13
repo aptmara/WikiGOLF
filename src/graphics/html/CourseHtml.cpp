@@ -6,9 +6,31 @@
 #include <memory>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_set>
 
 namespace graphics::html {
 namespace {
+/** @brief パーセント符号化を戻し、"_" を空白にします。不正な入力は false を返します。 */
+bool DecodeTitle(std::string_view value, std::string& out) {
+    auto hex = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        return -1;
+    };
+    out.clear();
+    for (std::size_t i = 0; i < value.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(value[i]);
+        if (c == '%') {
+            if (i + 2 >= value.size() || hex(value[i + 1]) < 0 || hex(value[i + 2]) < 0) return false;
+            c = static_cast<unsigned char>(hex(value[i + 1]) * 16 + hex(value[i + 2]));
+            i += 2;
+        }
+        if (c < 32 || c == 127 || c == '#' || c == '\\') return false;
+        out += c == '_' ? ' ' : static_cast<char>(c);
+    }
+    return !out.empty();
+}
 std::string Escape(std::string_view s) {
     std::string out;
     for (char c : s) {
@@ -39,21 +61,57 @@ std::string ImageUrl(std::string src) {
     if (src.find_first_of("\r\n\t\\") != std::string::npos) return {};
     return src;
 }
+const GumboNode* FindElement(const GumboNode* node, int depth,
+                             bool (*matches)(const GumboElement&)) {
+    if (!node || node->type != GUMBO_NODE_ELEMENT || depth > 96) return nullptr;
+    const auto& e = node->v.element;
+    if (matches(e)) return node;
+    for (unsigned i = 0; i < e.children.length; ++i) {
+        if (const auto* found = FindElement(static_cast<const GumboNode*>(e.children.data[i]),
+                                            depth + 1, matches)) return found;
+    }
+    return nullptr;
+}
+/**
+ * @brief 記事の本文にあたる要素を返します。
+ * @details 通常ページ（/wiki/記事名）はメニューやサイドバーを含むので、本文の入れ物
+ *          （#mw-content-text 内の .mw-parser-output）だけを対象にします。
+ *          見つからなければ、本文だけのHTMLとみなして全体を返します。
+ */
+const GumboNode* ContentRoot(const GumboNode* root) {
+    const auto* content = FindElement(root, 0, [](const GumboElement& e) {
+        return Attr(e, "id") == "mw-content-text";
+    });
+    if (!content) return root;
+    const auto* body = FindElement(content, 0, [](const GumboElement& e) {
+        return HasClass(Attr(e, "class"), "mw-parser-output");
+    });
+    return body ? body : content;
+}
 struct Serializer {
     PreparedArticle result;
     std::size_t nodes = 0;
     std::size_t maxImages = kMaxImages;
     const std::unordered_set<std::string>* allowedImageUrls = nullptr;
+    std::unordered_set<std::string> seenLinkTargets;
+    std::unordered_set<std::string> seenCategories;
     void Visit(const GumboNode* node, int depth) {
         if (++nodes > 40000 || depth > 96) throw std::runtime_error("HTML structure limit");
         if (node->type == GUMBO_NODE_TEXT || node->type == GUMBO_NODE_WHITESPACE) {
             result.html += Escape(node->v.text.text);
+            result.text += node->v.text.text;
             return;
         }
         if (node->type != GUMBO_NODE_ELEMENT) return;
         const auto& e = node->v.element;
         const std::string tag = gumbo_normalized_tagname(e.tag);
         const std::string cls = Attr(e, "class");
+        // カテゴリは表示しない link 要素で届くので、読み飛ばす前に拾う
+        if (tag == "link" && HasClass(Attr(e, "rel"), "mw:PageProp/Category")) {
+            auto category = CategoryTitle(Attr(e, "href"));
+            if (!category.empty() && seenCategories.insert(category).second)
+                result.categories.push_back(std::move(category));
+        }
         if (tag == "script" || tag == "style" || tag == "head" || tag == "link" ||
             tag == "iframe" || tag == "object" || tag == "svg" || tag == "form" ||
             tag == "nav" || tag == "noscript" || !Attr(e, "hidden").empty() ||
@@ -68,8 +126,10 @@ struct Serializer {
             result.html += "<" + tag;
             if (tag == "a") {
                 auto target = ArticleTarget(Attr(e, "href"));
-                if (!target.empty() && !HasClass(cls, "new"))
+                if (!target.empty() && !HasClass(cls, "new")) {
                     result.html += " data-course-target=\"" + Escape(target) + "\" href=\"#\"";
+                    if (seenLinkTargets.insert(target).second) result.linkTargets.push_back(target);
+                }
             }
             if (tag == "img") {
                 auto url = ImageUrl(Attr(e, "src"));
@@ -98,8 +158,27 @@ struct Serializer {
         for (unsigned i = 0; i < e.children.length; ++i)
             Visit(static_cast<const GumboNode*>(e.children.data[i]), depth + 1);
         if (keep && tag != "img" && tag != "br" && tag != "hr") result.html += "</" + tag + ">";
+        // 段落や見出しの境目で語がつながらないよう、本文テキストは改行で区切る
+        const std::string blocks = " div p h1 h2 h3 h4 h5 h6 figure figcaption table caption tr th td ul ol li dl dt dd blockquote pre br hr section ";
+        if (keep && blocks.find(" " + tag + " ") != std::string::npos &&
+            !result.text.empty() && result.text.back() != '\n') result.text += '\n';
     }
 };
+}
+std::string CategoryTitle(const std::string& href) {
+    std::string value = href;
+    if (value.rfind("./", 0) == 0) value.erase(0, 2);
+    else if (value.rfind("/wiki/", 0) == 0) value.erase(0, 6);
+    else return {};
+    value = value.substr(0, value.find('#'));
+    std::string decoded;
+    if (!DecodeTitle(value, decoded)) return {};
+    const auto colon = decoded.find(':');
+    if (colon == std::string::npos || colon + 1 >= decoded.size()) return {};
+    auto prefix = decoded.substr(0, colon);
+    for (auto& c : prefix) if (static_cast<unsigned char>(c) < 128) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (prefix != "category" && prefix != "カテゴリ" && prefix != "カテゴリー") return {};
+    return "Category:" + decoded.substr(colon + 1);
 }
 std::string ArticleTarget(const std::string& href) {
     std::string value = href;
@@ -146,7 +225,7 @@ std::vector<std::string> ExtractImageUrls(const std::string& html) {
     if (!parsed) return {};
     Serializer s;
     s.maxImages = kMaxImageCandidates;
-    try { s.Visit(parsed->root, 0); }
+    try { s.Visit(ContentRoot(parsed->root), 0); }
     catch (const std::exception&) { return {}; }
     return std::move(s.result.imageUrls);
 }
@@ -195,7 +274,7 @@ PreparedArticle PrepareArticle(const std::string& title, const std::string& html
     Serializer s;
     s.allowedImageUrls = allowedImageUrls;
     s.result.html = "<!doctype html><html lang=\"ja\"><body><h1>" + Escape(title) + "</h1>";
-    try { s.Visit(parsed->root, 0); }
+    try { s.Visit(ContentRoot(parsed->root), 0); }
     catch (const std::exception& e) { return {{}, {}, e.what()}; }
     // CC BY-SA 4.0 の帰属表示。カップにならないようリンクにはしない。
     std::string articlePath = title;

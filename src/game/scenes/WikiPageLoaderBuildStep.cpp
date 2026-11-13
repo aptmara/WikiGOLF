@@ -413,26 +413,33 @@ bool WikiPageLoader::StepBuildPage(core::GameContext& ctx)
 
     case BuildStep::CreateMapIcons:
     {
-        constexpr size_t kMapIconsPerFrame = 12;
         if (!m_buildMinimap) {
             m_buildStep = BuildStep::CreateHoles;
             m_nextHoleIndex = 0;
             return false;
         }
 
-        for (size_t i = 0; i < kMapIconsPerFrame &&
-                           m_nextMapIconIndex < m_buildMapHoleCandidates.size();
-             ++i, ++m_nextMapIconIndex) {
+        // 個数では区切らず、フレームの時間予算が尽きるまで続けて作る。
+        // 1回あたりの個数を固定すると、リンクの多い記事で進捗の増分が小さくなり、
+        // 予算が余っていても1フレームに1回しか進まなくなる。
+        constexpr size_t kDeadlineCheckInterval = 32;
+        while (m_nextMapIconIndex < m_buildMapHoleCandidates.size()) {
+            if (m_nextMapIconIndex % kDeadlineCheckInterval == 0 &&
+                std::chrono::steady_clock::now() >= m_buildDeadline) {
+                break;
+            }
             const auto& candidate = m_buildMapHoleCandidates[m_nextMapIconIndex];
             const bool isPlayable = IsPlayableCandidate(candidate);
             m_buildMinimap->AddHoleIcon(ctx, candidate.x, candidate.z,
                                         candidate.linkTarget,
                                         candidate.isTarget, isPlayable,
-                                        candidate.hopsToTarget);
+                                        candidate.hopsToTarget, false);
+            ++m_nextMapIconIndex;
         }
 
         if (m_buildMapHoleCandidates.empty() ||
             m_nextMapIconIndex >= m_buildMapHoleCandidates.size()) {
+            m_buildMinimap->RefreshFlagFilterToggles(ctx);
             m_nextHoleIndex = 0;
             m_buildStep = BuildStep::CreateHoles;
         } else {

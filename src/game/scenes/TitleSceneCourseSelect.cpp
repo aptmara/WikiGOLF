@@ -217,9 +217,10 @@ void TitleScene::RequestCourseCheck(core::GameContext& ctx) {
           return core::ToString(w.substr(0, maxLen) + L"...");
         };
         game::systems::WikiClient wiki;
-        std::string extStart = wiki.FetchPageExtract(startUtf8, 100);
+        // 表示するのは冒頭の80文字だけなので、本文全体は取得しない
+        std::string extStart = wiki.FetchPagePreview(startUtf8, 100);
         if (extStart.empty() || extStart == "ERROR" || extStart == "(Failed to fetch extract)") return std::string("ERROR");
-        std::string extGoal = wiki.FetchPageExtract(goalUtf8, 100);
+        std::string extGoal = wiki.FetchPagePreview(goalUtf8, 100);
         if (extGoal.empty() || extGoal == "ERROR" || extGoal == "(Failed to fetch extract)") return std::string("ERROR");
         return "【" + startUtf8 + "】\n" + trimW(extStart, 80) + "\n\n【" + goalUtf8 + "】\n" + trimW(extGoal, 80);
       });

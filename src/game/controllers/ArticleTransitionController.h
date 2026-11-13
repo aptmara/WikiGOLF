@@ -109,7 +109,8 @@ private:
     std::future<scenes::PageDataAsyncResult> m_loadTask;
     std::future<scenes::PageDataAsyncResult> m_prefetchTask; ///< PrefetchPageで先行開始した取得
     std::string m_prefetchPage;                              ///< 先行取得中のページ名
-    std::shared_ptr<std::atomic<float>> m_loadProgress;
+    scenes::PageFetchProgress m_prefetchProgress;            ///< 先行取得の進み具合
+    scenes::PageFetchProgress m_loadProgress;                ///< 表示中の取得の進み具合
     std::optional<scenes::PageDataAsyncResult> m_pendingPageData;
     scenes::WikiPageLoader* m_pageLoader = nullptr;
     std::string m_targetPage;
@@ -195,6 +196,7 @@ private:
     bool m_hasError = false;
     float m_errorTimer = 0.0f;
     float m_buildCompleteTimer = 0.0f; ///< 100% を表示してからの経過時間
+    bool m_completeHoldStarted = false; ///< 構築の終わりを見越して 100% の表示を始めたか
     std::wstring m_errorMsg;
 };
 

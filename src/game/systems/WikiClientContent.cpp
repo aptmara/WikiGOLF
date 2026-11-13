@@ -80,6 +80,17 @@ bool WikiClient::FetchPageLengths(const std::vector<std::string> &titles,
 
 std::string WikiClient::FetchPageExtract(const std::string &title,
                                          int lengthLimit) {
+  return FetchExtract(title, lengthLimit, L"");
+}
+
+std::string WikiClient::FetchPagePreview(const std::string &title,
+                                         int maxChars) {
+  const int chars = std::clamp(maxChars, 1, 1200);
+  return FetchExtract(title, chars, L"&exchars=" + std::to_wstring(chars));
+}
+
+std::string WikiClient::FetchExtract(const std::string &title, int lengthLimit,
+                                     const std::wstring &extraQuery) {
   std::string encodedTitle = UrlEncode(title);
 
   std::wstring wtitle = core::ToWString(encodedTitle);
@@ -91,7 +102,7 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
       L"api.php?action=query&prop=extracts&explaintext&exsectionformat=wiki&"
       L"redirects=1&format=json&"
       L"formatversion=2&titles=" +
-      wtitle;
+      wtitle + extraQuery;
 
   std::string response = PerformGetRequest(L"ja.wikipedia.org", path);
 
@@ -138,17 +149,21 @@ std::string WikiClient::FetchPageExtract(const std::string &title,
 }
 
 std::string WikiClient::FetchPageHtml(const std::string &title) {
-  std::string encodedTitle = UrlEncode(title);
-  std::wstring wtitle = core::ToWString(encodedTitle);
-
-  // Robot policyに従い、記事HTMLはAction APIではなくREST APIから取得する。
-  // 転送ページはサーバーのリダイレクトをWinHTTPがたどる。
-  const std::wstring path = L"/w/rest.php/v1/page/" + wtitle + L"/html";
+  // Robot policyが記事HTMLの取得先として勧める通常ページ（/wiki/記事名、クエリなし）を使う。
+  // CDNのキャッシュが効くので、REST APIのHTMLより応答が安定して速い。
+  // 返るのはメニューなどを含むページ全体で、本文の取り出しは CourseHtml が行う。
+  // 転送ページは転送先の内容がそのまま返る。
+  std::string pageTitle = title;
+  std::replace(pageTitle.begin(), pageTitle.end(), ' ', '_');
+  const std::wstring path = L"/wiki/" + core::ToWString(UrlEncode(pageTitle));
   return PerformGetRequest(L"ja.wikipedia.org", path, 8u * 1024 * 1024);
 }
 
 std::string WikiClient::FetchPageTableText(const std::string& title) {
-  const auto html = FetchPageHtml(title);
+  return ExtractTableText(FetchPageHtml(title));
+}
+
+std::string WikiClient::ExtractTableText(const std::string& html) {
   const auto tableBlocks = wiki_json::ExtractTableBlocks(html);
   std::string combined;
   for (const auto &block : tableBlocks) {

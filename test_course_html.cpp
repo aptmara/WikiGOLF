@@ -51,6 +51,28 @@ int main() {
         Require(p.html.find("9000")==std::string::npos,"style stripped");
         Require(p.html.find("Edit")==std::string::npos,"edit stripped");
         Require(p.imageUrls.size()==1,"image allowlist");
+        {
+            // 記事HTMLだけからリンク・本文・カテゴリを取り出す（APIの追加取得を省くため）
+            Require(CategoryTitle("./Category:%E6%97%A5%E6%9C%AC%E3%81%AE%E5%B7%9D#sort%20key")=="Category:日本の川","category decoded");
+            Require(CategoryTitle("./カテゴリ:A_B")=="Category:A B","localized category prefix");
+            Require(CategoryTitle("./日本").empty()&&CategoryTitle("./Category:").empty()&&CategoryTitle("https://other.test/Category:A").empty(),"non-category rejected");
+            auto facts=PrepareArticle("T",R"HTML(<html><head><title>Head</title></head><body><p>alpha <a href="./Beta">beta</a></p><h2>gamma</h2><ul><li><a href="./Beta">again</a></li><li><a href="./Delta_E" class="new">red</a></li><li><a href="./Zeta_Eta">zeta</a></li></ul><div class="navbox"><a href="./Hidden">hidden</a></div><link rel="mw:PageProp/Category" href="./Category:One#A"><link rel="mw:PageProp/Category" href="./Category:One"><link rel="mw:PageProp/Category" href="./Category:Two_Three"><link rel="stylesheet" href="./Category:Style"></body></html>)HTML");
+            Require(facts.error.empty(),"facts prepare");
+            Require(facts.linkTargets==std::vector<std::string>({"Beta","Zeta Eta"}),"visible links once, in order, without red links");
+            Require(facts.categories==std::vector<std::string>({"Category:One","Category:Two Three"}),"categories once, in order");
+            Require(facts.text.find("alpha beta\ngamma\n")!=std::string::npos,"text keeps block boundaries");
+            Require(facts.text.find("hidden")==std::string::npos&&facts.text.find("Head")==std::string::npos,"hidden text excluded");
+            Require(facts.html.find("Category:")==std::string::npos,"category links stay out of the rendered html");
+            // 通常ページ（/wiki/記事名）はメニューなどを含むので、本文の入れ物だけを使う
+            const std::string page=R"HTML(<html><head><title>T</title></head><body><div id="p-menu"><a href="/wiki/Menu">menu</a><img src="//upload.wikimedia.org/wikipedia/commons/a/ab/Menu.png"></div><div id="mw-content-text" class="mw-body-content"><div class="mw-content-ltr mw-parser-output"><section><p>body <a rel="mw:WikiLink" href="https://ja.wikipedia.org/wiki/本文_リンク">link</a> <a href="https://ja.wikipedia.org/wiki/赤?action=edit&amp;redlink=1" class="new">red</a></p><figure><img src="//thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Body.jpg/250px-Body.jpg"></figure><link rel="mw:PageProp/Category" href="./Category:本文"></section></div><div class="printfooter"><a href="/wiki/Footer">footer</a></div></div><div id="catlinks"><a href="/wiki/Category:Chrome">chrome</a></div></body></html>)HTML";
+            auto skin=PrepareArticle("T",page);
+            Require(skin.error.empty(),"skin page prepare");
+            Require(skin.linkTargets==std::vector<std::string>({"本文 リンク"}),"only links inside the article body");
+            Require(skin.categories==std::vector<std::string>({"Category:本文"}),"categories from the article body");
+            Require(skin.text.find("body link")!=std::string::npos&&skin.text.find("menu")==std::string::npos&&skin.text.find("footer")==std::string::npos,"page chrome excluded from text");
+            Require(skin.imageUrls.size()==1&&skin.imageUrls[0].find("Body.jpg")!=std::string::npos,"only images inside the article body");
+            Require(ExtractImageUrls(page).size()==1,"license candidates limited to the article body");
+        }
         Require(p.html.find("Wikipedia「Title &lt;test&gt;」")!=std::string::npos,"article attribution");
         Require(p.html.find("https://ja.wikipedia.org/wiki/Title_&lt;test&gt;")!=std::string::npos,"attribution url");
         Require(p.html.find("CC BY-SA 4.0")!=std::string::npos,"attribution license");
