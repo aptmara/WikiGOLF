@@ -16,6 +16,11 @@ constexpr float kFramingMinPitch = 0.12f;
 constexpr float kFramingMaxPitch = 1.2f;
 // 目標を置く画面上の高さ（画面中心=0、上端=1）
 constexpr float kFramingTargetScreenY = 0.6f;
+constexpr float kInitialOrbitDistancePerFieldScale = 10.5f;
+
+inline float InitialOrbitDistance(float fieldScale) {
+  return kInitialOrbitDistancePerFieldScale * fieldScale;
+}
 
 inline float NormalizeAngleDelta(float delta) {
   while (delta > DirectX::XM_PI) delta -= DirectX::XM_2PI;

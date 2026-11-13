@@ -107,7 +107,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           if (m_hud) m_hud->SetVisible(ctx, true);
           if (m_minimapController) m_minimapController->SetVisible(ctx, true);
           if (m_tutorialOverlay) m_tutorialOverlay->SetVisible(ctx, true);
-          if (m_cameraController) m_cameraController->Update(ctx);
+          if (m_cameraController) {
+              m_cameraController->BeginReturnFromTransition(ctx);
+              m_cameraController->Update(ctx);
+          }
           // チュートリアルオーバーレイはロード演出完了後に初期化する
           // （ロード中にUIが重なって表示されるのを防ぐ）
           if (m_isTutorial && !m_tutorialOverlay) {

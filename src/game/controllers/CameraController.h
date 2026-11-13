@@ -86,6 +86,9 @@ public:
   /** @brief ページ遷移時（TransitionToPage / OnEnter）のカメラリセット*/
   void ResetForTransition(float fieldScale);
 
+  /** @brief コース紹介の現在位置から通常のオービット位置へ戻す*/
+  void BeginReturnFromTransition(core::GameContext &ctx);
+
   /**
    * @brief 通常のボール中心オービット範囲で距離と目標方向を調整する。
    * @details 距離・Yaw・Pitchを同じ時間で補間し、ボールと地面上の目標を

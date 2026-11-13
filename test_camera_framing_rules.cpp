@@ -24,9 +24,12 @@ float ScreenY(const DirectX::XMFLOAT3 &target, float pitch) {
 
 int main() {
   using game::utils::FindTargetCenteredOrbitAngles;
+  using game::utils::InitialOrbitDistance;
   using game::utils::kFramingTargetScreenY;
 
   const DirectX::XMFLOAT3 ball{0.0f, 0.0f, 0.0f};
+
+  assert(Close(InitialOrbitDistance(4.0f), 42.0f));
 
   {
     // 平地の遠い目標でも水平にはならず、見下ろしつつ画面上部に収める

@@ -130,7 +130,7 @@ void CameraController::Initialize(Config cfg) {
   LOG_INFO("CameraController", "Initialized: cameraEntity={}, ballEntity={}",
            cfg.cameraEntity, cfg.ballEntity);
 
-  m_cameraDistance = 15.0f * cfg.fieldScale;
+  m_cameraDistance = game::utils::InitialOrbitDistance(cfg.fieldScale);
   m_targetCameraDistance = m_cameraDistance;
   m_distanceEaseFrom = m_cameraDistance;
   m_distanceEaseTimer = 0.0f;
@@ -209,7 +209,7 @@ void CameraController::ResetForTransition(float fieldScale) {
   m_pitchEaseDelta = 0.0f;
   m_yawEaseTimer = 0.0f;
   m_isYawEasing = false;
-  m_cameraDistance = 15.0f * fieldScale;
+  m_cameraDistance = game::utils::InitialOrbitDistance(fieldScale);
   m_targetCameraDistance = m_cameraDistance;
   m_distanceEaseFrom = m_cameraDistance;
   m_distanceEaseTimer = 0.0f;
@@ -219,6 +219,13 @@ void CameraController::ResetForTransition(float fieldScale) {
   m_wasShotCamera = false;
   m_isFreeCamera = false;
   m_orbitBlend = 1.0f;
+}
+
+void CameraController::BeginReturnFromTransition(core::GameContext &ctx) {
+  using namespace game::components;
+  if (const auto *camera = ctx.world.Get<Transform>(m_cfg.cameraEntity)) {
+    BeginOrbitBlend(camera->position);
+  }
 }
 
 void CameraController::SetGolferAnchor(const DirectX::XMFLOAT3 &position,
