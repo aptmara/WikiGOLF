@@ -26,6 +26,7 @@
 #include "../components/Transform.h"
 #include "../components/UIText.h"
 #include "../components/WikiComponents.h"
+#include "../utils/BallStopRules.h"
 #include "../utils/ProceduralFlag.h"
 #include "../utils/StartTeePin.h"
 #include "../controllers/MinimapController.h"
@@ -187,8 +188,7 @@ void WikiPageLoader::PlaceBallAtStartTee(
         groundZ};
 
     if (ballRB) {
-        ballRB->velocity = {0.0f, 0.0f, 0.0f};
-        ballRB->isStatic = true; // 最初のショットを打つまでピンの上へ固定する
+        game::utils::FreezeBall(*ballRB);
     }
 
     if (minimapController) {

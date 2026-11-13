@@ -530,6 +530,17 @@ if(MSVC)
 endif()
 add_test(NAME ball_fast_forward_state COMMAND test_ball_fast_forward_state)
 
+# ボール停止の連続時間判定と固定処理テスト
+add_executable(test_ball_stop_rules test_ball_stop_rules.cpp)
+target_precompile_headers(test_ball_stop_rules REUSE_FROM wikigolf_pch)
+target_include_directories(test_ball_stop_rules PRIVATE src)
+if(MSVC)
+    target_compile_definitions(test_ball_stop_rules PRIVATE -DUNICODE -D_UNICODE -DNOMINMAX
+                                                            -DWIN32_LEAN_AND_MEAN)
+    target_compile_options(test_ball_stop_rules PRIVATE /utf-8 /Zc:__cplusplus)
+endif()
+add_test(NAME ball_stop_rules COMMAND test_ball_stop_rules)
+
 # ローディングシーンのフェード計算テスト
 add_executable(test_loading_scene_fade test_loading_scene_fade.cpp)
 target_precompile_headers(test_loading_scene_fade REUSE_FROM wikigolf_pch)

@@ -22,6 +22,7 @@
 #include "../systems/WikiShortestPath.h"
 #include "../utils/AimPinClubSelection.h"
 #include "../utils/AimPinSolver.h"
+#include "../utils/BallStopRules.h"
 #include "../utils/CarryDistanceTable.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/FlagFadeRules.h"
@@ -413,6 +414,11 @@ void WikiGolfScene::TransitionToPage(core::GameContext &ctx,
   state->canShoot = true;
   m_tutorialCupInFired = false;
   m_pendingLaunchTimer = -1.0f;
+
+  if (auto *ballBody =
+          ctx.world.Get<game::components::RigidBody>(m_ballEntity)) {
+    game::utils::FreezeBall(*ballBody);
+  }
 
   if (shot) {
     shot->Reset();

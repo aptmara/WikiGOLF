@@ -330,6 +330,7 @@ struct ShotState {
   // 判定結果
   ShotJudgement judgement = ShotJudgement::None;
   float resultDisplayTime = 0.0f; ///< 結果表示残り時間
+  float stopCandidateTime = 0.0f; ///< 低速かつ接地している連続時間
 
   // ショットパラメータ
   float maxPower = 35.0f; ///< 最大パワー（速度）
@@ -366,6 +367,7 @@ struct ShotState {
     impactPerfectCenter = 0.5f;
     judgement = ShotJudgement::None;
     resultDisplayTime = 0.0f;
+    stopCandidateTime = 0.0f;
     aimClickTracking = false;
     swingCommitted = false;
   }

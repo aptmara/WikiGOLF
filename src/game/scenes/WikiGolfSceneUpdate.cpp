@@ -25,6 +25,7 @@
 #include "../controllers/MinimapController.h"
 #include "../controllers/TutorialOverlayController.h"
 #include "../systems/PhysicsSystem.h"
+#include "../utils/BallStopRules.h"
 #include "../utils/GameplayPhysicsConstants.h"
 #include "../utils/JudgeFeedback.h"
 #include "../utils/ProceduralFlag.h"
@@ -581,8 +582,10 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
           float speed = std::sqrt(rb->velocity.x * rb->velocity.x +
                                   rb->velocity.y * rb->velocity.y +
                                   rb->velocity.z * rb->velocity.z);
-          if (speed < 0.1f && state->isBallGrounded) {
-              rb->velocity = {0, 0, 0};
+          if (game::utils::UpdateBallStopConfirmation(
+                  speed, state->isBallGrounded, dt,
+                  shot->stopCandidateTime)) {
+              game::utils::FreezeBall(*rb);
               std::string terrainTex = "";
               bool treatAsOB = false;
               const bool wasOB = state->isOB; // state->isOB はこの後リセットされるため先に控える
@@ -602,7 +605,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                   auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
                   if (ballT) {
                       ballT->position = state->lastShotPosition;
-                      ballT->position.y += 0.5f;
                   }
                   state->isOB = false;
 
@@ -646,7 +648,6 @@ void WikiGolfScene::OnUpdate(core::GameContext &ctx) {
                       auto *ballT = ctx.world.Get<game::components::Transform>(m_ballEntity);
                       if (ballT) {
                           ballT->position = state->lastShotPosition;
-                          ballT->position.y += 0.5f;
                       }
                       if (ctx.audio) {
                           ctx.audio->PlaySE(ctx, "se_OB.wav", 0.8f);
